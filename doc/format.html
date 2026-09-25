@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>Problem Statement</title>
+  <title>Format</title>
   <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -1446,221 +1446,781 @@ text-decoration: underline;
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">Problem Statement</h1>
+<h1 class="title">Format</h1>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
-<li><a href="#eictar---encrypted-individually-compressed-tar" id="toc-eictar---encrypted-individually-compressed-tar">eictar -
-Encrypted Individually-Compressed TAR</a>
+<li><a href="#eictar-archive-format-version-1.0" id="toc-eictar-archive-format-version-1.0">eictar archive format,
+version 1.0</a>
 <ul>
-<li><a href="#goal" id="toc-goal">Goal</a></li>
-<li><a href="#constraints" id="toc-constraints">Constraints</a></li>
-<li><a href="#decisions" id="toc-decisions">Decisions</a></li>
-<li><a href="#out-of-scope-for-v1" id="toc-out-of-scope-for-v1">Out of
-scope for v1</a></li>
+<li><a href="#conventions" id="toc-conventions">1. Conventions</a></li>
+<li><a href="#layout" id="toc-layout">2. Layout</a></li>
+<li><a href="#file-header" id="toc-file-header">3. File header</a></li>
+<li><a href="#crypto-header" id="toc-crypto-header">4. Crypto
+header</a></li>
+<li><a href="#blobs-and-chunks" id="toc-blobs-and-chunks">5. Blobs and
+chunks</a></li>
+<li><a href="#codecs" id="toc-codecs">6. Codecs</a></li>
+<li><a href="#cryptography" id="toc-cryptography">7. Cryptography</a>
+<ul>
+<li><a href="#keys" id="toc-keys">7.1 Keys</a></li>
+<li><a href="#aead" id="toc-aead">7.2 AEAD</a></li>
+<li><a href="#chunks" id="toc-chunks">7.3 Chunks</a></li>
+<li><a href="#sealed-index" id="toc-sealed-index">7.4 Sealed
+index</a></li>
+<li><a href="#index-digest" id="toc-index-digest">7.5 Index
+digest</a></li>
+</ul></li>
+<li><a href="#index" id="toc-index">8. Index</a>
+<ul>
+<li><a href="#encoding" id="toc-encoding">8.1 Encoding</a></li>
+<li><a href="#index-map" id="toc-index-map">8.2 Index map</a></li>
+<li><a href="#member-map" id="toc-member-map">8.3 Member map</a></li>
+<li><a href="#checks" id="toc-checks">8.4 Checks</a></li>
+</ul></li>
+<li><a href="#members" id="toc-members">9. Members</a>
+<ul>
+<li><a href="#stored-paths" id="toc-stored-paths">9.1 Stored
+paths</a></li>
+<li><a href="#hardlinks" id="toc-hardlinks">9.2 Hardlinks</a></li>
+<li><a href="#sparse-files" id="toc-sparse-files">9.3 Sparse
+files</a></li>
+</ul></li>
+<li><a href="#trailer-and-generations" id="toc-trailer-and-generations">10. Trailer and generations</a></li>
+<li><a href="#limits" id="toc-limits">11. Limits</a></li>
 </ul></li>
 </ul>
 </nav>
-<h1 id="eictar---encrypted-individually-compressed-tar">eictar -
-Encrypted Individually-Compressed TAR</h1>
-<blockquote>
-<p>This statement and <code>doc/design.md</code> are kept in sync. This
-file says <em>what</em> the program must do and <em>why</em>; the design
-document says <em>how</em>. When a requirement changes, change it here
-first, then carry it into the design.</p>
-</blockquote>
-<h2 id="goal">Goal</h2>
-<p>I want to write a program similar to <code>tar</code>, however the
-packaged contents of the archive are individually compressed and, if
-elected to encrypt, individually encrypted.</p>
-<h2 id="constraints">Constraints</h2>
-<ol type="1">
-<li>The program is to be written in Go and use of multithreading is to
-be expected.</li>
-<li>The user will be able to choose the compression algorithm
-(e.g. zstd, xz, etc.). Files may have different compression algorithms
-if added to the archive separately. However, if files are added at the
-same time then they will have the same compression algorithm.</li>
-<li>Encryption uses Go’s state-of-the-art libraries: XChaCha20-Poly1305
-for the content and Argon2id to turn the passphrase into a key.
-<code>ccrypt</code> is therefore not required and is not used. All files
-share the same encryption secret key (unless the files themselves have
-been separately encrypted, but that is outside the scope of eictar’s
-purview).</li>
-<li>Both encryption and compression are optional, in which case it will
-act similar to TAR.</li>
-<li>An index will be maintained so listing is fast. The index will
-contain all relevant information about the compression algorithm,
-encryption details, unix permissions, extended attributes.</li>
-<li>Each compression algorithm supported will have their separate set of
-attributes that the user can select (compression level, number of
-threads, etc.).</li>
-<li>Dependencies must be pure Go. Third-party modules are welcome, but
-no CGO and no shelling out to external binaries, so that the result is a
-single static cross-compilable binary.</li>
-<li>The archive is one self-contained file. The index sits at the end of
-it, so that adding files later is an append, not a rewrite.</li>
-<li>Members may be deleted and replaced. Space from deleted members is
-reclaimed by an explicit compaction step, not automatically.</li>
-<li>The archive must record metadata faithfully: symlinks, hardlinks,
-device nodes, sparse files, extended attributes, ACLs, ownership and
-nanosecond-resolution timestamps.</li>
-<li>Integrity must be verifiable. Every member carries a digest of its
-content, and the archive can be checked without being extracted.</li>
-<li>A crash part way through writing must never damage what was already
-in the archive.</li>
-<li>Two runs that change the same archive at the same time must never
-damage it, for example two backup jobs that overlap. The second run does
-not wait: it stops with a clear error, and the first one finishes
-normally. Reading an archive while another run changes it is always
-safe.</li>
-<li>Paths are stored relative to the archive, never absolute. A leading
-<code>/</code> or <code>..</code> is removed when the file is added, and
-the program says once that it did so. This follows <code>tar</code> and
-<code>zip</code>: an archive holds a portable tree, not a set of
-filesystem locations, so an archived <code>/etc/passwd</code> unpacks
-under the chosen directory and not over the system file. There is no
-option to keep absolute paths. On extraction the check is made again,
-because an archive may have been written by another program.</li>
-<li>Extraction can be directed at a chosen directory with
-<code>-d</code>, as <code>unzip</code> does. The directory is created if
-it is not there. Nothing is ever written outside that directory, and in
-particular an archive must not be able to write through a symbolic link
-that points out of it.</li>
-<li>Paths can be selected by regular expression, as well as by name and
-glob: on the paths to add, and on the members to list, extract, verify
-or delete. The expression matches the whole stored path.</li>
-<li>Frequently used parameters, compression above all, must be settable
-without typing them every time: by environment variable and by a
-configuration file (<code>.eictarrc</code>). The command line wins over
-the environment, which wins over the configuration file. The
-configuration file is the user’s own, in the home directory, or one
-named explicitly with <code>--config</code>. There is no configuration
-file read from the current directory: the program must not change
-behaviour because of where it was run from. What the operation is
-(create, extract, and so on), which archive to use, and the passphrase
-are never taken from the environment or a configuration file.</li>
-<li>The program must be tested extensively, at two levels, and the tests
-are part of the deliverable rather than an afterthought:
+<h1 id="eictar-archive-format-version-1.0">eictar archive format,
+version 1.0</h1>
+<p>This document specifies the bytes of an eictar archive. With it, you
+can write a reader or a writer without the eictar source code.
+<code>doc/design.md</code> gives the reasons for each choice. This
+document gives only the rules.</p>
+<p>The committed archives in
+<code>src/internal/archive/testdata/golden/</code> are examples of this
+format, one plain and one encrypted. The passphrase of the encrypted
+example is <code>golden</code>. The fixed test vectors of the key
+schedule are in <code>src/internal/crypt/crypt_test.go</code>.</p>
+<h2 id="conventions">1. Conventions</h2>
 <ul>
-<li><strong>Unit tests</strong> in the code, next to each package. Every
-format structure, codec, key-schedule step and path rule has its own
-test. No milestone is finished until its tests are written and
-passing.</li>
-<li><strong>Operational tests</strong> that drive the built binary end
-to end, the way a user drives it, against real files on a real
-filesystem. These cover the full lifecycle: create, list, extract,
-append, delete, replace, compact, verify. The test suite must also prove
-the hard parts: that a tampered archive is detected, that a crash at any
-write step leaves the archive intact, that a second run that changes the
-archive at the same time is refused, that extraction cannot write
-outside its destination, and that metadata survives a round trip
-untouched.</li>
-</ul></li>
-</ol>
-<h2 id="decisions">Decisions</h2>
-<p>These resolve the open questions in the constraints above.
-<code>doc/design.md</code> gives the full reasoning and the exact
-formats.</p>
+<li>All integers are little-endian, except the chunk index in an AEAD
+nonce and in an AAD, which is big-endian (§7.3).</li>
+<li><code>CRC-32C</code> is CRC-32 with the Castagnoli polynomial.</li>
+<li><code>BLAKE3-256</code> is BLAKE3 with 32 bytes of output. “Keyed
+BLAKE3” is the keyed mode of BLAKE3 with a 32-byte key.</li>
+<li><code>u64le(x)</code> is the 8-byte little-endian form of
+<code>x</code>, and <code>u64be(x)</code> is the big-endian form.</li>
+<li><code>||</code> joins byte strings.</li>
+<li>“Refuse” means that a reader stops with an error and gives no
+content from the archive.</li>
+</ul>
+<h2 id="layout">2. Layout</h2>
+<pre><code>offset 0      file header         64 bytes
+64            crypto header       crypto_header_len bytes (0 if not encrypted)
+body start    blobs, old indexes and old trailers, in any order
+index_offset  index               index_length bytes
+file size-96  trailer             96 bytes</code></pre>
+<p>The conventional file name extension is <code>.ect</code>. A reader
+identifies an archive by the magic of the file header (§3), not by its
+name.</p>
+<p>The body starts at <code>64 + crypto_header_len</code>. The body has
+no framing: no separator and no length is between two blobs. Only the
+index says where each blob is. The body can also hold dead space: the
+blobs of deleted members, and the indexes and trailers of earlier
+generations (§10).</p>
+<h2 id="file-header">3. File header</h2>
 <table>
 <colgroup>
-<col style="width: 41%" />
-<col style="width: 58%" />
+<col style="width: 28%" />
+<col style="width: 21%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
 </colgroup>
 <thead>
 <tr class="header">
-<th>Topic</th>
-<th>Decision</th>
+<th style="text-align: right;">Offset</th>
+<th style="text-align: right;">Size</th>
+<th>Field</th>
+<th>Value</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td>Container layout</td>
-<td>Append-only body, index in a footer, fixed-size trailer at the end
-of the file as the commit record</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">8</td>
+<td>magic</td>
+<td><code>45 49 43 54 41 52 1A 0A</code> (“EICTAR1a”)</td>
 </tr>
 <tr class="even">
-<td>Encryption</td>
-<td>XChaCha20-Poly1305 AEAD over 4 MiB chunks, a separate derived subkey
-per member. A random data key per archive, sealed under a key that
-Argon2id derives from the passphrase, so the passphrase can change
-(<code>--change-passphrase</code>) without encrypting the content
-again</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">2</td>
+<td>format_major</td>
+<td>1</td>
 </tr>
 <tr class="odd">
-<td>Index encryption</td>
-<td>Optional, <code>--encrypt-index</code>, off by default. An
-unencrypted index reveals file names, sizes and permissions. In an
-encrypted archive the member digests are keyed, so they reveal nothing
-about the content</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">2</td>
+<td>format_minor</td>
+<td>0</td>
 </tr>
 <tr class="even">
-<td><code>ccrypt</code></td>
-<td>Dropped. <code>golang.org/x/crypto</code> covers the
-requirement</td>
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">4</td>
+<td>header_flags</td>
+<td>bit 0: the archive is encrypted. The other bits are 0.</td>
 </tr>
 <tr class="odd">
-<td>Dependencies</td>
-<td>Pure-Go third-party modules allowed. No CGO, no external
-binaries</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">8</td>
+<td>created_unix_nanos</td>
+<td>the time of creation, as a signed integer</td>
 </tr>
 <tr class="even">
-<td>Default codec</td>
-<td>zstd, alongside xz, gzip, flate, s2 and stored</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">16</td>
+<td>archive_uuid</td>
+<td>16 random bytes</td>
 </tr>
 <tr class="odd">
-<td>Concurrency</td>
-<td>Member order inside the archive is not significant, so a single
-writer appends whichever worker finishes first</td>
+<td style="text-align: right;">40</td>
+<td style="text-align: right;">4</td>
+<td>crypto_header_len</td>
+<td>0 when bit 0 of header_flags is 0. More than 0, and at most 65536,
+when it is 1.</td>
 </tr>
 <tr class="even">
-<td>CLI style</td>
-<td>Classical UNIX options, not subcommands. The operation is chosen by
-an option letter (<code>-c</code>, <code>-r</code>, <code>-t</code>,
-<code>-x</code>), short options bundle (<code>-cvf</code>), and every
-short option has a long form</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">16</td>
+<td>reserved</td>
+<td>zero</td>
 </tr>
 <tr class="odd">
-<td>Archive name</td>
-<td>The conventional extension is <code>.ect</code>. Create adds it to a
-name that has no extension, and the other operations find that name</td>
-</tr>
-<tr class="even">
-<td>License</td>
-<td>GPL-3.0. The name “eictar” is reserved: a modified version that is
-distributed must use another name (<code>TRADEMARKS.md</code>)</td>
+<td style="text-align: right;">60</td>
+<td style="text-align: right;">4</td>
+<td>crc32c</td>
+<td>CRC-32C of bytes 0 to 59</td>
 </tr>
 </tbody>
 </table>
-<h2 id="out-of-scope-for-v1">Out of scope for v1</h2>
+<p>A reader refuses a header with a wrong magic or a wrong CRC. It also
+refuses a format_major that it does not know, and a flag and a length
+that do not agree.</p>
+<h2 id="crypto-header">4. Crypto header</h2>
+<p>The crypto header exists only when the archive is encrypted. It is
+<code>crypto_header_len</code> bytes: a <code>u32le</code> length
+<code>n</code>, then <code>n</code> bytes of CBOR (§8.1) that encode
+this map:</p>
+<table>
+<colgroup>
+<col style="width: 27%" />
+<col style="width: 33%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Key</th>
+<th>Type</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>v</code></td>
+<td>uint</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td><code>kdf</code></td>
+<td>text</td>
+<td><code>argon2id</code></td>
+</tr>
+<tr class="odd">
+<td><code>salt</code></td>
+<td>bytes</td>
+<td>16 bytes, the Argon2id salt</td>
+</tr>
+<tr class="even">
+<td><code>time</code></td>
+<td>uint</td>
+<td>Argon2id passes, 1 to 64</td>
+</tr>
+<tr class="odd">
+<td><code>memory</code></td>
+<td>uint</td>
+<td>Argon2id memory in KiB, at least 8 × threads, at most 4194304</td>
+</tr>
+<tr class="even">
+<td><code>threads</code></td>
+<td>uint</td>
+<td>Argon2id lanes, 1 to 255</td>
+</tr>
+<tr class="odd">
+<td><code>aead</code></td>
+<td>text</td>
+<td><code>xchacha20poly1305</code></td>
+</tr>
+<tr class="even">
+<td><code>key</code></td>
+<td>bytes</td>
+<td>72 bytes, the wrapped data key (§7.1)</td>
+</tr>
+<tr class="odd">
+<td><code>recipients</code></td>
+<td>array</td>
+<td>reserved. A reader refuses a crypto header that has it.</td>
+</tr>
+</tbody>
+</table>
+<p>A reader applies the limits on <code>time</code> and
+<code>memory</code> before it asks for a passphrase. A crafted header
+can ask for a derivation that never ends.</p>
+<h2 id="blobs-and-chunks">5. Blobs and chunks</h2>
+<p>Each member with content has one blob: <code>len</code> bytes at
+offset <code>off</code> of the file. The blob is a sequence of chunks,
+back to back. The member’s <code>chunks</code> array gives the length on
+disk of each chunk, in order.</p>
+<p>The <strong>payload</strong> of a member is the content that its blob
+stores. For a member without <code>sparse</code>, it is the whole
+content, <code>size</code> bytes. For a member with <code>sparse</code>,
+it is the bytes of the data segments, back to back (§9.3).</p>
+<p>The payload is cut into plaintext chunks of <code>chunk</code> bytes.
+The last chunk can be shorter, but it is never empty. An empty payload
+has no chunks, and the member has no <code>chunk</code>.</p>
+<p>Each plaintext chunk becomes a chunk on disk in two steps:</p>
+<ol type="1">
+<li><strong>Compress</strong> it with the member’s codec (§6). If the
+result is not shorter than the plaintext chunk, keep the plaintext chunk
+instead.</li>
+<li><strong>Seal</strong> it, if the archive is encrypted (§7.3).</li>
+</ol>
+<p>A reader reverses the steps. After it unseals a chunk, it compares
+the length with the expected plaintext length of that chunk. If they are
+equal, the chunk is stored as it is, and the reader does not decompress
+it. If not, the reader decompresses it, and the result must have exactly
+the expected length. Compression never keeps a result that is as long as
+the plaintext, so this test has only one meaning.</p>
+<p>The expected plaintext length of chunk <code>i</code> is
+<code>chunk</code>, except for the last chunk, which has the rest of the
+payload.</p>
+<h2 id="codecs">6. Codecs</h2>
+<p>The index has a catalog of codecs. Each member names an entry of the
+catalog by its position, or <code>-1</code> for no codec. A catalog
+entry is a map with <code>name</code> (text) and <code>params</code> (a
+map from text to a number or a text). The parameters record the settings
+of the writer. A reader does not need them.</p>
+<table>
+<colgroup>
+<col style="width: 19%" />
+<col style="width: 80%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Name</th>
+<th>One compressed chunk is</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>zstd</code></td>
+<td>one Zstandard frame (RFC 8878). The writer puts a content checksum
+in the frame.</td>
+</tr>
+<tr class="even">
+<td><code>flate</code></td>
+<td>one raw DEFLATE stream (RFC 1951) that ends with a final block</td>
+</tr>
+<tr class="odd">
+<td><code>gzip</code></td>
+<td>one gzip member (RFC 1952), with MTIME 0 and no name. A reader
+refuses a second member after the first.</td>
+</tr>
+<tr class="even">
+<td><code>s2</code></td>
+<td>one S2 block: a uvarint of the decoded length, then S2 block
+elements (the block format of
+<code>github.com/klauspost/compress/s2</code>, a superset of the Snappy
+block format)</td>
+</tr>
+<tr class="odd">
+<td><code>xz</code></td>
+<td>one raw LZMA2 stream, with no <code>.xz</code> container, that ends
+with the end marker (a 0x00 control byte). The properties are lc=3,
+lp=0, pb=2.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>For <code>xz</code>, a reader uses a dictionary of
+<code>max(4096, expected plaintext length)</code> bytes.</strong> The
+stream does not state its dictionary size, and a reader must not take a
+larger number from anywhere else. The chunks are independent, so no
+match reaches back further than the start of its chunk.</p>
+<p>A decoder reads at most the expected plaintext length, and then one
+more byte to prove that the stream ends there. A chunk that decodes to
+more or to less is refused.</p>
+<h2 id="cryptography">7. Cryptography</h2>
+<h3 id="keys">7.1 Keys</h3>
+<pre><code>dataK    = 32 random bytes, made when the archive is created
+KEK      = Argon2id(passphrase, salt, time, memory, threads, 32 bytes)
+key      = nonce || XChaCha20-Poly1305(KEK, nonce, dataK, aad = &quot;eictar/v1/wrap&quot; || archive_uuid)
+indexK   = HKDF-SHA-256(ikm = dataK, salt = empty, info = &quot;eictar/v1/index&quot;      || archive_uuid || u64le(generation))
+authK    = HKDF-SHA-256(ikm = dataK, salt = empty, info = &quot;eictar/v1/index-auth&quot; || archive_uuid)
+contentK = HKDF-SHA-256(ikm = dataK, salt = empty, info = &quot;eictar/v1/content&quot;    || archive_uuid)
+memberK  = HKDF-SHA-256(ikm = dataK, salt = enc.salt, info = &quot;eictar/v1/member&quot;  || archive_uuid)</code></pre>
+<p><code>key</code> is the field of the crypto header (§4): a 24-byte
+random nonce, then the 32-byte sealed data key and its 16-byte tag. Each
+HKDF output is 32 bytes. The info strings are ASCII, with no terminator.
+The passphrase is its bytes as given, with no normalization.</p>
+<p>A reader derives <code>KEK</code> and opens <code>key</code>. If the
+tag fails, the passphrase is wrong. A change of passphrase writes a new
+<code>salt</code>, new Argon2id parameters and a new <code>key</code>,
+but <code>dataK</code> and every subkey stay the same.</p>
+<h3 id="aead">7.2 AEAD</h3>
+<p>The AEAD is XChaCha20-Poly1305: a 32-byte key, a 24-byte nonce and a
+16-byte tag after the ciphertext.</p>
+<h3 id="chunks">7.3 Chunks</h3>
+<p>Chunk <code>i</code> of a member (the first chunk has
+<code>i = 0</code>) is sealed with:</p>
+<pre><code>key   = memberK of the member
+nonce = 16 zero bytes || u64be(i)
+aad   = u64le(member.id) || u64be(i) || final
+final = 0x01 for the last chunk of the member, 0x00 for the others</code></pre>
+<p>The chunk on disk is the ciphertext and the tag. It is 16 bytes
+longer than the compressed or stored chunk.</p>
+<p>A writer must give a member a new random <code>enc.salt</code>, and
+so a new <code>memberK</code>, each time that it seals content for the
+member. The same key with the same chunk index and different content
+uses one nonce two times.</p>
+<h3 id="sealed-index">7.4 Sealed index</h3>
+<p>When bit 0 of trailer_flags is 1, the index on disk is:</p>
+<pre><code>nonce || AEAD-seal(indexK, nonce, compressed index, aad = u64le(generation))</code></pre>
+<p>The nonce is 24 random bytes. A writer must not take the nonce from
+the generation, because two different indexes can have the same
+generation.</p>
+<h3 id="index-digest">7.5 Index digest</h3>
+<p>The trailer records a digest of the index bytes on disk:</p>
+<pre><code>digest = BLAKE3-256(archive_uuid || u64le(generation) || index bytes on disk)</code></pre>
+<p>In an encrypted archive, the BLAKE3 is keyed with <code>authK</code>,
+whether or not the index is sealed. In a plain archive, it has no key. A
+reader checks the digest before it unseals or decodes the index, and
+compares it in constant time.</p>
+<p>A reader must also refuse a plain archive when its user expected an
+encrypted one. Someone who removes the encryption can write a plain
+index with an unkeyed digest.</p>
+<h2 id="index">8. Index</h2>
+<h3 id="encoding">8.1 Encoding</h3>
+<p>The index is encoded in these steps:</p>
+<ol type="1">
+<li>CBOR (RFC 8949) of the Index map (§8.2). Map keys are sorted
+bytewise. Arrays and maps have a definite length. There are no tags and
+no duplicate keys. Text strings can hold any bytes, because a path is
+not always UTF-8.</li>
+<li>Zstandard, one frame, when bit 1 of trailer_flags is 1. A writer
+always sets it.</li>
+<li>The seal of §7.4, when bit 0 of trailer_flags is 1.</li>
+</ol>
+<p>A reader reverses the steps. It limits the decompressed index to 1
+GiB, and the number of members to 4194304.</p>
+<h3 id="index-map">8.2 Index map</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Key</th>
+<th>Type</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>v</code></td>
+<td>uint</td>
+<td>1, the version of this schema</td>
+</tr>
+<tr class="even">
+<td><code>gen</code></td>
+<td>uint</td>
+<td>the generation, equal to the trailer</td>
+</tr>
+<tr class="odd">
+<td><code>codecs</code></td>
+<td>array</td>
+<td>the catalog (§6). Absent when it is empty.</td>
+</tr>
+<tr class="even">
+<td><code>members</code></td>
+<td>array</td>
+<td>the Member maps</td>
+</tr>
+</tbody>
+</table>
+<h3 id="member-map">8.3 Member map</h3>
+<table>
+<colgroup>
+<col style="width: 17%" />
+<col style="width: 21%" />
+<col style="width: 35%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Key</th>
+<th>Type</th>
+<th>Presence</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>id</code></td>
+<td>uint</td>
+<td>always</td>
+<td>unique in the index, never 0, never reused</td>
+</tr>
+<tr class="even">
+<td><code>gen</code></td>
+<td>uint</td>
+<td>always</td>
+<td>the generation that added the member</td>
+</tr>
+<tr class="odd">
+<td><code>path</code></td>
+<td>text</td>
+<td>always</td>
+<td>the stored path (§9.1)</td>
+</tr>
+<tr class="even">
+<td><code>type</code></td>
+<td>text</td>
+<td>always</td>
+<td><code>reg</code>, <code>dir</code>, <code>symlink</code>,
+<code>hardlink</code>, <code>fifo</code>, <code>sock</code>,
+<code>chardev</code> or <code>blockdev</code></td>
+</tr>
+<tr class="odd">
+<td><code>mode</code></td>
+<td>uint</td>
+<td>always</td>
+<td>permission bits with setuid, setgid and sticky: at most
+<code>07777</code></td>
+</tr>
+<tr class="even">
+<td><code>uid</code>, <code>gid</code></td>
+<td>uint</td>
+<td>both or neither</td>
+<td>the owner. Absent when the writer did not record it.</td>
+</tr>
+<tr class="odd">
+<td><code>uname</code>, <code>gname</code></td>
+<td>text</td>
+<td>optional</td>
+<td>the owner by name</td>
+</tr>
+<tr class="even">
+<td><code>mtime</code></td>
+<td>int</td>
+<td>always</td>
+<td>nanoseconds since the Unix epoch</td>
+</tr>
+<tr class="odd">
+<td><code>atime</code>, <code>ctime</code></td>
+<td>int</td>
+<td>optional</td>
+<td>nanoseconds since the Unix epoch</td>
+</tr>
+<tr class="even">
+<td><code>size</code></td>
+<td>uint</td>
+<td>always</td>
+<td>the logical length of the content. 0 for a type without
+content.</td>
+</tr>
+<tr class="odd">
+<td><code>link</code></td>
+<td>text</td>
+<td><code>symlink</code> only, and required there</td>
+<td>the target of the link, as recorded</td>
+</tr>
+<tr class="even">
+<td><code>hardlink</code></td>
+<td>uint</td>
+<td><code>hardlink</code> only, and required there</td>
+<td>the <code>id</code> of a <code>reg</code> member</td>
+</tr>
+<tr class="odd">
+<td><code>rdev</code></td>
+<td>array of 2 uint</td>
+<td><code>chardev</code> and <code>blockdev</code> only, and required
+there</td>
+<td>major, minor</td>
+</tr>
+<tr class="even">
+<td><code>xattrs</code></td>
+<td>map, text to bytes</td>
+<td>optional</td>
+<td>extended attributes, POSIX ACLs included, with each name as the
+source platform gives it (<code>user.comment</code> on Linux and the
+BSDs, <code>com.apple.quarantine</code> on macOS). Names of 1 to 255
+bytes, values of at most 65536 bytes, at most 1024 entries.</td>
+</tr>
+<tr class="odd">
+<td><code>sparse</code></td>
+<td>array of maps</td>
+<td><code>reg</code> only, optional</td>
+<td>data segments, each <code>{ &quot;off&quot;: uint, &quot;len&quot;: uint }</code></td>
+</tr>
+<tr class="even">
+<td><code>digest</code></td>
+<td>bytes</td>
+<td>required for <code>reg</code></td>
+<td>BLAKE3-256 of the payload (§5): keyed with <code>contentK</code>
+(§7.1) in an encrypted archive, with no key in a plain one</td>
+</tr>
+<tr class="odd">
+<td><code>codec</code></td>
+<td>int</td>
+<td>always</td>
+<td>a catalog position, or -1</td>
+</tr>
+<tr class="even">
+<td><code>chunk</code></td>
+<td>uint</td>
+<td>when there are chunks</td>
+<td>plaintext bytes in each chunk, at most 268435456</td>
+</tr>
+<tr class="odd">
+<td><code>enc</code></td>
+<td>map</td>
+<td>in an encrypted archive, on a member with content</td>
+<td><code>{ &quot;salt&quot;: 16 bytes }</code></td>
+</tr>
+<tr class="even">
+<td><code>off</code></td>
+<td>uint</td>
+<td>when there is a blob</td>
+<td>the offset of the blob in the file</td>
+</tr>
+<tr class="odd">
+<td><code>len</code></td>
+<td>uint</td>
+<td>when there is a blob</td>
+<td>the length of the blob</td>
+</tr>
+<tr class="even">
+<td><code>chunks</code></td>
+<td>array of uint</td>
+<td>when there are chunks</td>
+<td>the length on disk of each chunk</td>
+</tr>
+<tr class="odd">
+<td><code>dead</code></td>
+<td>bool</td>
+<td>tombstones only</td>
+<td>true</td>
+</tr>
+</tbody>
+</table>
+<p>Only <code>reg</code> members have content. A member of another type
+has no <code>off</code>, <code>len</code>, <code>chunks</code> or
+<code>chunk</code>, and its <code>size</code> is 0. A <code>reg</code>
+member with an empty payload has no chunks.</p>
+<p>A reader ignores a map key that it does not know. A writer that adds
+a key that an older reader must not ignore changes
+<code>format_minor</code> or <code>format_major</code>.</p>
+<h3 id="checks">8.4 Checks</h3>
+<p>A reader refuses an index that breaks any of these rules:</p>
 <ul>
-<li><strong>Delta storage between versions.</strong> When a stored file
-changes, we replace it: the new content goes in whole and the old member
-is tombstoned. We do not keep a base version plus a chain of patches. A
-file appended N times therefore holds N full copies until it is
-compacted.</li>
-<li><strong>Incremental archiving of a tree</strong> in the sense of
-<code>tar   --listed-incremental</code>, where a snapshot file records
-what was archived last time so the next run takes only the changes. This
-sits above the format and can be added later without changing the
-archive layout.</li>
-<li><strong>Content deduplication</strong>, meaning: storing identical
-content once, where identical is decided by the content itself rather
-than by the inode. Hardlinks are detected and stored once; two unrelated
-copies of the same file are not. Neither whole-file dedup nor
-chunk-level dedup (the content-defined chunking that borg and restic
-use) is in v1. Whole-file dedup is cheap to add later and
-<code>doc/design.md</code> §15 records what it needs.</li>
-<li>Public-key recipients. The format leaves room for them.</li>
-<li>Reading an archive from a pipe. The footer index needs a seekable
-file.</li>
-<li>Archive-wide signatures.</li>
-<li>Metadata on platforms other than Linux, macOS, FreeBSD, NetBSD and
-OpenBSD. On other platforms the program archives content, directories
-and links only. The four platforms besides Linux have the limits in
-<code>doc/design.md</code> §15.1: macOS records no ACLs and does not
-create pipes, and OpenBSD has no extended attributes. The tests run on
-all five platforms in CI.</li>
+<li>the rules of presence and type in §8.3, and the limits in them</li>
+<li>two members with the same <code>id</code></li>
+<li>a <code>codec</code> that is not -1 and not a catalog position</li>
+<li>a <code>hardlink</code> whose <code>id</code> is not a
+<code>reg</code> member of the index. The target can be a
+tombstone.</li>
+<li><code>sparse</code> segments that are empty, out of order,
+overlapping, or that end after <code>size</code></li>
+<li><code>chunks</code> whose total is not <code>len</code></li>
+<li>a payload that does not need exactly the number of chunks in
+<code>chunks</code>: it must be more than <code>chunk × (n − 1)</code>
+and at most <code>chunk × n</code></li>
+<li>a blob that does not lie inside
+<code>[body start, index_offset)</code></li>
+<li>a count of members without <code>dead</code> that is not the
+trailer’s live_member_count</li>
 </ul>
+<p>The index checks do not require stored paths. A reader can list an
+archive with a bad path, so that a person can see what is in it. A
+reader that extracts refuses the bad member (§9.1).</p>
+<h2 id="members">9. Members</h2>
+<h3 id="stored-paths">9.1 Stored paths</h3>
+<p>A stored path is relative, with <code>/</code> between its
+components. No component is empty, <code>.</code> or <code>..</code>,
+and the path does not start with <code>/</code>. The one exception is
+the path <code>.</code>, for the root of the archived tree. A path is a
+sequence of bytes, and it does not have to be UTF-8.</p>
+<p>An extractor refuses a member whose path breaks this rule. It also
+refuses to write through a symbolic link that an earlier member
+made.</p>
+<h3 id="hardlinks">9.2 Hardlinks</h3>
+<p>A <code>hardlink</code> member has no content. It names a
+<code>reg</code> member, whose content it shares. That member can be a
+tombstone: a newer generation can replace one name of a hardlinked file,
+and the other names keep the old content.</p>
+<h3 id="sparse-files">9.3 Sparse files</h3>
+<p>A <code>reg</code> member with <code>sparse</code> is a file with
+holes. Its payload is the bytes of the segments, in the order of the
+array. To rebuild the file, write each segment at its <code>off</code>,
+and make the file <code>size</code> bytes long. The rest of the file is
+zero.</p>
+<h2 id="trailer-and-generations">10. Trailer and generations</h2>
+<table>
+<colgroup>
+<col style="width: 28%" />
+<col style="width: 21%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: right;">Offset</th>
+<th style="text-align: right;">Size</th>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">8</td>
+<td>magic</td>
+<td>“EICTRAIL”</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">2</td>
+<td>format_major</td>
+<td>equal to the header</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">2</td>
+<td>format_minor</td>
+<td>equal to the header</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">4</td>
+<td>trailer_flags</td>
+<td>bit 0: the index is sealed. Bit 1: the index is compressed. Bit 0
+only in an encrypted archive.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">8</td>
+<td>generation</td>
+<td>1 for a new archive, 1 more for each later index</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">8</td>
+<td>index_offset</td>
+<td>inside the body, at or after the body start</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">8</td>
+<td>index_length</td>
+<td>the index ends at or before the trailer</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">40</td>
+<td style="text-align: right;">8</td>
+<td>prev_index_offset</td>
+<td>the index of the generation before, or 0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">48</td>
+<td style="text-align: right;">8</td>
+<td>live_member_count</td>
+<td>members without <code>dead</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">56</td>
+<td style="text-align: right;">32</td>
+<td>index_digest</td>
+<td>§7.5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">88</td>
+<td style="text-align: right;">4</td>
+<td>reserved</td>
+<td>zero</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">92</td>
+<td style="text-align: right;">4</td>
+<td>crc32c</td>
+<td>CRC-32C of bytes 0 to 91</td>
+</tr>
+</tbody>
+</table>
+<p>The last 96 bytes of the file are the trailer, and they are the
+commit record. A reader uses only that trailer. It does not go back to
+an earlier generation by itself.</p>
+<p>A writer changes an archive in this order:</p>
+<ol type="1">
+<li>Write the new blobs after the <strong>end of the file</strong>. The
+old trailer stays where it is.</li>
+<li>Write the new index, which lists every member, old and new, with
+<code>dead</code> on the members that this generation removes.</li>
+<li>Make steps 1 and 2 durable, then write the new trailer with
+<code>generation + 1</code>, then make it durable.</li>
+</ol>
+<p>If step 3 does not complete, the file does not end with a valid
+trailer, and a reader refuses it. The repair is to find the last valid
+trailer before the end, and to cut the file after it. A candidate is
+valid only when every check of this document passes for a file that ends
+after it.</p>
+<p>A compact writes a new file with the same header and crypto header,
+and the same <code>archive_uuid</code>, because every
+<code>memberK</code> depends on it. It uses the next generation, and a
+<code>prev_index_offset</code> of 0.</p>
+<h2 id="limits">11. Limits</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Item</th>
+<th>Limit</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>crypto_header_len</td>
+<td>65536 bytes</td>
+</tr>
+<tr class="even">
+<td>Argon2id <code>time</code></td>
+<td>64</td>
+</tr>
+<tr class="odd">
+<td>Argon2id <code>memory</code></td>
+<td>4194304 KiB</td>
+</tr>
+<tr class="even">
+<td><code>chunk</code></td>
+<td>268435456 bytes</td>
+</tr>
+<tr class="odd">
+<td>decompressed index</td>
+<td>1 GiB</td>
+</tr>
+<tr class="even">
+<td>members in one index</td>
+<td>4194304</td>
+</tr>
+<tr class="odd">
+<td>xattr name, value, count</td>
+<td>255 bytes, 65536 bytes, 1024</td>
+</tr>
+</tbody>
+</table>
 </body>
 </html>

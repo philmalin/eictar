@@ -5287,6 +5287,8 @@ format</a></li>
 <li><a href="#progress-meter" id="toc-progress-meter">10.10 Progress
 meter</a></li>
 <li><a href="#patterns" id="toc-patterns">10.11 Patterns</a></li>
+<li><a href="#archive-name" id="toc-archive-name">10.12 Archive
+name</a></li>
 </ul></li>
 <li><a href="#configuration-environment-variables-and-the-configuration-file" id="toc-configuration-environment-variables-and-the-configuration-file">11.
 Configuration: environment variables and the configuration file</a>
@@ -5310,6 +5312,7 @@ layout</a>
 <li><a href="#core-interfaces" id="toc-core-interfaces">12.1 Core
 interfaces</a></li>
 <li><a href="#diagrams" id="toc-diagrams">12.2 Diagrams</a></li>
+<li><a href="#releases" id="toc-releases">12.3 Releases</a></li>
 </ul></li>
 <li><a href="#testing-plan" id="toc-testing-plan">13. Testing plan</a>
 <ul>
@@ -5460,6 +5463,19 @@ Decided for M8, from open question 4.</td>
 destination takes it, and one notice lists the rest (§7.7). Decided for
 M8, from open question 5.</td>
 </tr>
+<tr class="even">
+<td>10</td>
+<td>Module path</td>
+<td><code>github.com/philmalin/eictar</code> (§12). Decided for the
+first release, from open question 3.</td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td>License</td>
+<td>GPL-3.0 (<code>LICENSE</code>). Under section 7(e), the license
+gives no right to use the name “eictar” for a modified version
+(<code>TRADEMARKS.md</code>).</td>
+</tr>
 </tbody>
 </table>
 <h3 id="non-goals-for-v1">1.2 Non-goals for v1</h3>
@@ -5502,7 +5518,8 @@ reader can tell a decided item from an open one. A decided question
 leaves the table, and its number is not used again, because code
 comments refer to the numbers. Question 1 (one live member for each
 path) was decided for M6 (§1.1, row 7). Questions 4 and 5 were decided
-for M8 (§1.1, rows 8 and 9).</p>
+for M8 (§1.1, rows 8 and 9). Question 3 was decided for the first
+release (§1.1, row 10).</p>
 <table>
 <colgroup>
 <col style="width: 8%" />
@@ -5528,14 +5545,6 @@ does not keep. Until this question is decided, more than one
 <code>-C</code> is a usage error.</td>
 <td>§7.1, §10.4</td>
 <td>M7</td>
-</tr>
-<tr class="even">
-<td>3</td>
-<td><strong>Module path.</strong> Today it is <code>eictar</code>, so
-imports read <code>eictar/src/internal/...</code>. A change to a real
-import path is one line now. Later it changes every import.</td>
-<td>§12</td>
-<td>Any time</td>
 </tr>
 </tbody>
 </table>
@@ -6228,8 +6237,8 @@ content on standard output has no destination directory.</p>
 <p>In <code>tar</code>, <code>-d</code> means <code>--compare</code>. In
 <code>zip</code>, it deletes entries. Neither meaning causes a problem
 here. This tool has no compare operation, and <code>-d</code> does not
-select an operation. Thus <code>eictar -d out -f a.eictar</code> fails
-the one-operation rule, and it deletes nothing.</p>
+select an operation. Thus <code>eictar -d out -f a.ect</code> fails the
+one-operation rule, and it deletes nothing.</p>
 <h3 id="the-archive-never-contains-itself">7.2 The archive never
 contains itself</h3>
 <p>The writer creates the archive file before the walk starts. A walk
@@ -7172,7 +7181,8 @@ encryption was removed (§14).</p>
 <tr class="odd">
 <td><code>-f</code></td>
 <td><code>--file ARCHIVE</code></td>
-<td>the archive to use (necessary)</td>
+<td>the archive to use (necessary). A name with no extension gets
+<code>.ect</code> (§10.12).</td>
 <td>M1</td>
 </tr>
 <tr class="even">
@@ -7254,6 +7264,21 @@ extract. An excluded directory is not entered.</td>
 <td>one glob on each line. Blank lines are ignored. There is no comment
 syntax, because a file name can start with <code>#</code>.</td>
 <td>M5</td>
+</tr>
+<tr class="even">
+<td><code>-R</code></td>
+<td><code>--regex RE</code></td>
+<td>can be repeated. Keep only the paths that match a regular expression
+(§10.11). Create, append, update, list, extract, verify and delete.</td>
+<td>after M9</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td><code>--exclude-regex RE</code></td>
+<td>can be repeated. Leave out the paths that match. An excluded
+directory is not entered, and on a read it takes its contents
+(§10.11).</td>
+<td>after M9</td>
 </tr>
 <tr class="even">
 <td><code>-h</code></td>
@@ -7519,8 +7544,10 @@ Thus a default value never causes this error.</p>
 <td>usage error: an unknown option, no operation, two operations, no
 <code>-f</code>, a bad compression spec. Also a pattern that matches no
 member, for <code>-t</code>, <code>-x</code>, <code>--verify</code> and
-<code>--delete</code>, and a path that is already in the archive under
-<code>--on-conflict=error</code>. Nothing is changed or extracted.</td>
+<code>--delete</code>, an <code>-R</code> that matches no path or
+member, a regular expression that does not compile, and a path that is
+already in the archive under <code>--on-conflict=error</code>. Nothing
+is changed or extracted.</td>
 </tr>
 <tr class="even">
 <td>3</td>
@@ -7558,7 +7585,7 @@ short option does not exist.</p>
 <p>Option parsing has its own unit tests (§13.1). They cover every
 combined form, the one-operation rule and each path to exit 2. The old
 <code>tar</code> form without the leading dash
-(<code>eictar cf archive.eictar path</code>) is <strong>not</strong>
+(<code>eictar cf archive.ect path</code>) is <strong>not</strong>
 supported. It makes the first positional argument unclear, and modern
 <code>tar</code> keeps it only for compatibility.</p>
 <h3 id="listing-format">10.9 Listing format</h3>
@@ -7566,7 +7593,7 @@ supported. It makes the first positional argument unclear, and modern
 Plain <code>-t</code> prints one path on each line. <code>-tv</code> (or
 <code>--long</code>) prints the long listing. <code>-tvv</code> adds
 more columns and a line of totals.</p>
-<pre><code>$ eictar -tvf a.eictar
+<pre><code>$ eictar -tvf a.ect
 drwxrwxr-x  psm/psm       -       -      -  -             2026-09-24 17:59:19  d
 -rw-rw-r--  psm/psm  200000  200000   0.0%  zstd:level=3  2026-09-24 17:59:19  d/random.bin
 -rw-rw-r--  psm/psm  240001    1432  99.4%  zstd:level=3  2026-09-24 17:59:19  d/text.txt</code></pre>
@@ -7640,6 +7667,71 @@ directory <code>a/cache</code>, but its members stayed, and
 <code>--exclude cache</code> hid <code>a/cache</code> but not its
 contents. A directory that a pattern matches now takes its contents, at
 any depth.</p>
+<p><strong>Regular expressions.</strong> <code>-R RE</code>
+(<code>--regex</code>) and <code>--exclude-regex RE</code> use the RE2
+syntax of Go’s <code>regexp</code> package. The time of a match is
+linear in the length of the path, so no expression can make the program
+hang. An expression that does not compile is a usage error (exit 2).</p>
+<ul>
+<li>An expression must match the <strong>whole</strong> stored path. The
+program puts it in <code>^(?:</code> and <code>)$</code>. Thus
+<code>dir/a1\.txt</code> does not match
+<code>olddir/a1.txt.bak</code>.</li>
+<li>The expression sees the <strong>stored path</strong>: relative, with
+<code>/</code> between the names, on every platform. It does not see the
+path on the disk. Thus
+<code>-C ~ -R &#39;Documents/.*\.pdf&#39; Documents</code> gives the same result
+on every machine.</li>
+<li>In an expression, <code>.</code> is any character. Write
+<code>\.</code> for a dot.</li>
+<li>A byte of a path that is not valid UTF-8 counts as one character,
+which <code>.</code> matches. An expression cannot hold such a
+byte.</li>
+</ul>
+<p><code>-R</code> <strong>keeps only</strong> the paths that match one
+of its expressions. On create, append and update, it filters what the
+walk finds below the path arguments. The walk enters every directory,
+because a match can be deeper down. A directory is stored only if it
+matches, and extraction creates the parent directories that the archive
+does not hold. On <code>-t</code>, <code>-x</code>,
+<code>--verify</code> and <code>--delete</code>, it filters the members
+that the patterns select, or all members when there are no patterns.
+<code>--delete</code> needs a pattern or an <code>-R</code>.</p>
+<p>Unlike a pattern, a match of a directory does not take its contents.
+<code>-R &#39;build&#39;</code> keeps the directory <code>build</code> only, and
+<code>-R &#39;build(/.*)?&#39;</code> keeps it with its contents.</p>
+<p><code>--exclude-regex</code> <strong>leaves out</strong> the paths
+that match. It works like <code>--exclude</code>. On create, append and
+update, the walk does not enter an excluded directory. On a read, an
+excluded directory also excludes its contents, so that a list of an
+archive agrees with the walk that made it. An exclusion wins over
+<code>-R</code> and over the patterns.</p>
+<p>Each <code>-R</code> must match at least one path, or the operation
+stops with exit 2 and changes nothing (§10.7), as a pattern does. A
+mistyped expression is reported, not answered with an empty result.
+<code>--exclude-regex</code> has no such check, as
+<code>--exclude</code> has none.</p>
+<h3 id="archive-name">10.12 Archive name</h3>
+<p>The conventional extension of an archive is <code>.ect</code>. The
+program finds an archive by the magic of its header (§3.1), not by its
+name. Thus any name works, and the extension is only for people.</p>
+<p><strong>Create adds <code>.ect</code> to a name with no
+extension.</strong> <code>-cf backup</code> makes
+<code>backup.ect</code>, and the program writes a notice that names the
+file, except under <code>-q</code>. It does so whatever exists with the
+name as typed. Thus <code>-cf backup backup</code> makes
+<code>backup.ect</code> from the directory <code>backup</code>. A name
+has an extension when its last element, without leading dots, has a dot.
+Thus <code>-cf backup.tar</code> and <code>-cf home.2026-09</code> keep
+the name as typed, and <code>-cf .backup</code> makes
+<code>.backup.ect</code>.</p>
+<p><strong>The other operations find the name that create made.</strong>
+If the name has no extension, no file has that name, and the same name
+with <code>.ect</code> exists, the program uses that file. Thus
+<code>-tf backup</code> lists <code>backup.ect</code>. A file with the
+name as typed always wins. A directory with that name does not count, so
+<code>-tf backup</code> finds <code>backup.ect</code> next to the
+directory <code>backup</code>.</p>
 <h2 id="configuration-environment-variables-and-the-configuration-file">11.
 Configuration: environment variables and the configuration file</h2>
 <p>A long command line is tedious to type each time, for example:
@@ -7693,8 +7785,10 @@ and the others), and <code>--recompress</code>, which is part of
 compact. A configuration file must never change a create into an
 extract.</li>
 <li><strong>What the operation works on:</strong> <code>-f</code>,
-<code>-C</code>, <code>-d</code>, <code>-T</code>, <code>-O</code>, and
-all positional paths and patterns.</li>
+<code>-C</code>, <code>-d</code>, <code>-T</code>, <code>-O</code>,
+<code>-R</code>, and all positional paths and patterns.
+<code>--exclude-regex</code> can come from a configuration, as
+<code>exclude</code> can.</li>
 <li><strong>The passphrase and its sources</strong> (§11.4).</li>
 <li><code>--config</code>, <code>--no-config</code> and
 <code>--show-config</code>.</li>
@@ -7807,11 +7901,13 @@ depend on the configuration of the person who runs it.</p>
 <h1 id="part-iv-implementation">Part IV — Implementation</h1>
 <h2 id="package-layout">12. Package layout</h2>
 <p><code>go.mod</code> is at the project root. The packages are under
-<code>src/</code>. The module path is <code>eictar</code>, so the import
-paths are like <code>eictar/src/internal/format</code>. A change to a
-real import path (for example
-<code>github.com/&lt;you&gt;/eictar</code>) is one line now. Later it
-changes every import (open question 3, §1.3).</p>
+<code>src/</code>. The module path is
+<code>github.com/philmalin/eictar</code>, so the import paths are like
+<code>github.com/philmalin/eictar/src/internal/format</code>. Thus
+<code>go install github.com/philmalin/eictar/src/cmd/eictar@latest</code>
+builds the program. Such a binary gets its version from the module
+version that Go records in it. A <code>make</code> build gets it from
+<code>VERSION</code>.</p>
 <p>The module cache is in <code>.gocache/</code>, the build cache in
 <code>.gobuildcache/</code>, and temporary files in <code>.tmp/</code>.
 All three are inside the project. The <code>Makefile</code> sets
@@ -8070,6 +8166,21 @@ its old length.</p>
         Note over F: the reader refuses the file, and --repair cuts it after the last valid trailer
     end
     C-&gt;&gt;F: close, which drops the lock</code></pre>
+<h3 id="releases">12.3 Releases</h3>
+<p>A release is a tag of the form <code>v1.2.3</code>. The version
+follows semantic versioning. A change of the format that an old reader
+cannot read needs a new major version (§3).</p>
+<p>A push of the tag starts the release workflow
+(<code>.github/workflows/release.yml</code>). The workflow runs
+<code>make check</code> on Linux. Then <code>make release</code> builds
+one binary for each platform of §15.1, on amd64 and on arm64, with the
+man page, <code>README.md</code>, <code>LICENSE</code> and
+<code>TRADEMARKS.md</code>. The workflow packs each one in a
+<code>.tar.gz</code> file, writes <code>SHA256SUMS</code>, and makes a
+draft release with these files.</p>
+<p>The ci workflow runs on the same tag, on all five platforms. The
+draft is published by hand, after that run passes too. Windows builds,
+but it is not in the release, because no workflow tests it (§15.1).</p>
 <h2 id="testing-plan">13. Testing plan</h2>
 <p>Tests are part of each deliverable. There are two levels: unit tests
 next to the code, and operational tests that run the built binary as a
@@ -8277,8 +8388,9 @@ new content, a new time or a new mode, or it goes, or it becomes a link,
 or new entries come. Then one operation runs: append with each
 <code>--on-conflict</code>, update with each <code>--update-mode</code>,
 delete, compact, compact with <code>--recompress</code>, or extraction
-by pattern. Each operation uses a random codec and random settings:
-chunk size, workers, memory limit and spill threshold.</p>
+by pattern or by <code>-R</code>. Each operation uses a random codec and
+random settings: chunk size, workers, memory limit and spill
+threshold.</p>
 <p>A third of the sequences are encrypted, some with a sealed index. In
 these, a step can also change the passphrase. After the change, the old
 passphrase must fail with exit 3.</p>
@@ -8500,8 +8612,8 @@ tens of millions of members, marked by a new <code>index_kind</code> in
 the trailer flags.</li>
 <li><strong>A streaming variant</strong> that repeats member metadata
 inline, for use through a pipe.</li>
-<li><strong>A detached signature</strong> (<code>.eictar.sig</code>) of
-the trailer.</li>
+<li><strong>A detached signature</strong> (<code>.ect.sig</code>) of the
+trailer.</li>
 </ul>
 <h3 id="other-unix-like-platforms">15.1 Other UNIX-like platforms</h3>
 <p><strong>Status: complete in M8.</strong> The CI workflow passes on
@@ -8788,6 +8900,12 @@ random data key that the passphrase wraps,
 encrypted archives (§6.2). Both change the format, so they come before a
 first release, with new test vectors and golden files.</p></li>
 </ol>
+<p>After M9, the module path is
+<code>github.com/philmalin/eictar</code>, and a release workflow makes
+the first release, v1.0.0 (§12.3). Before that release, two changes to
+the interface: the <code>.ect</code> extension (§10.12), and the
+selection by regular expression, <code>-R</code> and
+<code>--exclude-regex</code> (§10.11).</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
 <p>This appendix supports §6.1. The question “how does this compare with
