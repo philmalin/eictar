@@ -5317,6 +5317,8 @@ Operational tests (end to end, build tag
 <code>operational</code>)</a></li>
 <li><a href="#supporting-tools" id="toc-supporting-tools">13.3
 Supporting tools</a></li>
+<li><a href="#stress-tester" id="toc-stress-tester">13.4 Stress
+tester</a></li>
 </ul></li>
 <li><a href="#security-considerations" id="toc-security-considerations">14. Security considerations</a>
 <ul>
@@ -5351,8 +5353,8 @@ the usual choices</a></li>
 </ul>
 </nav>
 <h1 id="eictar-design-document">eictar — Design Document</h1>
-<p>Status: in implementation. M1 to M7 are complete. The code of M8 is
-written, and waits for its CI run (§15.1). Date: 2026-09-24 Applies to:
+<p>Status: M1 to M8 are complete. The CI workflow passes on Linux,
+macOS, FreeBSD, NetBSD and OpenBSD (§15.1). Date: 2026-09-24 Applies to:
 v1 (format version 1.0)</p>
 <p>This document specifies the on-disk format, the concurrency model,
 the command line and the internal package layout of <code>eictar</code>.
@@ -6459,17 +6461,31 @@ of RAM and <code>j × 4 × chunk_size</code>. On Linux, the program reads
 RAM from <code>/proc/meminfo</code>. The reader goroutine reserves one
 chunk of budget before each read. The worker releases the reservation
 when it has handed the chunk to the spool.</p>
-<p>Two rules prevent deadlock. The first version of M3 deadlocked, and
-these rules are the fix:</p>
+<p>Four rules prevent deadlock. The first version of M3 deadlocked, and
+so did M7 on a small machine. These rules are the fix:</p>
 <ul>
-<li><strong>Nothing waits for budget while it holds budget.</strong> A
-worker releases its chunk reservation <em>before</em> it adds the chunk
-to the spool, because the spool can need memory of its own.</li>
-<li><strong>A spool never waits.</strong> A spool releases its bytes
+<li><p><strong>Nothing waits for budget while it holds budget.</strong>
+A worker releases its chunk reservation <em>before</em> it adds the
+chunk to the spool, because the spool can need memory of its
+own.</p></li>
+<li><p><strong>A spool never waits.</strong> A spool releases its bytes
 only when its member is complete. A spool that waits for budget can wait
 for itself. Thus it uses a non-blocking <code>TryAcquire</code>. If that
 fails, the spool moves to disk, which is also the correct response to
-low memory.</li>
+low memory.</p></li>
+<li><p><strong>The reader does not wait for its own member.</strong>
+While the reader reads a member, the finished chunks of that member are
+in its spool, and they hold budget. The member is complete only when the
+reader goes on. Thus, if the budget is not free at once, the reader
+first moves that spool to disk, and then it waits. Everything else that
+holds budget is released without the reader.</p>
+<p>Until M8, this rule was missing. With 2 workers and 512-byte chunks,
+a create stopped for ever. With the defaults, a file of 24 to 32 MiB on
+a machine with two CPUs was able to do the same. A run of the tests as
+on a CI runner with two CPUs found it.</p></li>
+<li><p><strong>The budget is at least two chunks.</strong> The reader
+holds one chunk while it waits for the next. The builder raises a
+smaller budget to two chunks.</p></li>
 </ul>
 <p>A request that is larger than the whole budget goes through
 immediately. Waiting cannot help it. Also, the requester can be the only
@@ -7764,6 +7780,17 @@ targets, not a bare <code>go</code> command:</p>
 <td><code>make check</code> with <code>test</code> for
 <code>test-race</code>, for NetBSD and OpenBSD</td>
 </tr>
+<tr class="even">
+<td><code>make skips</code></td>
+<td>list each test that this platform skips, with its reason, and the
+totals</td>
+</tr>
+<tr class="odd">
+<td><code>make stress</code></td>
+<td>random end-to-end tests against a model (§13.4).
+<code>STRESS=&quot;-duration 30m&quot;</code> runs longer, and
+<code>STRESS=&quot;-seed N -sequences 1&quot;</code> replays a failure.</td>
+</tr>
 </tbody>
 </table>
 <p><code>GO=go</code> gives another toolchain, as CI does:
@@ -7771,6 +7798,8 @@ targets, not a bare <code>go</code> command:</p>
 <pre><code>go.mod
 doc/                       design.md; format.md, the format reference; eictar.1, the man page
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
+tools/testskips/           lists the skipped tests and their reasons, for make skips (§13.3)
+tools/stress/              the stress tester: model, generator, runner, checks and faults (§13.4)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
@@ -8122,12 +8151,92 @@ exactly.</li>
 <li><strong>Tests that need root</strong> (ownership, device nodes) skip
 with a clear reason. A CI container with the necessary privilege must
 run them.</li>
+<li><strong>A skip passes quietly.</strong> <code>go test</code> does
+not show it without <code>-v</code>, and a platform avoids a test by
+skipping it. Thus <code>make skips</code> runs the tests with
+<code>-json</code>, and <code>tools/testskips</code> lists each skipped
+test with its reason, and the totals. Each CI job runs it after
+<code>make check</code>, so that a green job also says what it did not
+test. The job’s result stays the result of <code>make check</code>.</li>
 <li><strong>Coverage and benchmarks</strong> come later.
 <code>format</code>, <code>crypt</code> and <code>codec</code> need high
 coverage, because a fault there is silent and permanent. Benchmarks
 (<code>go test -bench</code>) compare compression, extraction and index
 load time with <code>tar | zstd</code>.</li>
 </ul>
+<h3 id="stress-tester">13.4 Stress tester</h3>
+<p><code>make stress</code> runs <code>tools/stress</code>. It tests the
+built binary with random data and random operations, and it compares
+each result with a model. The unit and operational tests check the cases
+that someone thought of. The stress tester finds the combinations that
+nobody did.</p>
+<p><strong>The model</strong> is a map from each stored path to what an
+extraction must give back. That is the type, the content, the size, the
+mode, the time, and the target of a link. It changes only as eictar’s
+rules say (§9.2, §10.5). Replace, skip, error, the three update modes,
+and delete with eictar’s pattern rule are each a few lines of the
+tester.</p>
+<p><strong>A sequence</strong> creates an archive from a generated tree,
+and then takes steps. Before most steps, the tree changes. A file gets
+new content, a new time or a new mode, or it goes, or it becomes a link,
+or new entries come. Then one operation runs: append with each
+<code>--on-conflict</code>, update with each <code>--update-mode</code>,
+delete, compact, compact with <code>--recompress</code>, or extraction
+by pattern. Each operation uses a random codec and random settings:
+chunk size, workers, memory limit and spill threshold. A third of the
+sequences are encrypted, some with a sealed index.</p>
+<p><strong>After each step</strong> the tester makes three checks:</p>
+<ol type="1">
+<li><code>-t</code> lists exactly the model’s paths.</li>
+<li><code>--verify</code> passes.</li>
+<li>A full extraction gives back the model. The only extra paths allowed
+are the parent directories that extraction makes itself.</li>
+</ol>
+<p>Some operations must be refused: a conflict under
+<code>--on-conflict=error</code>, and a delete pattern that matches
+nothing. Each must exit with 2, and must leave the archive byte for byte
+as it was.</p>
+<p><strong>The data</strong> is random, text-like, repetitive or zeros,
+and it is often one byte on either side of a chunk boundary. The tree
+has deep directories, empty files, symbolic links, hardlinks and sparse
+files. Its names have spaces, other scripts, and bytes that are not
+UTF-8 where the filesystem takes them. A name never holds a glob
+character, so that a path is a literal pattern.</p>
+<p><strong>The fault mode</strong> is on by default. It adds two
+tests:</p>
+<ul>
+<li><strong>A crash.</strong> After a change, the tester cuts the
+archive at a random point inside the new generation. The archive must be
+refused with exit 3 and a message that names <code>--repair</code>. Then
+<code>--repair</code> must give back the archive of before the change,
+byte for byte.</li>
+<li><strong>Damage.</strong> In a copy of the archive, the tester flips
+one to four bits, often in the index and the trailer.
+<code>--verify</code> and extraction must agree. Both must refuse the
+copy with exit 3. Otherwise both must accept it and give back the model
+exactly, because a bit in dead space harms nothing. Wrong content with
+exit 0 is the failure that this test looks for.</li>
+</ul>
+<p>Any other exit code, a panic, or a command that runs for more than
+two minutes is a failure.</p>
+<p><strong>A failure stops the run.</strong> The sequence’s directory
+stays, with the source tree, <code>failure.txt</code> and
+<code>replay.sh</code>. <code>failure.txt</code> gives the seed and each
+step. <code>replay.sh</code> repeats the eictar commands. All randomness
+comes from the seed, and the file times come from a clock of the tester,
+never from the system clock. Thus
+<code>make stress STRESS=&quot;-seed N -sequences 1&quot;</code> repeats a failed
+sequence exactly.</p>
+<p><strong>The tester is tested.</strong> A bug put into eictar on
+purpose, where <code>-u</code> took an equal time as newer, failed the
+sixth sequence. The report named the file and its wrong mode.</p>
+<p><strong>Findings.</strong> The first runs found one fault in eictar.
+A chunk that its codec refused, for example after a failed zstd
+checksum, gave exit 4, as for an I/O error. It must give exit 3, for
+damage. Such an error is now <code>ErrCorruptData</code>. A test for
+each codec keeps it that way.</p>
+<p>A default run of three minutes makes approximately 11,000 eictar
+commands, with approximately 200 crashes and 400 damaged copies.</p>
 <h2 id="security-considerations">14. Security considerations</h2>
 <h3 id="what-an-observer-sees">14.1 What an observer sees</h3>
 <ul>
@@ -8291,8 +8400,8 @@ inline, for use through a pipe.</li>
 the trailer.</li>
 </ul>
 <h3 id="other-unix-like-platforms">15.1 Other UNIX-like platforms</h3>
-<p><strong>Status: the code is in M8. The support is not claimed until
-CI passes on each platform</strong> (see “Testing” below).</p>
+<p><strong>Status: complete in M8.</strong> The CI workflow passes on
+all five platforms (see “Testing” below).</p>
 <p>The metadata code (<code>src/internal/meta</code>) has a part that
 all five platforms share, and a small file for each platform. On any
 other platform (Windows, illumos, Plan 9 and the rest), the program
@@ -8370,6 +8479,12 @@ metadata.</p>
 </table>
 <p>“Stored dense” is not a failure. Without hole detection, the reader
 reads the whole file, which is correct.</p>
+<p><strong>A hole is only as fine as the filesystem reports it.</strong>
+ext4 reports data in 4 KiB blocks. ZFS, the usual filesystem on FreeBSD,
+reports it in whole records of 128 KiB by default. Thus on ZFS, each
+small data region costs a record. On the FreeBSD CI runner, three
+regions of 8, 8 and 4 KiB in a 64 MiB file stored 384 KiB. The holes are
+still kept.</p>
 <p><code>meta.Supports</code> gives this table in the code, one row for
 each platform. The unit tests read it, so that each test runs where its
 feature exists and says why it does not elsewhere. The operational tests
@@ -8428,9 +8543,22 @@ no-follow call does on each filesystem.</p>
 <p><code>.github/workflows/ci.yml</code> runs <code>make check</code> on
 Linux and macOS, and in virtual machines for FreeBSD, NetBSD and
 OpenBSD. NetBSD and OpenBSD have no race detector, so they run
-<code>make check-norace</code>. The workflow does not run from this
-project yet: it needs a GitHub repository. Until it passes on a
-platform, eictar does not claim support for that platform.</p>
+<code>make check-norace</code>. A platform is supported while the
+workflow passes on it.</p>
+<p>The first runs found five faults that no run on Linux had shown:</p>
+<ul>
+<li><code>.tmp</code> is not in the repository, and <code>vet</code> and
+<code>fmt</code> did not create it.</li>
+<li>A configuration test used a worker count that is the default on a CI
+runner with two CPUs.</li>
+<li>The pipeline deadlock of §8.1, which the check for that test
+found.</li>
+<li>The hole test expected the 4 KiB granularity of ext4. ZFS reports
+128 KiB records.</li>
+<li>A recompress test expected holes on NetBSD and OpenBSD, which store
+files dense. Also, the NetBSD job used <code>sort -V</code>, which
+NetBSD does not have.</li>
+</ul>
 <p>illumos is different again. Its xattrs are a hidden directory for
 each file, which is a separate model.</p>
 <h3 id="outstanding-items">15.2 Outstanding items</h3>
@@ -8587,14 +8715,12 @@ old, unlinked file (§9.6)</li>
 slower than necessary (§8.4)</li>
 <li>a gzip chunk carried a meaningless time</li>
 </ul></li>
-<li><p><strong>M8 — Other UNIX-like platforms</strong> <em>(code
-written, waits for CI)</em>: metadata on macOS, FreeBSD, NetBSD and
-OpenBSD, as §15.1 describes. Open questions 4 and 5 are decided (§1.1,
-rows 8 and 9). The CI workflow is in
-<code>.github/workflows/ci.yml</code>. The code builds and passes
-<code>go vet</code> on each platform, and the tests pass on Linux. The
-milestone is complete when the workflow passes on all five
-platforms.</p></li>
+<li><p><strong>M8 — Other UNIX-like platforms</strong>
+<em>(complete)</em>: metadata on macOS, FreeBSD, NetBSD and OpenBSD, as
+§15.1 describes. Open questions 4 and 5 are decided (§1.1, rows 8 and
+9). The CI workflow in <code>.github/workflows/ci.yml</code> passes on
+all five platforms. The first runs found a deadlock in the pipeline
+(§8.1), and four faults in tests and in the workflow (§15.1).</p></li>
 </ol>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>

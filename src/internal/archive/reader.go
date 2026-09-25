@@ -402,7 +402,9 @@ func (r *Reader) WriteMember(m *format.Member, dst io.Writer) error {
 		if uint64(len(encoded)) != plainSize {
 			plain, err = dec.Decode(plain[:0], encoded, int(plainSize))
 			if err != nil {
-				return fmt.Errorf("chunk %d of %q: %w", i, m.Path, err)
+				// The codec's own error says what it found; the sentinel says
+				// that this is damage, not I/O (exit 3, doc/design.md 10.7).
+				return fmt.Errorf("%w: chunk %d of %q: %v", format.ErrCorruptData, i, m.Path, err)
 			}
 			content = plain
 		}

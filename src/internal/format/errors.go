@@ -30,6 +30,11 @@ var (
 	// a decompression bomb rather than of ordinary damage.
 	ErrIndexTooLarge = errors.New("index exceeds maximum decoded size")
 
+	// ErrCorruptData means a member's content failed to decode: a chunk that
+	// its codec refuses, or that decodes to another size than the index
+	// gives. It is damage, as a digest that does not match is.
+	ErrCorruptData = errors.New("corrupt member data")
+
 	// ErrVersionMismatch means the header and the trailer disagree about the
 	// format version, which no writer of ours produces.
 	ErrVersionMismatch = errors.New("header and trailer version mismatch")

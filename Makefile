@@ -34,7 +34,7 @@ VERSION  ?= dev
 LDFLAGS    := -s -w -X eictar/src/internal/cli.Version=$(VERSION)
 BUILDFLAGS := -trimpath -ldflags="$(LDFLAGS)"
 
-.PHONY: all build test test-race operational fuzz bench compare vet fmt check check-norace skips clean
+.PHONY: all build test test-race operational fuzz bench compare stress vet fmt check check-norace skips clean
 
 all: build
 
@@ -78,6 +78,13 @@ skips: | $(TMPDIR)
 	@$(GO) test -count=1 -json ./src/... | $(GO) run ./tools/testskips
 	@echo "=== operational tests"
 	@$(GO) test -count=1 -json -tags operational ./src/operational/ | $(GO) run ./tools/testskips
+
+# Random end-to-end testing against a model of the archive (doc/design.md
+# 13.4). STRESS passes options, for example:
+#   make stress STRESS="-duration 30m"
+#   make stress STRESS="-seed 1234 -sequences 1"
+stress: build
+	$(GO) run ./tools/stress -eictar $(BIN) $(STRESS)
 
 vet: | $(TMPDIR)
 	$(GO) vet $(PKGS) ./tools/...

@@ -447,7 +447,7 @@ func TestVerifyFindsDamagedBlobs(t *testing.T) {
 			if err == nil {
 				t.Fatal("verify passed a damaged blob")
 			}
-			if !errors.Is(err, format.ErrChecksum) && !errors.Is(err, crypt.ErrAuthentication) && !errors.Is(err, format.ErrCorruptIndex) {
+			if !IsDamage(err) {
 				t.Errorf("error %v is not a corruption error", err)
 			}
 			if res.Failed != 1 || len(rep.warnings) != 1 || !bytes.Contains([]byte(rep.warnings[0]), []byte("t/b.txt")) {
@@ -945,4 +945,36 @@ func membersByID(t *testing.T, archive string, enc bool) map[uint64]format.Membe
 		out[m.ID] = m
 	}
 	return out
+}
+
+// TestCorruptChunkIsDamage: a chunk that its codec refuses is damage (exit 3),
+// whichever check catches it - the codec's own, or the content digest. The
+// stress tester found zstd's checksum error reported as an I/O error (exit 4).
+func TestCorruptChunkIsDamage(t *testing.T) {
+	for _, name := range codec.Names() {
+		if name == "none" {
+			continue // stored content has no codec to refuse it
+		}
+		t.Run(name, func(t *testing.T) {
+			tree := testutil.NewTree(t)
+			tree.Text("f.txt", 0o644, strings.Repeat("compressible text ", 4000))
+			archive := filepath.Join(t.TempDir(), "c.eictar")
+			if _, err := CreateArchive(CreateConfig{Archive: archive, Paths: []string{"f.txt"},
+				BaseDir: tree.Root, Options: Options{Codec: name}}); err != nil {
+				t.Fatal(err)
+			}
+			r, err := OpenWith(archive, OpenOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := r.Members()[0]
+			r.Close()
+			flipByteAt(t, archive, int64(m.Offset)+int64(m.Length)/2)
+
+			_, err = VerifyArchive(VerifyConfig{Archive: archive})
+			if err == nil || !IsDamage(err) {
+				t.Errorf("a corrupt %s chunk: %v; want an error that counts as damage", name, err)
+			}
+		})
+	}
 }

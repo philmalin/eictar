@@ -794,7 +794,7 @@ func RepairArchive(path string, open OpenOptions) (RepairResult, error) {
 // damage lists the errors that mean the archive's bytes are damaged or were
 // altered.
 var damage = []error{
-	format.ErrBadMagic, format.ErrChecksum, format.ErrCorruptIndex,
+	format.ErrBadMagic, format.ErrChecksum, format.ErrCorruptIndex, format.ErrCorruptData,
 	format.ErrTruncated, format.ErrIndexTooLarge, format.ErrVersionMismatch,
 	crypt.ErrAuthentication,
 }

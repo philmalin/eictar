@@ -1708,6 +1708,7 @@ nothing outside the project directory. Until M7, the `Makefile` did not set
 | `make check` | `fmt`, `vet`, `test-race` and `operational` |
 | `make check-norace` | `make check` with `test` for `test-race`, for NetBSD and OpenBSD |
 | `make skips` | list each test that this platform skips, with its reason, and the totals |
+| `make stress` | random end-to-end tests against a model (§13.4). `STRESS="-duration 30m"` runs longer, and `STRESS="-seed N -sequences 1"` replays a failure. |
 
 `GO=go` gives another toolchain, as CI does: `make check GO=go`.
 
@@ -1716,6 +1717,7 @@ go.mod
 doc/                       design.md; format.md, the format reference; eictar.1, the man page
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
 tools/testskips/           lists the skipped tests and their reasons, for make skips (§13.3)
+tools/stress/              the stress tester: model, generator, runner, checks and faults (§13.4)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
@@ -2083,6 +2085,80 @@ parts work.
   (`go test -bench`) compare compression, extraction and index load time
   with `tar | zstd`.
 
+
+### 13.4 Stress tester
+
+`make stress` runs `tools/stress`. It tests the built binary with random data
+and random operations, and it compares each result with a model. The unit
+and operational tests check the cases that someone thought of. The stress
+tester finds the combinations that nobody did.
+
+**The model** is a map from each stored path to what an extraction must give
+back. That is the type, the content, the size, the mode, the time, and the
+target of a link. It changes only as eictar's rules say (§9.2, §10.5). Replace, skip,
+error, the three update modes, and delete with eictar's pattern rule are each
+a few lines of the tester.
+
+**A sequence** creates an archive from a generated tree, and then takes steps.
+Before most steps, the tree changes. A file gets new content, a new time or
+a new mode, or it goes, or it becomes a link, or new entries come. Then one operation
+runs: append with each `--on-conflict`, update with each `--update-mode`,
+delete, compact, compact with `--recompress`, or extraction by pattern. Each
+operation uses a random codec and random settings: chunk size, workers,
+memory limit and spill threshold. A third of the sequences are encrypted,
+some with a sealed index.
+
+**After each step** the tester makes three checks:
+
+1. `-t` lists exactly the model's paths.
+2. `--verify` passes.
+3. A full extraction gives back the model. The only extra paths allowed are
+   the parent directories that extraction makes itself.
+
+Some operations must be refused: a conflict under `--on-conflict=error`, and
+a delete pattern that matches nothing. Each must exit with 2, and must leave
+the archive byte for byte as it was.
+
+**The data** is random, text-like, repetitive or zeros, and it is often one
+byte on either side of a chunk boundary. The tree has deep directories, empty
+files, symbolic links, hardlinks and sparse files. Its names have spaces,
+other scripts, and bytes that are not UTF-8 where the filesystem takes them. A name
+never holds a glob character, so that a path is a literal pattern.
+
+**The fault mode** is on by default. It adds two tests:
+
+- **A crash.** After a change, the tester cuts the archive at a random point
+  inside the new generation. The archive must be refused with exit 3 and a
+  message that names `--repair`. Then `--repair` must give back the archive
+  of before the change, byte for byte.
+- **Damage.** In a copy of the archive, the tester flips one to four bits,
+  often in the index and the trailer. `--verify` and extraction must agree.
+  Both must refuse the copy with exit 3. Otherwise both must accept it and
+  give back the model exactly, because a bit in dead space harms nothing. Wrong content with
+  exit 0 is the failure that this test looks for.
+
+Any other exit code, a panic, or a command that runs for more than two
+minutes is a failure.
+
+**A failure stops the run.** The sequence's directory stays, with the source
+tree, `failure.txt` and `replay.sh`. `failure.txt` gives the seed and each
+step. `replay.sh` repeats the eictar commands. All randomness comes from the
+seed, and the file times come from a clock of the tester, never from the
+system clock. Thus `make stress STRESS="-seed N -sequences 1"` repeats a
+failed sequence exactly.
+
+**The tester is tested.** A bug put into eictar on purpose, where `-u` took
+an equal time as newer, failed the sixth sequence. The report named the file
+and its wrong mode.
+
+**Findings.** The first runs found one fault in eictar. A chunk that its
+codec refused, for example after a failed zstd checksum, gave exit 4, as for
+an I/O error. It must give exit 3, for damage. Such an error is now `ErrCorruptData`. A
+test for each codec keeps it that way.
+
+A default run of three minutes makes
+approximately 11,000 eictar commands, with approximately 200 crashes and 400
+damaged copies.
 
 ## 14. Security considerations
 
