@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"eictar/src/internal/testutil"
+	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
 // runOK runs the binary and fails the test on a non-zero exit.

@@ -7,9 +7,9 @@ import (
 	"io"
 	"os"
 
-	"eictar/src/internal/codec"
-	"eictar/src/internal/crypt"
-	"eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/codec"
+	"github.com/philmalin/eictar/src/internal/crypt"
+	"github.com/philmalin/eictar/src/internal/format"
 )
 
 // Reader opens an archive for listing and extraction.

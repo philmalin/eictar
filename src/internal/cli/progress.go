@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/term"
 
-	"eictar/src/internal/archive"
-	"eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/archive"
+	"github.com/philmalin/eictar/src/internal/format"
 )
 
 // isTerminal reports whether w is a terminal. It is a variable so that tests

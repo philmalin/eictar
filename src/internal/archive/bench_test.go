@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"eictar/src/internal/codec"
-	"eictar/src/internal/testutil"
+	"github.com/philmalin/eictar/src/internal/codec"
+	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
 // benchTree is a mixed corpus of about 64 MiB: many small text files, some

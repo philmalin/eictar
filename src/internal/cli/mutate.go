@@ -7,9 +7,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"eictar/src/internal/archive"
-	"eictar/src/internal/codec"
-	"eictar/src/internal/crypt"
+	"github.com/philmalin/eictar/src/internal/archive"
+	"github.com/philmalin/eictar/src/internal/codec"
+	"github.com/philmalin/eictar/src/internal/crypt"
 )
 
 // openFor builds the open options every operation on an existing archive

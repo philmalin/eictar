@@ -10,10 +10,10 @@ import (
 	"runtime"
 	"sort"
 
-	"eictar/src/internal/crypt"
-	"eictar/src/internal/format"
-	"eictar/src/internal/fsutil"
-	"eictar/src/internal/pipeline"
+	"github.com/philmalin/eictar/src/internal/crypt"
+	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/fsutil"
+	"github.com/philmalin/eictar/src/internal/pipeline"
 )
 
 // Reporter receives progress and warnings. A nil Reporter is silent.

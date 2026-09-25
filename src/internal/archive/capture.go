@@ -8,9 +8,9 @@ import (
 	"io"
 	"os"
 
-	"eictar/src/internal/format"
-	"eictar/src/internal/meta"
-	"eictar/src/internal/pipeline"
+	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/meta"
+	"github.com/philmalin/eictar/src/internal/pipeline"
 )
 
 // MetadataOptions selects which metadata a create records.

@@ -13,11 +13,11 @@ import (
 
 	"lukechampine.com/blake3"
 
-	"eictar/src/internal/codec"
-	"eictar/src/internal/crypt"
-	"eictar/src/internal/format"
-	"eictar/src/internal/meta"
-	"eictar/src/internal/testutil"
+	"github.com/philmalin/eictar/src/internal/codec"
+	"github.com/philmalin/eictar/src/internal/crypt"
+	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/meta"
+	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
 // mutTree is a small tree for the mutation tests: two files, a nested one,

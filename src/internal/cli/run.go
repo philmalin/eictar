@@ -4,13 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime/debug"
 	"sort"
 	"strings"
 
-	"eictar/src/internal/archive"
-	"eictar/src/internal/crypt"
-	"eictar/src/internal/format"
-	"eictar/src/internal/fsutil"
+	"github.com/philmalin/eictar/src/internal/archive"
+	"github.com/philmalin/eictar/src/internal/crypt"
+	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/fsutil"
 )
 
 // Exit codes (doc/design.md 10.7). Code 3 is kept distinct from code 4 so a
@@ -34,6 +35,18 @@ func (e *UsageError) Unwrap() error { return e.Err }
 // Version is set at build time; the zero value keeps a developer build honest
 // about being one.
 var Version = "dev"
+
+// version is what --version prints. A binary from `go install ...@v1.0.0`
+// has no -ldflags, but the Go toolchain records the module version in it.
+func version() string {
+	if Version != "dev" {
+		return Version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return strings.TrimPrefix(bi.Main.Version, "v")
+	}
+	return Version
+}
 
 // Run parses argv and performs the requested operation, returning the process
 // exit code. It writes nothing to the real standard streams, which is what
@@ -65,7 +78,7 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 		writeUsage(stdout)
 		return ExitOK
 	case opts.Version:
-		fmt.Fprintf(stdout, "eictar %s\n", Version)
+		fmt.Fprintf(stdout, "eictar %s\n", version())
 		return ExitOK
 	case opts.ShowConfig:
 		fmt.Fprint(stdout, EffectiveSettings(opts))

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"eictar/src/internal/format"
-	"eictar/src/internal/meta"
-	"eictar/src/internal/testutil"
+	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/meta"
+	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
 // TestXattrsFromAnotherPlatform is open question 5, as decided for M8

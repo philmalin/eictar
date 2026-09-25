@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"eictar/src/internal/testutil"
+	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
 // updateGolden rewrites the golden archives. Run it only for a deliberate

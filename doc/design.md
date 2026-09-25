@@ -65,6 +65,7 @@ result, a listing or a selective extraction does not read the member data.
 | 7 | Paths in an archive | At most one live member for each path. `-r` on a path that is already in the archive replaces it (§9.2). |
 | 8 | macOS ACLs | Not recorded. They need CGO, and the no-CGO rule stays (§15.1). Decided for M8, from open question 4. |
 | 9 | Xattrs across platforms | Names are recorded exactly. Each name is applied where the destination takes it, and one notice lists the rest (§7.7). Decided for M8, from open question 5. |
+| 10 | Module path | `github.com/philmalin/eictar` (§12). Decided for the first release, from open question 3. |
 
 ### 1.2 Non-goals for v1
 
@@ -101,12 +102,12 @@ This table lists the decisions that are not made yet. With it, a reader can
 tell a decided item from an open one. A decided question leaves the table,
 and its number is not used again, because code comments refer to the numbers.
 Question 1 (one live member for each path) was decided for M6 (§1.1, row 7).
-Questions 4 and 5 were decided for M8 (§1.1, rows 8 and 9).
+Questions 4 and 5 were decided for M8 (§1.1, rows 8 and 9). Question 3 was
+decided for the first release (§1.1, row 10).
 
 | # | Question | Sections | Needed by |
 |---|----------|----------|-----------|
 | 2 | **Interleaved `-C`.** `tar` accepts `-C a x -C b y` and changes directory between the path arguments. That needs the argument order, which the option parser does not keep. Until this question is decided, more than one `-C` is a usage error. | §7.1, §10.4 | M7 |
-| 3 | **Module path.** Today it is `eictar`, so imports read `eictar/src/internal/...`. A change to a real import path is one line now. Later it changes every import. | §12 | Any time |
 
 ### 1.4 Terms
 
@@ -1769,9 +1770,11 @@ who runs it.
 ## 12. Package layout
 
 `go.mod` is at the project root. The packages are under `src/`. The module
-path is `eictar`, so the import paths are like `eictar/src/internal/format`.
-A change to a real import path (for example `github.com/<you>/eictar`) is one
-line now. Later it changes every import (open question 3, §1.3).
+path is `github.com/philmalin/eictar`, so the import paths are like
+`github.com/philmalin/eictar/src/internal/format`. Thus
+`go install github.com/philmalin/eictar/src/cmd/eictar@latest` builds the
+program. Such a binary gets its version from the module version that Go
+records in it. A `make` build gets it from `VERSION`.
 
 The module cache is in `.gocache/`, the build cache in `.gobuildcache/`, and
 temporary files in `.tmp/`. All three are inside the project. The `Makefile`
@@ -2011,6 +2014,22 @@ sequenceDiagram
     end
     C->>F: close, which drops the lock
 ```
+
+### 12.3 Releases
+
+A release is a tag of the form `v1.2.3`. The version follows semantic
+versioning. A change of the format that an old reader cannot read needs a
+new major version (§3).
+
+A push of the tag starts the release workflow
+(`.github/workflows/release.yml`). The workflow runs `make check` on Linux.
+Then `make release` builds one binary for each platform of §15.1, on amd64
+and on arm64, with the man page. The workflow packs each one in a `.tar.gz`
+file, writes `SHA256SUMS`, and makes a draft release with these files.
+
+The ci workflow runs on the same tag, on all five platforms. The draft is
+published by hand, after that run passes too. Windows builds, but it is not
+in the release, because no workflow tests it (§15.1).
 
 ## 13. Testing plan
 
@@ -2596,6 +2615,9 @@ and pass, not that the feature ran once by hand.
    passphrase wraps, `--change-passphrase` (§9.7), and a keyed member digest
    in encrypted archives (§6.2). Both change the format, so they come before a
    first release, with new test vectors and golden files.
+
+After M9, the module path is `github.com/philmalin/eictar`, and a release
+workflow makes the first release, v1.0.0 (§12.3).
 
 
 ## Appendix A. Why these primitives, compared with AES

@@ -15,10 +15,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"eictar/src/internal/archive"
-	"eictar/src/internal/codec"
-	"eictar/src/internal/crypt"
-	"eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/archive"
+	"github.com/philmalin/eictar/src/internal/codec"
+	"github.com/philmalin/eictar/src/internal/crypt"
+	"github.com/philmalin/eictar/src/internal/format"
 )
 
 // reporter turns -v and warnings into output on the right stream.

@@ -5,7 +5,7 @@ package main
 import (
 	"os"
 
-	"eictar/src/internal/cli"
+	"github.com/philmalin/eictar/src/internal/cli"
 )
 
 func main() {

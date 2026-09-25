@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"eictar/src/internal/testutil"
+	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
 // Exit codes, repeated here rather than imported. The operational suite is a

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"eictar/src/internal/testutil"
+	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
 const (

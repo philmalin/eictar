@@ -25,16 +25,17 @@ FUZZTIME ?= 30s
 
 # The version that --version prints. Override it for a release:
 #   make build VERSION=1.0.0
+# The release workflow (.github/workflows/release.yml) sets it from the tag.
 VERSION  ?= dev
 
 # -trimpath keeps local paths out of the binary, which also makes the build
 # reproducible. -s -w drop the symbol table and the DWARF debug information:
 # the same result as strip(1). Panic stack traces keep their function names
 # and lines. A debugger (Delve) needs a build without -s -w.
-LDFLAGS    := -s -w -X eictar/src/internal/cli.Version=$(VERSION)
+LDFLAGS    := -s -w -X github.com/philmalin/eictar/src/internal/cli.Version=$(VERSION)
 BUILDFLAGS := -trimpath -ldflags="$(LDFLAGS)"
 
-.PHONY: all build test test-race operational fuzz bench compare stress vet fmt check check-norace skips clean
+.PHONY: all build release test test-race operational fuzz bench compare stress vet fmt check check-norace skips clean
 
 all: build
 
@@ -43,6 +44,23 @@ $(TMPDIR):
 
 build: | $(TMPDIR)
 	$(GO) build $(BUILDFLAGS) -o $(BIN) ./src/cmd/eictar
+
+# The release binaries: one directory for each platform that the CI workflow
+# tests (doc/design.md 15.1), with the man page. The release workflow packs
+# each directory and writes the checksums.
+#   make release VERSION=1.0.0
+RELEASE_TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 \
+                   freebsd/amd64 freebsd/arm64 netbsd/amd64 netbsd/arm64 \
+                   openbsd/amd64 openbsd/arm64
+release: | $(TMPDIR)
+	rm -rf .build/release
+	@for t in $(RELEASE_TARGETS); do \
+		os=$${t%/*}; arch=$${t#*/}; dir=.build/release/eictar-$(VERSION)-$$os-$$arch; \
+		echo "$$os/$$arch"; \
+		mkdir -p $$dir && \
+		GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 $(GO) build $(BUILDFLAGS) -o $$dir/eictar ./src/cmd/eictar && \
+		cp doc/eictar.1 $$dir/ || exit 1; \
+	done
 
 test: | $(TMPDIR)
 	$(GO) test $(PKGS)

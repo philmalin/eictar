@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"eictar/src/internal/format"
-	"eictar/src/internal/fsutil"
-	"eictar/src/internal/meta"
+	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/fsutil"
+	"github.com/philmalin/eictar/src/internal/meta"
 )
 
 // ExtractConfig drives extraction.

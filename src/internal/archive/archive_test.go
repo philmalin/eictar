@@ -17,11 +17,11 @@ import (
 
 	"lukechampine.com/blake3"
 
-	"eictar/src/internal/codec"
-	"eictar/src/internal/crypt"
-	"eictar/src/internal/format"
-	"eictar/src/internal/fsutil"
-	"eictar/src/internal/testutil"
+	"github.com/philmalin/eictar/src/internal/codec"
+	"github.com/philmalin/eictar/src/internal/crypt"
+	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/fsutil"
+	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
 // contents covers the payload shapes that break an archiver: empty, tiny,

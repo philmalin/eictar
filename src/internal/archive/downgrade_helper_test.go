@@ -6,8 +6,8 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 
-	"eictar/src/internal/crypt"
-	"eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/crypt"
+	"github.com/philmalin/eictar/src/internal/format"
 )
 
 // downgradeArchive strips encryption from an archive's framing, the way an

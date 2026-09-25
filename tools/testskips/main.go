@@ -36,7 +36,7 @@ func main() {
 		if json.Unmarshal(sc.Bytes(), &e) != nil || e.Test == "" {
 			continue // a package line, or not JSON (a build error)
 		}
-		key := strings.TrimPrefix(e.Package, "eictar/") + "  " + e.Test
+		key := strings.TrimPrefix(e.Package, "github.com/philmalin/eictar/") + "  " + e.Test
 		switch e.Action {
 		case "output":
 			output[key] = append(output[key], e.Output)

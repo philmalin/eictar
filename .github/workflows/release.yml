@@ -1,0 +1,48 @@
+# A release, when a version tag is pushed:
+#
+#   git tag -a v1.0.0 -m "eictar 1.0.0"
+#   git push origin v1.0.0
+#
+# The job runs the tests on Linux, builds the binaries of `make release`, and
+# makes a DRAFT release with the archives and their SHA-256 sums. The ci
+# workflow runs on the same tag on all five platforms. Publish the draft on
+# GitHub when that run passes too.
+name: release
+
+on:
+  push:
+    tags: ['v[0-9]*']
+
+env:
+  GOTOOLCHAIN: auto
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: make check GO=go
+      - name: build
+        run: make release GO=go VERSION="${GITHUB_REF_NAME#v}"
+      - name: pack
+        working-directory: .build/release
+        run: |
+          for dir in eictar-*; do
+            tar --owner=0 --group=0 --numeric-owner -czf "$dir.tar.gz" "$dir"
+          done
+          sha256sum eictar-*.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+      - name: draft release
+        working-directory: .build/release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+            --title "eictar ${GITHUB_REF_NAME#v}" --generate-notes \
+            eictar-*.tar.gz SHA256SUMS

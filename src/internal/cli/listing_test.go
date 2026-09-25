@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/format"
 )
 
 func TestSavedPercent(t *testing.T) {

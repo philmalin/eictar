@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"eictar/src/internal/archive"
-	"eictar/src/internal/crypt"
-	"eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/archive"
+	"github.com/philmalin/eictar/src/internal/crypt"
+	"github.com/philmalin/eictar/src/internal/format"
 )
 
 // Operation is the single action a run performs. Exactly one is selected per

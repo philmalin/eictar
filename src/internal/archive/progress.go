@@ -3,7 +3,7 @@ package archive
 import (
 	"io"
 
-	"eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/format"
 )
 
 // Progress is an optional part of a Reporter, for a progress meter

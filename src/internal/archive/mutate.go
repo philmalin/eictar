@@ -10,11 +10,11 @@ import (
 	"runtime"
 	"sort"
 
-	"eictar/src/internal/codec"
-	"eictar/src/internal/crypt"
-	"eictar/src/internal/format"
-	"eictar/src/internal/meta"
-	"eictar/src/internal/pipeline"
+	"github.com/philmalin/eictar/src/internal/codec"
+	"github.com/philmalin/eictar/src/internal/crypt"
+	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/meta"
+	"github.com/philmalin/eictar/src/internal/pipeline"
 )
 
 // ErrNoMatch means a pattern matched no live member. The whole operation is

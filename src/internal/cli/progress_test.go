@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/format"
 )
 
 func TestMeterLine(t *testing.T) {

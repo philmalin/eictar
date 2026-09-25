@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"eictar/src/internal/format"
-	"eictar/src/internal/fsutil"
-	"eictar/src/internal/meta"
-	"eictar/src/internal/testutil"
+	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/fsutil"
+	"github.com/philmalin/eictar/src/internal/meta"
+	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
 // metadataTree builds a tree with every kind of metadata M5 records.

@@ -12,7 +12,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"eictar/src/internal/codec"
+	"github.com/philmalin/eictar/src/internal/codec"
 )
 
 // The configuration layer (doc/design.md 11): settings from a configuration

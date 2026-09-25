@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"eictar/src/internal/fsutil"
-	"eictar/src/internal/meta"
+	"github.com/philmalin/eictar/src/internal/fsutil"
+	"github.com/philmalin/eictar/src/internal/meta"
 )
 
 // entryKind is what the walker found.

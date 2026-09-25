@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"eictar/src/internal/archive"
-	"eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/archive"
+	"github.com/philmalin/eictar/src/internal/format"
 )
 
 func mustParse(t *testing.T, argv ...string) *Options {
@@ -728,5 +728,19 @@ func TestModeString(t *testing.T) {
 		if got := modeString(&m); got != tc.want {
 			t.Errorf("modeString(%s %#o) = %q, want %q", tc.typ, tc.mode, got, tc.want)
 		}
+	}
+}
+
+// TestVersionPrefersTheLinkerValue: a make build sets Version with -ldflags,
+// and that wins. Without it, a test binary has no module version, so the
+// result stays "dev".
+func TestVersionPrefersTheLinkerValue(t *testing.T) {
+	if got := version(); got != "dev" {
+		t.Errorf("version() = %q in a test binary, want dev", got)
+	}
+	defer func(v string) { Version = v }(Version)
+	Version = "1.2.3"
+	if got := version(); got != "1.2.3" {
+		t.Errorf("version() = %q, want the linker value 1.2.3", got)
 	}
 }

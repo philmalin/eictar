@@ -1,4 +1,4 @@
-module eictar
+module github.com/philmalin/eictar
 
 go 1.27
 
