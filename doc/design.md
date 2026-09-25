@@ -1707,6 +1707,7 @@ nothing outside the project directory. Until M7, the `Makefile` did not set
 | `make compare` | compare eictar with `tar` and a compressor, on `DIR` (default: the module cache). Needs `tar`, `zstd`, `xz` and `gzip`. |
 | `make check` | `fmt`, `vet`, `test-race` and `operational` |
 | `make check-norace` | `make check` with `test` for `test-race`, for NetBSD and OpenBSD |
+| `make skips` | list each test that this platform skips, with its reason, and the totals |
 
 `GO=go` gives another toolchain, as CI does: `make check GO=go`.
 
@@ -1714,6 +1715,7 @@ nothing outside the project directory. Until M7, the `Makefile` did not set
 go.mod
 doc/                       design.md; format.md, the format reference; eictar.1, the man page
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
+tools/testskips/           lists the skipped tests and their reasons, for make skips (§13.3)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
@@ -2070,6 +2072,12 @@ parts work.
   cannot keep modes, timestamps, hardlinks and holes exactly.
 - **Tests that need root** (ownership, device nodes) skip with a clear
   reason. A CI container with the necessary privilege must run them.
+- **A skip passes quietly.** `go test` does not show it without `-v`, and a
+  platform avoids a test by skipping it. Thus `make skips` runs the tests
+  with `-json`, and `tools/testskips` lists each skipped test with its reason,
+  and the totals. Each CI job runs it after `make check`, so that a green job
+  also says what it did not test. The job's result stays the result of
+  `make check`.
 - **Coverage and benchmarks** come later. `format`, `crypt` and `codec` need
   high coverage, because a fault there is silent and permanent. Benchmarks
   (`go test -bench`) compare compression, extraction and index load time

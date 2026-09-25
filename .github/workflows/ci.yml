@@ -25,6 +25,9 @@ jobs:
         with:
           go-version-file: go.mod
       - run: make check GO=go
+      - name: skipped tests
+        if: always()
+        run: make skips GO=go
       - run: make fuzz GO=go FUZZTIME=20s
 
   macos:
@@ -35,6 +38,9 @@ jobs:
         with:
           go-version-file: go.mod
       - run: make check GO=go
+      - name: skipped tests
+        if: always()
+        run: make skips GO=go
 
   freebsd:
     runs-on: ubuntu-latest
@@ -44,7 +50,11 @@ jobs:
         with:
           envs: GOTOOLCHAIN
           prepare: pkg install -y go gmake
-          run: gmake check GO=go
+          # The job's result is check's; the list of skipped tests follows it.
+          run: |
+            gmake check GO=go; status=$?
+            gmake skips GO=go
+            exit $status
 
   netbsd:
     runs-on: ubuntu-latest
@@ -61,7 +71,9 @@ jobs:
             GO=$(command -v go || true)
             [ -n "$GO" ] || GO=$(ls /usr/pkg/bin/go1[0-9]* /usr/pkg/go*/bin/go 2>/dev/null | tail -1)
             echo "Go: $GO"
-            gmake check-norace GO="$GO"
+            gmake check-norace GO="$GO"; status=$?
+            gmake skips GO="$GO"
+            exit $status
 
   openbsd:
     runs-on: ubuntu-latest
@@ -72,4 +84,7 @@ jobs:
           envs: GOTOOLCHAIN
           prepare: pkg_add go gmake
           # OpenBSD has no race detector.
-          run: gmake check-norace GO=go
+          run: |
+            gmake check-norace GO=go; status=$?
+            gmake skips GO=go
+            exit $status
