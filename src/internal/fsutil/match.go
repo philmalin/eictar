@@ -11,6 +11,13 @@ import (
 // it names a directory the path lies under. That last rule is what makes
 // `eictar -xf a.eictar src` extract everything below src, which is what a user
 // means by naming a directory.
+//
+// A pattern with no slash also matches by name, at any depth: it matches a
+// path when it matches any component of it. That is what makes "*.go" find
+// src/main.go, and it keeps the directory rule for a name found deeper
+// down: "node_modules" takes a/node_modules and everything below it. Until
+// the stress tester, it matched only the last component, so it took the
+// directory a/node_modules and left its contents behind (doc/design.md 13.4).
 func Match(pattern, memberPath string) bool {
 	pattern = strings.TrimSuffix(path.Clean(pattern), "/")
 	if pattern == "" || pattern == "." {
@@ -24,14 +31,16 @@ func Match(pattern, memberPath string) bool {
 		return true
 	}
 	// path.Match treats / as a separator, so "*.go" does not match "a/b.go".
-	// Match the full path first, then the base name, which is what shell
+	// Match the full path first, then each name in it, which is what shell
 	// habits lead people to expect from a bare "*.go".
 	if ok, err := path.Match(pattern, memberPath); err == nil && ok {
 		return true
 	}
 	if !strings.Contains(pattern, "/") {
-		if ok, err := path.Match(pattern, path.Base(memberPath)); err == nil && ok {
-			return true
+		for _, name := range strings.Split(memberPath, "/") {
+			if ok, err := path.Match(pattern, name); err == nil && ok {
+				return true
+			}
 		}
 	}
 	return false

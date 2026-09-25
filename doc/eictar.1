@@ -346,6 +346,37 @@ adds the chunk count,
 .B sealed
 for an encrypted member, and the start of the BLAKE3 digest. A last line
 gives the totals.
+.SH PATTERNS
+The operations
+.BR \-t ,
+.BR \-x ,
+.B \-\-verify
+and
+.BR \-\-delete ,
+and
+.BR \-\-exclude ,
+take patterns. A pattern matches a member when it is the member's path, or
+a directory that the member is under, or a glob that matches the whole path
+(a
+.B *
+does not match
+.BR / ).
+A pattern with no
+.B /
+also matches any name in the path, at any depth: 
+.B *.go
+takes
+.BR src/main.go ,
+and
+.B cache
+takes
+.B a/cache
+and everything under it. Each pattern must match at least one member.
+.PP
+Put paths and patterns that start with
+.B \-
+after
+.BR \-\- .
 .SH CODECS
 .TP
 .B zstd

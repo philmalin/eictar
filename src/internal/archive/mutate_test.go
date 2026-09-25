@@ -3,6 +3,7 @@ package archive
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -976,5 +977,99 @@ func TestCorruptChunkIsDamage(t *testing.T) {
 				t.Errorf("a corrupt %s chunk: %v; want an error that counts as damage", name, err)
 			}
 		})
+	}
+}
+
+// TestNameMatchTakesTheDirectoryContents: a pattern with no slash matches a
+// directory by its name at any depth, and then takes what is below it, as a
+// full path does. It used to take the nested directory and leave its
+// contents behind: live members under a deleted directory, and a listing
+// that --exclude did not clean (doc/design.md 13.4).
+func TestNameMatchTakesTheDirectoryContents(t *testing.T) {
+	tree := testutil.NewTree(t)
+	tree.Dir("t", 0o755).Dir("t/a", 0o755).Dir("t/a/cache", 0o755)
+	tree.Text("t/a/cache/x.bin", 0o644, "x").Text("t/a/keep.txt", 0o644, "k")
+	archive := mkArchive(t, tree, false, "t")
+
+	l, err := ListArchive(ListConfig{Archive: archive, Exclude: []string{"cache"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range l.Members {
+		if strings.Contains(m.Path, "cache") {
+			t.Errorf("--exclude cache still lists %s", m.Path)
+		}
+	}
+
+	if _, err := DeleteMembers(DeleteConfig{Archive: archive, Patterns: []string{"cache"}}); err != nil {
+		t.Fatal(err)
+	}
+	live, _, _ := state(t, archive, false)
+	if want := []string{"t", "t/a", "t/a/keep.txt"}; !equalStrings(live, want) {
+		t.Errorf("after --delete cache: %v, want %v", live, want)
+	}
+}
+
+// TestUpdateDigestComparesContentNotLayout: -u --update-mode=digest must
+// judge a file by what it holds, not by where the filesystem says its holes
+// are. The stress tester found an unchanged sparse file archived again when
+// its data regions were reported differently.
+func TestUpdateDigestComparesContentNotLayout(t *testing.T) {
+	data := []byte("data in the middle of a sparse file")
+	const size, at = 1 << 20, 512 << 10
+	dense := make([]byte, size)
+	copy(dense[at:], data)
+
+	for _, tc := range []struct {
+		name          string
+		start, change func(tree *testutil.Tree)
+		stale         bool
+	}{
+		{"sparse, then dense with the same bytes",
+			func(tr *testutil.Tree) { tr.Sparse("t/f", 0o644, size, testutil.Segment{Offset: at, Data: data}) },
+			func(tr *testutil.Tree) { tr.File("t/f", 0o644, dense) }, false},
+		{"dense, then sparse with the same bytes",
+			func(tr *testutil.Tree) { tr.File("t/f", 0o644, dense) },
+			func(tr *testutil.Tree) { tr.Sparse("t/f", 0o644, size, testutil.Segment{Offset: at, Data: data}) }, false},
+		{"sparse, then a byte where the hole was",
+			func(tr *testutil.Tree) { tr.Sparse("t/f", 0o644, size, testutil.Segment{Offset: at, Data: data}) },
+			func(tr *testutil.Tree) {
+				tr.Sparse("t/f", 0o644, size, testutil.Segment{Offset: at, Data: data}, testutil.Segment{Offset: 7, Data: []byte{1}})
+			}, true},
+		{"sparse, then other data in the same place",
+			func(tr *testutil.Tree) { tr.Sparse("t/f", 0o644, size, testutil.Segment{Offset: at, Data: data}) },
+			func(tr *testutil.Tree) {
+				tr.Sparse("t/f", 0o644, size, testutil.Segment{Offset: at, Data: bytes.ToUpper(data)})
+			}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tree := testutil.NewTree(t)
+			tree.Dir("t", 0o755)
+			tc.start(tree)
+			archive := mkArchive(t, tree, false, "t/f")
+			os.Remove(tree.Path("t/f"))
+			tc.change(tree)
+			tree.SetTimes("t/f", time.Unix(1, 0), time.Unix(2, 0)) // a new time: digest must not care
+
+			stats, err := appendTo(t, archive, tree, false, func(c *AppendConfig) { c.UpdateMode = UpdateDigest }, "t/f")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := stats.Replaced == 1; got != tc.stale {
+				t.Errorf("replaced = %v, want %v (stats %+v)", got, tc.stale, stats)
+			}
+		})
+	}
+}
+
+func TestOutsideSegments(t *testing.T) {
+	segs := []format.SparseSegment{{Offset: 10, Length: 10}, {Offset: 30, Length: 5}}
+	got := outside(meta.Segment{Offset: 0, Length: 40}, segs)
+	want := []meta.Segment{{Offset: 0, Length: 10}, {Offset: 20, Length: 10}, {Offset: 35, Length: 5}}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("outside = %v, want %v", got, want)
+	}
+	if got := outside(meta.Segment{Offset: 12, Length: 5}, segs); len(got) != 0 {
+		t.Errorf("a range inside a segment has parts outside it: %v", got)
 	}
 }

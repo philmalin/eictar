@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -316,11 +317,11 @@ func outOfDate(old *format.Member, e entry, mode string) (bool, error) {
 		return mtime > old.MTimeNanos, nil
 	case "digest":
 		if old.Type == format.TypeReg {
-			sum, err := fileDigest(e)
+			same, err := sameContent(old, e)
 			if err != nil {
 				return false, err
 			}
-			return string(sum) != string(old.Digest), nil
+			return !same, nil
 		}
 		fallthrough // other types have no content to hash
 	default: // "different"
@@ -350,32 +351,107 @@ func memberTypeFor(k entryKind) format.MemberType {
 	return ""
 }
 
-// fileDigest hashes a file exactly as the writer does: the whole file when it
-// is dense, only its data segments when it has holes. Anything else would
-// never match a stored digest, and -u --update-mode=digest would re-archive
-// every sparse file every time.
-func fileDigest(e entry) ([]byte, error) {
+// sameContent reports whether the file at e holds exactly the content of the
+// member old, for -u --update-mode=digest.
+//
+// The digest of a member covers its payload: the whole file when it was
+// stored dense, only the data regions when it had holes. How a filesystem
+// reports those regions can change while the content does not - after a
+// delayed allocation settles, or on another filesystem - so hashing the
+// file's current regions compared two layouts, not two contents, and
+// archived an unchanged sparse file again. The stress tester found it
+// (doc/design.md 13.4).
+//
+// Thus the file is read as the member was stored. For a member with holes:
+// the bytes at the member's data regions must give its digest, and the rest
+// of the file must be zero. Only the file's current data outside those
+// regions is read for that; its current holes are zero already.
+func sameContent(old *format.Member, e entry) (bool, error) {
+	size := e.Info.Size()
+	if uint64(size) != old.Size {
+		return false, nil
+	}
 	f, err := os.Open(e.Src)
 	if err != nil {
-		return nil, fmt.Errorf("opening %s: %w", e.Src, err)
+		return false, fmt.Errorf("opening %s: %w", e.Src, err)
 	}
 	defer f.Close()
 
 	h := blake3.New(format.DigestSize, nil)
-	segs, sparse, err := meta.DataSegments(f, e.Info.Size(), e.Sys.Blocks)
+	if len(old.Sparse) == 0 {
+		// Stored dense: the digest is of the file as a reader sees it,
+		// holes as zeros, which is what a plain read gives.
+		if _, err := io.Copy(h, f); err != nil {
+			return false, fmt.Errorf("reading %s: %w", e.Src, err)
+		}
+		return bytes.Equal(h.Sum(nil), old.Digest), nil
+	}
+
+	for _, s := range old.Sparse {
+		if _, err := io.Copy(h, io.NewSectionReader(f, int64(s.Offset), int64(s.Length))); err != nil {
+			return false, fmt.Errorf("reading %s: %w", e.Src, err)
+		}
+	}
+	if !bytes.Equal(h.Sum(nil), old.Digest) {
+		return false, nil
+	}
+	cur, sparse, err := meta.DataSegments(f, size, e.Sys.Blocks)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", e.Src, err)
+		return false, fmt.Errorf("%s: %w", e.Src, err)
 	}
 	if !sparse {
-		if _, err := io.Copy(h, f); err != nil {
-			return nil, fmt.Errorf("reading %s: %w", e.Src, err)
-		}
-		return h.Sum(nil), nil
+		cur = []meta.Segment{{Offset: 0, Length: size}}
 	}
+	for _, c := range cur {
+		for _, gap := range outside(c, old.Sparse) {
+			zero, err := allZero(io.NewSectionReader(f, gap.Offset, gap.Length))
+			if err != nil {
+				return false, fmt.Errorf("reading %s: %w", e.Src, err)
+			}
+			if !zero {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
+}
+
+// outside returns the parts of c that no segment of segs covers. segs is in
+// order and does not overlap, as the index guarantees.
+func outside(c meta.Segment, segs []format.SparseSegment) []meta.Segment {
+	var out []meta.Segment
+	pos, end := c.Offset, c.Offset+c.Length
 	for _, s := range segs {
-		if _, err := io.Copy(h, io.NewSectionReader(f, s.Offset, s.Length)); err != nil {
-			return nil, fmt.Errorf("reading %s: %w", e.Src, err)
+		so, se := int64(s.Offset), int64(s.Offset+s.Length)
+		if se <= pos || so >= end {
+			continue
+		}
+		if so > pos {
+			out = append(out, meta.Segment{Offset: pos, Length: so - pos})
+		}
+		pos = max(pos, se)
+	}
+	if pos < end {
+		out = append(out, meta.Segment{Offset: pos, Length: end - pos})
+	}
+	return out
+}
+
+// allZero reports whether r holds only zero bytes.
+func allZero(r io.Reader) (bool, error) {
+	buf := make([]byte, 64<<10)
+	for {
+		n, err := r.Read(buf)
+		for _, b := range buf[:n] {
+			if b != 0 {
+				return false, nil
+			}
+		}
+		if err == io.EOF {
+			return true, nil
+		}
+		if err != nil {
+			return false, err
 		}
 	}
-	return h.Sum(nil), nil
 }

@@ -1377,6 +1377,12 @@ our side.
 - A filesystem with coarse timestamps, or a clock set backward, causes
   missed changes.
 
+`digest` compares the content of the file with the content of the member.
+For a member with holes, the bytes at the member's data regions must give
+its digest, and the rest of the file must be zero. The file's own regions do
+not count: a filesystem can report other regions for the same content.
+Until the stress tester found it (§13.4), such a file was archived again.
+
 `digest` never compresses without need and never misses a change. It reads
 each candidate in full. A sequential read costs much less than compression,
 encryption and a write. Thus on a large tree with few changes, `digest` is
@@ -1510,6 +1516,25 @@ it again after. The meter shows nothing until the first byte. Before that,
 the program can ask for a passphrase on the same terminal, and a redraw
 writes over the prompt. The clock starts at the first byte too, so that the
 time to type the passphrase does not lower the rate.
+
+### 10.11 Patterns
+
+`-t`, `-x`, `--verify`, `--delete` and `--exclude` take patterns. A pattern
+matches a member path in any of these cases:
+
+- It is the path.
+- It names a directory that the path is under. Thus `src` takes
+  `src/main.go`.
+- It is a glob that matches the whole path, as `path.Match` does. `*` does not
+  match a `/`.
+- It has no `/`, and it matches one name in the path, at any depth. Thus
+  `*.go` takes `src/main.go`, and `cache` takes `a/cache` and everything
+  below it.
+
+The last rule applied to the last name only until the stress tester found the
+result (§13.4). `--delete cache` deleted the directory `a/cache`, but its
+members stayed, and `--exclude cache` hid `a/cache` but not its contents. A
+directory that a pattern matches now takes its contents, at any depth.
 
 ## 11. Configuration: environment variables and the configuration file
 
@@ -2151,10 +2176,16 @@ failed sequence exactly.
 an equal time as newer, failed the sixth sequence. The report named the file
 and its wrong mode.
 
-**Findings.** The first runs found one fault in eictar. A chunk that its
-codec refused, for example after a failed zstd checksum, gave exit 4, as for
-an I/O error. It must give exit 3, for damage. Such an error is now `ErrCorruptData`. A
-test for each codec keeps it that way.
+**Findings.** The first runs found three faults in eictar. Each one now has
+a test of its own:
+
+- A chunk that its codec refused, for example after a failed zstd checksum,
+  gave exit 4, as for an I/O error. It must give exit 3, for damage. Such an
+  error is now `ErrCorruptData`.
+- A pattern that matched a directory by its name, deeper in the tree, did
+  not take the directory's contents (§10.11).
+- `-u --update-mode=digest` archived an unchanged sparse file again, when the
+  filesystem reported its data regions in another way (§10.5).
 
 A default run of three minutes makes
 approximately 11,000 eictar commands, with approximately 200 crashes and 400

@@ -19,7 +19,17 @@ func TestMatch(t *testing.T) {
 		{"src", "src/deep/nested/file.go", true},
 		{"src", "src", true},
 		{"src", "srcfile.go", false}, // prefix, but not a directory boundary
-		{"src", "other/src/file.go", false},
+
+		// A name with no slash matches at any depth, and a directory found
+		// that way takes its contents too. Before the stress tester found
+		// it, "src" took other/src and left other/src/file.go behind.
+		{"src", "other/src", true},
+		{"src", "other/src/file.go", true},
+		{"src", "other/src/deep/file.go", true},
+		{"node_modules", "a/b/node_modules/pkg/index.js", true},
+		{"src", "other/srcs/file.go", false},        // a name, not a prefix of one
+		{"*.d", "a/x.d/inside", true},               // a glob that names a directory
+		{"other/src", "x/other/src/file.go", false}, // with a slash: from the root only
 
 		// Globs against the whole path.
 		{"src/*.go", "src/main.go", true},

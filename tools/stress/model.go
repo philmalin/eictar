@@ -132,11 +132,22 @@ func stale(old, cur Entry, mode string) bool {
 
 // matches is eictar's pattern rule for a literal pattern (no glob
 // characters, which the generator never puts in a name): the path itself,
-// everything below it, and - for a pattern without a slash - any path with
-// that base name.
+// everything below it, and - for a pattern without a slash - any path that
+// has that name as one of its components, and so everything below a
+// directory of that name at any depth.
 func matches(pattern, p string) bool {
-	return p == pattern || strings.HasPrefix(p, pattern+"/") ||
-		(!strings.Contains(pattern, "/") && path.Base(p) == pattern)
+	if p == pattern || strings.HasPrefix(p, pattern+"/") {
+		return true
+	}
+	if strings.Contains(pattern, "/") {
+		return false
+	}
+	for _, name := range strings.Split(p, "/") {
+		if name == pattern {
+			return true
+		}
+	}
+	return false
 }
 
 // selectPaths returns the model paths that any pattern matches.
