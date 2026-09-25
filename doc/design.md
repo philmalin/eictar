@@ -66,6 +66,7 @@ result, a listing or a selective extraction does not read the member data.
 | 8 | macOS ACLs | Not recorded. They need CGO, and the no-CGO rule stays (§15.1). Decided for M8, from open question 4. |
 | 9 | Xattrs across platforms | Names are recorded exactly. Each name is applied where the destination takes it, and one notice lists the rest (§7.7). Decided for M8, from open question 5. |
 | 10 | Module path | `github.com/philmalin/eictar` (§12). Decided for the first release, from open question 3. |
+| 11 | License | GPL-3.0 (`LICENSE`). Under section 7(e), the license gives no right to use the name "eictar" for a modified version (`TRADEMARKS.md`). |
 
 ### 1.2 Non-goals for v1
 
@@ -2024,8 +2025,9 @@ new major version (§3).
 A push of the tag starts the release workflow
 (`.github/workflows/release.yml`). The workflow runs `make check` on Linux.
 Then `make release` builds one binary for each platform of §15.1, on amd64
-and on arm64, with the man page. The workflow packs each one in a `.tar.gz`
-file, writes `SHA256SUMS`, and makes a draft release with these files.
+and on arm64, with the man page, `LICENSE` and `TRADEMARKS.md`. The workflow
+packs each one in a `.tar.gz` file, writes `SHA256SUMS`, and makes a draft
+release with these files.
 
 The ci workflow runs on the same tag, on all five platforms. The draft is
 published by hand, after that run passes too. Windows builds, but it is not

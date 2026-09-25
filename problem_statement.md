@@ -102,6 +102,7 @@ gives the full reasoning and the exact formats.
 | Default codec | zstd, alongside xz, gzip, flate, s2 and stored |
 | Concurrency | Member order inside the archive is not significant, so a single writer appends whichever worker finishes first |
 | CLI style | Classical UNIX options, not subcommands.  The operation is chosen by an option letter (`-c`, `-r`, `-t`, `-x`), short options bundle (`-cvf`), and every short option has a long form |
+| License | GPL-3.0.  The name "eictar" is reserved: a modified version that is distributed must use another name (`TRADEMARKS.md`) |
 
 
 ## Out of scope for v1

@@ -46,7 +46,7 @@ build: | $(TMPDIR)
 	$(GO) build $(BUILDFLAGS) -o $(BIN) ./src/cmd/eictar
 
 # The release binaries: one directory for each platform that the CI workflow
-# tests (doc/design.md 15.1), with the man page. The release workflow packs
+# tests (doc/design.md 15.1), with the man page and the license. The release workflow packs
 # each directory and writes the checksums.
 #   make release VERSION=1.0.0
 RELEASE_TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 \
@@ -59,7 +59,7 @@ release: | $(TMPDIR)
 		echo "$$os/$$arch"; \
 		mkdir -p $$dir && \
 		GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 $(GO) build $(BUILDFLAGS) -o $$dir/eictar ./src/cmd/eictar && \
-		cp doc/eictar.1 $$dir/ || exit 1; \
+		cp doc/eictar.1 LICENSE TRADEMARKS.md $$dir/ || exit 1; \
 	done
 
 test: | $(TMPDIR)
