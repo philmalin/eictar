@@ -10,7 +10,8 @@
 //
 // Each sequence creates an archive from a generated tree, then takes random
 // steps: changes to the tree, append with each --on-conflict, update with
-// each --update-mode, delete, compact, recompress and extraction by pattern.
+// each --update-mode, delete, compact, recompress, change of passphrase and
+// extraction by pattern.
 // After each step it lists, verifies and extracts the archive, and compares
 // the result with the model. In the fault mode it also cuts the archive as a
 // crash would, and flips bits in a copy.

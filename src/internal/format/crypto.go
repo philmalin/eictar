@@ -21,8 +21,11 @@ type CryptoHeader struct {
 	Memory  uint32 `cbor:"memory"`  // KiB
 	Threads uint8  `cbor:"threads"` //
 
-	AEAD  string `cbor:"aead"`  // "xchacha20poly1305"
-	Check []byte `cbor:"check"` // 32 bytes derived from the master key
+	AEAD string `cbor:"aead"` // "xchacha20poly1305"
+	// Key is the archive's data key, wrapped under the key that the
+	// passphrase gives: the nonce, the sealed key, the tag (doc/design.md
+	// 6.2). A wrong passphrase fails its tag.
+	Key []byte `cbor:"key"`
 
 	// Recipients is reserved for public-key mode (§15). A reader that finds
 	// it set must refuse rather than ignore it: the archive is addressed to
@@ -99,9 +102,9 @@ func (c *CryptoHeader) Validate() error {
 		return fmt.Errorf("format: %w: salt is %d bytes, want %d",
 			ErrCorruptIndex, len(c.Salt), CryptoSaltSize)
 	}
-	if len(c.Check) != CryptoCheckSize {
-		return fmt.Errorf("format: %w: check value is %d bytes, want %d",
-			ErrCorruptIndex, len(c.Check), CryptoCheckSize)
+	if len(c.Key) != CryptoWrappedKeySize {
+		return fmt.Errorf("format: %w: the wrapped key is %d bytes, want %d",
+			ErrCorruptIndex, len(c.Key), CryptoWrappedKeySize)
 	}
 	// The parameters come from the file, and deriving a key allocates Memory
 	// kibibytes. An archive claiming terabytes must be refused before the
@@ -127,8 +130,10 @@ func (c *CryptoHeader) Validate() error {
 
 // Sizes and limits for the crypto header.
 const (
-	CryptoSaltSize  = 16
-	CryptoCheckSize = 32
+	CryptoSaltSize = 16
+	// CryptoWrappedKeySize is a 24-byte nonce, a 32-byte key and a 16-byte
+	// tag.
+	CryptoWrappedKeySize = 72
 
 	// MaxKDFMemoryKiB caps what an archive may ask this machine to allocate
 	// while deriving its key: 4 GiB. The figure is the archive's, so without

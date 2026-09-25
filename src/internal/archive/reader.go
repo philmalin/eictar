@@ -7,8 +7,6 @@ import (
 	"io"
 	"os"
 
-	"lukechampine.com/blake3"
-
 	"eictar/src/internal/codec"
 	"eictar/src/internal/crypt"
 	"eictar/src/internal/format"
@@ -256,11 +254,10 @@ func (r *Reader) unlock(ask PassphraseFunc) error {
 	}
 	defer zero(passphrase)
 
-	keys, err := crypt.Derive(passphrase, ch.Salt, r.hdr.ArchiveUUID, params)
+	// A wrong passphrase gives another key-encryption key, and the wrapped
+	// data key fails its tag: that is the check (doc/design.md 6.2).
+	keys, err := crypt.Unlock(passphrase, ch.Salt, r.hdr.ArchiveUUID, params, ch.Key)
 	if err != nil {
-		return fmt.Errorf("%s: %w", r.path, err)
-	}
-	if err := keys.VerifyCheck(ch.Check); err != nil {
 		return fmt.Errorf("%s: %w", r.path, err)
 	}
 	r.keys = keys
@@ -352,7 +349,7 @@ func (r *Reader) WriteMember(m *format.Member, dst io.Writer) error {
 			r.path, format.ErrCorruptIndex, m.Path)
 	}
 
-	hasher := blake3.New(format.DigestSize, nil)
+	hasher := newDigest(r.keys)
 	out := io.MultiWriter(dst, hasher)
 
 	var opened []byte

@@ -12,11 +12,14 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
+
+	"lukechampine.com/blake3"
 
 	"eictar/src/internal/codec"
 	"eictar/src/internal/crypt"
@@ -53,8 +56,11 @@ type Options struct {
 	// KDFParams are recorded in the crypto header so the archive can be
 	// opened later with the parameters it was made with.
 	KDFParams crypt.KDFParams
-	// Salt is the Argon2id salt the keys were derived from.
+	// Salt is the Argon2id salt of the key that wraps the data key.
 	Salt []byte
+	// WrappedKey is the data key, wrapped for the passphrase
+	// (doc/design.md 6.2).
+	WrappedKey []byte
 	// EncryptIndex adds confidentiality to the index. Authentication does not
 	// depend on it.
 	EncryptIndex bool
@@ -161,6 +167,10 @@ func Create(path string, opt Options) (*Writer, error) {
 		w.abort()
 		return nil, fmt.Errorf("archive: encryption keys supplied with a %d-byte salt", len(opt.Salt))
 	}
+	if opt.Keys != nil && len(opt.WrappedKey) != crypt.WrappedKeySize {
+		w.abort()
+		return nil, fmt.Errorf("archive: encryption keys supplied with a %d-byte wrapped key", len(opt.WrappedKey))
+	}
 
 	w.keys = opt.Keys
 	w.encryptIndex = opt.EncryptIndex
@@ -189,7 +199,7 @@ func Create(path string, opt Options) (*Writer, error) {
 			Memory:  opt.KDFParams.Memory,
 			Threads: opt.KDFParams.Threads,
 			AEAD:    format.AEADXChaCha20,
-			Check:   opt.Keys.Check(),
+			Key:     opt.WrappedKey,
 		}
 		if cryptoBytes, err = ch.Marshal(); err != nil {
 			w.abort()
@@ -396,6 +406,19 @@ func (w *Writer) Encoder() codec.Encoder { return w.enc }
 
 // CodecRef is the catalog index members should record, or format.NoCodec.
 func (w *Writer) CodecRef() int { return w.codecRef }
+
+// newDigest is the hash of a member's content: BLAKE3 keyed with the
+// content key in an encrypted archive, plain BLAKE3 otherwise
+// (doc/design.md 6.2).
+func (w *Writer) newDigest() hash.Hash { return newDigest(w.keys) }
+
+func newDigest(keys *crypt.Keys) hash.Hash {
+	var key []byte
+	if keys != nil {
+		key = keys.ContentKey()
+	}
+	return blake3.New(format.DigestSize, key)
+}
 
 // NextID hands out member ids in walk order, so that the ids in an archive do
 // not depend on which worker happened to finish first.

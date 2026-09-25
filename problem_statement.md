@@ -95,8 +95,8 @@ gives the full reasoning and the exact formats.
 | Topic | Decision |
 |-------|----------|
 | Container layout | Append-only body, index in a footer, fixed-size trailer at the end of the file as the commit record |
-| Encryption | XChaCha20-Poly1305 AEAD over 4 MiB chunks, Argon2id key derivation, a separate derived subkey per member |
-| Index encryption | Optional, `--encrypt-index`, off by default.  An unencrypted index reveals file names, sizes and permissions |
+| Encryption | XChaCha20-Poly1305 AEAD over 4 MiB chunks, a separate derived subkey per member.  A random data key per archive, sealed under a key that Argon2id derives from the passphrase, so the passphrase can change (`--change-passphrase`) without encrypting the content again |
+| Index encryption | Optional, `--encrypt-index`, off by default.  An unencrypted index reveals file names, sizes and permissions.  In an encrypted archive the member digests are keyed, so they reveal nothing about the content |
 | `ccrypt` | Dropped.  `golang.org/x/crypto` covers the requirement |
 | Dependencies | Pure-Go third-party modules allowed.  No CGO, no external binaries |
 | Default codec | zstd, alongside xz, gzip, flate, s2 and stored |

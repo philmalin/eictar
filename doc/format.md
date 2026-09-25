@@ -71,7 +71,7 @@ that encode this map:
 | `memory` | uint | Argon2id memory in KiB, at least 8 × threads, at most 4194304 |
 | `threads` | uint | Argon2id lanes, 1 to 255 |
 | `aead` | text | `xchacha20poly1305` |
-| `check` | bytes | 32 bytes, the check value (§7.1) |
+| `key` | bytes | 72 bytes, the wrapped data key (§7.1) |
 | `recipients` | array | reserved. A reader refuses a crypto header that has it. |
 
 A reader applies the limits on `time` and `memory` before it asks for a
@@ -136,18 +136,23 @@ less is refused.
 ### 7.1 Keys
 
 ```
-master  = Argon2id(passphrase, salt, time, memory, threads, 32 bytes)
-check   = HKDF-SHA-256(ikm = master, salt = empty, info = "eictar/v1/check"      || archive_uuid)
-indexK  = HKDF-SHA-256(ikm = master, salt = empty, info = "eictar/v1/index"      || archive_uuid || u64le(generation))
-authK   = HKDF-SHA-256(ikm = master, salt = empty, info = "eictar/v1/index-auth" || archive_uuid)
-memberK = HKDF-SHA-256(ikm = master, salt = enc.salt, info = "eictar/v1/member"  || archive_uuid)
+dataK    = 32 random bytes, made when the archive is created
+KEK      = Argon2id(passphrase, salt, time, memory, threads, 32 bytes)
+key      = nonce || XChaCha20-Poly1305(KEK, nonce, dataK, aad = "eictar/v1/wrap" || archive_uuid)
+indexK   = HKDF-SHA-256(ikm = dataK, salt = empty, info = "eictar/v1/index"      || archive_uuid || u64le(generation))
+authK    = HKDF-SHA-256(ikm = dataK, salt = empty, info = "eictar/v1/index-auth" || archive_uuid)
+contentK = HKDF-SHA-256(ikm = dataK, salt = empty, info = "eictar/v1/content"    || archive_uuid)
+memberK  = HKDF-SHA-256(ikm = dataK, salt = enc.salt, info = "eictar/v1/member"  || archive_uuid)
 ```
 
-Each output is 32 bytes. The info strings are ASCII, with no terminator. The
-passphrase is its bytes as given, with no normalization.
+`key` is the field of the crypto header (§4): a 24-byte random nonce, then
+the 32-byte sealed data key and its 16-byte tag. Each HKDF output is 32 bytes.
+The info strings are ASCII, with no terminator. The passphrase is its bytes
+as given, with no normalization.
 
-A reader derives `master`, and compares `check` with the crypto header in
-constant time. If they are different, the passphrase is wrong.
+A reader derives `KEK` and opens `key`. If the tag fails, the passphrase is
+wrong. A change of passphrase writes a new `salt`, new Argon2id parameters
+and a new `key`, but `dataK` and every subkey stay the same.
 
 ### 7.2 AEAD
 
@@ -245,7 +250,7 @@ the number of members to 4194304.
 | `rdev` | array of 2 uint | `chardev` and `blockdev` only, and required there | major, minor |
 | `xattrs` | map, text to bytes | optional | extended attributes, POSIX ACLs included, with each name as the source platform gives it (`user.comment` on Linux and the BSDs, `com.apple.quarantine` on macOS). Names of 1 to 255 bytes, values of at most 65536 bytes, at most 1024 entries. |
 | `sparse` | array of maps | `reg` only, optional | data segments, each `{ "off": uint, "len": uint }` |
-| `digest` | bytes | required for `reg` | BLAKE3-256 of the payload (§5), with no key |
+| `digest` | bytes | required for `reg` | BLAKE3-256 of the payload (§5): keyed with `contentK` (§7.1) in an encrypted archive, with no key in a plain one |
 | `codec` | int | always | a catalog position, or -1 |
 | `chunk` | uint | when there are chunks | plaintext bytes in each chunk, at most 268435456 |
 | `enc` | map | in an encrypted archive, on a member with content | `{ "salt": 16 bytes }` |

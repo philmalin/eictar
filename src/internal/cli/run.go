@@ -112,6 +112,8 @@ func dispatch(o *Options, stdout, stderr io.Writer) error {
 		return runDelete(o, stdout, stderr)
 	case OpCompact:
 		return runCompact(o, stdout, stderr)
+	case OpChangePassphrase:
+		return runChangePassphrase(o, stdout, stderr)
 	case OpVerify:
 		return runVerify(o, stdout, stderr)
 	case OpRepair:
@@ -189,6 +191,7 @@ Operations (exactly one):
   -u, --update        append only the paths that are out of date
       --delete        tombstone matching members
       --compact       reclaim the space of tombstoned members
+      --change-passphrase  seal the archive's key under a new passphrase
       --verify        check integrity without extracting
       --repair        recover from a damaged trailer
       --info          print archive information

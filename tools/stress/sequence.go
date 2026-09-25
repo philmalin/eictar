@@ -14,18 +14,19 @@ import (
 // sequence is one archive and its history: a create, then steps of
 // changes, each followed by the checks.
 type sequence struct {
-	seed      uint64
-	rnd       *rand.Rand
-	dir       string
-	src       string
-	archive   string
-	encrypted bool
-	g         *gen
-	r         *runner
-	model     Model
-	steps     []string // what each step did, for the failure report
-	faults    bool
-	stats     *stats
+	seed        uint64
+	rnd         *rand.Rand
+	dir         string
+	src         string
+	archive     string
+	encrypted   bool
+	passphrases int // changes of passphrase so far
+	g           *gen
+	r           *runner
+	model       Model
+	steps       []string // what each step did, for the failure report
+	faults      bool
+	stats       *stats
 }
 
 type stats struct {
@@ -172,6 +173,8 @@ func (s *sequence) step() error {
 		return s.compact(false)
 	case op < 15:
 		return s.compact(true)
+	case op < 16 && s.encrypted:
+		return s.changePassphrase()
 	default:
 		return s.extractSome()
 	}
@@ -305,6 +308,37 @@ func (s *sequence) compact(recompress bool) error {
 	}
 	_, err := s.r.expect(true, args...)
 	return err
+}
+
+// changePassphrase seals the archive's key under a new passphrase, now and
+// then with new KDF parameters. The old passphrase must no longer open it;
+// the checks after the step show that the new one does, and that the
+// content is the same.
+func (s *sequence) changePassphrase() error {
+	s.passphrases++
+	pass := filepath.Join(s.dir, fmt.Sprintf("passphrase-%d", s.passphrases))
+	if err := os.WriteFile(pass, []byte(fmt.Sprintf("stress passphrase %d\n", s.passphrases)), 0o600); err != nil {
+		return err
+	}
+	args := []string{"--change-passphrase", "-f", s.archive, "--new-passphrase-file", pass}
+	if s.rnd.IntN(2) == 0 {
+		args = append(args, "--kdf-time", strconv.Itoa(1+s.rnd.IntN(2)), "--kdf-memory", strconv.Itoa(8192<<s.rnd.IntN(2)))
+	}
+	s.note("change the passphrase %q", args[4:])
+	s.stats.ops["change-passphrase"]++
+	if _, err := s.r.expect(true, args...); err != nil {
+		return err
+	}
+	old := s.r.crypt
+	s.r.crypt = []string{"--passphrase-file", pass}
+	res, err := s.r.run(false, append([]string{"-tf", s.archive}, old...)...)
+	if err != nil {
+		return err
+	}
+	if res.code != 3 {
+		return fmt.Errorf("the old passphrase after a change: exit %d, want 3:\n%s", res.code, res)
+	}
+	return nil
 }
 
 // extractSome extracts one or two members by pattern, and checks that

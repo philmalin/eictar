@@ -19,6 +19,7 @@ type passphraseSource struct {
 	file    string
 	env     string
 	confirm bool // creating: ask twice, since a typo is unrecoverable
+	isNew   bool // the new passphrase of --change-passphrase
 	stdin   *os.File
 	stderr  *os.File
 }
@@ -80,12 +81,16 @@ func (p passphraseSource) prompt() ([]byte, error) {
 	fd := int(in.Fd())
 	if !term.IsTerminal(fd) {
 		return nil, fmt.Errorf("%w: standard input is not a terminal; "+
-			"use --passphrase-file, or --passphrase-env naming a variable", ErrNoPassphrase)
+			"use %s-file, or %s-env naming a variable", ErrNoPassphrase, p.option(), p.option())
 	}
 
+	label := "Passphrase"
+	if p.isNew {
+		label = "New passphrase"
+	}
 	// The prompt goes to stderr so that it cannot land in a redirected
 	// listing or in extracted content.
-	fmt.Fprint(errOut, "Passphrase: ")
+	fmt.Fprint(errOut, label+": ")
 	first, err := term.ReadPassword(fd)
 	fmt.Fprintln(errOut)
 	if err != nil {
@@ -96,7 +101,7 @@ func (p passphraseSource) prompt() ([]byte, error) {
 	}
 
 	if p.confirm {
-		fmt.Fprint(errOut, "Passphrase (again): ")
+		fmt.Fprint(errOut, label+" (again): ")
 		second, err := term.ReadPassword(fd)
 		fmt.Fprintln(errOut)
 		if err != nil {
@@ -118,12 +123,20 @@ func (p passphraseSource) prompt() ([]byte, error) {
 func (p passphraseSource) describe() string {
 	switch {
 	case p.file != "":
-		return "--passphrase-file " + p.file
+		return p.option() + "-file " + p.file
 	case p.env != "":
-		return "--passphrase-env " + p.env
+		return p.option() + "-env " + p.env
 	default:
 		return "the terminal"
 	}
+}
+
+// option is the start of the name of the options that give this passphrase.
+func (p passphraseSource) option() string {
+	if p.isNew {
+		return "--new-passphrase"
+	}
+	return "--passphrase"
 }
 
 func zeroBytes(b []byte) {
@@ -136,6 +149,6 @@ func zeroBytes(b []byte) {
 // visible to anything that can read /proc.
 func (p passphraseSource) warnIfInsecureSource(warn func(string, ...any)) {
 	if p.env != "" && warn != nil {
-		warn("--passphrase-env exposes the passphrase to anything that can read this process's environment")
+		warn("%s-env exposes the passphrase to anything that can read this process's environment", p.option())
 	}
 }

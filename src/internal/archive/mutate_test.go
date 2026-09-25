@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"lukechampine.com/blake3"
+
 	"eictar/src/internal/codec"
 	"eictar/src/internal/crypt"
 	"eictar/src/internal/format"
@@ -1071,5 +1073,169 @@ func TestOutsideSegments(t *testing.T) {
 	}
 	if got := outside(meta.Segment{Offset: 12, Length: 5}, segs); len(got) != 0 {
 		t.Errorf("a range inside a segment has parts outside it: %v", got)
+	}
+}
+
+// TestEncryptedDigestIsKeyed is the point of the keyed digest (doc/design.md
+// 6.2): in an encrypted archive whose index is not sealed, the plain BLAKE3
+// of a file must be nowhere in the file, or anyone with a copy of the file
+// could find out that the archive holds it. A plaintext archive keeps the
+// plain digest.
+func TestEncryptedDigestIsKeyed(t *testing.T) {
+	content := []byte("a file that an observer also has a copy of")
+	plain := blake3.Sum256(content)
+
+	for _, enc := range []bool{false, true} {
+		tree := testutil.NewTree(t)
+		tree.File("f", 0o644, content)
+		cfg := CreateConfig{Archive: filepath.Join(t.TempDir(), "k.eictar"), Paths: []string{"f"},
+			BaseDir: tree.Root, Options: Options{Codec: "none"}}
+		if enc {
+			// EncryptIndex false: the index, digests and all, is readable.
+			cfg.Encryption = &EncryptionConfig{Passphrase: []byte("correct horse"), Params: testKDF}
+		}
+		if _, err := CreateArchive(cfg); err != nil {
+			t.Fatal(err)
+		}
+		m := membersByID(t, cfg.Archive, enc)[1]
+		if got := bytes.Equal(m.Digest, plain[:]); got == enc {
+			t.Errorf("encrypted=%v: the member digest is the plain BLAKE3: %v", enc, got)
+		}
+		if enc {
+			raw := readAll(t, cfg.Archive)
+			// The index is compressed; decode it without a key, as an
+			// observer can, and look for the plain digest there too.
+			var tr format.Trailer
+			if err := tr.UnmarshalBinary(raw); err != nil {
+				t.Fatal(err)
+			}
+			ix, err := format.DecodeIndex(raw[tr.IndexOffset:tr.IndexOffset+tr.IndexLength], tr.Flags, nil)
+			if err != nil {
+				t.Fatalf("the unsealed index did not decode: %v", err)
+			}
+			if bytes.Equal(ix.Members[0].Digest, plain[:]) || bytes.Contains(raw, plain[:]) {
+				t.Error("an observer can read the plain digest of the file")
+			}
+		}
+		if _, err := VerifyArchive(VerifyConfig{Archive: cfg.Archive, Open: openFor(enc)}); err != nil {
+			t.Errorf("encrypted=%v: verify: %v", enc, err)
+		}
+	}
+}
+
+// TestUpdateDigestOnAnEncryptedArchive: -u --update-mode=digest compares with
+// the keyed digest, so it needs the key, and judges content as before.
+func TestUpdateDigestOnAnEncryptedArchive(t *testing.T) {
+	tree := mutTree(t)
+	archive := mkArchive(t, tree, true, "t/a.txt")
+	tree.SetTimes("t/a.txt", time.Unix(5, 0), time.Unix(6, 0)) // same content
+	stats, err := appendTo(t, archive, tree, true, func(c *AppendConfig) { c.UpdateMode = UpdateDigest }, "t/a.txt")
+	if err != nil || stats.Members != 0 {
+		t.Fatalf("a touch: %+v, %v; want nothing archived", stats, err)
+	}
+	tree.Text("t/a.txt", 0o644, "ALPHA")
+	stats, err = appendTo(t, archive, tree, true, func(c *AppendConfig) { c.UpdateMode = UpdateDigest }, "t/a.txt")
+	if err != nil || stats.Replaced != 1 {
+		t.Fatalf("new content: %+v, %v; want it replaced", stats, err)
+	}
+}
+
+// TestChangePassphrase: the new passphrase opens the archive and the old one
+// does not. The data key is the same, so ids, digests and content do not
+// change, and the dead space of old generations goes.
+func TestChangePassphrase(t *testing.T) {
+	tree := mutTree(t)
+	archive := mkArchive(t, tree, true, "t")
+	tree.Text("t/a.txt", 0o644, "ALPHA")
+	if _, err := appendTo(t, archive, tree, true, nil, "t/a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	before := membersByID(t, archive, true)
+	live, _, _ := state(t, archive, true)
+	oldSize := mustStat(t, archive).Size()
+
+	newParams := crypt.KDFParams{Time: 2} // memory and threads stay
+	res, err := CompactArchive(CompactConfig{Archive: archive, Open: openFor(true),
+		Rewrap: &RewrapConfig{Passphrase: passphrase("battery staple"), Params: newParams}})
+	if err != nil {
+		t.Fatalf("change of passphrase: %v", err)
+	}
+	if res.Dropped != 1 || mustStat(t, archive).Size() >= oldSize {
+		t.Errorf("result %+v, size %d (was %d): want the replaced member and dead space gone",
+			res, mustStat(t, archive).Size(), oldSize)
+	}
+
+	if _, err := OpenWith(archive, openFor(true)); !errors.Is(err, crypt.ErrWrongPassphrase) {
+		t.Fatalf("the old passphrase: %v, want ErrWrongPassphrase", err)
+	}
+	newOpen := OpenOptions{Passphrase: passphrase("battery staple")}
+	r, err := OpenWith(archive, newOpen)
+	if err != nil {
+		t.Fatalf("the new passphrase: %v", err)
+	}
+	if got := (crypt.KDFParams{Time: r.crypto.Time, Memory: r.crypto.Memory, Threads: r.crypto.Threads}); got !=
+		(crypt.KDFParams{Time: 2, Memory: testKDF.Memory, Threads: testKDF.Threads}) {
+		t.Errorf("KDF parameters %+v: want time 2 and the others kept", got)
+	}
+	var got []string
+	for _, m := range r.Members() {
+		got = append(got, m.Path)
+		old, ok := before[m.ID]
+		if !ok || old.Path != m.Path || !bytes.Equal(old.Digest, m.Digest) {
+			t.Errorf("%s (id %d): the member changed identity or digest", m.Path, m.ID)
+		}
+	}
+	r.Close()
+	sort.Strings(got)
+	if strings.Join(got, ",") != strings.Join(live, ",") {
+		t.Errorf("members %q, want %q", got, live)
+	}
+
+	if _, err := VerifyArchive(VerifyConfig{Archive: archive, Open: newOpen}); err != nil {
+		t.Errorf("verify: %v", err)
+	}
+	dest := t.TempDir()
+	if _, err := Extract(ExtractConfig{Archive: archive, Destination: dest, Passphrase: newOpen.Passphrase}); err != nil {
+		t.Fatal(err)
+	}
+	if b := readAll(t, filepath.Join(dest, "t/a.txt")); string(b) != "ALPHA" {
+		t.Errorf("t/a.txt = %q, want the new content", b)
+	}
+}
+
+func TestChangePassphraseRefusals(t *testing.T) {
+	tree := mutTree(t)
+	rewrap := &RewrapConfig{Passphrase: passphrase("battery staple")}
+
+	plain := mkArchive(t, tree, false, "t")
+	before := readAll(t, plain)
+	if _, err := CompactArchive(CompactConfig{Archive: plain, Rewrap: rewrap}); !errors.Is(err, ErrNotEncrypted) {
+		t.Errorf("a plaintext archive: %v, want ErrNotEncrypted", err)
+	}
+	if !bytes.Equal(before, readAll(t, plain)) {
+		t.Error("a refused change of passphrase changed the archive")
+	}
+
+	enc := mkArchive(t, tree, true, "t")
+	before = readAll(t, enc)
+	for name, rw := range map[string]*RewrapConfig{
+		"empty passphrase": {Passphrase: passphrase("")},
+		"bad parameters":   {Passphrase: passphrase("x"), Params: crypt.KDFParams{Memory: 1}},
+		"unaffordable":     {Passphrase: passphrase("x"), Params: crypt.KDFParams{Memory: 1<<32 - 1}},
+	} {
+		if _, err := CompactArchive(CompactConfig{Archive: enc, Open: openFor(true), Rewrap: rw}); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+		if !bytes.Equal(before, readAll(t, enc)) {
+			t.Errorf("%s: a refused change of passphrase changed the archive", name)
+		}
+	}
+	if _, err := CompactArchive(CompactConfig{Archive: enc, Open: OpenOptions{Passphrase: passphrase("wrong")},
+		Rewrap: rewrap}); !errors.Is(err, crypt.ErrWrongPassphrase) {
+		t.Errorf("the wrong old passphrase: %v, want ErrWrongPassphrase", err)
+	}
+	entries, _ := os.ReadDir(filepath.Dir(enc))
+	if len(entries) != 1 {
+		t.Errorf("files left beside the archive: %v", entries)
 	}
 }

@@ -14,11 +14,18 @@ var (
 	fastKDF = KDFParams{Time: 1, Memory: 8 * 1024, Threads: 1}
 )
 
+// mustDerive gives the schedule whose data key is the KEK of passphrase.
+// The format before M9 used that value as its master key, so the pinned
+// subkey vectors below carry over unchanged.
 func mustDerive(t *testing.T, passphrase string) *Keys {
 	t.Helper()
-	k, err := Derive([]byte(passphrase), testSalt, testUUID, fastKDF)
+	kek, err := DeriveKEK([]byte(passphrase), testSalt, fastKDF)
 	if err != nil {
-		t.Fatalf("Derive: %v", err)
+		t.Fatalf("DeriveKEK: %v", err)
+	}
+	k, err := NewKeys(kek, testUUID)
+	if err != nil {
+		t.Fatalf("NewKeys: %v", err)
 	}
 	return k
 }
@@ -58,16 +65,22 @@ func TestKeyScheduleVectors(t *testing.T) {
 		t.Fatalf("SealIndex: %v", err)
 	}
 	digest := IndexDigest(k.IndexAuthKey(), testUUID, 1, []byte("vector index"))
+	var wrapNonce [24]byte
+	wrapNonce[23] = 2
+	wrapped, err := wrapKeyWithNonce(k.dataKey, testUUID, bytes.Repeat([]byte{0x5a}, DataKeySize), wrapNonce)
+	if err != nil {
+		t.Fatalf("wrap: %v", err)
+	}
 
 	for _, tc := range []struct {
 		name string
 		got  []byte
 		want string
 	}{
-		{"master key", k.master,
+		{"key-encryption key", k.dataKey,
 			"410e70a43437e782f539589bddec13a5e7a5513ded7400de04b6b8b2ef71a2e1"},
-		{"check value", k.Check(),
-			"867d1cda13093bc1effc38ab69f824ad5d1543845e02180353dbccb8209250d3"},
+		{"wrapped data key", wrapped, wrappedVector},
+		{"content key", k.ContentKey(), contentKeyVector},
 		{"index auth key", k.IndexAuthKey(),
 			"6ba20bc54a8983ee129dec7f0db63f11f40a52576d4dda88c8de4ca52d6c2497"},
 		{"index key, generation 1", k.IndexKey(1),
@@ -92,22 +105,23 @@ func TestKeyScheduleVectors(t *testing.T) {
 	}
 }
 
-// TestKDFParamsAreLoadBearing: the vectors above are for fastKDF. A change to
-// the parameters an archive records must change the key, or the parameters
-// would be decoration.
+// TestKDFParamsAreLoadBearing: a change to the parameters an archive records
+// must change the key-encryption key, or the parameters would be decoration.
 func TestKDFParamsAreLoadBearing(t *testing.T) {
-	base := mustDerive(t, "passphrase")
-
+	base, err := DeriveKEK([]byte("passphrase"), testSalt, fastKDF)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, p := range []KDFParams{
 		{Time: 2, Memory: 8 * 1024, Threads: 1},
 		{Time: 1, Memory: 16 * 1024, Threads: 1},
 		{Time: 1, Memory: 8 * 1024, Threads: 2},
 	} {
-		other, err := Derive([]byte("passphrase"), testSalt, testUUID, p)
+		other, err := DeriveKEK([]byte("passphrase"), testSalt, p)
 		if err != nil {
-			t.Fatalf("Derive(%+v): %v", p, err)
+			t.Fatalf("DeriveKEK(%+v): %v", p, err)
 		}
-		if bytes.Equal(base.master, other.master) {
+		if bytes.Equal(base, other) {
 			t.Errorf("%+v produced the same key as %+v", p, fastKDF)
 		}
 	}
@@ -124,8 +138,8 @@ func TestSubkeysAreDistinct(t *testing.T) {
 	}
 
 	keys := map[string][]byte{
-		"master":     k.master,
-		"check":      k.Check(),
+		"data":       k.dataKey,
+		"content":    k.ContentKey(),
 		"index-auth": k.IndexAuthKey(),
 		"index-1":    k.IndexKey(1),
 		"index-2":    k.IndexKey(2),
@@ -162,39 +176,86 @@ func TestMemberKeysDifferPerSalt(t *testing.T) {
 	}
 }
 
-// TestKeysAreBoundToTheArchive: the same passphrase and salt in a different
-// archive must not give the same keys, or an index could be lifted between
-// archives.
+// TestKeysAreBoundToTheArchive: the same data key in a different archive must
+// not give the same keys, or an index could be lifted between archives.
 func TestKeysAreBoundToTheArchive(t *testing.T) {
-	a, err := Derive([]byte("same"), testSalt, [16]byte{1}, fastKDF)
-	if err != nil {
-		t.Fatalf("Derive: %v", err)
-	}
-	b, err := Derive([]byte("same"), testSalt, [16]byte{2}, fastKDF)
-	if err != nil {
-		t.Fatalf("Derive: %v", err)
-	}
-	if bytes.Equal(a.Check(), b.Check()) {
-		t.Error("two archives with different ids derived the same check value")
-	}
-	if bytes.Equal(a.IndexAuthKey(), b.IndexAuthKey()) {
-		t.Error("two archives with different ids derived the same index key")
+	dk := bytes.Repeat([]byte{7}, DataKeySize)
+	a, _ := NewKeys(dk, [16]byte{1})
+	b, _ := NewKeys(dk, [16]byte{2})
+	if bytes.Equal(a.IndexAuthKey(), b.IndexAuthKey()) || bytes.Equal(a.ContentKey(), b.ContentKey()) {
+		t.Error("two archives with different ids derived the same keys")
 	}
 }
 
-func TestCheckRejectsWrongPassphrase(t *testing.T) {
-	right := mustDerive(t, "right")
-	wrong := mustDerive(t, "wrong")
+// TestWrapAndUnlock: the data key comes back with the right passphrase, and
+// a wrong passphrase, another archive's id, or a damaged wrapped key are all
+// a wrong passphrase.
+func TestWrapAndUnlock(t *testing.T) {
+	dk, err := NewDataKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, _ := NewKeys(dk, testUUID)
+	salt, wrapped, err := k.Wrap([]byte("right"), fastKDF)
+	if err != nil {
+		t.Fatalf("Wrap: %v", err)
+	}
+	if len(wrapped) != WrappedKeySize || len(salt) != SaltSize {
+		t.Fatalf("wrapped %d bytes, salt %d bytes", len(wrapped), len(salt))
+	}
 
-	if err := right.VerifyCheck(right.Check()); err != nil {
-		t.Errorf("the correct passphrase was rejected: %v", err)
+	got, err := Unlock([]byte("right"), salt, testUUID, fastKDF, wrapped)
+	if err != nil {
+		t.Fatalf("Unlock: %v", err)
 	}
-	if err := wrong.VerifyCheck(right.Check()); !errors.Is(err, ErrWrongPassphrase) {
-		t.Errorf("error = %v, want ErrWrongPassphrase", err)
+	if !bytes.Equal(got.dataKey, dk) || !bytes.Equal(got.ContentKey(), k.ContentKey()) {
+		t.Error("the unlocked keys differ from the wrapped ones")
 	}
-	// An empty or short stored value must not pass.
-	if err := right.VerifyCheck(nil); !errors.Is(err, ErrWrongPassphrase) {
-		t.Errorf("error = %v, want ErrWrongPassphrase", err)
+
+	damaged := append([]byte(nil), wrapped...)
+	damaged[30] ^= 1
+	for name, try := range map[string]func() error{
+		"wrong passphrase": func() error {
+			_, err := Unlock([]byte("wrong"), salt, testUUID, fastKDF, wrapped)
+			return err
+		},
+		"other archive": func() error {
+			_, err := Unlock([]byte("right"), salt, [16]byte{9}, fastKDF, wrapped)
+			return err
+		},
+		"damaged": func() error {
+			_, err := Unlock([]byte("right"), salt, testUUID, fastKDF, damaged)
+			return err
+		},
+		"short": func() error {
+			_, err := Unlock([]byte("right"), salt, testUUID, fastKDF, wrapped[:40])
+			return err
+		},
+	} {
+		if err := try(); !errors.Is(err, ErrWrongPassphrase) {
+			t.Errorf("%s: got %v, want ErrWrongPassphrase", name, err)
+		}
+	}
+}
+
+// TestRewrapKeepsEveryKey is the point of the wrapped data key: a new
+// passphrase, with new KDF parameters, opens the same data key, so no member
+// needs sealing again.
+func TestRewrapKeepsEveryKey(t *testing.T) {
+	dk, _ := NewDataKey()
+	k, _ := NewKeys(dk, testUUID)
+	salt, wrapped, err := k.Wrap([]byte("new passphrase"), KDFParams{Time: 2, Memory: 16 * 1024, Threads: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := Unlock([]byte("new passphrase"), salt, testUUID, KDFParams{Time: 2, Memory: 16 * 1024, Threads: 2}, wrapped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m1, _ := k.MemberKey(testSalt)
+	m2, _ := again.MemberKey(testSalt)
+	if !bytes.Equal(m1, m2) || !bytes.Equal(k.IndexKey(3), again.IndexKey(3)) {
+		t.Error("a new passphrase changed the member or index keys")
 	}
 }
 
@@ -366,7 +427,7 @@ func TestIndexDigestIsKeyed(t *testing.T) {
 func TestZeroWipesTheMaster(t *testing.T) {
 	k := mustDerive(t, "passphrase")
 	k.Zero()
-	for _, b := range k.master {
+	for _, b := range k.dataKey {
 		if b != 0 {
 			t.Fatal("Zero left key material behind")
 		}
@@ -417,3 +478,11 @@ func TestIndexNonceIsFresh(t *testing.T) {
 		t.Fatalf("short sealed index: got %v, want ErrAuthentication", err)
 	}
 }
+
+// The vectors of M9. They were computed once from this implementation and
+// pinned, like the others: a change means that archives no longer open.
+const (
+	wrappedVector = "000000000000000000000000000000000000000000000002" +
+		"01b7aef1a5b2501b467f2a7db4759982e36f525f2d1f9a5dbae2a503c35f389048d0bc5ef63bf41cb1c1145074261802"
+	contentKeyVector = "f12e4f6c5e906c46786010196c939bf0b08fe367dd832d95bac28f6e0d69c36e"
+)

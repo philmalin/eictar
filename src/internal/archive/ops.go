@@ -282,18 +282,26 @@ func (e *EncryptionConfig) apply(opts *Options) error {
 	if _, err := rand.Read(uuid[:]); err != nil {
 		return fmt.Errorf("generating an archive id: %w", err)
 	}
-	salt := make([]byte, crypt.SaltSize)
-	if _, err := rand.Read(salt); err != nil {
-		return fmt.Errorf("generating a salt: %w", err)
-	}
-
-	keys, err := crypt.Derive(e.Passphrase, salt, uuid, params)
+	// A random data key, wrapped for the passphrase: the passphrase makes
+	// none of the keys, so it can change later (doc/design.md 6.2, 9.7).
+	dataKey, err := crypt.NewDataKey()
 	if err != nil {
+		return err
+	}
+	keys, err := crypt.NewKeys(dataKey, uuid)
+	clear(dataKey)
+	if err != nil {
+		return err
+	}
+	salt, wrapped, err := keys.Wrap(e.Passphrase, params)
+	if err != nil {
+		keys.Zero()
 		return err
 	}
 
 	opts.Keys = keys
 	opts.Salt = salt
+	opts.WrappedKey = wrapped
 	opts.KDFParams = params
 	opts.EncryptIndex = e.EncryptIndex
 	opts.ArchiveUUID = uuid

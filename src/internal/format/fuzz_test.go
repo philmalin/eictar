@@ -137,8 +137,8 @@ func FuzzUnmarshalCryptoHeader(f *testing.F) {
 		KDF:     KDFArgon2id,
 		Salt:    make([]byte, CryptoSaltSize),
 		Time:    3, Memory: 256 * 1024, Threads: 4,
-		AEAD:  AEADXChaCha20,
-		Check: make([]byte, CryptoCheckSize),
+		AEAD: AEADXChaCha20,
+		Key:  make([]byte, CryptoWrappedKeySize),
 	}
 	b, err := good.Marshal()
 	if err != nil {
@@ -158,7 +158,7 @@ func FuzzUnmarshalCryptoHeader(f *testing.F) {
 		if ch.Memory > MaxKDFMemoryKiB || ch.Time > MaxKDFTime || ch.Time == 0 || ch.Threads == 0 {
 			t.Fatalf("accepted out-of-range KDF parameters: %+v", ch)
 		}
-		if len(ch.Salt) != CryptoSaltSize || len(ch.Check) != CryptoCheckSize {
+		if len(ch.Salt) != CryptoSaltSize || len(ch.Key) != CryptoWrappedKeySize {
 			t.Fatalf("accepted a malformed salt or check: %+v", ch)
 		}
 		if _, err := ch.Marshal(); err != nil {

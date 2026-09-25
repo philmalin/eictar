@@ -32,7 +32,7 @@ eictar \- archive files, each compressed and optionally encrypted on its own
 .IR pattern ...
 .br
 .B eictar
-.BR \-\-compact | \-\-repair | \-\-info
+.BR \-\-compact | \-\-change\-passphrase | \-\-repair | \-\-info
 .B \-f
 .I archive
 .RI [ options ]
@@ -99,6 +99,16 @@ a member, or nothing changes.
 .TP
 .B \-\-compact
 Write the archive again without its dead space: tombstones, and old indexes.
+.TP
+.B \-\-change\-passphrase
+Seal the key of an encrypted archive under a new passphrase. The program asks
+for the old passphrase, then two times for the new one. It writes the archive
+again, as
+.B \-\-compact
+does. The content is copied, not encrypted again. The Argon2id parameters stay
+as they are, except those that a
+.B \-\-kdf\-*
+option gives.
 .TP
 .B \-\-verify
 Decode every member and check every digest and every authentication tag,
@@ -192,7 +202,10 @@ KiB, MiB or GiB.
 .BR \-e ", " \-\-encrypt
 Encrypt the new archive. The program asks for the passphrase two times. Only
 .B \-c
-takes this option: every later operation uses the passphrase of the archive.
+takes this option: every later operation uses the passphrase of the archive,
+until
+.B \-\-change\-passphrase
+changes it.
 .TP
 .B \-\-encrypt\-index
 Also encrypt the index, which hides the names, sizes and digests.
@@ -207,9 +220,22 @@ Read the passphrase from the environment variable
 .IR var .
 Other processes can see the environment, so the program prints a warning.
 .TP
+.BI \-\-new\-passphrase\-file " file" "\fR, \fP\-\-new\-passphrase\-env " var
+With
+.BR \-\-change\-passphrase ,
+read the new passphrase from the first line of
+.IR file ,
+or from the environment variable
+.IR var .
+Without them, the program asks for it.
+.TP
 .BI \-\-kdf\-time " n" "\fR, \fP\-\-kdf\-memory " kib "\fR, \fP\-\-kdf\-threads " n
 The Argon2id cost: passes (1 to 64, default 3), memory in KiB (at most
-4194304, default 262144), and threads (default 4).
+4194304, default 262144), and threads (default 4). Only
+.B \-c
+and
+.B \-\-change\-passphrase
+take these options.
 .SS Changes
 .TP
 .BI \-\-on\-conflict " mode"
@@ -515,9 +541,9 @@ Where the configuration file is.
 .IP \(bu 2
 Without
 .BR \-\-encrypt\-index ,
-the index is readable: names, sizes, times, owners, and the BLAKE3 digest of
-each file. With the digests, a person who has a copy of a file can find out
-if the archive holds it.
+the index is readable: names, sizes, times and owners. The digest of each
+file is a keyed BLAKE3 hash. Thus a person who has a copy of a file cannot
+find out from the digests if the archive holds it.
 .IP \(bu 2
 An encrypted archive detects changes to its content and to its index. A
 plain archive detects damage, but not a person who writes the file again.
@@ -533,7 +559,11 @@ fails. The exit status says so.
 Two eictar processes cannot change one archive at the same time: the second
 stops with exit 4. The lock is advisory, and it is not reliable on NFS.
 .IP \(bu 2
-The passphrase cannot change in this version. Every key comes from it.
+Every key comes from a random data key, which the passphrase seals.
+.B \-\-change\-passphrase
+seals the same data key under a new passphrase. The blocks of the old file
+can stay on the disk. Thus a person with a copy of the old file, or with the
+old passphrase and the disk, can still read what the archive held then.
 .IP \(bu 2
 .B \-\-update\-mode=newer
 misses a file that a restore from backup made older. Use
@@ -591,6 +621,14 @@ Remove old versions, and encode everything again with xz:
 .nf
 .RS
 eictar \-\-compact \-f home.eictar \-\-recompress xz:preset=9
+.RE
+.fi
+.PP
+Change the passphrase, and make the key derivation stronger:
+.PP
+.nf
+.RS
+eictar \-\-change\-passphrase \-f home.eictar \-\-kdf\-memory 1048576
 .RE
 .fi
 .SH FILES

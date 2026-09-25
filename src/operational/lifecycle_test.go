@@ -965,3 +965,45 @@ func TestListingLevels(t *testing.T) {
 		}
 	}
 }
+
+// TestChangePassphrase: after the change, the new passphrase opens the
+// archive and the old one does not, and the content is the same
+// (doc/design.md 9.7). A plaintext archive has no passphrase to change.
+func TestChangePassphrase(t *testing.T) {
+	tree := fixture(t)
+	oldPass := passFile(t, "the old one")
+	archive := filepath.Join(t.TempDir(), "enc.eictar")
+	runOK(t, tree.Root, "-cf", archive, "-e", "--encrypt-index", "--passphrase-file", oldPass,
+		"--kdf-memory", "8192", "--kdf-time", "1", "work")
+
+	res := testutil.RunEnv(t, tree.Root, []string{"EICTAR_NEW_PASS=the new one"},
+		"--change-passphrase", "-f", archive, "--passphrase-file", oldPass,
+		"--new-passphrase-env", "EICTAR_NEW_PASS", "--kdf-time", "2")
+	if res.ExitCode != exitOK {
+		t.Fatalf("change: exit %d (stderr: %s)", res.ExitCode, res.Stderr)
+	}
+	if !strings.Contains(res.Stderr, "--new-passphrase-env") {
+		t.Errorf("stderr = %q, want the warning about the environment", res.Stderr)
+	}
+
+	if res := testutil.Run(t, tree.Root, "-tf", archive, "--passphrase-file", oldPass); res.ExitCode != exitCorrupt {
+		t.Errorf("the old passphrase: exit %d, want %d", res.ExitCode, exitCorrupt)
+	}
+	newPass := passFile(t, "the new one")
+	info := runOK(t, tree.Root, "--info", "-f", archive, "--passphrase-file", newPass)
+	// --kdf-time changed; the memory that was not given stays.
+	if !strings.Contains(info.Stdout, "time=2 memory=8192 KiB") {
+		t.Errorf("info does not show the new key derivation:\n%s", info.Stdout)
+	}
+	dest := t.TempDir()
+	runOK(t, tree.Root, "-xf", archive, "-d", dest, "--passphrase-file", newPass)
+	testutil.CompareTrees(t, filepath.Join(tree.Root, "work"), filepath.Join(dest, "work"),
+		testutil.CompareOptions{Mode: true, MTime: true})
+
+	plain := filepath.Join(t.TempDir(), "plain.eictar")
+	runOK(t, tree.Root, "-cf", plain, "work")
+	res = testutil.Run(t, tree.Root, "--change-passphrase", "-f", plain, "--new-passphrase-file", newPass)
+	if res.ExitCode == exitOK || !strings.Contains(res.Stderr, "not encrypted") {
+		t.Errorf("a plaintext archive: exit %d (stderr: %s), want a refusal", res.ExitCode, res.Stderr)
+	}
+}

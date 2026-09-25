@@ -10,8 +10,6 @@ import (
 	"runtime"
 	"sort"
 
-	"lukechampine.com/blake3"
-
 	"eictar/src/internal/codec"
 	"eictar/src/internal/crypt"
 	"eictar/src/internal/format"
@@ -204,6 +202,17 @@ type CompactConfig struct {
 	// Recompress, when set, encodes every member again with other codec
 	// settings (--recompress). Otherwise the blobs are copied as they are.
 	Recompress *RecompressConfig
+	// Rewrap, when set, seals the data key under a new passphrase
+	// (--change-passphrase, doc/design.md 9.7).
+	Rewrap *RewrapConfig
+}
+
+// RewrapConfig is the new passphrase of --change-passphrase. Passphrase is
+// asked only after the old passphrase has opened the archive. A zero field of
+// Params keeps the archive's own value.
+type RewrapConfig struct {
+	Passphrase PassphraseFunc
+	Params     crypt.KDFParams
 }
 
 // RecompressConfig is how --recompress encodes the members again. The fields
@@ -255,7 +264,10 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	res.OldSize = r.size
 	keep := kept(r.index.Members)
 	res.Dropped = len(r.index.Members) - len(keep)
-	if cfg.Recompress == nil && res.Dropped == 0 && deadSpace(r) == 0 {
+	if cfg.Rewrap != nil && r.crypto == nil {
+		return res, fmt.Errorf("%s: %w; there is no passphrase to change", cfg.Archive, ErrNotEncrypted)
+	}
+	if cfg.Recompress == nil && cfg.Rewrap == nil && res.Dropped == 0 && deadSpace(r) == 0 {
 		res.NothingToDo = true
 		res.NewSize = r.size
 		return res, nil
@@ -269,7 +281,7 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	if dir == "" {
 		dir = "."
 	}
-	tmp, err := os.CreateTemp(dir, "."+base+".compact-*")
+	tmp, err := os.CreateTemp(dir, "."+base+".rewrite-*")
 	if err != nil {
 		return res, fmt.Errorf("creating the compacted archive: %w", err)
 	}
@@ -283,17 +295,32 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	}()
 
 	// The header and the crypto header are copied as they are: same uuid, same
-	// salt, same KDF parameters, so the same passphrase opens the result.
-	body := r.hdr.BodyOffset()
-	if _, err := io.Copy(tmp, io.NewSectionReader(r.f, 0, body)); err != nil {
-		return res, fmt.Errorf("copying the header: %w", err)
+	// salt, same KDF parameters, so the same passphrase opens the result. A
+	// change of passphrase writes a new crypto header instead, and a header
+	// that gives its new length.
+	hdr := r.hdr
+	var body int64
+	if cfg.Rewrap == nil {
+		body = r.hdr.BodyOffset()
+		if _, err := io.Copy(tmp, io.NewSectionReader(r.f, 0, body)); err != nil {
+			return res, fmt.Errorf("copying the header: %w", err)
+		}
+	} else {
+		head, newHdr, err := rewrapHeaders(r, cfg.Rewrap)
+		if err != nil {
+			return res, err
+		}
+		if _, err := tmp.Write(head); err != nil {
+			return res, fmt.Errorf("writing the header: %w", err)
+		}
+		hdr, body = newHdr, int64(len(head))
 	}
 
 	// The old index chain is gone, so there is no previous index to name.
 	w := &Writer{
 		f:    tmp,
 		path: tmpPath,
-		hdr:  r.hdr,
+		hdr:  hdr,
 		index: format.Index{
 			Version:    format.IndexVersion,
 			Generation: r.tr.Generation + 1,
@@ -350,6 +377,61 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	}
 	res.NewSize = w.off
 	return res, nil
+}
+
+// rewrapHeaders builds the file header and the crypto header of a change of
+// passphrase: the same archive id and data key, a new salt, new KDF
+// parameters where given, and the data key wrapped for the new passphrase.
+func rewrapHeaders(r *Reader, rw *RewrapConfig) ([]byte, format.Header, error) {
+	params := crypt.KDFParams{Time: r.crypto.Time, Memory: r.crypto.Memory, Threads: r.crypto.Threads}
+	if rw.Params.Time != 0 {
+		params.Time = rw.Params.Time
+	}
+	if rw.Params.Memory != 0 {
+		params.Memory = rw.Params.Memory
+	}
+	if rw.Params.Threads != 0 {
+		params.Threads = rw.Params.Threads
+	}
+	if err := params.Validate(); err != nil {
+		return nil, format.Header{}, err
+	}
+	if params.Time > format.MaxKDFTime || params.Memory > format.MaxKDFMemoryKiB {
+		return nil, format.Header{}, fmt.Errorf("kdf: time %d and memory %d KiB: the format allows at most %d and %d KiB",
+			params.Time, params.Memory, format.MaxKDFTime, format.MaxKDFMemoryKiB)
+	}
+	// The new parameters must open on this machine, or the change locks the
+	// archive against the one that made it (doc/design.md A.3).
+	if err := checkAffordable(params); err != nil {
+		return nil, format.Header{}, err
+	}
+
+	pass, err := rw.Passphrase()
+	if err != nil {
+		return nil, format.Header{}, fmt.Errorf("the new passphrase: %w", err)
+	}
+	defer clear(pass)
+	if len(pass) == 0 {
+		return nil, format.Header{}, errors.New("an empty passphrase cannot protect anything")
+	}
+	salt, wrapped, err := r.keys.Wrap(pass, params)
+	if err != nil {
+		return nil, format.Header{}, err
+	}
+	ch := *r.crypto
+	ch.Salt, ch.Key = salt, wrapped
+	ch.Time, ch.Memory, ch.Threads = params.Time, params.Memory, params.Threads
+	cryptoBytes, err := ch.Marshal()
+	if err != nil {
+		return nil, format.Header{}, err
+	}
+	hdr := r.hdr
+	hdr.CryptoHeaderLen = uint32(len(cryptoBytes))
+	hdrBytes, err := hdr.MarshalBinary()
+	if err != nil {
+		return nil, format.Header{}, err
+	}
+	return append(hdrBytes, cryptoBytes...), hdr, nil
 }
 
 // copyBlobs moves the kept blobs into w as they are, in file order so that
@@ -464,7 +546,7 @@ func recompressOne(r *Reader, w *Writer, b *pipeline.Builder, m format.Member, p
 	// the way fails instead of being stored with a digest that lies.
 	pr, pw := io.Pipe()
 	go func() { pw.CloseWithError(r.WriteMember(&old, pw)) }()
-	err := b.AddFile(m, countReader(pr, progress), blake3.New(format.DigestSize, nil))
+	err := b.AddFile(m, countReader(pr, progress), w.newDigest())
 	pr.CloseWithError(errors.New("recompression stopped")) // unblock the decoder on an early return
 	if err != nil {
 		return fmt.Errorf("%s: %w", old.Path, err)

@@ -191,6 +191,13 @@ func TestParseUsageErrors(t *testing.T) {
 		{"recompress without compact", []string{"-cf", "a", "--recompress", "zstd", "p"}},
 		{"bad recompress spec", []string{"--compact", "-f", "a", "--recompress", "zstd:"}},
 		{"config and no-config", []string{"-tf", "a", "--config", "c", "--no-config"}},
+		{"change-passphrase with arguments", []string{"--change-passphrase", "-f", "a", "extra"}},
+		{"two new passphrase sources", []string{"--change-passphrase", "-f", "a",
+			"--new-passphrase-file", "f", "--new-passphrase-env", "V"}},
+		{"new passphrase without change-passphrase", []string{"-tf", "a", "--new-passphrase-file", "f"}},
+		{"new passphrase env on create", []string{"-cef", "a", "--new-passphrase-env", "V", "p"}},
+		{"encrypt on change-passphrase", []string{"--change-passphrase", "-f", "a", "-e"}},
+		{"encrypt-index on change-passphrase", []string{"--change-passphrase", "-f", "a", "--encrypt-index"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			o, err := Parse(tc.argv)
@@ -547,6 +554,21 @@ func TestEncryptionOptionsOnlyOnCreate(t *testing.T) {
 	}
 	// Supplying a passphrase is fine anywhere: reading needs one.
 	mustParse(t, "-tf", "a", "--passphrase-file", "p")
+}
+
+// TestChangePassphraseOptions: a change of passphrase takes the --kdf-*
+// options, and remembers which ones were typed, because only those change
+// the archive's key derivation (doc/design.md 9.7).
+func TestChangePassphraseOptions(t *testing.T) {
+	o := mustParse(t, "--change-passphrase", "-f", "a", "--passphrase-file", "old",
+		"--new-passphrase-file", "new", "--kdf-memory", "65536")
+	if o.Op != OpChangePassphrase || o.NewPassphraseFile != "new" || !o.Op.WritesArchive() {
+		t.Errorf("parsed %v, new passphrase file %q", o.Op, o.NewPassphraseFile)
+	}
+	if !o.explicit["kdf-memory"] || o.explicit["kdf-time"] || o.explicit["kdf-threads"] {
+		t.Errorf("explicit = %v, want only kdf-memory", o.explicit)
+	}
+	mustParse(t, "--change-passphrase", "-f", "a", "--new-passphrase-env", "V")
 }
 
 func TestKDFBounds(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strings"
 
 	"github.com/spf13/pflag"
 
@@ -30,6 +31,7 @@ const (
 	OpRepair
 	OpInfo
 	OpListCodecs
+	OpChangePassphrase
 )
 
 var operationNames = map[Operation]string{
@@ -45,6 +47,8 @@ var operationNames = map[Operation]string{
 	OpRepair:     "--repair",
 	OpInfo:       "--info",
 	OpListCodecs: "--list-codecs",
+
+	OpChangePassphrase: "--change-passphrase",
 }
 
 func (o Operation) String() string {
@@ -62,7 +66,7 @@ func (o Operation) NeedsArchive() bool { return o != OpListCodecs && o != OpNone
 // to add members.
 func (o Operation) WritesArchive() bool {
 	switch o {
-	case OpCreate, OpAppend, OpUpdate, OpDelete, OpCompact, OpRepair:
+	case OpCreate, OpAppend, OpUpdate, OpDelete, OpCompact, OpRepair, OpChangePassphrase:
 		return true
 	}
 	return false
@@ -112,6 +116,10 @@ type Options struct {
 
 	PassphraseFile string
 	PassphraseEnv  string
+	// NewPassphraseFile and NewPassphraseEnv give the new passphrase of
+	// --change-passphrase.
+	NewPassphraseFile string
+	NewPassphraseEnv  string
 
 	KDFTime    uint32
 	KDFMemory  uint32 // KiB
@@ -209,6 +217,7 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs.BoolVar(&ops.repair, "repair", false, "recover from a damaged trailer")
 	fs.BoolVar(&ops.info, "info", false, "print archive information")
 	fs.BoolVar(&ops.listCodecs, "list-codecs", false, "list compression codecs and their parameters")
+	fs.BoolVar(&ops.changePassphrase, "change-passphrase", false, "seal the archive's key under a new passphrase")
 
 	fs.StringVarP(&o.Archive, "file", "f", o.Archive, "the archive to operate on")
 	fs.StringArrayVarP(&o.Chdir, "directory", "C", nil, "change to this directory first")
@@ -226,6 +235,8 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs.BoolVar(&o.EncryptIdx, "encrypt-index", o.EncryptIdx, "also encrypt the index")
 	fs.StringVar(&o.PassphraseFile, "passphrase-file", "", "read the passphrase from the first line of this file")
 	fs.StringVar(&o.PassphraseEnv, "passphrase-env", "", "read the passphrase from this environment variable")
+	fs.StringVar(&o.NewPassphraseFile, "new-passphrase-file", "", "with --change-passphrase, read the new passphrase from this file")
+	fs.StringVar(&o.NewPassphraseEnv, "new-passphrase-env", "", "with --change-passphrase, read the new passphrase from this variable")
 	fs.Uint32Var(&o.KDFTime, "kdf-time", o.KDFTime, "Argon2id iterations")
 	fs.Uint32Var(&o.KDFMemory, "kdf-memory", o.KDFMemory, "Argon2id memory in KiB")
 	fs.Uint8Var(&o.KDFThreads, "kdf-threads", o.KDFThreads, "Argon2id parallelism")
@@ -288,7 +299,7 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 type operationFlags struct {
 	create, append_, list, extract, update bool
 	delete_, compact, verify, repair, info bool
-	listCodecs                             bool
+	listCodecs, changePassphrase           bool
 	gzip, xz, zstd                         bool
 	keepExisting, overwrite, newerOnly     bool
 	compress                               *string
@@ -375,7 +386,7 @@ func Parse(argv []string) (*Options, error) {
 	if o.NoConfig {
 		// Nothing but the command line decides: no file, and no EICTAR_*.
 	} else {
-		l, err := loadLayers(o.Config, o.PassphraseEnv)
+		l, err := loadLayers(o.Config, o.PassphraseEnv, o.NewPassphraseEnv)
 		if err != nil {
 			return nil, err
 		}
@@ -411,7 +422,8 @@ func Parse(argv []string) (*Options, error) {
 // noOperation reports that no operation option was given at all.
 func noOperation(ops *operationFlags) bool {
 	return !(ops.create || ops.append_ || ops.list || ops.extract || ops.update ||
-		ops.delete_ || ops.compact || ops.verify || ops.repair || ops.info || ops.listCodecs)
+		ops.delete_ || ops.compact || ops.verify || ops.repair || ops.info || ops.listCodecs ||
+		ops.changePassphrase)
 }
 
 func resolveOperation(ops *operationFlags) (Operation, error) {
@@ -430,6 +442,7 @@ func resolveOperation(ops *operationFlags) (Operation, error) {
 		{ops.repair, OpRepair},
 		{ops.info, OpInfo},
 		{ops.listCodecs, OpListCodecs},
+		{ops.changePassphrase, OpChangePassphrase},
 	}
 
 	var found []Operation
@@ -440,7 +453,7 @@ func resolveOperation(ops *operationFlags) (Operation, error) {
 	}
 	switch len(found) {
 	case 0:
-		return OpNone, &UsageError{fmt.Errorf("no operation selected: one of -c, -r, -t, -x, -u, --delete, --compact, --verify, --repair, --info or --list-codecs is required")}
+		return OpNone, &UsageError{fmt.Errorf("no operation selected: one of -c, -r, -t, -x, -u, --delete, --compact, --change-passphrase, --verify, --repair, --info or --list-codecs is required")}
 	case 1:
 		return found[0], nil
 	default:
@@ -529,6 +542,16 @@ func (o *Options) validate() error {
 	if o.PassphraseFile != "" && o.PassphraseEnv != "" {
 		return &UsageError{fmt.Errorf("--passphrase-file and --passphrase-env are mutually exclusive")}
 	}
+	if o.NewPassphraseFile != "" && o.NewPassphraseEnv != "" {
+		return &UsageError{fmt.Errorf("--new-passphrase-file and --new-passphrase-env are mutually exclusive")}
+	}
+	if o.Op != OpChangePassphrase {
+		for _, name := range []string{"new-passphrase-file", "new-passphrase-env"} {
+			if o.explicit[name] {
+				return &UsageError{fmt.Errorf("--%s applies to --change-passphrase only", name)}
+			}
+		}
+	}
 	if o.Config != "" && o.NoConfig {
 		return &UsageError{fmt.Errorf("--config and --no-config are mutually exclusive")}
 	}
@@ -607,14 +630,18 @@ func (o *Options) validate() error {
 
 	// Encryption is decided when an archive is created; afterwards the
 	// archive's own header says how it was made. Accepting these elsewhere
-	// would let someone believe they had chosen something they had not.
-	if o.Op != OpCreate {
-		for _, name := range []string{"encrypt", "encrypt-index", "kdf-time", "kdf-memory", "kdf-threads"} {
-			if o.explicit[name] {
-				return &UsageError{fmt.Errorf("--%s applies to -c only: an existing archive's "+
-					"encryption is fixed by its header", name)}
-			}
+	// would let someone believe they had chosen something they had not. The
+	// one exception is the key derivation, which a change of passphrase sets
+	// again (doc/design.md 9.7).
+	for _, name := range []string{"encrypt", "encrypt-index", "kdf-time", "kdf-memory", "kdf-threads"} {
+		if !o.explicit[name] || o.Op == OpCreate {
+			continue
 		}
+		if o.Op == OpChangePassphrase && strings.HasPrefix(name, "kdf-") {
+			continue
+		}
+		return &UsageError{fmt.Errorf("--%s applies to -c only: an existing archive's "+
+			"encryption is fixed by its header", name)}
 	}
 	if o.KDFTime < 1 || o.KDFTime > format.MaxKDFTime {
 		return &UsageError{fmt.Errorf("--kdf-time must be between 1 and %d, got %d",
@@ -652,7 +679,7 @@ func (o *Options) validate() error {
 		if len(o.Args) == 0 {
 			return &UsageError{fmt.Errorf("--delete needs at least one pattern")}
 		}
-	case OpCompact, OpInfo, OpRepair, OpListCodecs:
+	case OpCompact, OpChangePassphrase, OpInfo, OpRepair, OpListCodecs:
 		if len(o.Args) > 0 {
 			return &UsageError{fmt.Errorf("%v takes no positional arguments, got %d", o.Op, len(o.Args))}
 		}

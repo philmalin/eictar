@@ -169,7 +169,7 @@ func TestCryptoHeaderRefusesCostlyParameters(t *testing.T) {
 		return &CryptoHeader{
 			Version: CryptoHeaderVersion, KDF: KDFArgon2id,
 			Salt: make([]byte, CryptoSaltSize), Time: 3, Memory: 256 * 1024, Threads: 4,
-			AEAD: AEADXChaCha20, Check: make([]byte, CryptoCheckSize),
+			AEAD: AEADXChaCha20, Key: make([]byte, CryptoWrappedKeySize),
 		}
 	}
 	for _, tc := range []struct {

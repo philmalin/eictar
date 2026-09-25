@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"os"
-
-	"lukechampine.com/blake3"
 
 	"eictar/src/internal/format"
 	"eictar/src/internal/meta"
@@ -93,7 +92,7 @@ func (c *capturer) submit(e entry) error {
 	old, replacing := c.live[e.Stored]
 	if replacing {
 		if c.updateMode != "" {
-			stale, err := outOfDate(c.contentOf(old), e, c.updateMode)
+			stale, err := outOfDate(c.contentOf(old), e, c.updateMode, c.w.newDigest)
 			if err != nil {
 				return err
 			}
@@ -231,7 +230,7 @@ func (c *capturer) submitFile(m format.Member, e entry) error {
 		src = io.MultiReader(readers...)
 	}
 
-	if err := c.b.AddFile(m, countReader(src, c.progress), blake3.New(format.DigestSize, nil)); err != nil {
+	if err := c.b.AddFile(m, countReader(src, c.progress), c.w.newDigest()); err != nil {
 		return fmt.Errorf("%s: %w", e.Src, err)
 	}
 	// Only a member that was recorded can be a hardlink target. Set before a
@@ -302,7 +301,7 @@ func (c *capturer) contentOf(m *format.Member) *format.Member {
 
 // outOfDate applies the -u test of doc/design.md 10.5 to one path. For a
 // hardlink, old is the member that holds its content (see contentOf).
-func outOfDate(old *format.Member, e entry, mode string) (bool, error) {
+func outOfDate(old *format.Member, e entry, mode string, newHash func() hash.Hash) (bool, error) {
 	// A change of type is always a change.
 	if memberTypeFor(e.Kind) != old.Type {
 		return true, nil
@@ -317,7 +316,7 @@ func outOfDate(old *format.Member, e entry, mode string) (bool, error) {
 		return mtime > old.MTimeNanos, nil
 	case "digest":
 		if old.Type == format.TypeReg {
-			same, err := sameContent(old, e)
+			same, err := sameContent(old, e, newHash)
 			if err != nil {
 				return false, err
 			}
@@ -366,7 +365,7 @@ func memberTypeFor(k entryKind) format.MemberType {
 // the bytes at the member's data regions must give its digest, and the rest
 // of the file must be zero. Only the file's current data outside those
 // regions is read for that; its current holes are zero already.
-func sameContent(old *format.Member, e entry) (bool, error) {
+func sameContent(old *format.Member, e entry, newHash func() hash.Hash) (bool, error) {
 	size := e.Info.Size()
 	if uint64(size) != old.Size {
 		return false, nil
@@ -377,7 +376,7 @@ func sameContent(old *format.Member, e entry) (bool, error) {
 	}
 	defer f.Close()
 
-	h := blake3.New(format.DigestSize, nil)
+	h := newHash()
 	if len(old.Sparse) == 0 {
 		// Stored dense: the digest is of the file as a reader sees it,
 		// holes as zeros, which is what a plain read gives.

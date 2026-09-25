@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -82,18 +83,20 @@ var configKeys = map[string][]Operation{
 // refusedKeys are options that exist but that a configuration must not set,
 // with the reason (doc/design.md 11.1 and 11.4).
 var refusedKeys = map[string]string{
-	"passphrase":      "a passphrase never comes from the environment or a configuration file; use --passphrase-file or --passphrase-env on the command line",
-	"passphrase-file": "a passphrase source is given on the command line only",
-	"passphrase-env":  "a passphrase source is given on the command line only",
-	"file":            "the archive is named on the command line only",
-	"directory":       "-C is given on the command line only",
-	"destination":     "-d is given on the command line only",
-	"files-from":      "the paths are given on the command line only",
-	"to-stdout":       "where extracted content goes is given on the command line only",
-	"recompress":      "--recompress is part of the operation, given on the command line only",
-	"config":          "a configuration cannot name another one",
-	"no-config":       "--no-config is given on the command line only",
-	"show-config":     "--show-config is given on the command line only",
+	"passphrase":          "a passphrase never comes from the environment or a configuration file; use --passphrase-file or --passphrase-env on the command line",
+	"passphrase-file":     "a passphrase source is given on the command line only",
+	"passphrase-env":      "a passphrase source is given on the command line only",
+	"new-passphrase-file": "a passphrase source is given on the command line only",
+	"new-passphrase-env":  "a passphrase source is given on the command line only",
+	"file":                "the archive is named on the command line only",
+	"directory":           "-C is given on the command line only",
+	"destination":         "-d is given on the command line only",
+	"files-from":          "the paths are given on the command line only",
+	"to-stdout":           "where extracted content goes is given on the command line only",
+	"recompress":          "--recompress is part of the operation, given on the command line only",
+	"config":              "a configuration cannot name another one",
+	"no-config":           "--no-config is given on the command line only",
+	"show-config":         "--show-config is given on the command line only",
 }
 
 // keyGroups are keys that decide one thing together. If the command line
@@ -121,9 +124,9 @@ type layers struct {
 
 // loadLayers reads the configuration file and the environment. The
 // environment wins over the file, key by key. passphraseEnv is the variable
-// that --passphrase-env names: it holds a secret, not a setting, and may well
-// be called EICTAR_ something.
-func loadLayers(configFlag, passphraseEnv string) (*layers, error) {
+// that --passphrase-env names, and the one that --new-passphrase-env names:
+// each holds a secret, not a setting, and may well be called EICTAR_ something.
+func loadLayers(configFlag string, passphraseEnvs ...string) (*layers, error) {
 	l := &layers{settings: map[string][]setting{}, codecs: map[string]map[string]setting{}}
 
 	path, err := configPath(configFlag)
@@ -136,7 +139,7 @@ func loadLayers(configFlag, passphraseEnv string) (*layers, error) {
 			return nil, err
 		}
 	}
-	if err := l.readEnv(passphraseEnv); err != nil {
+	if err := l.readEnv(passphraseEnvs); err != nil {
 		return nil, err
 	}
 	return l, nil
@@ -259,12 +262,12 @@ func stripComment(line string) string {
 // readEnv reads the EICTAR_* variables (doc/design.md 11.2). A variable the
 // program does not know is an error, not something to ignore: a misspelled
 // EICTAR_COMPESS would otherwise give an archive at a level nobody chose.
-func (l *layers) readEnv(passphraseEnv string) error {
+func (l *layers) readEnv(passphraseEnvs []string) error {
 	fromEnv := map[string][]setting{}
 	for _, kv := range environ() {
 		name, value, _ := strings.Cut(kv, "=")
 		rest, ok := strings.CutPrefix(name, "EICTAR_")
-		if !ok || name == "EICTAR_CONFIG" || name == passphraseEnv {
+		if !ok || name == "EICTAR_CONFIG" || slices.Contains(passphraseEnvs, name) {
 			continue
 		}
 		if c, ok := strings.CutPrefix(rest, "CODEC_"); ok {

@@ -7,13 +7,14 @@
 package crypt
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"errors"
 	"fmt"
 	"io"
 
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
 	"lukechampine.com/blake3"
 )
@@ -32,10 +33,10 @@ var (
 
 // Sizes fixed by the primitives.
 const (
-	MasterKeySize = 32
-	SaltSize      = 16
-	CheckSize     = 32
-	DigestSize    = 32
+	DataKeySize = 32
+	KEKSize     = 32
+	SaltSize    = 16
+	DigestSize  = 32
 )
 
 // KDFParams are the Argon2id settings, stored in the crypto header so that an
@@ -80,40 +81,143 @@ func (p KDFParams) MemoryBytes() int64 { return int64(p.Memory) * 1024 }
 
 // Keys is the key schedule for one archive.
 //
-// The master key never encrypts anything itself: every use derives a subkey
-// bound to a purpose and to the archive, so that a key reused for two jobs
-// cannot be confused for one used for a third.
+// Every key comes from the archive's data key: 32 random bytes made once, when
+// the archive is created. The passphrase does not make any of these keys. It
+// wraps the data key (doc/design.md 6.2), so that a new passphrase re-wraps
+// the same data key and every key below stays the same. The data key never
+// encrypts anything itself: every use derives a subkey bound to a purpose and
+// to the archive, so that a key for one job cannot serve another.
 type Keys struct {
-	master []byte
-	uuid   [16]byte
+	dataKey []byte
+	uuid    [16]byte
 }
 
-// Derive runs the passphrase through Argon2id.
+// WrappedKeySize is the size of a wrapped data key: the nonce, the key, and
+// the tag.
+const WrappedKeySize = chacha20poly1305.NonceSizeX + DataKeySize + chacha20poly1305.Overhead
+
+// NewDataKey makes the random data key of a new archive.
+func NewDataKey() ([]byte, error) {
+	k := make([]byte, DataKeySize)
+	if _, err := rand.Read(k); err != nil {
+		return nil, fmt.Errorf("crypt: making a data key: %w", err)
+	}
+	return k, nil
+}
+
+// NewKeys builds the key schedule of an archive from its data key. The keys
+// keep their own copy.
+func NewKeys(dataKey []byte, uuid [16]byte) (*Keys, error) {
+	if len(dataKey) != DataKeySize {
+		return nil, fmt.Errorf("crypt: data key is %d bytes, want %d", len(dataKey), DataKeySize)
+	}
+	return &Keys{dataKey: append([]byte(nil), dataKey...), uuid: uuid}, nil
+}
+
+// DeriveKEK runs the passphrase through Argon2id to make the key-encryption
+// key that wraps the data key.
 //
 // This is the slow step by design: it is the only defence against someone
 // guessing the passphrase offline, and its cost is set by KDFParams.
-func Derive(passphrase []byte, salt []byte, uuid [16]byte, p KDFParams) (*Keys, error) {
+func DeriveKEK(passphrase, salt []byte, p KDFParams) ([]byte, error) {
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
 	if len(salt) != SaltSize {
 		return nil, fmt.Errorf("kdf: salt is %d bytes, want %d", len(salt), SaltSize)
 	}
+	return argon2.IDKey(passphrase, salt, p.Time, p.Memory, p.Threads, KEKSize), nil
+}
 
-	master := argon2.IDKey(passphrase, salt, p.Time, p.Memory, p.Threads, MasterKeySize)
-	return &Keys{master: master, uuid: uuid}, nil
+// WrapKey seals a data key under a key-encryption key. The result is the
+// nonce, then the sealed key. The archive id is bound in, so that a wrapped
+// key cannot be moved to another archive.
+func WrapKey(kek []byte, uuid [16]byte, dataKey []byte) ([]byte, error) {
+	var nonce [chacha20poly1305.NonceSizeX]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return nil, fmt.Errorf("crypt: wrap nonce: %w", err)
+	}
+	return wrapKeyWithNonce(kek, uuid, dataKey, nonce)
+}
+
+// wrapKeyWithNonce is WrapKey with a fixed nonce, for the test vectors.
+func wrapKeyWithNonce(kek []byte, uuid [16]byte, dataKey []byte, nonce [chacha20poly1305.NonceSizeX]byte) ([]byte, error) {
+	if len(dataKey) != DataKeySize {
+		return nil, fmt.Errorf("crypt: data key is %d bytes, want %d", len(dataKey), DataKeySize)
+	}
+	aead, err := chacha20poly1305.NewX(kek)
+	if err != nil {
+		return nil, fmt.Errorf("crypt: wrap cipher: %w", err)
+	}
+	out := make([]byte, 0, WrappedKeySize)
+	out = append(out, nonce[:]...)
+	return aead.Seal(out, nonce[:], dataKey, wrapAAD(uuid)), nil
+}
+
+// UnwrapKey opens a wrapped data key. A tag that fails means the passphrase
+// is wrong: the tag is the check that a separate check value used to be.
+func UnwrapKey(kek []byte, uuid [16]byte, wrapped []byte) ([]byte, error) {
+	if len(wrapped) != WrappedKeySize {
+		return nil, fmt.Errorf("%w: the wrapped key is %d bytes, want %d", ErrWrongPassphrase, len(wrapped), WrappedKeySize)
+	}
+	aead, err := chacha20poly1305.NewX(kek)
+	if err != nil {
+		return nil, fmt.Errorf("crypt: wrap cipher: %w", err)
+	}
+	nonce := wrapped[:chacha20poly1305.NonceSizeX]
+	key, err := aead.Open(nil, nonce, wrapped[chacha20poly1305.NonceSizeX:], wrapAAD(uuid))
+	if err != nil {
+		return nil, ErrWrongPassphrase
+	}
+	return key, nil
+}
+
+func wrapAAD(uuid [16]byte) []byte {
+	return append([]byte("eictar/v1/wrap"), uuid[:]...)
+}
+
+// Unlock turns a passphrase and a crypto header's values into the archive's
+// keys: the KEK, then the data key, then the schedule.
+func Unlock(passphrase, salt []byte, uuid [16]byte, p KDFParams, wrapped []byte) (*Keys, error) {
+	kek, err := DeriveKEK(passphrase, salt, p)
+	if err != nil {
+		return nil, err
+	}
+	defer zero(kek)
+	dataKey, err := UnwrapKey(kek, uuid, wrapped)
+	if err != nil {
+		return nil, err
+	}
+	defer zero(dataKey)
+	return NewKeys(dataKey, uuid)
+}
+
+// Wrap seals this archive's data key for a passphrase, with a new salt of
+// its own. It is how create stores the data key, and how a change of
+// passphrase stores it again.
+func (k *Keys) Wrap(passphrase []byte, p KDFParams) (salt, wrapped []byte, err error) {
+	salt = make([]byte, SaltSize)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, nil, fmt.Errorf("crypt: salt: %w", err)
+	}
+	kek, err := DeriveKEK(passphrase, salt, p)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer zero(kek)
+	wrapped, err = WrapKey(kek, k.uuid, k.dataKey)
+	return salt, wrapped, err
 }
 
 // derive produces a subkey for one purpose.
 func (k *Keys) derive(info string, extra []byte, salt []byte, n int) []byte {
-	ikm := k.master
 	context := make([]byte, 0, len(info)+len(k.uuid)+len(extra))
 	context = append(context, info...)
 	context = append(context, k.uuid[:]...)
 	context = append(context, extra...)
 
 	out := make([]byte, n)
-	r := hkdf.New(sha256.New, ikm, salt, context)
+	r := hkdf.New(sha256.New, k.dataKey, salt, context)
 	if _, err := io.ReadFull(r, out); err != nil {
 		// HKDF cannot fail for these sizes; a failure here is a broken build.
 		panic("crypt: deriving a subkey: " + err.Error())
@@ -121,18 +225,11 @@ func (k *Keys) derive(info string, extra []byte, salt []byte, n int) []byte {
 	return out
 }
 
-// Check is the value stored in the crypto header, so that a wrong passphrase
-// is reported as such instead of surfacing later as a failed tag.
-func (k *Keys) Check() []byte {
-	return k.derive("eictar/v1/check", nil, nil, CheckSize)
-}
-
-// VerifyCheck compares a stored check value in constant time.
-func (k *Keys) VerifyCheck(stored []byte) error {
-	if subtle.ConstantTimeCompare(k.Check(), stored) != 1 {
-		return ErrWrongPassphrase
-	}
-	return nil
+// ContentKey keys the member digests of an encrypted archive, so that a
+// digest in an index that is not sealed tells nothing about the content
+// (doc/design.md 6.2).
+func (k *Keys) ContentKey() []byte {
+	return k.derive("eictar/v1/content", nil, nil, 32)
 }
 
 // IndexKey seals the index. It is bound to the generation, so an index from
@@ -160,11 +257,13 @@ func (k *Keys) MemberKey(salt []byte) ([]byte, error) {
 	return k.derive("eictar/v1/member", nil, salt, 32), nil
 }
 
-// Zero wipes the master key. It is best-effort: Go may have copied it during a
+// Zero wipes the data key. It is best-effort: Go may have copied it during a
 // stack or heap move, and there is no way to find those copies.
-func (k *Keys) Zero() {
-	for i := range k.master {
-		k.master[i] = 0
+func (k *Keys) Zero() { zero(k.dataKey) }
+
+func zero(b []byte) {
+	for i := range b {
+		b[i] = 0
 	}
 }
 

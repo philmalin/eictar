@@ -1925,12 +1925,16 @@ func TestCraftedKDFParametersAreRefusedBeforePrompting(t *testing.T) {
 // TestWriterRefusesKeysWithoutTheirArchiveID: keys are derived against the
 // archive id, so keys without it produce an archive nobody can open.
 func TestWriterRefusesKeysWithoutTheirArchiveID(t *testing.T) {
-	keys, err := crypt.Derive([]byte("p"), bytes.Repeat([]byte{1}, crypt.SaltSize), [16]byte{7}, testKDF)
+	keys, err := crypt.NewKeys(bytes.Repeat([]byte{3}, crypt.DataKeySize), [16]byte{7})
 	if err != nil {
-		t.Fatalf("Derive: %v", err)
+		t.Fatalf("NewKeys: %v", err)
+	}
+	salt, wrapped, err := keys.Wrap([]byte("p"), testKDF)
+	if err != nil {
+		t.Fatal(err)
 	}
 	_, err = Create(filepath.Join(t.TempDir(), "a.eictar"), Options{
-		Codec: "none", Keys: keys, Salt: bytes.Repeat([]byte{1}, crypt.SaltSize),
+		Codec: "none", Keys: keys, Salt: salt, WrappedKey: wrapped,
 		KDFParams: testKDF,
 		// no ArchiveUUID
 	})
@@ -1950,15 +1954,17 @@ func TestReaderCloseWipesKeys(t *testing.T) {
 		t.Fatalf("Open: %v", err)
 	}
 	keys := r.keys
+	before := keys.ContentKey()
 	if err := r.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 	if r.keys != nil {
 		t.Error("the reader still holds its keys after Close")
 	}
-	// The Keys value itself was zeroed, not merely dropped.
-	if keys.Check() == nil {
-		t.Fatal("unexpected nil check")
+	// The Keys value itself was zeroed, not merely dropped: a subkey derived
+	// from it now is not the one derived before.
+	if bytes.Equal(keys.ContentKey(), before) {
+		t.Error("Close left the data key in place")
 	}
 	if err := r.Close(); err != nil {
 		t.Errorf("a second Close failed: %v", err)

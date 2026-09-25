@@ -3,8 +3,10 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -94,6 +96,30 @@ func TestPassphrasePromptNeedsATerminal(t *testing.T) {
 		if !bytes.Contains([]byte(err.Error()), []byte(want)) {
 			t.Errorf("error = %q, want it to mention %s", err, want)
 		}
+	}
+}
+
+// TestNewPassphraseNamesItsOwnOptions: the new passphrase of
+// --change-passphrase has its own options, and the messages name them.
+func TestNewPassphraseNamesItsOwnOptions(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	defer r.Close()
+	defer w.Close()
+	_, err = passphraseSource{stdin: r, isNew: true}.get()
+	if !errors.Is(err, ErrNoPassphrase) || !strings.Contains(err.Error(), "--new-passphrase-file") {
+		t.Errorf("error = %v, want ErrNoPassphrase naming --new-passphrase-file", err)
+	}
+	src := passphraseSource{env: "V", isNew: true}
+	if got := src.describe(); got != "--new-passphrase-env V" {
+		t.Errorf("describe() = %q", got)
+	}
+	var warned []string
+	src.warnIfInsecureSource(func(f string, a ...any) { warned = append(warned, fmt.Sprintf(f, a...)) })
+	if len(warned) != 1 || !strings.Contains(warned[0], "--new-passphrase-env") {
+		t.Errorf("warnings = %q, want one naming --new-passphrase-env", warned)
 	}
 }
 

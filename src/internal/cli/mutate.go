@@ -9,6 +9,7 @@ import (
 
 	"eictar/src/internal/archive"
 	"eictar/src/internal/codec"
+	"eictar/src/internal/crypt"
 )
 
 // openFor builds the open options every operation on an existing archive
@@ -110,6 +111,47 @@ func runCompact(o *Options, stdout, stderr io.Writer) error {
 	}
 	fmt.Fprintf(stdout, "%s: %d bytes reclaimed (%d -> %d), %d tombstones removed\n",
 		o.Archive, res.OldSize-res.NewSize, res.OldSize, res.NewSize, res.Dropped)
+	return nil
+}
+
+// runChangePassphrase seals the archive's data key under a new passphrase,
+// and writes the archive again as compact does (doc/design.md 9.7). Only the
+// --kdf-* options typed on this command line change the key derivation.
+// Otherwise the archive keeps its own parameters, not the defaults.
+func runChangePassphrase(o *Options, stdout, stderr io.Writer) error {
+	rep := &reporter{out: stdout, errOut: stderr, verbose: o.Verbose, quiet: o.Quiet}
+	var params crypt.KDFParams
+	if o.explicit["kdf-time"] {
+		params.Time = o.KDFTime
+	}
+	if o.explicit["kdf-memory"] {
+		params.Memory = o.KDFMemory
+	}
+	if o.explicit["kdf-threads"] {
+		params.Threads = o.KDFThreads
+	}
+	newSrc := passphraseSource{file: o.NewPassphraseFile, env: o.NewPassphraseEnv, confirm: true, isNew: true}
+	cfg := archive.CompactConfig{
+		Archive:  o.Archive,
+		Open:     openFor(o, rep),
+		Reporter: rep,
+		Rewrap: &archive.RewrapConfig{
+			Params: params,
+			Passphrase: func() ([]byte, error) {
+				newSrc.warnIfInsecureSource(rep.Warn)
+				return newSrc.get()
+			},
+		},
+	}
+	var done func()
+	cfg.Reporter, done = withProgress(o, rep, stderr)
+	res, err := archive.CompactArchive(cfg)
+	done()
+	if err != nil || o.Quiet {
+		return err
+	}
+	fmt.Fprintf(stdout, "%s: the passphrase is changed; %d -> %d bytes, %d tombstones removed\n",
+		o.Archive, res.OldSize, res.NewSize, res.Dropped)
 	return nil
 }
 
