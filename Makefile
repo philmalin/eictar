@@ -66,11 +66,11 @@ bench: | $(TMPDIR)
 compare: build
 	bench/compare.sh $(DIR)
 
-vet:
+vet: | $(TMPDIR)
 	$(GO) vet $(PKGS)
 	$(GO) vet -tags operational ./src/operational/
 
-fmt:
+fmt: | $(TMPDIR)
 	$(GO) fmt $(PKGS)
 
 check: fmt vet test-race operational
