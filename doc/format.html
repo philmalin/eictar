@@ -1460,7 +1460,11 @@ version 1.0</a>
 header</a></li>
 <li><a href="#blobs-and-chunks" id="toc-blobs-and-chunks">5. Blobs and
 chunks</a></li>
-<li><a href="#codecs" id="toc-codecs">6. Codecs</a></li>
+<li><a href="#codecs" id="toc-codecs">6. Codecs</a>
+<ul>
+<li><a href="#dictionaries" id="toc-dictionaries">6.1
+Dictionaries</a></li>
+</ul></li>
 <li><a href="#cryptography" id="toc-cryptography">7. Cryptography</a>
 <ul>
 <li><a href="#keys" id="toc-keys">7.1 Keys</a></li>
@@ -1470,6 +1474,8 @@ chunks</a></li>
 index</a></li>
 <li><a href="#index-digest" id="toc-index-digest">7.5 Index
 digest</a></li>
+<li><a href="#sealed-dictionary" id="toc-sealed-dictionary">7.6 Sealed
+dictionary</a></li>
 </ul></li>
 <li><a href="#index" id="toc-index">8. Index</a>
 <ul>
@@ -1706,9 +1712,11 @@ payload.</p>
 <h2 id="codecs">6. Codecs</h2>
 <p>The index has a catalog of codecs. Each member names an entry of the
 catalog by its position, or <code>-1</code> for no codec. A catalog
-entry is a map with <code>name</code> (text) and <code>params</code> (a
-map from text to a number or a text). The parameters record the settings
-of the writer. A reader does not need them.</p>
+entry is a map with <code>name</code> (text), <code>params</code> (a map
+from text to a number or a text), and <code>dict</code> (uint,
+optional). The parameters record the settings of the writer. A reader
+does not need them. <code>dict</code> is the id of the dictionary (§6.1)
+that the codec used, and a reader needs it to decode.</p>
 <table>
 <colgroup>
 <col style="width: 19%" />
@@ -1758,6 +1766,27 @@ match reaches back further than the start of its chunk.</p>
 <p>A decoder reads at most the expected plaintext length, and then one
 more byte to prove that the stream ends there. A chunk that decodes to
 more or to less is refused.</p>
+<h3 id="dictionaries">6.1 Dictionaries</h3>
+<p>A <code>zstd</code> catalog entry with <code>dict</code> compresses
+each chunk with a Zstandard dictionary. The dictionary is in the
+Zstandard dictionary format (RFC 8878, section 5): the magic
+<code>37 A4 30 EC</code>, then the dictionary id as a
+<code>u32le</code>. The dictionary id is the <code>id</code> of its Dict
+map (§8.2). Each frame names the id of its dictionary, and a reader
+refuses a frame whose id is different.</p>
+<p>The dictionary blob is <code>len</code> bytes at offset
+<code>off</code>, one message. It is not compressed. When
+<code>enc</code> is present, the blob is sealed (§7.6). Otherwise, it is
+the dictionary as it is, and <code>len</code> equals
+<code>size</code>.</p>
+<p>A reader checks a dictionary before it decodes a member with it:</p>
+<ul>
+<li>the tag, when it is sealed</li>
+<li>that its length is <code>size</code></li>
+<li>its <code>digest</code>: BLAKE3-256 of the dictionary, keyed like
+the member digests (§8.3)</li>
+<li>that its magic and its id are correct</li>
+</ul>
 <h2 id="cryptography">7. Cryptography</h2>
 <h3 id="keys">7.1 Keys</h3>
 <pre><code>dataK    = 32 random bytes, made when the archive is created
@@ -1766,7 +1795,8 @@ key      = nonce || XChaCha20-Poly1305(KEK, nonce, dataK, aad = &quot;eictar/v1/
 indexK   = HKDF-SHA-256(ikm = dataK, salt = empty, info = &quot;eictar/v1/index&quot;      || archive_uuid || u64le(generation))
 authK    = HKDF-SHA-256(ikm = dataK, salt = empty, info = &quot;eictar/v1/index-auth&quot; || archive_uuid)
 contentK = HKDF-SHA-256(ikm = dataK, salt = empty, info = &quot;eictar/v1/content&quot;    || archive_uuid)
-memberK  = HKDF-SHA-256(ikm = dataK, salt = enc.salt, info = &quot;eictar/v1/member&quot;  || archive_uuid)</code></pre>
+memberK  = HKDF-SHA-256(ikm = dataK, salt = enc.salt, info = &quot;eictar/v1/member&quot;  || archive_uuid)
+dictK    = HKDF-SHA-256(ikm = dataK, salt = enc.salt, info = &quot;eictar/v1/dict&quot;    || archive_uuid)</code></pre>
 <p><code>key</code> is the field of the crypto header (§4): a 24-byte
 random nonce, then the 32-byte sealed data key and its 16-byte tag. Each
 HKDF output is 32 bytes. The info strings are ASCII, with no terminator.
@@ -1807,6 +1837,15 @@ compares it in constant time.</p>
 <p>A reader must also refuse a plain archive when its user expected an
 encrypted one. Someone who removes the encryption can write a plain
 index with an unkeyed digest.</p>
+<h3 id="sealed-dictionary">7.6 Sealed dictionary</h3>
+<p>A dictionary (§6.1) of an encrypted archive is sealed as one
+message:</p>
+<pre><code>key    = dictK of the dictionary, from its enc.salt
+nonce  = 24 zero bytes
+aad    = u32le(id)
+blob   = AEAD-seal(key, nonce, dictionary, aad)</code></pre>
+<p>A writer must give each dictionary a new random salt. Each dictionary
+key then seals one message only, so the fixed nonce is safe.</p>
 <h2 id="index">8. Index</h2>
 <h3 id="encoding">8.1 Encoding</h3>
 <p>The index is encoded in these steps:</p>
@@ -1847,9 +1886,63 @@ GiB, and the number of members to 4194304.</p>
 <td>the catalog (§6). Absent when it is empty.</td>
 </tr>
 <tr class="even">
+<td><code>dicts</code></td>
+<td>array</td>
+<td>the Dict maps (§6.1). Absent when there are none.</td>
+</tr>
+<tr class="odd">
 <td><code>members</code></td>
 <td>array</td>
 <td>the Member maps</td>
+</tr>
+</tbody>
+</table>
+<p>A Dict map:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Key</th>
+<th>Type</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>id</code></td>
+<td>uint</td>
+<td>the dictionary id, 1 to 2^32 − 1, unique in the index</td>
+</tr>
+<tr class="even">
+<td><code>gen</code></td>
+<td>uint</td>
+<td>the generation that added it</td>
+</tr>
+<tr class="odd">
+<td><code>size</code></td>
+<td>uint</td>
+<td>the length of the dictionary, 1 to 1048576</td>
+</tr>
+<tr class="even">
+<td><code>digest</code></td>
+<td>bytes</td>
+<td>32 bytes (§6.1)</td>
+</tr>
+<tr class="odd">
+<td><code>enc</code></td>
+<td>map</td>
+<td><code>{ &quot;salt&quot;: 16 bytes }</code>, when the archive is
+encrypted</td>
+</tr>
+<tr class="even">
+<td><code>off</code></td>
+<td>uint</td>
+<td>the blob offset</td>
+</tr>
+<tr class="odd">
+<td><code>len</code></td>
+<td>uint</td>
+<td>the blob length: <code>size</code>, or <code>size + 16</code> when
+sealed</td>
 </tr>
 </tbody>
 </table>
@@ -2032,6 +2125,10 @@ a key that an older reader must not ignore changes
 <li>the rules of presence and type in §8.3, and the limits in them</li>
 <li>two members with the same <code>id</code></li>
 <li>a <code>codec</code> that is not -1 and not a catalog position</li>
+<li>a catalog <code>dict</code> that names no Dict map, or that is on a
+codec other than <code>zstd</code></li>
+<li>a Dict map that breaks the rules of §8.2, or two with the same
+<code>id</code>, or more than 1024 of them</li>
 <li>a <code>hardlink</code> whose <code>id</code> is not a
 <code>reg</code> member of the index. The target can be a
 tombstone.</li>
@@ -2041,7 +2138,7 @@ overlapping, or that end after <code>size</code></li>
 <li>a payload that does not need exactly the number of chunks in
 <code>chunks</code>: it must be more than <code>chunk × (n − 1)</code>
 and at most <code>chunk × n</code></li>
-<li>a blob that does not lie inside
+<li>a blob, of a member or of a dictionary, that does not lie inside
 <code>[body start, index_offset)</code></li>
 <li>a count of members without <code>dead</code> that is not the
 trailer’s live_member_count</li>
@@ -2217,6 +2314,10 @@ and the same <code>archive_uuid</code>, because every
 <td>4194304</td>
 </tr>
 <tr class="odd">
+<td>dictionaries in one index, dictionary size</td>
+<td>1024, 1048576 bytes</td>
+</tr>
+<tr class="even">
 <td>xattr name, value, count</td>
 <td>255 bytes, 65536 bytes, 1024</td>
 </tr>

@@ -181,7 +181,7 @@ func TestParseUsageErrors(t *testing.T) {
 		{"negative workers", []string{"-cf", "a", "-j", "-4", "p"}},
 		{"bad size", []string{"-cf", "a", "--chunk-size", "lots", "p"}},
 		{"zero chunk size", []string{"-cf", "a", "--chunk-size", "0", "p"}},
-		{"bad compress spec", []string{"-cf", "a", "--compress", "zstd:level", "p"}},
+		{"bad compress spec", []string{"-cf", "a", "--compress", "zstd:level=", "p"}},
 		{"conflicting codecs", []string{"-cf", "a", "-z", "-J", "p"}},
 		{"shorthand conflicts with --compress", []string{"-cf", "a", "-z", "--compress", "xz", "p"}},
 		{"conflicting overwrite policies", []string{"-xf", "a", "-k", "--overwrite"}},

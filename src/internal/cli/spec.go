@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/philmalin/eictar/src/internal/codec"
 )
 
 // CompressSpec is a parsed --compress argument: a codec name and the
@@ -26,11 +28,13 @@ const NoCompression = "none"
 // IsNone reports whether the spec disables compression.
 func (s CompressSpec) IsNone() bool { return s.Name == NoCompression }
 
-// ParseCompressSpec parses "NAME[:k=v[,k=v]...]".
+// ParseCompressSpec parses "NAME[:k[=v][,k[=v]]...]". A key given alone has
+// the value "on", which each codec defines (doc/design.md 10.2).
 //
 //	zstd
 //	zstd:level=19
 //	zstd:level=19,long=27
+//	zstd:level=19,long,train
 //	none
 func ParseCompressSpec(s string) (CompressSpec, error) {
 	if s == "" {
@@ -51,13 +55,15 @@ func ParseCompressSpec(s string) (CompressSpec, error) {
 
 	spec.Params = make(map[string]string)
 	for _, kv := range strings.Split(rest, ",") {
-		k, v, ok := strings.Cut(kv, "=")
-		if !ok {
-			return CompressSpec{}, fmt.Errorf("compression parameter %q is not k=v", kv)
-		}
+		k, v, hasValue := strings.Cut(kv, "=")
 		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
 		if k == "" {
 			return CompressSpec{}, fmt.Errorf("compression spec %q has an empty parameter name", s)
+		}
+		if !hasValue {
+			v = codec.On
+		} else if v == "" {
+			return CompressSpec{}, fmt.Errorf("compression parameter %q has no value; write %s alone, or %s=VALUE", k, k, k)
 		}
 		if _, dup := spec.Params[k]; dup {
 			// Silently keeping the last value would hand the user a

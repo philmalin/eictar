@@ -46,7 +46,30 @@ const NoCodec = -1
 type CodecSpec struct {
 	Name   string         `cbor:"name"`
 	Params map[string]any `cbor:"params,omitempty"`
+	// Dict is the id of the dictionary (Index.Dicts) that the codec used, or
+	// zero. Unlike Params, a reader needs it to decode (doc/design.md 4.2).
+	Dict uint32 `cbor:"dict,omitempty"`
 }
+
+// Dict is a dictionary that some codec entries use (doc/design.md 4.2). Its
+// blob is one chunk, not compressed, and sealed as a whole when the archive
+// is encrypted.
+type Dict struct {
+	ID         uint32   `cbor:"id"` // the id that the dictionary carries
+	Generation uint64   `cbor:"gen"`
+	Size       uint32   `cbor:"size"`   // plaintext length
+	Digest     []byte   `cbor:"digest"` // BLAKE3-256 of the plaintext, keyed as member digests are
+	Enc        *EncInfo `cbor:"enc,omitempty"`
+	Offset     uint64   `cbor:"off"`
+	Length     uint64   `cbor:"len"` // on disk: Size, or Size plus the tag when sealed
+}
+
+// MaxDictSize caps a dictionary. A reader holds each one that it uses in
+// memory, so the index must not be able to claim more.
+const MaxDictSize = 1 << 20
+
+// MaxDicts caps the dictionaries of one index.
+const MaxDicts = 1024
 
 // EncInfo carries the per-member encryption parameters. The key itself is
 // derived from the passphrase and this salt; see doc/design.md 6.2.
@@ -103,6 +126,7 @@ type Index struct {
 	Version    uint32      `cbor:"v"`
 	Generation uint64      `cbor:"gen"`
 	Codecs     []CodecSpec `cbor:"codecs,omitempty"`
+	Dicts      []Dict      `cbor:"dicts,omitempty"`
 	Members    []Member    `cbor:"members"`
 }
 
@@ -343,6 +367,10 @@ func (ix *Index) Validate() error {
 			ErrIndexTooLarge, len(ix.Members), MaxIndexMembers)
 	}
 
+	if err := ix.validateDicts(); err != nil {
+		return err
+	}
+
 	types := make(map[uint64]MemberType, len(ix.Members))
 
 	for i := range ix.Members {
@@ -378,6 +406,48 @@ func (ix *Index) Validate() error {
 		}
 		if target != TypeReg {
 			return corrupt(m, fmt.Sprintf("hardlink to member %d, which is a %s", m.HardlinkTo, target))
+		}
+	}
+	return nil
+}
+
+// validateDicts checks the dictionaries, and that each catalog entry names a
+// dictionary that is there. Only zstd has dictionaries.
+func (ix *Index) validateDicts() error {
+	if len(ix.Dicts) > MaxDicts {
+		return fmt.Errorf("format: %w: %d dictionaries exceeds the limit of %d",
+			ErrIndexTooLarge, len(ix.Dicts), MaxDicts)
+	}
+	ids := make(map[uint32]bool, len(ix.Dicts))
+	for _, d := range ix.Dicts {
+		bad := func(what string) error {
+			return fmt.Errorf("format: %w: dictionary %d: %s", ErrCorruptIndex, d.ID, what)
+		}
+		switch {
+		case d.ID == 0:
+			return bad("id 0")
+		case ids[d.ID]:
+			return bad("duplicate id")
+		case d.Size == 0 || d.Size > MaxDictSize:
+			return bad(fmt.Sprintf("size %d is outside 1..%d", d.Size, MaxDictSize))
+		case len(d.Digest) != DigestSize:
+			return bad(fmt.Sprintf("has a %d-byte digest", len(d.Digest)))
+		case d.Length < uint64(d.Size) || d.Offset+d.Length < d.Offset:
+			return bad(fmt.Sprintf("blob [%d,+%d) cannot hold %d bytes", d.Offset, d.Length, d.Size))
+		}
+		ids[d.ID] = true
+	}
+	for i, c := range ix.Codecs {
+		if c.Dict == 0 {
+			continue
+		}
+		if c.Name != "zstd" {
+			return fmt.Errorf("format: %w: codec %d (%s) names a dictionary; only zstd has them",
+				ErrCorruptIndex, i, c.Name)
+		}
+		if !ids[c.Dict] {
+			return fmt.Errorf("format: %w: codec %d names dictionary %d, which the index does not hold",
+				ErrCorruptIndex, i, c.Dict)
 		}
 	}
 	return nil
@@ -525,17 +595,22 @@ func validateSparse(m *Member) error {
 // NAME:k=v,... with the keys in order, so that one codec always prints the
 // same way.
 func (c CodecSpec) String() string {
-	if len(c.Params) == 0 {
-		return c.Name
-	}
 	keys := make([]string, 0, len(c.Params))
 	for k := range c.Params {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	parts := make([]string, len(keys))
-	for i, k := range keys {
-		parts[i] = fmt.Sprintf("%s=%v", k, c.Params[k])
+	parts := make([]string, 0, len(keys)+1)
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%v", k, c.Params[k]))
+	}
+	// A codec with a dictionary shows "dict", the way a key given alone is
+	// written (doc/design.md 10.2).
+	if c.Dict != 0 {
+		parts = append(parts, "dict")
+	}
+	if len(parts) == 0 {
+		return c.Name
 	}
 	return c.Name + ":" + strings.Join(parts, ",")
 }

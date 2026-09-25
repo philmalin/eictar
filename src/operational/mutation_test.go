@@ -4,6 +4,7 @@ package operational
 
 import (
 	"bytes"
+	"fmt"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -365,4 +366,41 @@ func TestRecompress(t *testing.T) {
 	dest := t.TempDir()
 	runOK(t, tree.Root, "-xf", archive, "-d", dest)
 	testutil.CompareTrees(t, tree.Path("work"), filepath.Join(dest, "work"), testutil.CompareOptions{Mode: true})
+}
+
+// TestDictionaryThroughTheBinary: -Z zstd:train stores a dictionary, which
+// --info and the listing show, and the archive gives back every file
+// (doc/design.md 4.2). With nothing to learn from, there is a notice and no
+// dictionary.
+func TestDictionaryThroughTheBinary(t *testing.T) {
+	tree := testutil.NewTree(t)
+	tree.Dir("src", 0o755)
+	for i := 0; i < 120; i++ {
+		tree.Text(fmt.Sprintf("src/f%03d.go", i), 0o644, fmt.Sprintf(
+			"// Copyright 2026 The Example Authors.\npackage p%d\n\nimport \"fmt\"\n\nfunc F%d() { fmt.Println(%d) }\n%s",
+			i%4, i, i, strings.Repeat("// shared comment line\n", 1+i%5)))
+	}
+	archive := filepath.Join(t.TempDir(), "d.ect")
+	runOK(t, tree.Root, "-cf", archive, "-Z", "zstd:level=19,train=8K", "src")
+	if info := runOK(t, tree.Root, "--info", "-f", archive); !strings.Contains(info.Stdout, "dictionary:") ||
+		!strings.Contains(info.Stdout, "120 live members") {
+		t.Errorf("--info:\n%s", info.Stdout)
+	}
+	if list := runOK(t, tree.Root, "-tvf", archive); !strings.Contains(list.Stdout, "zstd:level=19,dict") {
+		t.Errorf("-tv does not show the dictionary:\n%s", list.Stdout)
+	}
+	runOK(t, tree.Root, "--verify", "-f", archive)
+	dest := t.TempDir()
+	runOK(t, tree.Root, "-xf", archive, "-d", dest)
+	testutil.CompareTrees(t, filepath.Join(tree.Root, "src"), filepath.Join(dest, "src"), testutil.CompareOptions{})
+
+	small := testutil.NewTree(t)
+	small.Text("one.txt", 0o644, "x")
+	res := runOK(t, small.Root, "-cf", filepath.Join(t.TempDir(), "s.ect"), "-Z", "zstd:train", "one.txt")
+	if !strings.Contains(res.Stderr, "without a dictionary") {
+		t.Errorf("stderr = %q, want the notice", res.Stderr)
+	}
+	if bad := testutil.Run(t, small.Root, "-cf", filepath.Join(t.TempDir(), "b.ect"), "-Z", "gzip:train", "one.txt"); bad.ExitCode != exitUsage {
+		t.Errorf("gzip:train: exit %d, want %d", bad.ExitCode, exitUsage)
+	}
 }

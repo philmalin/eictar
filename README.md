@@ -22,6 +22,10 @@ $ eictar -xf home.ect -d /tmp/restore Documents/numbers.txt
 - **Compression for each file**: zstd (the default), xz, gzip, flate and s2,
   or none. Each append can use a different codec. `--list-codecs` shows
   the codecs and their parameters.
+- **Dictionaries**: `-Z zstd:train` learns the text that the files share,
+  such as license headers and imports, and stores it once in the archive.
+  Many small, similar files then compress better, and each file can still be
+  extracted alone.
 - **Encryption** (`-e`): XChaCha20-Poly1305 over chunks, with a key that
   Argon2id derives from a passphrase. Each file has its own subkey.
   `--encrypt-index` also hides the names, sizes and times.
@@ -69,6 +73,12 @@ Create an archive with strong compression:
 
 ```
 eictar -cf home.ect -C ~ --compress zstd:level=19 Documents
+```
+
+Archive a source tree with a dictionary:
+
+```
+eictar -cf src.ect -Z zstd:level=19,train project/
 ```
 
 Create an encrypted archive, with a hidden index. The program asks for the

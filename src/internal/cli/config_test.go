@@ -242,3 +242,17 @@ func TestShowConfig(t *testing.T) {
 		}
 	}
 }
+
+// TestConfiguredTrain: a configuration says train = on, and the command line
+// can turn it off.
+func TestConfiguredTrain(t *testing.T) {
+	home := t.TempDir()
+	writeConfig(t, filepath.Join(home, ".eictarrc"), "[codec.zstd]\ntrain = on\n")
+	withEnv(t, home)
+	if got := mustParse(t, "-cf", "a", "p").Compress.Params["train"]; got != "on" {
+		t.Errorf("train = %q from the configuration", got)
+	}
+	if got := mustParse(t, "-cf", "a", "-Z", "zstd:train=off", "p").Compress.Params["train"]; got != "off" {
+		t.Errorf("train = %q with train=off on the command line", got)
+	}
+}

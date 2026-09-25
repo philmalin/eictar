@@ -24,7 +24,7 @@ func openFor(o *Options, rep *reporter) archive.OpenOptions {
 
 // runAppend is -r and -u (doc/design.md 9.2 and 10.5).
 func runAppend(o *Options, stdout, stderr io.Writer) error {
-	if err := checkCompress(o); err != nil {
+	if err := checkCompress(o, stderr); err != nil {
 		return err
 	}
 	rep := &reporter{out: stdout, errOut: stderr, verbose: o.Verbose, quiet: o.Quiet}
@@ -80,10 +80,8 @@ func runCompact(o *Options, stdout, stderr io.Writer) error {
 			return &UsageError{fmt.Errorf("--recompress: %w", err)}
 		}
 		spec = o.withCodecDefaults(spec)
-		if enc, err := codec.NewEncoder(spec.Name, codec.Params(spec.Params), 1); err != nil {
-			return &UsageError{fmt.Errorf("--recompress %s: %w", spec, err)}
-		} else {
-			enc.Close()
+		if err := checkSpec(o, spec, "--recompress", stderr); err != nil {
+			return err
 		}
 		cfg.Recompress = &archive.RecompressConfig{
 			Codec:          spec.Name,
@@ -244,5 +242,9 @@ func writeInfo(w io.Writer, path string, in *archive.ArchiveInfo) {
 		codecs = []string{"-"}
 	}
 	row("codecs", "%s", strings.Join(codecs, ", "))
+	for _, d := range in.Dicts {
+		row("dictionary", "%d: %d bytes, generation %d, %s",
+			d.Dict.ID, d.Dict.Size, d.Dict.Generation, plural(d.Members, "live member"))
+	}
 	tw.Flush()
 }

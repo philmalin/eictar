@@ -81,6 +81,10 @@ func AppendArchive(cfg AppendConfig) (Stats, error) {
 	if err != nil {
 		return Stats{}, err
 	}
+	if err := w.useDictionary(func(size int) ([][]byte, error) { return sampleTree(w, cfg.CreateConfig, size) }, warnOf(cfg.Reporter)); err != nil {
+		w.Abort()
+		return Stats{}, err
+	}
 
 	// A copy, not pointers into w's slice: the emitter appends to that slice
 	// while the walk reads this map.
@@ -188,12 +192,79 @@ func kept(all []format.Member) []format.Member {
 // that is not the header, a kept blob, the current index or the trailer.
 func deadSpace(r *Reader) int64 {
 	used := r.hdr.BodyOffset() + int64(r.tr.IndexLength) + format.TrailerSize
-	for _, m := range kept(r.index.Members) {
+	keep := kept(r.index.Members)
+	for _, m := range keep {
 		if m.Type.HasPayload() {
 			used += int64(m.Length)
 		}
 	}
+	// A dictionary that no kept member uses is dead space (doc/design.md 9.3).
+	inUse := usedDicts(keep, r.index.Codecs)
+	for _, d := range r.index.Dicts {
+		if inUse[d.ID] {
+			used += int64(d.Length)
+		}
+	}
 	return r.size - used
+}
+
+// usedDicts returns the ids of the dictionaries that the members' codecs use.
+func usedDicts(members []format.Member, codecs []format.CodecSpec) map[uint32]bool {
+	out := map[uint32]bool{}
+	for _, m := range members {
+		if m.Codec >= 0 && m.Codec < len(codecs) && codecs[m.Codec].Dict != 0 {
+			out[codecs[m.Codec].Dict] = true
+		}
+	}
+	return out
+}
+
+// pruneCatalog keeps the catalog entries that the members use, in their
+// order, and renumbers each member's codec to match. Compact uses it, so that
+// an entry cannot name a dictionary that the new archive does not hold.
+func pruneCatalog(members []format.Member, codecs []format.CodecSpec) []format.CodecSpec {
+	renumber := make([]int, len(codecs))
+	for i := range renumber {
+		renumber[i] = format.NoCodec
+	}
+	for _, m := range members {
+		if m.Codec >= 0 && m.Codec < len(codecs) {
+			renumber[m.Codec] = 0
+		}
+	}
+	var out []format.CodecSpec
+	for i, c := range codecs {
+		if renumber[i] == 0 {
+			renumber[i] = len(out)
+			out = append(out, c)
+		}
+	}
+	for i := range members {
+		if c := members[i].Codec; c >= 0 && c < len(codecs) {
+			members[i].Codec = renumber[c]
+		}
+	}
+	return out
+}
+
+// copyDicts copies, byte for byte, each dictionary that the kept members use.
+// A sealed dictionary stays valid: its key comes from its salt and its id,
+// not from where it lies.
+func copyDicts(r *Reader, w *Writer, keep []format.Member) error {
+	inUse := usedDicts(keep, w.index.Codecs)
+	for _, d := range r.index.Dicts {
+		if !inUse[d.ID] {
+			continue
+		}
+		src := io.NewSectionReader(r.f, int64(d.Offset), int64(d.Length))
+		if _, err := io.Copy(w.f, src); err != nil {
+			return fmt.Errorf("copying dictionary %d: %w", d.ID, err)
+		}
+		d.Offset = uint64(w.off)
+		w.off += int64(d.Length)
+		w.index.Dicts = append(w.index.Dicts, d)
+	}
+	return nil
 }
 
 // CompactConfig drives --compact.
@@ -341,12 +412,15 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 			}
 			progress.Total(total)
 		}
-		err = copyBlobs(r, w, keep, progress)
+		w.index.Codecs = pruneCatalog(keep, r.index.Codecs)
+		if err = copyDicts(r, w, keep); err == nil {
+			err = copyBlobs(r, w, keep, progress)
+		}
 	} else {
 		if progress != nil {
 			progress.Total(payloadTotal(keep))
 		}
-		res.Recompressed, err = recompressBlobs(r, w, keep, cfg.Recompress, tmpPath, progress)
+		res.Recompressed, err = recompressBlobs(r, w, keep, cfg.Recompress, tmpPath, progress, warnOf(cfg.Reporter))
 	}
 	if err != nil {
 		return res, err
@@ -467,7 +541,7 @@ func copyBlobs(r *Reader, w *Writer, keep []format.Member, progress Progress) er
 // indexes, and sealing them under the old key would use each nonce twice
 // (doc/design.md 6.3). The catalog is replaced, because no old entry is used
 // any more.
-func recompressBlobs(r *Reader, w *Writer, keep []format.Member, rc *RecompressConfig, tmpPath string, progress Progress) (int, error) {
+func recompressBlobs(r *Reader, w *Writer, keep []format.Member, rc *RecompressConfig, tmpPath string, progress Progress, warn func(string, ...any)) (int, error) {
 	workers := rc.Workers
 	if workers < 1 {
 		workers = runtime.GOMAXPROCS(0)
@@ -488,15 +562,23 @@ func recompressBlobs(r *Reader, w *Writer, keep []format.Member, rc *RecompressC
 	if err != nil {
 		return 0, err
 	}
-	defer enc.Close()
 
 	w.enc, w.codecName, w.chunkSize = enc, name, chunkSize
-	w.codecRef = format.NoCodec
+	w.params, w.concurrency = rc.Params, workers
+	defer func() { w.enc.Close() }()
+	w.codecRef, w.addedCodec = format.NoCodec, false
 	w.index.Codecs = nil
 	if name != "none" {
 		w.index.Codecs = []format.CodecSpec{{Name: name, Params: enc.Resolved()}}
-		w.codecRef = 0
+		w.codecRef, w.addedCodec = 0, true
 	}
+	// --recompress zstd:train trains a new dictionary from the members; the
+	// old dictionaries go, with the catalog that used them (doc/design.md
+	// 4.2). The members are already in the archive, so there is none to reuse.
+	if err := w.useDictionary(func(size int) ([][]byte, error) { return sampleMembers(r, keep, size) }, warn); err != nil {
+		return 0, err
+	}
+	enc = w.enc
 
 	builder := pipeline.New(pipeline.Config{
 		Workers:        workers,
@@ -678,6 +760,12 @@ type CodecUse struct {
 	Members int
 }
 
+// DictUse is one dictionary, and the number of live members that use it.
+type DictUse struct {
+	Dict    format.Dict
+	Members int
+}
+
 // ArchiveInfo is what --info shows.
 type ArchiveInfo struct {
 	Size    int64
@@ -689,6 +777,7 @@ type ArchiveInfo struct {
 	Live, Dead  int
 	Stored      int // live members with no codec
 	Codecs      []CodecUse
+	Dicts       []DictUse
 	Plain       uint64 // plaintext bytes of the live members
 	Blobs       uint64 // on-disk bytes of the live members' blobs
 	IndexLength uint64
@@ -729,6 +818,15 @@ func Info(path string, open OpenOptions) (*ArchiveInfo, error) {
 				in.Codecs[m.Codec].Members++
 			}
 		}
+	}
+	for _, d := range r.index.Dicts {
+		use := DictUse{Dict: d}
+		for _, c := range in.Codecs {
+			if c.Spec.Dict == d.ID {
+				use.Members += c.Members
+			}
+		}
+		in.Dicts = append(in.Dicts, use)
 	}
 	return in, nil
 }

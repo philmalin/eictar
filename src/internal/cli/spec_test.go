@@ -1,7 +1,11 @@
 package cli
 
 import (
+	"bytes"
+	"errors"
+	"io"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -19,8 +23,11 @@ func TestParseCompressSpec(t *testing.T) {
 		{"zstd: level = 19 ", CompressSpec{Name: "zstd", Params: map[string]string{"level": "19"}}},
 		// A value may itself contain an '=' - the split is on the first one.
 		{"x:k=a=b", CompressSpec{Name: "x", Params: map[string]string{"k": "a=b"}}},
-		// An empty value is legal; the codec registry decides what it means.
-		{"x:k=", CompressSpec{Name: "x", Params: map[string]string{"k": ""}}},
+		// A key alone is "on"; the codec decides what that means (doc/design.md
+		// 10.2), and refuses it for a key such as level.
+		{"zstd:level=19,long,train", CompressSpec{Name: "zstd", Params: map[string]string{"level": "19", "long": "on", "train": "on"}}},
+		{"zstd:level", CompressSpec{Name: "zstd", Params: map[string]string{"level": "on"}}},
+		{"zstd:train=off", CompressSpec{Name: "zstd", Params: map[string]string{"train": "off"}}},
 	} {
 		t.Run(tc.in, func(t *testing.T) {
 			got, err := ParseCompressSpec(tc.in)
@@ -39,7 +46,8 @@ func TestParseCompressSpecRejects(t *testing.T) {
 		"",
 		":level=9",     // no codec name
 		"zstd:",        // colon with no parameters
-		"zstd:level",   // not k=v
+		"zstd:level=",  // an empty value: write the key alone, or give one
+		"x:k=",         // the same
 		"zstd:=19",     // empty parameter name
 		"zstd:l=1,l=2", // the same parameter twice
 	} {
@@ -54,7 +62,7 @@ func TestParseCompressSpecRejects(t *testing.T) {
 // TestCompressSpecStringRoundTrip matters for --show-config: what it prints
 // must parse back to the same thing.
 func TestCompressSpecStringRoundTrip(t *testing.T) {
-	for _, in := range []string{"zstd", "none", "zstd:level=19", "zstd:level=19,long=27"} {
+	for _, in := range []string{"zstd", "none", "zstd:level=19", "zstd:level=19,long=27", "zstd:long=on,train=on"} {
 		spec, err := ParseCompressSpec(in)
 		if err != nil {
 			t.Fatalf("ParseCompressSpec(%q): %v", in, err)
@@ -118,6 +126,48 @@ func TestSizeStringRoundTrip(t *testing.T) {
 		}
 		if got != in {
 			t.Errorf("%d rendered as %q and parsed back as %d", in, in.String(), got)
+		}
+	}
+}
+
+// TestLongWiderThanTheChunkWarns: the chunks are independent, so a window
+// larger than a chunk does nothing, and the program says so (doc/design.md
+// 10.2).
+func TestLongWiderThanTheChunkWarns(t *testing.T) {
+	for _, tc := range []struct {
+		argv []string
+		warn bool
+	}{
+		{[]string{"-cf", "a", "-Z", "zstd:long", "p"}, true},
+		{[]string{"-cf", "a", "-Z", "zstd:long", "--chunk-size", "128MiB", "p"}, false},
+		{[]string{"-cf", "a", "-Z", "zstd:long=20", "p"}, false},
+		{[]string{"-cqf", "a", "-Z", "zstd:long", "p"}, false},
+	} {
+		o := mustParse(t, tc.argv...)
+		var stderr bytes.Buffer
+		if err := checkCompress(o, &stderr); err != nil {
+			t.Fatalf("%q: %v", tc.argv, err)
+		}
+		if got := strings.Contains(stderr.String(), "no effect"); got != tc.warn {
+			t.Errorf("%q: warned %v, want %v (%q)", tc.argv, got, tc.warn, stderr.String())
+		}
+	}
+	// A key with no form alone is a usage error, before the archive exists.
+	o := mustParse(t, "-cf", "a", "-Z", "zstd:level", "p")
+	var usage *UsageError
+	if err := checkCompress(o, io.Discard); !errors.As(err, &usage) {
+		t.Errorf("zstd:level: %v, want a usage error", err)
+	}
+}
+
+func TestListCodecsShowsTheFormAlone(t *testing.T) {
+	var out bytes.Buffer
+	if err := runListCodecs(&out); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"alone 27", "train", "alone 114688"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("--list-codecs lacks %q:\n%s", want, out.String())
 		}
 	}
 }

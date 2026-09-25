@@ -257,6 +257,16 @@ func (k *Keys) MemberKey(salt []byte) ([]byte, error) {
 	return k.derive("eictar/v1/member", nil, salt, 32), nil
 }
 
+// DictKey derives the key that seals one dictionary, from its own salt
+// (doc/design.md 6.3). The info string differs from that of a member, so no
+// dictionary key can be a member key.
+func (k *Keys) DictKey(salt []byte) ([]byte, error) {
+	if len(salt) != SaltSize {
+		return nil, fmt.Errorf("crypt: dictionary salt is %d bytes, want %d", len(salt), SaltSize)
+	}
+	return k.derive("eictar/v1/dict", nil, salt, 32), nil
+}
+
 // Zero wipes the data key. It is best-effort: Go may have copied it during a
 // stack or heap move, and there is no way to find those copies.
 func (k *Keys) Zero() { zero(k.dataKey) }

@@ -486,3 +486,39 @@ const (
 		"01b7aef1a5b2501b467f2a7db4759982e36f525f2d1f9a5dbae2a503c35f389048d0bc5ef63bf41cb1c1145074261802"
 	contentKeyVector = "f12e4f6c5e906c46786010196c939bf0b08fe367dd832d95bac28f6e0d69c36e"
 )
+
+// TestDictSealing: a dictionary opens with its key and its id only, and its
+// key is not the member key of the same salt (doc/design.md 6.3).
+func TestDictSealing(t *testing.T) {
+	k := mustDerive(t, "correct horse")
+	salt := bytes.Repeat([]byte{7}, SaltSize)
+	key, err := k.DictKey(salt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	memberKey, _ := k.MemberKey(salt)
+	if bytes.Equal(key, memberKey) {
+		t.Fatal("a dictionary key equals the member key of the same salt")
+	}
+	dict := []byte("a dictionary, made of pieces of the files")
+	sealed, err := SealDict(key, 40000, dict)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(sealed, dict[:12]) || len(sealed) != len(dict)+Overhead {
+		t.Errorf("sealed dictionary: %d bytes, plaintext visible: %v", len(sealed), bytes.Contains(sealed, dict[:12]))
+	}
+	if got, err := OpenDict(key, 40000, sealed); err != nil || !bytes.Equal(got, dict) {
+		t.Fatalf("OpenDict: %q, %v", got, err)
+	}
+	if _, err := OpenDict(key, 40001, sealed); !errors.Is(err, ErrAuthentication) {
+		t.Errorf("another id: %v, want ErrAuthentication", err)
+	}
+	sealed[3] ^= 1
+	if _, err := OpenDict(key, 40000, sealed); !errors.Is(err, ErrAuthentication) {
+		t.Errorf("a changed byte: %v, want ErrAuthentication", err)
+	}
+	if _, err := k.DictKey([]byte{1}); err == nil {
+		t.Error("a short salt was accepted")
+	}
+}

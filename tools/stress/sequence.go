@@ -70,7 +70,14 @@ func (s *sequence) codecSpec() string {
 	case 0:
 		return "none"
 	case 1:
-		return "zstd:level=" + strconv.Itoa(1+s.rnd.IntN(15))
+		spec := "zstd:level=" + strconv.Itoa(1+s.rnd.IntN(15))
+		// A dictionary on create, append and recompress (doc/design.md 4.2).
+		// A small size, so that a generated tree can fill it; a tree that
+		// cannot gives a notice and no dictionary, which is a case too.
+		if s.rnd.IntN(2) == 0 {
+			spec += ",train=" + []string{"4K", "8K", "16K"}[s.rnd.IntN(3)]
+		}
+		return spec
 	case 2:
 		return "gzip:level=" + strconv.Itoa(1+s.rnd.IntN(9))
 	case 3:

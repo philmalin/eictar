@@ -102,6 +102,10 @@ func CreateArchive(cfg CreateConfig) (Stats, error) {
 	if err != nil {
 		return stats, err
 	}
+	if err := w.useDictionary(func(size int) ([][]byte, error) { return sampleTree(w, cfg, size) }, warnOf(cfg.Reporter)); err != nil {
+		w.Abort()
+		return stats, err
+	}
 
 	stats, _, err = addPaths(w, cfg, workers, nil)
 	if err != nil {

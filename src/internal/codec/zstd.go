@@ -1,8 +1,12 @@
 package codec
 
 import (
+	"encoding/binary"
 	"fmt"
+	"strconv"
+	"strings"
 
+	"github.com/klauspost/compress/dict"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -13,6 +17,15 @@ func init() { Register(zstdFactory{}) }
 const (
 	zstdLevelMin, zstdLevelMax, zstdLevelDefault = 1, 22, 3
 	zstdLongMin, zstdLongMax                     = 10, 30
+	// zstdLongBare is the window of zstd --long given alone.
+	zstdLongBare = 27
+
+	// Dictionary sizes (doc/design.md 4.2). The default is the one of the
+	// zstd trainer.
+	zstdTrainMin, zstdTrainMax, zstdTrainBare = 4 << 10, 1 << 20, 112 << 10
+	// zstdDictMagic starts every dictionary in the zstd format, and the
+	// dictionary id follows it.
+	zstdDictMagic = 0xEC30A437
 )
 
 type zstdFactory struct{}
@@ -32,15 +45,30 @@ func (zstdFactory) Describe() Spec {
 			},
 			{
 				Name:        "long",
-				Description: "window log: the window is 2^long bytes, improving ratio on large files",
-				Default:     "off",
+				Description: "window log: the window is 2^long bytes, improving ratio on large files; a window larger than the chunk has no effect",
+				Default:     Off,
 				Min:         zstdLongMin, Max: zstdLongMax,
+				Bare: fmt.Sprint(zstdLongBare),
+			},
+			{
+				Name:        "train",
+				Description: "train a dictionary of this many bytes from the files first, and store it in the archive: many small, similar files compress better",
+				Default:     Off,
+				Min:         zstdTrainMin, Max: zstdTrainMax,
+				Bare: fmt.Sprint(zstdTrainBare),
 			},
 		},
 	}
 }
 
 func (f zstdFactory) NewEncoder(p Params, concurrency int) (Encoder, error) {
+	return f.newDictEncoder(p, concurrency, nil)
+}
+
+// newDictEncoder builds the encoder, with a dictionary when dict is not nil.
+// The train key is checked here but does not change the encoder: the writer
+// trains the dictionary and hands it in (doc/design.md 4.2).
+func (f zstdFactory) newDictEncoder(p Params, concurrency int, dictionary []byte) (Encoder, error) {
 	spec := f.Describe()
 	if err := checkParams(p, spec); err != nil {
 		return nil, err
@@ -52,6 +80,9 @@ func (f zstdFactory) NewEncoder(p Params, concurrency int) (Encoder, error) {
 	}
 	long, err := intParam(p, "long", 0, zstdLongMin, zstdLongMax)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := f.trainSize(p); err != nil {
 		return nil, err
 	}
 
@@ -70,6 +101,9 @@ func (f zstdFactory) NewEncoder(p Params, concurrency int) (Encoder, error) {
 		opts = append(opts, zstd.WithWindowSize(1<<long))
 		resolved["long"] = long
 	}
+	if dictionary != nil {
+		opts = append(opts, zstd.WithEncoderDict(dictionary))
+	}
 
 	enc, err := zstd.NewWriter(nil, opts...)
 	if err != nil {
@@ -78,15 +112,27 @@ func (f zstdFactory) NewEncoder(p Params, concurrency int) (Encoder, error) {
 	return &zstdEncoder{enc: enc, resolved: resolved}, nil
 }
 
-func (zstdFactory) NewDecoder(maxPlain int) (Decoder, error) {
+func (f zstdFactory) NewDecoder(maxPlain int) (Decoder, error) {
+	return f.newDictDecoder(maxPlain, nil)
+}
+
+// newDictDecoder builds the decoder, with a dictionary when dict is not nil.
+// A frame names the id of its dictionary, and the decoder refuses a frame
+// that names another, so a wrong dictionary is damage, not wrong output.
+func (zstdFactory) newDictDecoder(maxPlain int, dictionary []byte) (Decoder, error) {
 	// The bound goes into the decoder itself: a frame that would exceed it is
 	// refused while decoding, not after the memory has been handed over.
 	// The library requires at least a window's worth.
 	maxMem := max(uint64(maxPlain), 1<<20)
 
-	dec, err := zstd.NewReader(nil,
+	opts := []zstd.DOption{
 		zstd.WithDecoderConcurrency(1),
-		zstd.WithDecoderMaxMemory(maxMem))
+		zstd.WithDecoderMaxMemory(maxMem),
+	}
+	if dictionary != nil {
+		opts = append(opts, zstd.WithDecoderDicts(dictionary))
+	}
+	dec, err := zstd.NewReader(nil, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("zstd decoder: %w", err)
 	}
@@ -139,4 +185,84 @@ func (z *zstdDecoder) Decode(dst, src []byte, plainSize int) ([]byte, error) {
 func (z *zstdDecoder) Close() error {
 	z.dec.Close()
 	return nil
+}
+
+// trainSize reads the train key: 0 when it is absent.
+func (zstdFactory) trainSize(p Params) (int, error) {
+	raw, ok := p["train"]
+	if !ok {
+		return 0, nil
+	}
+	n, err := parseSize(raw)
+	if err != nil {
+		return 0, fmt.Errorf("parameter train: %w", err)
+	}
+	if n < zstdTrainMin || n > zstdTrainMax {
+		return 0, fmt.Errorf("parameter train: %d bytes is out of range %d..%d", n, zstdTrainMin, zstdTrainMax)
+	}
+	return n, nil
+}
+
+// train makes a dictionary in the zstd format. The trainer of
+// klauspost/compress/dict is experimental, and it can fail, or panic, on
+// small or uniform input; either way the result is "no dictionary".
+func (zstdFactory) train(p Params, samples [][]byte, size int, id uint32) (out []byte, err error) {
+	level, err := intParam(p, "level", zstdLevelDefault, zstdLevelMin, zstdLevelMax)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			out, err = nil, fmt.Errorf("the dictionary trainer failed: %v", r)
+		}
+	}()
+	out, err = dict.BuildZstdDict(samples, dict.Options{
+		MaxDictSize: size,
+		HashBytes:   6,
+		ZstdDictID:  id,
+		ZstdLevel:   zstd.EncoderLevelFromZstd(level),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("the dictionary trainer failed: %w", err)
+	}
+	if got, err := (zstdFactory{}).dictID(out); err != nil || got != id {
+		return nil, fmt.Errorf("the dictionary trainer made a dictionary with id %d, want %d (%v)", got, id, err)
+	}
+	return out, nil
+}
+
+// dictID reads the id of a dictionary in the zstd format: the magic, then
+// the id, both little-endian (RFC 8878, section 5).
+func (zstdFactory) dictID(d []byte) (uint32, error) {
+	if len(d) < 8 || binary.LittleEndian.Uint32(d) != zstdDictMagic {
+		return 0, fmt.Errorf("zstd: not a dictionary in the zstd format")
+	}
+	return binary.LittleEndian.Uint32(d[4:]), nil
+}
+
+// parseSize reads a byte count with an optional unit: 65536, 64K, 64KiB, 1M.
+// The units are powers of 1024, as on the rest of the command line.
+func parseSize(s string) (int, error) {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == 0 {
+		return 0, fmt.Errorf("%q is not a size", s)
+	}
+	n, err := strconv.Atoi(s[:i])
+	if err != nil || n > 1<<40 {
+		// The bound keeps a shift below from wrapping into the range.
+		return 0, fmt.Errorf("%q is not a size", s)
+	}
+	switch strings.ToLower(s[i:]) {
+	case "", "b":
+	case "k", "kb", "kib":
+		n <<= 10
+	case "m", "mb", "mib":
+		n <<= 20
+	default:
+		return 0, fmt.Errorf("%q has an unknown unit", s)
+	}
+	return n, nil
 }

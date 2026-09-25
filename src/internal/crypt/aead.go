@@ -132,3 +132,36 @@ func indexAAD(generation uint64) []byte {
 	binary.LittleEndian.PutUint64(aad, generation)
 	return aad
 }
+
+// SealDict seals a dictionary as one message (doc/design.md 6.3). Each
+// dictionary has its own salt and so its own key, which seals this one
+// message only: a fixed nonce is safe. The id is bound in, so a dictionary
+// cannot stand in for another.
+func SealDict(key []byte, id uint32, plaintext []byte) ([]byte, error) {
+	aead, err := chacha20poly1305.NewX(key)
+	if err != nil {
+		return nil, fmt.Errorf("crypt: dictionary cipher: %w", err)
+	}
+	var nonce [chacha20poly1305.NonceSizeX]byte
+	return aead.Seal(nil, nonce[:], plaintext, dictAAD(id)), nil
+}
+
+// OpenDict reverses SealDict.
+func OpenDict(key []byte, id uint32, sealed []byte) ([]byte, error) {
+	aead, err := chacha20poly1305.NewX(key)
+	if err != nil {
+		return nil, fmt.Errorf("crypt: dictionary cipher: %w", err)
+	}
+	var nonce [chacha20poly1305.NonceSizeX]byte
+	out, err := aead.Open(nil, nonce[:], sealed, dictAAD(id))
+	if err != nil {
+		return nil, fmt.Errorf("%w: dictionary %d", ErrAuthentication, id)
+	}
+	return out, nil
+}
+
+func dictAAD(id uint32) []byte {
+	aad := make([]byte, 4)
+	binary.LittleEndian.PutUint32(aad, id)
+	return aad
+}

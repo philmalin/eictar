@@ -1,6 +1,6 @@
 # eictar — Design Document
 
-Status: M1 to M9 are complete. The CI workflow passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
+Status: M1 to M10 are complete. The CI workflow passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
 Date: 2026-09-24
 Applies to: v1 (format version 1.0)
 
@@ -277,6 +277,65 @@ the chunk first. Then it compares the unsealed length with the plaintext
 length. This is the same test as `on-disk length == plaintext length + 16`,
 but it has no tag arithmetic to get wrong.
 
+### 4.2 Dictionaries (M10)
+
+A codec that compresses each file alone cannot use what the files have in
+common: license headers, imports, and other text that many files repeat.
+`tar | zstd` compresses one stream, so it stores such text one time. A
+dictionary gives most of that result, and the members stay independent.
+zstd trains a dictionary of about 112 KiB from samples of the files. Then each chunk is compressed as if the dictionary came before it,
+and text that the dictionary holds costs a few bytes.
+
+A measurement on 441 Go source files of 15 KiB on average, at the strongest
+zstd level, gave these sizes:
+
+| Method | Size |
+|---|---|
+| each file alone | 22.6% |
+| each file alone, with a dictionary | 19.4%, and 21.2% with the dictionary itself |
+| one stream | 17.3% |
+
+The dictionary has a fixed cost. Thus the gain grows with the number of
+files. For large files and for data that is already compressed, the gain is
+almost zero.
+
+**`-Z zstd:train` makes a dictionary** (§10.2). Only zstd has one. The
+library `klauspost/compress/dict` trains it. The library calls its trainer
+experimental. A poor dictionary costs ratio, not correctness: each member's
+digest is still checked, and the zstd frame names its dictionary.
+
+**Training is a pass before the compression.** The writer walks the paths,
+with the same filters, and makes a list of the regular files and their
+sizes. It takes the first 32 KiB of each file as a sample. When the samples
+are more than 100 times the dictionary size, it takes every k-th file, with
+the smallest k that fits. Thus the choice depends only on the tree.
+
+Then the writer trains the dictionary, and the normal walk compresses the
+files with it. A file that changes between the two walks costs ratio only.
+If the trainer cannot make a dictionary, for example from too little data,
+the writer compresses without one, and prints a notice.
+
+**The archive stores each dictionary as a blob,** before the members of the
+generation that uses it. The index lists the dictionaries, and each catalog
+entry names the dictionary of its codec (§5.1). A reader needs only the
+dictionary of the members that it reads.
+
+**In an encrypted archive, the dictionary is content.** It holds pieces of
+the files, so the writer seals it with a key of its own (§6.3). The index
+digest of the dictionary is keyed like the member digests (§6.2).
+
+**`-r` and `-u` with `train` use the archive's newest dictionary,** when
+there is one. A few changed files are a poor sample, and the dictionary from
+the whole tree fits them better. When the archive has no dictionary, the
+operation trains one from its own files. Without `train`, a new member uses
+no dictionary. `--recompress zstd:train` always trains a new dictionary,
+from the members of the archive.
+
+**A dictionary stays while a member uses it.** Compact keeps a dictionary
+that a kept member uses, and drops the others (§9.3). `--verify` checks each
+dictionary that a selected member uses. `--info` shows each dictionary, its
+size, and the number of live members that use it.
+
 
 ## 5. The index
 
@@ -296,10 +355,22 @@ Index := {
   "v":        1,
   "gen":      <uint64>,
   "codecs":   [ CodecSpec, ... ],     # catalog, referenced by array position
+  "dicts":    [ Dict, ... ],          # dictionaries (§4.2); absent when none
   "members":  [ Member, ... ],
 }
 
-CodecSpec := { "name": "zstd", "params": { "level": 9, "long": 27 } }
+CodecSpec := { "name": "zstd", "params": { "level": 9, "long": 27 },
+               "dict": <uint32> }     # the id of a Dict; absent when none
+
+Dict := {
+  "id":      <uint32>,       # the zstd dictionary id, the same as in the dictionary
+  "gen":     <uint64>,       # generation that added it
+  "size":    <uint32>,       # plaintext length, at most 1 MiB
+  "digest":  <32 bytes>,     # BLAKE3-256 of the plaintext, keyed as member digests are
+  "enc":     { "salt": <16 bytes> },          # absent when not encrypted
+  "off":     <uint64>,       # blob offset
+  "len":     <uint64>,       # blob length on disk: size, or size + 16 when sealed
+}
 
 Member := {
   "id":      <uint64>,       # stable, monotonic, never reused
@@ -328,7 +399,13 @@ Member := {
 ```
 
 The catalog stores each codec's parameters as the values in effect, not as
-the text that the user typed. Many members can share one catalog entry.
+the text that the user typed. Many members can share one catalog entry. A
+catalog entry with `dict` is a different entry from the same codec without
+it, and a reader needs `dict`, but not `params`, to decode.
+
+A dictionary blob is one chunk. It is not compressed, because a dictionary
+is itself dense. The writer takes each id from a random number, and takes a
+new one if the archive has it already.
 
 `uid` and `gid` are optional. With `--no-owner` they are absent, which is
 different from uid 0. A stored zero means root to a reader that restores
@@ -575,6 +652,19 @@ the generation. A random 192-bit nonce cannot collide in practice (Appendix A).
 
 Compact must keep the uuid: the member keys come from it, so a new uuid makes
 every sealed blob impossible to open.
+
+A dictionary (§4.2) is sealed as one message with a key of its own:
+
+```
+dictK  = HKDF(dataK, info = "eictar/v1/dict" || archive_uuid, salt = dict.salt)
+nonce  = 24 zero bytes
+aad    = uint32_le(dict.id)
+sealed = seal(dictK, nonce, dictionary, aad)
+```
+
+The salt is random for each dictionary, so each key seals one message only,
+and a fixed nonce is safe. The info string differs from that of a member, so
+no dictionary key can be a member key.
 
 ### 6.4 Authenticating the index
 
@@ -1075,6 +1165,9 @@ group, when the process has permission to set them. Otherwise the program
 prints a warning. If `-f` names a symbolic link, compact replaces the file
 that the link points to, and the link stays.
 
+Compact copies each dictionary that a kept member uses, byte for byte, and
+drops the others. A dictionary that no live member uses is dead space.
+
 If there is no dead space and no tombstone to remove, compact changes nothing
 and says so. For an encrypted archive, compact needs the passphrase, for the
 keyed index digest.
@@ -1262,7 +1355,7 @@ the file must be seekable, and a pipe is not possible (§1.2).
 ### 10.2 Compression selection
 
 ```
--Z, --compress SPEC    # SPEC := "none" | "NAME[:k=v[,k=v]...]"
+-Z, --compress SPEC    # SPEC := "none" | "NAME[:k[=v][,k[=v]]...]"
 -z, --gzip             # the same as --compress gzip
 -J, --xz               # the same as --compress xz
     --zstd             # the same as --compress zstd (the default)
@@ -1276,10 +1369,29 @@ Examples:
 
 ```
 --compress zstd:level=19,long=27
+--compress zstd:level=19,long,train
 --compress xz:preset=6
 --compress gzip:level=9
 --compress none
 ```
+
+**A key without a value is the key's "on" form** (M10). `long` is
+`long=27`, the window of `zstd --long`, and `train` trains a dictionary of the
+default size (§4.2). `k=on` means the same as `k`, and `k=off` turns the key
+off. Thus a configuration can say `train = on`, and a command line can say
+`train=off` against it. A key with no "on" form, such as `level`, needs a
+value.
+
+| zstd key | Values | Default | Bare |
+|---|---|---|---|
+| `level` | 1..22 | 3 | needs a value |
+| `long` | `off`, or 10..30: the window is 2^long bytes | `off` | 27 |
+| `train` | `off`, or a dictionary size, 4 KiB..1 MiB | `off` | 112 KiB |
+
+**A window larger than the chunk has no effect.** The chunks are
+independent (§4), so no match reaches back past the start of its chunk.
+`long=27` needs `--chunk-size 128MiB` to have any use. When the window is
+larger than the chunk, the program prints a warning, and continues.
 
 A registry checks the name and the keys of each codec. A bad spec is a usage
 error (exit 2), and the program reports it before it touches the archive
@@ -1288,7 +1400,7 @@ file. The index catalog stores the values in effect for each codec. `eictar
 
 | Codec | Library | Notes | Built |
 |-------|---------|-------|-------|
-| `zstd` | `klauspost/compress/zstd` | default. `level` 1..22, `long` 10..30 | M2 |
+| `zstd` | `klauspost/compress/zstd` | default. `level` 1..22, `long` 10..30, `train` (§4.2, M10) | M2 |
 | `none` | — | stored | M2 |
 | `gzip`, `flate` | `klauspost/compress` | `level` 1..9, default 6. `gzip` is `flate` in a gzip member for each chunk. | M7 |
 | `xz` | `ulikunitz/xz` | `preset` 0..9, default 6. Raw LZMA2, slower than the C implementation. | M7 |
@@ -2679,9 +2791,16 @@ and pass, not that the feature ran once by hand.
    first release, with new test vectors and golden files.
 
 After M9, the module path is `github.com/philmalin/eictar`, and a release
-workflow makes the first release, v1.0.0 (§12.3). Before that release, two
+workflow makes the first release (§12.3). Before that release, two
 changes to the interface: the `.ect` extension (§10.12), and the selection
 by regular expression, `-R` and `--exclude-regex` (§10.11).
+
+10. **M10 — Dictionaries** *(complete)*: `-Z zstd:train` trains a zstd
+    dictionary in a pass before the compression. The archive stores it,
+    sealed when the archive is encrypted (§4.2, §5.1, §6.3). Codec
+    keys take the form `k[=v]`, so `long` and `train` can stand alone
+    (§10.2). The dictionary adds index fields, so it comes before the first
+    release, v1.0.0, with a new golden archive.
 
 
 ## Appendix A. Why these primitives, compared with AES

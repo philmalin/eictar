@@ -1,7 +1,9 @@
 package archive
 
 import (
+	"bytes"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -160,5 +162,54 @@ func TestGolden(t *testing.T) {
 				t.Error("g/hard.txt is not a hardlink of g/keep.txt")
 			}
 		})
+	}
+}
+
+// TestGoldenDictionary opens an encrypted archive with a dictionary, written
+// by an earlier build (doc/design.md 4.2): a sealed dictionary blob, its keyed
+// digest, and the catalog entry that names it.
+func TestGoldenDictionary(t *testing.T) {
+	path := filepath.Join(goldenDir, "dict.ect")
+	tree := dictTree(t, "d", 60)
+	if *updateGolden {
+		os.Remove(path)
+		cfg := CreateConfig{
+			Archive:    path,
+			Paths:      []string{"d"},
+			BaseDir:    tree.Root,
+			Options:    Options{Codec: "zstd", Params: map[string]string{"train": "4K"}},
+			Metadata:   MetadataOptions{NoOwner: true, NoXattrs: true, NoACLs: true},
+			Workers:    1,
+			Encryption: &EncryptionConfig{Passphrase: []byte("golden"), Params: testKDF},
+		}
+		if _, err := CreateArchive(cfg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in, err := Info(path, goldenOpen(true))
+	if err != nil {
+		t.Fatalf("the golden archive does not open: %v", err)
+	}
+	if len(in.Dicts) != 1 || in.Dicts[0].Dict.Enc == nil || in.Dicts[0].Members != 60 {
+		t.Errorf("dictionaries %+v, want one, sealed, used by 60 members", in.Dicts)
+	}
+	checkGoldenContent := func() {
+		dest := t.TempDir()
+		if _, err := Extract(ExtractConfig{Archive: path, Destination: dest,
+			Passphrase: goldenOpen(true).Passphrase, RequireEncryption: true}); err != nil {
+			t.Fatalf("extract: %v", err)
+		}
+		for i := 0; i < 60; i++ {
+			rel := filepath.Join("d", fmt.Sprintf("f%03d.go", i))
+			got, _ := os.ReadFile(filepath.Join(dest, rel))
+			want, _ := os.ReadFile(filepath.Join(tree.Root, rel))
+			if !bytes.Equal(got, want) {
+				t.Errorf("%s differs", rel)
+			}
+		}
+	}
+	checkGoldenContent()
+	if _, err := VerifyArchive(VerifyConfig{Archive: path, Open: goldenOpen(true)}); err != nil {
+		t.Errorf("verify: %v", err)
 	}
 }

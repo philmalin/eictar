@@ -65,12 +65,23 @@ func askFor(o *Options, rep *reporter) archive.PassphraseFunc {
 
 // checkCompress reports a bad compression spec as the mistake in the command
 // line that it is (exit 2), before the archive file is touched.
-func checkCompress(o *Options) error {
-	enc, err := codec.NewEncoder(o.Compress.Name, codec.Params(o.Compress.Params), 1)
+func checkCompress(o *Options, stderr io.Writer) error {
+	return checkSpec(o, o.Compress, "--compress", stderr)
+}
+
+// checkSpec builds an encoder for spec to check it, and warns when its window
+// is larger than a chunk: the chunks are independent, so no match reaches
+// back past the start of its chunk (doc/design.md 10.2).
+func checkSpec(o *Options, spec CompressSpec, option string, stderr io.Writer) error {
+	enc, err := codec.NewEncoder(spec.Name, codec.Params(spec.Params), 1)
 	if err != nil {
-		return &UsageError{fmt.Errorf("--compress %s: %w", o.Compress, err)}
+		return &UsageError{fmt.Errorf("%s %s: %w", option, spec, err)}
 	}
-	enc.Close()
+	defer enc.Close()
+	if long, ok := enc.Resolved()["long"].(int); ok && !o.Quiet && Size(1)<<long > o.ChunkSize {
+		fmt.Fprintf(stderr, "eictar: %s: a window of %s is larger than the chunk size %s, "+
+			"so it has no effect; raise --chunk-size to use it\n", option, Size(1)<<long, o.ChunkSize)
+	}
 	return nil
 }
 
@@ -116,7 +127,7 @@ func addConfig(o *Options, rep *reporter) (archive.CreateConfig, error) {
 }
 
 func runCreate(o *Options, stdout, stderr io.Writer) error {
-	if err := checkCompress(o); err != nil {
+	if err := checkCompress(o, stderr); err != nil {
 		return err
 	}
 	rep := &reporter{out: stdout, errOut: stderr, verbose: o.Verbose, quiet: o.Quiet}
@@ -300,8 +311,11 @@ func runListCodecs(stdout io.Writer) error {
 			case p.Min != 0 || p.Max != 0:
 				rng = fmt.Sprintf("%d..%d", p.Min, p.Max)
 			}
+			if p.Bare != "" {
+				rng += fmt.Sprintf(", alone %s", p.Bare)
+			}
 			fmt.Fprintf(tw, "  %s\t%s (default %s%s)\n", p.Name, p.Description, p.Default,
-				map[bool]string{true: "", false: ", " + rng}[rng == ""])
+				map[bool]string{true: "", false: ", " + strings.TrimPrefix(rng, ", ")}[rng == ""])
 		}
 	}
 	return tw.Flush()

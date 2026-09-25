@@ -114,8 +114,10 @@ chunk, which has the rest of the payload.
 
 The index has a catalog of codecs. Each member names an entry of the catalog
 by its position, or `-1` for no codec. A catalog entry is a map with `name`
-(text) and `params` (a map from text to a number or a text). The parameters
-record the settings of the writer. A reader does not need them.
+(text), `params` (a map from text to a number or a text), and `dict` (uint,
+optional). The parameters record the settings of the writer. A reader does
+not need them. `dict` is the id of the dictionary (§6.1) that the codec
+used, and a reader needs it to decode.
 
 | Name | One compressed chunk is |
 |------|-------------------------|
@@ -134,6 +136,26 @@ A decoder reads at most the expected plaintext length, and then one more
 byte to prove that the stream ends there. A chunk that decodes to more or to
 less is refused.
 
+### 6.1 Dictionaries
+
+A `zstd` catalog entry with `dict` compresses each chunk with a Zstandard
+dictionary. The dictionary is in the Zstandard dictionary format (RFC 8878,
+section 5): the magic `37 A4 30 EC`, then the dictionary id as a `u32le`.
+The dictionary id is the `id` of its Dict map (§8.2). Each frame names the
+id of its dictionary, and a reader refuses a frame whose id is different.
+
+The dictionary blob is `len` bytes at offset `off`, one message. It is not
+compressed. When `enc` is present, the blob is sealed (§7.6). Otherwise, it
+is the dictionary as it is, and `len` equals `size`.
+
+A reader checks a dictionary before it decodes a member with it:
+
+- the tag, when it is sealed
+- that its length is `size`
+- its `digest`: BLAKE3-256 of the dictionary, keyed like the member digests
+  (§8.3)
+- that its magic and its id are correct
+
 ## 7. Cryptography
 
 ### 7.1 Keys
@@ -146,6 +168,7 @@ indexK   = HKDF-SHA-256(ikm = dataK, salt = empty, info = "eictar/v1/index"     
 authK    = HKDF-SHA-256(ikm = dataK, salt = empty, info = "eictar/v1/index-auth" || archive_uuid)
 contentK = HKDF-SHA-256(ikm = dataK, salt = empty, info = "eictar/v1/content"    || archive_uuid)
 memberK  = HKDF-SHA-256(ikm = dataK, salt = enc.salt, info = "eictar/v1/member"  || archive_uuid)
+dictK    = HKDF-SHA-256(ikm = dataK, salt = enc.salt, info = "eictar/v1/dict"    || archive_uuid)
 ```
 
 `key` is the field of the crypto header (§4): a 24-byte random nonce, then
@@ -208,6 +231,20 @@ A reader must also refuse a plain archive when its user expected an
 encrypted one. Someone who removes the encryption can write a plain index
 with an unkeyed digest.
 
+### 7.6 Sealed dictionary
+
+A dictionary (§6.1) of an encrypted archive is sealed as one message:
+
+```
+key    = dictK of the dictionary, from its enc.salt
+nonce  = 24 zero bytes
+aad    = u32le(id)
+blob   = AEAD-seal(key, nonce, dictionary, aad)
+```
+
+A writer must give each dictionary a new random salt. Each dictionary key
+then seals one message only, so the fixed nonce is safe.
+
 ## 8. Index
 
 ### 8.1 Encoding
@@ -232,7 +269,20 @@ the number of members to 4194304.
 | `v` | uint | 1, the version of this schema |
 | `gen` | uint | the generation, equal to the trailer |
 | `codecs` | array | the catalog (§6). Absent when it is empty. |
+| `dicts` | array | the Dict maps (§6.1). Absent when there are none. |
 | `members` | array | the Member maps |
+
+A Dict map:
+
+| Key | Type | Value |
+|-----|------|-------|
+| `id` | uint | the dictionary id, 1 to 2^32 − 1, unique in the index |
+| `gen` | uint | the generation that added it |
+| `size` | uint | the length of the dictionary, 1 to 1048576 |
+| `digest` | bytes | 32 bytes (§6.1) |
+| `enc` | map | `{ "salt": 16 bytes }`, when the archive is encrypted |
+| `off` | uint | the blob offset |
+| `len` | uint | the blob length: `size`, or `size + 16` when sealed |
 
 ### 8.3 Member map
 
@@ -277,6 +327,10 @@ A reader refuses an index that breaks any of these rules:
 - the rules of presence and type in §8.3, and the limits in them
 - two members with the same `id`
 - a `codec` that is not -1 and not a catalog position
+- a catalog `dict` that names no Dict map, or that is on a codec other than
+  `zstd`
+- a Dict map that breaks the rules of §8.2, or two with the same `id`, or
+  more than 1024 of them
 - a `hardlink` whose `id` is not a `reg` member of the index. The target can
   be a tombstone.
 - `sparse` segments that are empty, out of order, overlapping, or that end
@@ -284,7 +338,8 @@ A reader refuses an index that breaks any of these rules:
 - `chunks` whose total is not `len`
 - a payload that does not need exactly the number of chunks in `chunks`: it
   must be more than `chunk × (n − 1)` and at most `chunk × n`
-- a blob that does not lie inside `[body start, index_offset)`
+- a blob, of a member or of a dictionary, that does not lie inside
+  `[body start, index_offset)`
 - a count of members without `dead` that is not the trailer's
   live_member_count
 
@@ -366,4 +421,5 @@ next generation, and a `prev_index_offset` of 0.
 | `chunk` | 268435456 bytes |
 | decompressed index | 1 GiB |
 | members in one index | 4194304 |
+| dictionaries in one index, dictionary size | 1024, 1048576 bytes |
 | xattr name, value, count | 255 bytes, 65536 bytes, 1024 |

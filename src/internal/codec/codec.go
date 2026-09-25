@@ -19,8 +19,15 @@ import (
 // does not have.
 var ErrUnknownCodec = errors.New("unknown codec")
 
-// Params are the raw k=v settings from a --compress spec.
+// Params are the raw k=v settings from a --compress spec. A key given alone
+// has the value "on", and "off" turns a key off (doc/design.md 10.2).
 type Params map[string]string
+
+// On and Off are the values of a key given alone, and of a key turned off.
+const (
+	On  = "on"
+	Off = "off"
+)
 
 // Encoder compresses one chunk at a time.
 type Encoder interface {
@@ -78,6 +85,9 @@ type ParamSpec struct {
 	Default     string
 	Min, Max    int // for integer parameters; both zero when not applicable
 	Choices     []string
+	// Bare is what the key means when it is given alone, or "on": long is
+	// 27, as with zstd --long. Empty means the key needs a value.
+	Bare string
 }
 
 var registry = map[string]Factory{}
@@ -113,18 +123,131 @@ func Lookup(name string) (Factory, error) {
 // NewEncoder builds an encoder for name with params, to be shared by
 // concurrency goroutines.
 func NewEncoder(name string, p Params, concurrency int) (Encoder, error) {
+	return NewEncoderWithDict(name, p, concurrency, nil)
+}
+
+// NewEncoderWithDict is NewEncoder with a dictionary (doc/design.md 4.2).
+// A nil dictionary means none. Only a codec that has dictionaries takes one.
+func NewEncoderWithDict(name string, p Params, concurrency int, dict []byte) (Encoder, error) {
 	f, err := Lookup(name)
 	if err != nil {
+		return nil, err
+	}
+	if p, err = normalize(p, f.Describe()); err != nil {
 		return nil, err
 	}
 	if concurrency < 1 {
 		concurrency = 1
 	}
-	return f.NewEncoder(p, concurrency)
+	if dict == nil {
+		return f.NewEncoder(p, concurrency)
+	}
+	df, ok := f.(dictFactory)
+	if !ok {
+		return nil, fmt.Errorf("codec %s has no dictionaries", name)
+	}
+	return df.newDictEncoder(p, concurrency, dict)
+}
+
+// dictFactory is a codec with dictionaries. Only zstd has them.
+type dictFactory interface {
+	newDictEncoder(p Params, concurrency int, dict []byte) (Encoder, error)
+	newDictDecoder(maxPlain int, dict []byte) (Decoder, error)
+	// trainSize is the dictionary size that p asks for, or 0.
+	trainSize(p Params) (int, error)
+	train(p Params, samples [][]byte, size int, id uint32) ([]byte, error)
+	dictID(dict []byte) (uint32, error)
+}
+
+// TrainSize returns the size of the dictionary that the parameters ask for,
+// or 0 when they ask for none.
+func TrainSize(name string, p Params) (int, error) {
+	f, err := Lookup(name)
+	if err != nil {
+		return 0, err
+	}
+	if p, err = normalize(p, f.Describe()); err != nil {
+		return 0, err
+	}
+	df, ok := f.(dictFactory)
+	if !ok {
+		return 0, nil
+	}
+	return df.trainSize(p)
+}
+
+// TrainDict makes a dictionary of size bytes from samples, with the given id.
+// It fails when the samples are too few or too alike to make one.
+func TrainDict(name string, p Params, samples [][]byte, size int, id uint32) ([]byte, error) {
+	f, err := Lookup(name)
+	if err != nil {
+		return nil, err
+	}
+	if p, err = normalize(p, f.Describe()); err != nil {
+		return nil, err
+	}
+	df, ok := f.(dictFactory)
+	if !ok {
+		return nil, fmt.Errorf("codec %s has no dictionaries", name)
+	}
+	return df.train(p, samples, size, id)
+}
+
+// DictID reads the id that a dictionary of the codec carries.
+func DictID(name string, dict []byte) (uint32, error) {
+	f, err := Lookup(name)
+	if err != nil {
+		return 0, err
+	}
+	df, ok := f.(dictFactory)
+	if !ok {
+		return 0, fmt.Errorf("codec %s has no dictionaries", name)
+	}
+	return df.dictID(dict)
+}
+
+// normalize turns "on" into the key's bare value, and removes a key that is
+// "off", so that each codec sees plain values. It returns a copy.
+func normalize(p Params, spec Spec) (Params, error) {
+	if len(p) == 0 {
+		return p, nil
+	}
+	byName := make(map[string]ParamSpec, len(spec.Params))
+	for _, ps := range spec.Params {
+		byName[ps.Name] = ps
+	}
+	out := make(Params, len(p))
+	for k, v := range p {
+		ps, known := byName[k]
+		switch {
+		case !known:
+			out[k] = v // checkParams reports it
+		case v == On:
+			if ps.Bare == "" {
+				return nil, fmt.Errorf("parameter %s needs a value", k)
+			}
+			out[k] = ps.Bare
+		case v == Off:
+			if ps.Default != Off {
+				return nil, fmt.Errorf("parameter %s cannot be off", k)
+			}
+		case v == "":
+			return nil, fmt.Errorf("parameter %s has an empty value", k)
+		default:
+			out[k] = v
+		}
+	}
+	return out, nil
 }
 
 // NewDecoder builds a decoder for name, bounded to maxPlain bytes per chunk.
 func NewDecoder(name string, maxPlain int) (Decoder, error) {
+	return NewDecoderWithDict(name, maxPlain, nil)
+}
+
+// NewDecoderWithDict is NewDecoder for chunks made with a dictionary. A nil
+// dictionary means none.
+func NewDecoderWithDict(name string, maxPlain int, dict []byte) (Decoder, error) {
 	f, err := Lookup(name)
 	if err != nil {
 		return nil, err
@@ -132,7 +255,14 @@ func NewDecoder(name string, maxPlain int) (Decoder, error) {
 	if maxPlain <= 0 {
 		return nil, fmt.Errorf("codec %s: chunk bound must be positive, got %d", name, maxPlain)
 	}
-	return f.NewDecoder(maxPlain)
+	if dict == nil {
+		return f.NewDecoder(maxPlain)
+	}
+	df, ok := f.(dictFactory)
+	if !ok {
+		return nil, fmt.Errorf("codec %s has no dictionaries", name)
+	}
+	return df.newDictDecoder(maxPlain, dict)
 }
 
 // Describe returns every codec's documentation, sorted by name.

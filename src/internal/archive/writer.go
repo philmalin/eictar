@@ -92,6 +92,12 @@ type Writer struct {
 	codecName string
 	codecRef  int
 	chunkSize int
+	// params and concurrency build the encoder again with a dictionary
+	// (doc/design.md 4.2). addedCodec means this writer added the catalog
+	// entry at codecRef, so that it can take it away when it is not used.
+	params      codec.Params
+	concurrency int
+	addedCodec  bool
 
 	off    int64 // where the next blob goes
 	nextID uint64
@@ -146,15 +152,17 @@ func Create(path string, opt Options) (*Writer, error) {
 	}
 
 	w := &Writer{
-		f:         f,
-		path:      target,
-		tmpPath:   tmpPath,
-		guard:     guard,
-		enc:       enc,
-		codecName: codecName,
-		codecRef:  format.NoCodec,
-		chunkSize: chunkSize,
-		nextID:    1,
+		f:           f,
+		path:        target,
+		tmpPath:     tmpPath,
+		guard:       guard,
+		enc:         enc,
+		codecName:   codecName,
+		codecRef:    format.NoCodec,
+		chunkSize:   chunkSize,
+		params:      opt.Params,
+		concurrency: max(1, opt.Concurrency),
+		nextID:      1,
 	}
 
 	// Keys are derived against the archive id, so keys without the id they
@@ -231,7 +239,7 @@ func Create(path string, opt Options) (*Writer, error) {
 	// The codec catalog entry is created on first use, so an archive of
 	// nothing but directories does not claim a compressor it never ran.
 	if codecName != "none" {
-		w.codecRef = 0
+		w.codecRef, w.addedCodec = 0, true
 		w.index.Codecs = []format.CodecSpec{{Name: codecName, Params: enc.Resolved()}}
 	}
 	return w, nil
@@ -292,6 +300,7 @@ func OpenAppend(path string, opt Options, open OpenOptions) (*Writer, error) {
 		Version:    format.IndexVersion,
 		Generation: r.tr.Generation + 1,
 		Codecs:     append([]format.CodecSpec(nil), r.index.Codecs...),
+		Dicts:      append([]format.Dict(nil), r.index.Dicts...),
 		Members:    append([]format.Member(nil), r.index.Members...),
 	}
 	var maxID uint64
@@ -310,6 +319,8 @@ func OpenAppend(path string, opt Options, open OpenOptions) (*Writer, error) {
 		codecName:       codecName,
 		codecRef:        format.NoCodec,
 		chunkSize:       chunkSize,
+		params:          opt.Params,
+		concurrency:     max(1, opt.Concurrency),
 		off:             r.size,
 		nextID:          maxID + 1,
 		appending:       true,
@@ -320,18 +331,7 @@ func OpenAppend(path string, opt Options, open OpenOptions) (*Writer, error) {
 	// Reuse the catalog entry when this codec, with these parameters, is
 	// already there; add one otherwise.
 	if codecName != "none" {
-		spec := format.CodecSpec{Name: codecName, Params: enc.Resolved()}
-		w.codecRef = -1
-		for i, c := range w.index.Codecs {
-			if format.SameCodec(c, spec) {
-				w.codecRef = i
-				break
-			}
-		}
-		if w.codecRef < 0 {
-			w.index.Codecs = append(w.index.Codecs, spec)
-			w.codecRef = len(w.index.Codecs) - 1
-		}
+		w.codecRef, w.addedCodec = w.catalogRef(format.CodecSpec{Name: codecName, Params: enc.Resolved()})
 	}
 	return w, nil
 }

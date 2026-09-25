@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/philmalin/eictar/src/internal/codec"
 	"github.com/philmalin/eictar/src/internal/crypt"
@@ -30,6 +31,11 @@ type Reader struct {
 	keys   *crypt.Keys
 	// borrowedKeys means keys belong to the caller, who zeroes them.
 	borrowedKeys bool
+
+	// dicts holds each dictionary that a member needed, by id. Extraction
+	// decodes members in parallel, so dictMu guards it.
+	dictMu sync.Mutex
+	dicts  map[uint32][]byte
 }
 
 // PassphraseFunc supplies the passphrase for an encrypted archive. It is
@@ -201,6 +207,24 @@ func (r *Reader) validateMemberRanges() error {
 	body := r.hdr.BodyOffset()
 	indexStart := int64(r.tr.IndexOffset)
 
+	for _, d := range r.index.Dicts {
+		off, length := int64(d.Offset), int64(d.Length)
+		if off < body || length < 0 || off+length < off || off+length > indexStart {
+			return fmt.Errorf("%s: %w: dictionary %d blob [%d,+%d) lies outside the archive body [%d,%d)",
+				r.path, format.ErrCorruptIndex, d.ID, d.Offset, d.Length, body, indexStart)
+		}
+		// A dictionary is one message: its plaintext, and the tag when it
+		// is sealed.
+		want := uint64(d.Size)
+		if d.Enc != nil {
+			want += crypt.Overhead
+		}
+		if d.Length != want {
+			return fmt.Errorf("%s: %w: dictionary %d is %d bytes on disk, want %d",
+				r.path, format.ErrCorruptIndex, d.ID, d.Length, want)
+		}
+	}
+
 	for i := range r.index.Members {
 		m := &r.index.Members[i]
 		if !m.Type.HasPayload() || m.Length == 0 {
@@ -323,7 +347,11 @@ func (r *Reader) WriteMember(m *format.Member, dst io.Writer) error {
 		chunkSize = DefaultChunkSize
 	}
 
-	dec, err := codec.NewDecoder(codecName, chunkSize)
+	dict, err := r.dictFor(m)
+	if err != nil {
+		return err
+	}
+	dec, err := codec.NewDecoderWithDict(codecName, chunkSize, dict)
 	if err != nil {
 		return err
 	}

@@ -22,6 +22,10 @@ func sampleIndex() *Index {
 		Codecs: []CodecSpec{
 			{Name: "zstd", Params: map[string]any{"level": uint64(19), "long": uint64(27)}},
 			{Name: "xz", Params: map[string]any{"preset": uint64(6)}},
+			{Name: "zstd", Params: map[string]any{"level": uint64(19)}, Dict: 40000},
+		},
+		Dicts: []Dict{
+			{ID: 40000, Generation: 2, Size: 1000, Digest: bytes.Repeat([]byte{0x44}, DigestSize), Offset: 20000, Length: 1000},
 		},
 		Members: []Member{
 			{
@@ -484,5 +488,45 @@ func TestOwnerIsOptional(t *testing.T) {
 	got, _ = DecodeIndex(enc.Bytes, enc.Flags, nil)
 	if got.Members[0].UID == nil || *got.Members[0].UID != 0 {
 		t.Error("uid 0 did not survive as a recorded root owner")
+	}
+}
+
+// TestIndexValidateRejectsDicts: a dictionary that no reader could trust, or
+// a catalog entry that names one the index does not hold.
+func TestIndexValidateRejectsDicts(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mod  func(ix *Index)
+	}{
+		{"id 0", func(ix *Index) { ix.Dicts[0].ID = 0 }},
+		{"duplicate id", func(ix *Index) { ix.Dicts = append(ix.Dicts, ix.Dicts[0]) }},
+		{"empty", func(ix *Index) { ix.Dicts[0].Size = 0 }},
+		{"too large", func(ix *Index) { ix.Dicts[0].Size, ix.Dicts[0].Length = MaxDictSize+1, MaxDictSize+1 }},
+		{"short digest", func(ix *Index) { ix.Dicts[0].Digest = []byte{1} }},
+		{"blob shorter than the dictionary", func(ix *Index) { ix.Dicts[0].Length = 10 }},
+		{"blob range overflows", func(ix *Index) { ix.Dicts[0].Offset = ^uint64(0) - 5 }},
+		{"catalog names a missing dictionary", func(ix *Index) { ix.Codecs[2].Dict = 40001 }},
+		{"dictionary on xz", func(ix *Index) { ix.Codecs[1].Dict = 40000 }},
+		{"too many", func(ix *Index) {
+			for i := 0; i <= MaxDicts; i++ {
+				d := ix.Dicts[0]
+				d.ID = uint32(50000 + i)
+				ix.Dicts = append(ix.Dicts, d)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ix := sampleIndex()
+			tc.mod(ix)
+			if err := ix.Validate(); err == nil {
+				t.Error("accepted")
+			}
+		})
+	}
+	if s := sampleIndex().Codecs[2].String(); s != "zstd:level=19,dict" {
+		t.Errorf("String() = %q", s)
+	}
+	if s := (CodecSpec{Name: "zstd", Dict: 5}).String(); s != "zstd:dict" {
+		t.Errorf("String() = %q", s)
 	}
 }

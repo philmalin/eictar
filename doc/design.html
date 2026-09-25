@@ -5197,6 +5197,8 @@ chunks and compression</a>
 <ul>
 <li><a href="#chunks-that-compression-makes-larger" id="toc-chunks-that-compression-makes-larger">4.1 Chunks that
 compression makes larger</a></li>
+<li><a href="#dictionaries-m10" id="toc-dictionaries-m10">4.2
+Dictionaries (M10)</a></li>
 </ul></li>
 <li><a href="#the-index" id="toc-the-index">5. The index</a>
 <ul>
@@ -5359,7 +5361,7 @@ the usual choices</a></li>
 </ul>
 </nav>
 <h1 id="eictar-design-document">eictar — Design Document</h1>
-<p>Status: M1 to M9 are complete. The CI workflow passes on Linux,
+<p>Status: M1 to M10 are complete. The CI workflow passes on Linux,
 macOS, FreeBSD, NetBSD and OpenBSD (§15.1). Date: 2026-09-24 Applies to:
 v1 (format version 1.0)</p>
 <p>This document specifies the on-disk format, the concurrency model,
@@ -5879,6 +5881,82 @@ Poly1305 tag. The reader unseals the chunk first. Then it compares the
 unsealed length with the plaintext length. This is the same test as
 <code>on-disk length == plaintext length + 16</code>, but it has no tag
 arithmetic to get wrong.</p>
+<h3 id="dictionaries-m10">4.2 Dictionaries (M10)</h3>
+<p>A codec that compresses each file alone cannot use what the files
+have in common: license headers, imports, and other text that many files
+repeat. <code>tar | zstd</code> compresses one stream, so it stores such
+text one time. A dictionary gives most of that result, and the members
+stay independent. zstd trains a dictionary of about 112 KiB from samples
+of the files. Then each chunk is compressed as if the dictionary came
+before it, and text that the dictionary holds costs a few bytes.</p>
+<p>A measurement on 441 Go source files of 15 KiB on average, at the
+strongest zstd level, gave these sizes:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Method</th>
+<th>Size</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>each file alone</td>
+<td>22.6%</td>
+</tr>
+<tr class="even">
+<td>each file alone, with a dictionary</td>
+<td>19.4%, and 21.2% with the dictionary itself</td>
+</tr>
+<tr class="odd">
+<td>one stream</td>
+<td>17.3%</td>
+</tr>
+</tbody>
+</table>
+<p>The dictionary has a fixed cost. Thus the gain grows with the number
+of files. For large files and for data that is already compressed, the
+gain is almost zero.</p>
+<p><strong><code>-Z zstd:train</code> makes a dictionary</strong>
+(§10.2). Only zstd has one. The library
+<code>klauspost/compress/dict</code> trains it. The library calls its
+trainer experimental. A poor dictionary costs ratio, not correctness:
+each member’s digest is still checked, and the zstd frame names its
+dictionary.</p>
+<p><strong>Training is a pass before the compression.</strong> The
+writer walks the paths, with the same filters, and makes a list of the
+regular files and their sizes. It takes the first 32 KiB of each file as
+a sample. When the samples are more than 100 times the dictionary size,
+it takes every k-th file, with the smallest k that fits. Thus the choice
+depends only on the tree.</p>
+<p>Then the writer trains the dictionary, and the normal walk compresses
+the files with it. A file that changes between the two walks costs ratio
+only. If the trainer cannot make a dictionary, for example from too
+little data, the writer compresses without one, and prints a notice.</p>
+<p><strong>The archive stores each dictionary as a blob,</strong> before
+the members of the generation that uses it. The index lists the
+dictionaries, and each catalog entry names the dictionary of its codec
+(§5.1). A reader needs only the dictionary of the members that it
+reads.</p>
+<p><strong>In an encrypted archive, the dictionary is content.</strong>
+It holds pieces of the files, so the writer seals it with a key of its
+own (§6.3). The index digest of the dictionary is keyed like the member
+digests (§6.2).</p>
+<p><strong><code>-r</code> and <code>-u</code> with <code>train</code>
+use the archive’s newest dictionary,</strong> when there is one. A few
+changed files are a poor sample, and the dictionary from the whole tree
+fits them better. When the archive has no dictionary, the operation
+trains one from its own files. Without <code>train</code>, a new member
+uses no dictionary. <code>--recompress zstd:train</code> always trains a
+new dictionary, from the members of the archive.</p>
+<p><strong>A dictionary stays while a member uses it.</strong> Compact
+keeps a dictionary that a kept member uses, and drops the others (§9.3).
+<code>--verify</code> checks each dictionary that a selected member
+uses. <code>--info</code> shows each dictionary, its size, and the
+number of live members that use it.</p>
 <h2 id="the-index">5. The index</h2>
 <h3 id="schema">5.1 Schema</h3>
 <p>The index uses CBOR (<code>github.com/fxamacker/cbor/v2</code>). CBOR
@@ -5892,10 +5970,22 @@ given, the writer then seals the index as one AEAD message (§6.3).</p>
   &quot;v&quot;:        1,
   &quot;gen&quot;:      &lt;uint64&gt;,
   &quot;codecs&quot;:   [ CodecSpec, ... ],     # catalog, referenced by array position
+  &quot;dicts&quot;:    [ Dict, ... ],          # dictionaries (§4.2); absent when none
   &quot;members&quot;:  [ Member, ... ],
 }
 
-CodecSpec := { &quot;name&quot;: &quot;zstd&quot;, &quot;params&quot;: { &quot;level&quot;: 9, &quot;long&quot;: 27 } }
+CodecSpec := { &quot;name&quot;: &quot;zstd&quot;, &quot;params&quot;: { &quot;level&quot;: 9, &quot;long&quot;: 27 },
+               &quot;dict&quot;: &lt;uint32&gt; }     # the id of a Dict; absent when none
+
+Dict := {
+  &quot;id&quot;:      &lt;uint32&gt;,       # the zstd dictionary id, the same as in the dictionary
+  &quot;gen&quot;:     &lt;uint64&gt;,       # generation that added it
+  &quot;size&quot;:    &lt;uint32&gt;,       # plaintext length, at most 1 MiB
+  &quot;digest&quot;:  &lt;32 bytes&gt;,     # BLAKE3-256 of the plaintext, keyed as member digests are
+  &quot;enc&quot;:     { &quot;salt&quot;: &lt;16 bytes&gt; },          # absent when not encrypted
+  &quot;off&quot;:     &lt;uint64&gt;,       # blob offset
+  &quot;len&quot;:     &lt;uint64&gt;,       # blob length on disk: size, or size + 16 when sealed
+}
 
 Member := {
   &quot;id&quot;:      &lt;uint64&gt;,       # stable, monotonic, never reused
@@ -5923,7 +6013,12 @@ Member := {
 }</code></pre>
 <p>The catalog stores each codec’s parameters as the values in effect,
 not as the text that the user typed. Many members can share one catalog
-entry.</p>
+entry. A catalog entry with <code>dict</code> is a different entry from
+the same codec without it, and a reader needs <code>dict</code>, but not
+<code>params</code>, to decode.</p>
+<p>A dictionary blob is one chunk. It is not compressed, because a
+dictionary is itself dense. The writer takes each id from a random
+number, and takes a new one if the archive has it already.</p>
 <p><code>uid</code> and <code>gid</code> are optional. With
 <code>--no-owner</code> they are absent, which is different from uid 0.
 A stored zero means root to a reader that restores ownership. The writer
@@ -6179,6 +6274,15 @@ M6 review, the nonce came from the generation. A random 192-bit nonce
 cannot collide in practice (Appendix A).</p>
 <p>Compact must keep the uuid: the member keys come from it, so a new
 uuid makes every sealed blob impossible to open.</p>
+<p>A dictionary (§4.2) is sealed as one message with a key of its
+own:</p>
+<pre><code>dictK  = HKDF(dataK, info = &quot;eictar/v1/dict&quot; || archive_uuid, salt = dict.salt)
+nonce  = 24 zero bytes
+aad    = uint32_le(dict.id)
+sealed = seal(dictK, nonce, dictionary, aad)</code></pre>
+<p>The salt is random for each dictionary, so each key seals one message
+only, and a fixed nonce is safe. The info string differs from that of a
+member, so no dictionary key can be a member key.</p>
 <h3 id="authenticating-the-index">6.4 Authenticating the index</h3>
 <p><strong>When a key exists, the index is always authenticated, sealed
 or not.</strong> <code>--encrypt-index</code> controls
@@ -6770,6 +6874,9 @@ and the group, when the process has permission to set them. Otherwise
 the program prints a warning. If <code>-f</code> names a symbolic link,
 compact replaces the file that the link points to, and the link
 stays.</p>
+<p>Compact copies each dictionary that a kept member uses, byte for
+byte, and drops the others. A dictionary that no live member uses is
+dead space.</p>
 <p>If there is no dead space and no tombstone to remove, compact changes
 nothing and says so. For an encrypted archive, compact needs the
 passphrase, for the keyed index digest.</p>
@@ -7031,7 +7138,7 @@ replaces a path that is already in the archive (§9.2).</p>
 device. The index is at the end of the file, so the file must be
 seekable, and a pipe is not possible (§1.2).</p>
 <h3 id="compression-selection">10.2 Compression selection</h3>
-<pre><code>-Z, --compress SPEC    # SPEC := &quot;none&quot; | &quot;NAME[:k=v[,k=v]...]&quot;
+<pre><code>-Z, --compress SPEC    # SPEC := &quot;none&quot; | &quot;NAME[:k[=v][,k[=v]]...]&quot;
 -z, --gzip             # the same as --compress gzip
 -J, --xz               # the same as --compress xz
     --zstd             # the same as --compress zstd (the default)</code></pre>
@@ -7042,9 +7149,59 @@ support it, so the letter selects the general form here. <code>-j</code>
 is <strong>not</strong> bzip2 (see §10.4).</p>
 <p>Examples:</p>
 <pre><code>--compress zstd:level=19,long=27
+--compress zstd:level=19,long,train
 --compress xz:preset=6
 --compress gzip:level=9
 --compress none</code></pre>
+<p><strong>A key without a value is the key’s “on” form</strong> (M10).
+<code>long</code> is <code>long=27</code>, the window of
+<code>zstd --long</code>, and <code>train</code> trains a dictionary of
+the default size (§4.2). <code>k=on</code> means the same as
+<code>k</code>, and <code>k=off</code> turns the key off. Thus a
+configuration can say <code>train = on</code>, and a command line can
+say <code>train=off</code> against it. A key with no “on” form, such as
+<code>level</code>, needs a value.</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>zstd key</th>
+<th>Values</th>
+<th>Default</th>
+<th>Bare</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>level</code></td>
+<td>1..22</td>
+<td>3</td>
+<td>needs a value</td>
+</tr>
+<tr class="even">
+<td><code>long</code></td>
+<td><code>off</code>, or 10..30: the window is 2^long bytes</td>
+<td><code>off</code></td>
+<td>27</td>
+</tr>
+<tr class="odd">
+<td><code>train</code></td>
+<td><code>off</code>, or a dictionary size, 4 KiB..1 MiB</td>
+<td><code>off</code></td>
+<td>112 KiB</td>
+</tr>
+</tbody>
+</table>
+<p><strong>A window larger than the chunk has no effect.</strong> The
+chunks are independent (§4), so no match reaches back past the start of
+its chunk. <code>long=27</code> needs <code>--chunk-size 128MiB</code>
+to have any use. When the window is larger than the chunk, the program
+prints a warning, and continues.</p>
 <p>A registry checks the name and the keys of each codec. A bad spec is
 a usage error (exit 2), and the program reports it before it touches the
 archive file. The index catalog stores the values in effect for each
@@ -7069,7 +7226,8 @@ keys, defaults and ranges.</p>
 <tr class="odd">
 <td><code>zstd</code></td>
 <td><code>klauspost/compress/zstd</code></td>
-<td>default. <code>level</code> 1..22, <code>long</code> 10..30</td>
+<td>default. <code>level</code> 1..22, <code>long</code> 10..30,
+<code>train</code> (§4.2, M10)</td>
 <td>M2</td>
 </tr>
 <tr class="even">
@@ -7849,21 +8007,21 @@ occur only one time, except <code>exclude</code>, which adds a glob on
 each line. Optional <code>[codec.NAME]</code> sections give defaults for
 one codec. The parser has no dependency, and it checks each codec value
 when it reads it, so that an error names the line.</p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode ini"><code class="sourceCode ini"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ~/.eictarrc</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="dt">compress    </span><span class="ot">=</span><span class="st"> zstd</span></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="dt">workers     </span><span class="ot">=</span><span class="st"> </span><span class="dv">12</span></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="dt">chunk-size  </span><span class="ot">=</span><span class="st"> 8MiB</span></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="dt">update-mode </span><span class="ot">=</span><span class="st"> different</span></span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="dt">progress    </span><span class="ot">=</span><span class="st"> </span><span class="kw">true</span></span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> *.o</span></span>
-<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> .cache</span></span>
-<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.zstd]</span></span>
-<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a><span class="dt">level </span><span class="ot">=</span><span class="st"> </span><span class="dv">19</span></span>
-<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a><span class="dt">long  </span><span class="ot">=</span><span class="st"> </span><span class="dv">27</span></span>
-<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.xz]</span></span>
-<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a><span class="dt">preset </span><span class="ot">=</span><span class="st"> </span><span class="dv">6</span></span></code></pre></div>
+<div class="sourceCode" id="cb21"><pre class="sourceCode ini"><code class="sourceCode ini"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ~/.eictarrc</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="dt">compress    </span><span class="ot">=</span><span class="st"> zstd</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="dt">workers     </span><span class="ot">=</span><span class="st"> </span><span class="dv">12</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="dt">chunk-size  </span><span class="ot">=</span><span class="st"> 8MiB</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="dt">update-mode </span><span class="ot">=</span><span class="st"> different</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="dt">progress    </span><span class="ot">=</span><span class="st"> </span><span class="kw">true</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> *.o</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> .cache</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.zstd]</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a><span class="dt">level </span><span class="ot">=</span><span class="st"> </span><span class="dv">19</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a><span class="dt">long  </span><span class="ot">=</span><span class="st"> </span><span class="dv">27</span></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.xz]</span></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a><span class="dt">preset </span><span class="ot">=</span><span class="st"> </span><span class="dv">6</span></span></code></pre></div>
 <p>A key that is not a known long option is a usage error, for the
 reason in §11.2. So is a section that is not <code>[codec.NAME]</code>,
 and a codec that does not exist.</p>
@@ -8010,48 +8168,48 @@ package of its own. It changes nothing but options, and it needs the
 option parser.</p>
 <h3 id="core-interfaces">12.1 Core interfaces</h3>
 <p>The codec interfaces:</p>
-<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co">// codec: one chunk in, one chunk out. Encoders hold no state between chunks,</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="co">// so all workers can share one encoder.</span></span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Encoder <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    Encode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>    Resolved<span class="op">()</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">any</span> <span class="co">// the parameters in effect, for the index catalog</span></span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Decode receives the plaintext size that the index gives. Without it, a</span></span>
-<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="co">// crafted chunk is a decompression bomb with nothing to compare against.</span></span>
-<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Decoder <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>    Decode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> plainSize <span class="dt">int</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
-<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Factory <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>    Name<span class="op">()</span> <span class="dt">string</span></span>
-<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>    Describe<span class="op">()</span> Spec                                      <span class="co">// for --list-codecs</span></span>
-<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>    NewEncoder<span class="op">(</span>p Params<span class="op">,</span> concurrency <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Encoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// concurrency: §8.2</span></span>
-<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>    NewDecoder<span class="op">(</span>maxPlain <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Decoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co">// codec: one chunk in, one chunk out. Encoders hold no state between chunks,</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="co">// so all workers can share one encoder.</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Encoder <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>    Encode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>    Resolved<span class="op">()</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">any</span> <span class="co">// the parameters in effect, for the index catalog</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Decode receives the plaintext size that the index gives. Without it, a</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a><span class="co">// crafted chunk is a decompression bomb with nothing to compare against.</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Decoder <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>    Decode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> plainSize <span class="dt">int</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Factory <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>    Name<span class="op">()</span> <span class="dt">string</span></span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>    Describe<span class="op">()</span> Spec                                      <span class="co">// for --list-codecs</span></span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>    NewEncoder<span class="op">(</span>p Params<span class="op">,</span> concurrency <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Encoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// concurrency: §8.2</span></span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>    NewDecoder<span class="op">(</span>maxPlain <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Decoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <p>A decoder takes no compression parameters, because the stream
 contains what decoding needs. Thus a later build can read an archive
 even if its view of the recorded parameters changed.</p>
 <p>The index encoder takes hooks, so that encryption did not change the
 shape of the pipeline:</p>
-<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co">// format</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Sealer <span class="kw">func</span><span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Opener <span class="kw">func</span><span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> EncodeOptions <span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    Compress <span class="dt">bool</span></span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>    Seal     Sealer                           <span class="co">// nil: the index is not sealed</span></span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>    Digest   <span class="kw">func</span><span class="op">([]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">[</span>DigestSize<span class="op">]</span><span class="dt">byte</span>    <span class="co">// nil: the plain BLAKE3 (§6.4)</span></span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co">// format</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Sealer <span class="kw">func</span><span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Opener <span class="kw">func</span><span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> EncodeOptions <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>    Compress <span class="dt">bool</span></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>    Seal     Sealer                           <span class="co">// nil: the index is not sealed</span></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>    Digest   <span class="kw">func</span><span class="op">([]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">[</span>DigestSize<span class="op">]</span><span class="dt">byte</span>    <span class="co">// nil: the plain BLAKE3 (§6.4)</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <p>The chunk sealer in <code>crypt</code> is a different thing. It seals
 one chunk with a counter and a final-chunk flag.
 <code>format.Sealer</code> seals the whole index in one call:</p>
-<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co">// crypt</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> MemberSealer <span class="kw">struct</span><span class="op">{</span> <span class="op">...</span> <span class="op">}</span></span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Seal<span class="op">(</span>dst<span class="op">,</span> plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Open<span class="op">(</span>dst<span class="op">,</span> ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co">// crypt</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> MemberSealer <span class="kw">struct</span><span class="op">{</span> <span class="op">...</span> <span class="op">}</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Seal<span class="op">(</span>dst<span class="op">,</span> plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Open<span class="op">(</span>dst<span class="op">,</span> ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
 <p>There is one sealer and one key for each member. <code>final</code>
 is a parameter, not a state of the sealer. The writer learns which chunk
 is last only when the next read reaches the end of the file (§8).</p>
@@ -8902,10 +9060,19 @@ first release, with new test vectors and golden files.</p></li>
 </ol>
 <p>After M9, the module path is
 <code>github.com/philmalin/eictar</code>, and a release workflow makes
-the first release, v1.0.0 (§12.3). Before that release, two changes to
-the interface: the <code>.ect</code> extension (§10.12), and the
-selection by regular expression, <code>-R</code> and
-<code>--exclude-regex</code> (§10.11).</p>
+the first release (§12.3). Before that release, two changes to the
+interface: the <code>.ect</code> extension (§10.12), and the selection
+by regular expression, <code>-R</code> and <code>--exclude-regex</code>
+(§10.11).</p>
+<ol start="10" type="1">
+<li><strong>M10 — Dictionaries</strong> <em>(complete)</em>:
+<code>-Z zstd:train</code> trains a zstd dictionary in a pass before the
+compression. The archive stores it, sealed when the archive is encrypted
+(§4.2, §5.1, §6.3). Codec keys take the form <code>k[=v]</code>, so
+<code>long</code> and <code>train</code> can stand alone (§10.2). The
+dictionary adds index fields, so it comes before the first release,
+v1.0.0, with a new golden archive.</li>
+</ol>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
 <p>This appendix supports §6.1. The question “how does this compare with

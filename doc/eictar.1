@@ -208,8 +208,14 @@ Compress with
 .IR spec :
 .B none
 or
-.IR name [: key = value [, key = value ]...].
-The default is
+.IR name [: key [= value ][, key [= value ]]...].
+A
+.I key
+alone means its \(lqon\(rq value, the same as
+.IB key =on\fR,\fP
+and
+.IB key =off
+turns it off. The default is
 .BR zstd .
 All the members that one operation adds use the same codec. An archive can
 hold members from different codecs.
@@ -466,9 +472,30 @@ after
 .B zstd
 Zstandard. Parameters:
 .B level
-1 to 22 (default 3), and
+1 to 22 (default 3);
 .B long
-10 to 30, the window size as a power of 2.
+10 to 30, the window size as a power of 2, or alone for 27, as with
+.BR "zstd \-\-long" ;
+and
+.BR train .
+The chunks are independent, so a window larger than
+.B \-\-chunk\-size
+has no effect, and the program warns.
+.IP
+.B train
+makes a dictionary from the start of each file before the compression, and
+stores it in the archive. Many small, similar files, such as a source tree,
+then compress better, and each file can still be extracted alone. The
+value is the dictionary size, 4 KiB to 1 MiB; alone, it is 112 KiB. With
+.B \-r
+and
+.BR \-u ,
+.B train
+uses the dictionary that the archive already has.
+.B "\-\-recompress zstd:train"
+makes a new one from the whole archive. In an encrypted archive, the
+dictionary is encrypted too. When there is too little to learn from, the
+program compresses without a dictionary, and says so.
 .TP
 .BR gzip ", " flate
 DEFLATE, in a gzip member or raw. Parameter:
@@ -494,6 +521,7 @@ No compression.
 .PP
 A chunk that compression makes larger is stored as it is. Examples:
 .BR "\-\-compress zstd:level=19,long=27" ,
+.BR "\-\-compress zstd:level=19,train" ,
 .BR "\-\-compress xz:preset=9" .
 .SH CONFIGURATION
 Settings come from these places. The first has priority:
