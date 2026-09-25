@@ -140,7 +140,13 @@ func TestSpecialBitsNeedAskingFor(t *testing.T) {
 }
 
 // TestHolesSurviveAndCostNothing: a 64 MiB file with 20 KiB of data stores
-// about 20 KiB, and extracts with its holes.
+// only what the filesystem reports as data, and extracts with its holes.
+//
+// How much that is depends on the filesystem. ext4 reports data in 4 KiB
+// blocks, so the blob is about 20 KiB. ZFS reports it in whole records, 128 KiB
+// by default and up to 1 MiB, so each of the three regions costs a record:
+// 384 KiB on the FreeBSD CI runner. The bound allows three 1 MiB records and
+// still fails at once for a file stored dense.
 func TestHolesSurviveAndCostNothing(t *testing.T) {
 	if !meta.Supports.Holes {
 		t.Skipf("%s stores files with holes dense (doc/design.md 15.1)", runtime.GOOS)
@@ -170,12 +176,13 @@ func TestHolesSurviveAndCostNothing(t *testing.T) {
 	if m.Size != 64<<20 {
 		t.Errorf("logical size = %d, want %d", m.Size, 64<<20)
 	}
-	if m.Length > 64<<10 {
+	const bound = 64 << 20 / 16 // 4 MiB
+	if m.Length > bound {
 		t.Errorf("the blob is %d bytes; a sparse file must store only its data", m.Length)
 	}
 
 	fi, _ := os.Stat(archivePath)
-	if fi.Size() > 1<<20 {
+	if fi.Size() > bound+1<<20 {
 		t.Errorf("the archive is %d bytes for 20 KiB of data", fi.Size())
 	}
 }

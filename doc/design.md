@@ -2244,6 +2244,12 @@ links, and records no other metadata.
 "Stored dense" is not a failure. Without hole detection, the reader reads the
 whole file, which is correct.
 
+**A hole is only as fine as the filesystem reports it.** ext4 reports data in
+4 KiB blocks. ZFS, the usual filesystem on FreeBSD, reports it in whole
+records of 128 KiB by default. Thus on ZFS, each small data region costs a
+record. On the FreeBSD CI runner, three regions of 8, 8 and 4 KiB in a 64 MiB
+file stored 384 KiB. The holes are still kept.
+
 `meta.Supports` gives this table in the code, one row for each platform. The
 unit tests read it, so that each test runs where its feature exists and says
 why it does not elsewhere. The operational tests keep their own copy of the
