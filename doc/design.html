@@ -5260,6 +5260,8 @@ info</a></li>
 <li><a href="#repair" id="toc-repair">9.5 Repair</a></li>
 <li><a href="#concurrent-writers" id="toc-concurrent-writers">9.6
 Concurrent writers</a></li>
+<li><a href="#change-of-passphrase" id="toc-change-of-passphrase">9.7
+Change of passphrase</a></li>
 </ul></li>
 </ul></li>
 <li><a href="#part-iii-interface" id="toc-part-iii-interface">Part III —
@@ -5284,6 +5286,7 @@ this build does not support yet</a></li>
 format</a></li>
 <li><a href="#progress-meter" id="toc-progress-meter">10.10 Progress
 meter</a></li>
+<li><a href="#patterns" id="toc-patterns">10.11 Patterns</a></li>
 </ul></li>
 <li><a href="#configuration-environment-variables-and-the-configuration-file" id="toc-configuration-environment-variables-and-the-configuration-file">11.
 Configuration: environment variables and the configuration file</a>
@@ -5353,7 +5356,7 @@ the usual choices</a></li>
 </ul>
 </nav>
 <h1 id="eictar-design-document">eictar — Design Document</h1>
-<p>Status: M1 to M8 are complete. The CI workflow passes on Linux,
+<p>Status: M1 to M9 are complete. The CI workflow passes on Linux,
 macOS, FreeBSD, NetBSD and OpenBSD (§15.1). Date: 2026-09-24 Applies to:
 v1 (format version 1.0)</p>
 <p>This document specifies the on-disk format, the concurrency model,
@@ -6069,24 +6072,38 @@ allocates the size in the field before it decodes anything.</p>
   &quot;memory&quot;:  262144,        # KiB (256 MiB default)
   &quot;threads&quot;: 4,
   &quot;aead&quot;:    &quot;xchacha20poly1305&quot;,
-  &quot;check&quot;:   &lt;32 bytes&gt;,    # HKDF-derived value, see below
+  &quot;key&quot;:     &lt;72 bytes&gt;,    # the data key, wrapped: see below
   &quot;recipients&quot;: [...]       # reserved for public-key mode; absent today
 }</code></pre>
-<p><code>check</code> is a 32-byte value that comes from the master key.
-With it, <code>eictar</code> refuses a wrong passphrase immediately,
-with a clear message. Without it, the error comes later, as a failed tag
-on a member. An attacker can use <code>check</code> to test a guess
-offline. That is true of every file that a passphrase protects, and the
-Argon2id parameters exist to make each guess expensive.</p>
 <p>A reader that finds <code>recipients</code> refuses the archive. Such
 an archive is addressed to public keys that this build does not
 know.</p>
-<p>The key schedule:</p>
-<pre><code>master  = Argon2id(passphrase, salt, time, memory, threads, 32)
-check   = HKDF(master, info = &quot;eictar/v1/check&quot;      || archive_uuid)
-indexK  = HKDF(master, info = &quot;eictar/v1/index&quot;      || archive_uuid || generation)
-authK   = HKDF(master, info = &quot;eictar/v1/index-auth&quot; || archive_uuid)
-memberK = HKDF(master, info = &quot;eictar/v1/member&quot;     || archive_uuid, salt = member.salt)</code></pre>
+<p><strong>The archive has a random data key, and the passphrase only
+wraps it.</strong> Create makes a random 256-bit data key. Every subkey
+comes from the data key. The passphrase gives a key-encryption key (KEK)
+through Argon2id, and the crypto header stores the data key sealed under
+the KEK:</p>
+<pre><code>dataK   = 32 random bytes, made once, at create
+KEK     = Argon2id(passphrase, salt, time, memory, threads, 32)
+key     = nonce || seal(KEK, nonce, dataK, aad = &quot;eictar/v1/wrap&quot; || archive_uuid)
+          nonce = 24 random bytes
+
+indexK   = HKDF(dataK, info = &quot;eictar/v1/index&quot;      || archive_uuid || generation)
+authK    = HKDF(dataK, info = &quot;eictar/v1/index-auth&quot; || archive_uuid)
+contentK = HKDF(dataK, info = &quot;eictar/v1/content&quot;    || archive_uuid)
+memberK  = HKDF(dataK, info = &quot;eictar/v1/member&quot;     || archive_uuid, salt = member.salt)</code></pre>
+<p>A wrong passphrase gives another KEK, and the seal of
+<code>key</code> fails its tag. The reader reports that as a wrong
+passphrase, before it reads anything else. Thus the tag does what the M4
+<code>check</code> value did, and <code>check</code> is gone. An
+attacker can test a guess offline against the tag, as against any file
+that a passphrase protects. The Argon2id parameters exist to make each
+guess expensive.</p>
+<p>The wrapped key is the reason that a passphrase can change (§9.7). A
+change seals the same data key under a new KEK. Every subkey stays the
+same, so no member is sealed again, and every digest stays valid. Until
+the format revision of M9, the passphrase gave the master key directly,
+and a change was not possible.</p>
 <p>All HKDF instances use SHA-256. The encoding of
 <code>generation</code> is <code>uint64_le</code> in every key and
 digest. <code>member.salt</code> is 16 random bytes, stored in each
@@ -6100,6 +6117,20 @@ of this occurs <em>before</em> the prompt for the passphrase. The cost
 of Argon2id is linear in <code>time</code>, approximately 1.8 s for each
 pass at the memory limit. Without the time limit, a crafted header that
 asks for 2³²−1 passes stops a listing for centuries.</p>
+<p><strong>In an encrypted archive, the member digest is keyed.</strong>
+A plain BLAKE3 digest of the content is readable in an index that is not
+sealed, which is the default. Anyone with a copy of a file can then find
+out if the archive holds it, whatever its name. Worse, anyone can find
+the content of a small file with few possible values, such as a PIN or a
+short answer. They hash each candidate, and compare. The content is
+sealed, but its digest gives it away.</p>
+<p>Thus in an encrypted archive, the digest of a member is BLAKE3 keyed
+with <code>contentK</code>. <code>--verify</code>,
+<code>-u --update-mode=digest</code>, compact and recompress work as
+before, because every member of one archive has the same key. A digest
+cannot be compared across two archives, or with a hash made outside
+eictar. The digest of a plaintext archive is the plain BLAKE3, as
+before.</p>
 <h3 id="the-aead-layer">6.3 The AEAD layer</h3>
 <p>The writer seals each chunk after it compresses the chunk (§4):</p>
 <pre><code>sealed = seal(memberK, nonce, compressed_chunk, aad)
@@ -6156,7 +6187,7 @@ covers these fields.</p>
 encrypted, <code>index_digest</code> is a <strong>keyed</strong>
 BLAKE3:</p>
 <pre><code>index_digest = BLAKE3-keyed(authK, archive_uuid || uint64_le(generation) || index_bytes)
-authK        = HKDF(master, info = &quot;eictar/v1/index-auth&quot; || archive_uuid)</code></pre>
+authK        = HKDF(dataK, info = &quot;eictar/v1/index-auth&quot; || archive_uuid)</code></pre>
 <p>When the archive is not encrypted, the digest has the same input but
 no key. The uuid and the generation stop an index and a trailer from
 moving to a different archive. With a key, they also stop that move
@@ -6823,6 +6854,31 @@ and Windows uses <code>LockFileEx</code>, in a separate file for that
 platform. Plan 9, WASI and AIX have no <code>flock</code>, so there the
 program does not find a second writer. A lock on NFS is not reliable,
 and the man page says so.</p>
+<h3 id="change-of-passphrase">9.7 Change of passphrase</h3>
+<p><code>--change-passphrase</code> seals the archive’s data key under a
+new passphrase (§6.2). It needs the old passphrase, and it asks for the
+new one two times, as create does. <code>--new-passphrase-file</code>
+and <code>--new-passphrase-env</code> give the new one without a prompt.
+The <code>--kdf-*</code> options set new Argon2id parameters. Without
+them, the archive keeps the parameters that it has. Thus a change of
+passphrase is also the way to make an old archive’s key derivation
+stronger.</p>
+<p><strong>The change writes the file again, as compact does
+(§9.3).</strong> It writes a new file beside the archive, with the new
+crypto header, and renames it over the archive. A crash before the
+rename leaves the old archive, which the old passphrase opens. A change
+in place is not possible, because the crypto header changes size with
+the new parameters. It is not safe either: a crash in the middle of the
+only copy of the wrapped key loses the archive.</p>
+<p>The data key does not change, so the blobs are copied byte for byte,
+with no second encryption. Like compact, the change drops the dead
+space. The old wrapped key is not in the new file.</p>
+<p>On most filesystems, the blocks of the old file are free space until
+something writes over them. Thus a person can still read what the
+archive held then with a copy of the old file. The old passphrase and
+access to the disk are enough too. A change of passphrase cannot take
+back what someone already has. Only a new archive, with a new data key,
+can protect new content from a leaked key.</p>
 <hr />
 <h1 id="part-iii-interface">Part III — Interface</h1>
 <h2 id="command-line-interface">10. Command line interface</h2>
@@ -6938,6 +6994,14 @@ space</td>
 <td>M6</td>
 </tr>
 <tr class="odd">
+<td></td>
+<td><code>--change-passphrase</code></td>
+<td>Seal the data key under a new passphrase, and write the archive
+again without its dead space (§9.7)</td>
+<td>none</td>
+<td>M9</td>
+</tr>
+<tr class="even">
 <td></td>
 <td><code>--list-codecs</code></td>
 <td>Show each codec with its parameters, defaults and ranges</td>
@@ -7060,23 +7124,27 @@ statement requires.</p>
     --encrypt-index          # also seal the index (default: off)
     --kdf-time N             # Argon2id passes, 1..64 (default 3)
     --kdf-memory KiB         # Argon2id memory in KiB, up to 4194304 (default 262144)
-    --kdf-threads N          # Argon2id threads (default 4)</code></pre>
+    --kdf-threads N          # Argon2id threads (default 4)
+    --new-passphrase-file FILE   # with --change-passphrase: the new passphrase
+    --new-passphrase-env VAR     # with --change-passphrase: the new passphrase</code></pre>
 <p>You select encryption when you create an archive, and it applies to
 the whole archive. An append to an encrypted archive needs the same
 passphrase. This agrees with the problem statement: one secret key for
 all members.</p>
-<p><code>--encrypt</code>, <code>--encrypt-index</code> and the
-<code>--kdf-*</code> options apply to create only. On any other
-operation they are a usage error, because the header of an existing
-archive fixes its encryption. The <code>--kdf-*</code> limits are the
-same limits that a reader applies (§6.2).</p>
+<p><code>--encrypt</code> and <code>--encrypt-index</code> apply to
+create only. The <code>--kdf-*</code> options apply to create and to
+<code>--change-passphrase</code>. On any other operation they are a
+usage error, because the header of an existing archive fixes its
+encryption. The <code>--kdf-*</code> limits are the same limits that a
+reader applies (§6.2).</p>
 <p>The program reads the passphrase from the terminal with echo off.
-<strong>On create, it asks two times</strong>, because a mistyped
-passphrase cannot be recovered. No part of the program can find out
-later what you meant. The program asks only when an archive needs a
-passphrase. Thus a plaintext archive never prompts, and a usage error
-never asks for a secret. The prompt goes to stderr, so it cannot go into
-a redirected listing or into extracted content.</p>
+<strong>On create, and for the new passphrase of a change, it asks two
+times</strong>, because a mistyped passphrase cannot be recovered. No
+part of the program can find out later what you meant. The program asks
+only when an archive needs a passphrase. Thus a plaintext archive never
+prompts, and a usage error never asks for a secret. The prompt goes to
+stderr, so it cannot go into a redirected listing or into extracted
+content.</p>
 <p><code>--passphrase-env</code> prints a warning. Any process that can
 read this process’s environment can see the value.</p>
 <p><strong>A passphrase source means “this archive is
@@ -7391,6 +7459,12 @@ that is not necessary.</li>
 <li>A filesystem with coarse timestamps, or a clock set backward, causes
 missed changes.</li>
 </ul>
+<p><code>digest</code> compares the content of the file with the content
+of the member. For a member with holes, the bytes at the member’s data
+regions must give its digest, and the rest of the file must be zero. The
+file’s own regions do not count: a filesystem can report other regions
+for the same content. Until the stress tester found it (§13.4), such a
+file was archived again.</p>
 <p><code>digest</code> never compresses without need and never misses a
 change. It reads each candidate in full. A sequential read costs much
 less than compression, encryption and a write. Thus on a large tree with
@@ -7545,6 +7619,27 @@ byte. Before that, the program can ask for a passphrase on the same
 terminal, and a redraw writes over the prompt. The clock starts at the
 first byte too, so that the time to type the passphrase does not lower
 the rate.</p>
+<h3 id="patterns">10.11 Patterns</h3>
+<p><code>-t</code>, <code>-x</code>, <code>--verify</code>,
+<code>--delete</code> and <code>--exclude</code> take patterns. A
+pattern matches a member path in any of these cases:</p>
+<ul>
+<li>It is the path.</li>
+<li>It names a directory that the path is under. Thus <code>src</code>
+takes <code>src/main.go</code>.</li>
+<li>It is a glob that matches the whole path, as <code>path.Match</code>
+does. <code>*</code> does not match a <code>/</code>.</li>
+<li>It has no <code>/</code>, and it matches one name in the path, at
+any depth. Thus <code>*.go</code> takes <code>src/main.go</code>, and
+<code>cache</code> takes <code>a/cache</code> and everything below
+it.</li>
+</ul>
+<p>The last rule applied to the last name only until the stress tester
+found the result (§13.4). <code>--delete cache</code> deleted the
+directory <code>a/cache</code>, but its members stayed, and
+<code>--exclude cache</code> hid <code>a/cache</code> but not its
+contents. A directory that a pattern matches now takes its contents, at
+any depth.</p>
 <h2 id="configuration-environment-variables-and-the-configuration-file">11.
 Configuration: environment variables and the configuration file</h2>
 <p>A long command line is tedious to type each time, for example:
@@ -7942,7 +8037,7 @@ so no path can leave the destination.</p>
     open[&quot;OpenWith&quot;] --&gt; hdr[&quot;header:&lt;br/&gt;magic, CRC&quot;]
     hdr --&gt; tr[&quot;trailer:&lt;br/&gt;magic, CRC, bounds&quot;]
     tr --&gt; unlock{&quot;encrypted?&quot;}
-    unlock -- yes --&gt; kdf[&quot;crypto header, KDF limits,&lt;br/&gt;passphrase, Argon2id,&lt;br/&gt;check value&quot;]
+    unlock -- yes --&gt; kdf[&quot;crypto header, KDF limits,&lt;br/&gt;passphrase, Argon2id,&lt;br/&gt;wrapped data key&quot;]
     unlock -- no --&gt; dig
     kdf --&gt; dig[&quot;index digest&lt;br/&gt;(keyed if encrypted)&quot;]
     dig --&gt; dec[&quot;unseal, decompress,&lt;br/&gt;decode, validate index&quot;]
@@ -7994,10 +8089,10 @@ the refusal of each single-field corruption.</li>
 registered codec. It covers round trips, empty input, incompressible
 input, chunk boundaries, the parameter checks, refusal of bad
 parameters, and the parallel-encoder test of §8.2.</li>
-<li><strong>Key schedule</strong>: fixed vectors for the master key,
-every subkey, a sealed chunk, a sealed index and the keyed index digest.
-A failure here means that existing archives no longer open. It never
-means “update the vector”.</li>
+<li><strong>Key schedule</strong>: fixed vectors for the KEK, the
+wrapped data key, every subkey, a sealed chunk, a sealed index and the
+keyed index digest. A failure here means that existing archives no
+longer open. It never means “update the vector”.</li>
 <li><strong>Chunked AEAD</strong>: tag checks, a wrong key, a chunk
 moved to another index or member, a changed final flag, and truncation.
 Each must fail.</li>
@@ -8183,8 +8278,10 @@ or new entries come. Then one operation runs: append with each
 <code>--on-conflict</code>, update with each <code>--update-mode</code>,
 delete, compact, compact with <code>--recompress</code>, or extraction
 by pattern. Each operation uses a random codec and random settings:
-chunk size, workers, memory limit and spill threshold. A third of the
-sequences are encrypted, some with a sealed index.</p>
+chunk size, workers, memory limit and spill threshold.</p>
+<p>A third of the sequences are encrypted, some with a sealed index. In
+these, a step can also change the passphrase. After the change, the old
+passphrase must fail with exit 3.</p>
 <p><strong>After each step</strong> the tester makes three checks:</p>
 <ol type="1">
 <li><code>-t</code> lists exactly the model’s paths.</li>
@@ -8230,11 +8327,18 @@ sequence exactly.</p>
 <p><strong>The tester is tested.</strong> A bug put into eictar on
 purpose, where <code>-u</code> took an equal time as newer, failed the
 sixth sequence. The report named the file and its wrong mode.</p>
-<p><strong>Findings.</strong> The first runs found one fault in eictar.
-A chunk that its codec refused, for example after a failed zstd
+<p><strong>Findings.</strong> The first runs found three faults in
+eictar. Each one now has a test of its own:</p>
+<ul>
+<li>A chunk that its codec refused, for example after a failed zstd
 checksum, gave exit 4, as for an I/O error. It must give exit 3, for
-damage. Such an error is now <code>ErrCorruptData</code>. A test for
-each codec keeps it that way.</p>
+damage. Such an error is now <code>ErrCorruptData</code>.</li>
+<li>A pattern that matched a directory by its name, deeper in the tree,
+did not take the directory’s contents (§10.11).</li>
+<li><code>-u --update-mode=digest</code> archived an unchanged sparse
+file again, when the filesystem reported its data regions in another way
+(§10.5).</li>
+</ul>
 <p>A default run of three minutes makes approximately 11,000 eictar
 commands, with approximately 200 crashes and 400 damaged copies.</p>
 <h2 id="security-considerations">14. Security considerations</h2>
@@ -8246,11 +8350,10 @@ man page must state it clearly. <code>--encrypt-index</code> hides it.
 Then an observer sees only that the archive exists, and its total
 size.</li>
 <li><strong>Content digests.</strong> The plain index also shows the
-BLAKE3 digest of the plaintext of each member, and in an encrypted
-archive this digest is not keyed. Thus an observer who has a copy of a
-file can find out if the archive contains that file.
-<code>--encrypt-index</code> hides the digests. §15.2 records a possible
-fix.</li>
+digest of each member. In an encrypted archive, the digest is keyed
+(§6.2), so it tells an observer nothing about the content. Before M9 it
+was not keyed, and it showed if the archive held a file that the
+observer had.</li>
 <li><strong>Sizes.</strong> With a plain index, the compressed length of
 every member and every chunk is visible. With
 <code>--encrypt-index</code>, they are <strong>not</strong> visible. The
@@ -8268,12 +8371,13 @@ removes it.</li>
 <li><strong>One key for all members, and no forward secrecy</strong>, as
 the problem statement requires. If the passphrase is known, the whole
 archive is open, earlier generations too.</li>
-<li><strong>The passphrase cannot change in v1.</strong> Every key comes
-from it, so a new passphrase means that each member must be encrypted
-again. A wrapped data key removes this limit (§15.2).</li>
+<li><strong>The passphrase wraps a random data key</strong> (§6.2). Thus
+<code>--change-passphrase</code> needs no second encryption of the
+members (§9.7). A change does not protect what someone already has: a
+copy of the old file, or the data key.</li>
 <li><strong>Passphrase handling.</strong> The program reads the
 passphrase from the terminal with echo off, and sets it to zero after
-the key schedule. The reader sets the master key to zero when it closes.
+the key schedule. The reader sets the data key to zero when it closes.
 The program does not set the derived subkeys to zero, and it does not
 lock memory. Go can copy memory without notice, so zeroing is only a
 partial protection. <code>--passphrase-env</code> prints a warning.</li>
@@ -8564,52 +8668,9 @@ each file, which is a separate model.</p>
 <h3 id="outstanding-items">15.2 Outstanding items</h3>
 <p>The code review after M6, and the discussion after it, found these
 items. They are not faults. Each one needs a decision or a measurement
-before any work starts.</p>
+before any work starts. Two items of this list, the wrapped data key and
+the keyed content digest, were decided for M9 (§6.2, §9.7).</p>
 <ul>
-<li><strong>A wrapped data key, so that the passphrase can
-change.</strong> In v1, every key comes from the passphrase through
-Argon2id (§6.2). Thus a new passphrase means a new master key, and every
-sealed member must be encrypted again. The usual design adds one step:
-<ul>
-<li>The writer makes a random 256-bit data key when it creates the
-archive. The member keys, the index keys and the index authentication
-key come from this data key, not from the passphrase.</li>
-<li>The passphrase gives a key-encryption key through Argon2id. The
-crypto header stores the data key sealed under this key, with its own
-nonce.</li>
-<li>A change of passphrase unseals the data key with the old passphrase,
-and seals it again with the new one. Only the crypto header changes. The
-members, the index and the uuid stay as they are.</li>
-</ul>
-The design has these consequences:
-<ul>
-<li>It changes the format: a new crypto header version, and new golden
-files. It is much cheaper before v1 is released than after.</li>
-<li>The crypto header length can change, and the header is at the start
-of the file. Thus a change of passphrase must write the file again, as
-compact does (§9.3), or the header must keep space in reserve.</li>
-<li>A change of passphrase does not protect data that someone already
-has. A person who knew the old passphrase, and kept a copy of the data
-key or of the old archive, can still read it. Only a new archive with a
-new data key removes that access.</li>
-<li>The same step makes room for the public-key recipients of §15. Each
-recipient is one more sealed copy of the data key.</li>
-</ul></li>
-<li><strong>A keyed content digest in encrypted archives.</strong>
-Today, each member of an encrypted archive carries an unkeyed digest of
-its plaintext. If the index is not sealed, this shows if the archive
-contains a known file (§14.1). The fix is to key the digest with a new
-subkey, for example <code>&quot;eictar/v1/content&quot;</code>. The fix has these
-properties:
-<ul>
-<li>It costs nothing at run time.</li>
-<li>It changes the format, so it needs a new index version, or a flag,
-and new golden files.</li>
-<li>Deduplication (§15) still works, because members of one archive
-share the key, and a match needs only equal digests.</li>
-<li><code>-u --update-mode=digest</code> must then calculate the keyed
-digest of the source file.</li>
-</ul></li>
 <li><strong>Parallel <code>--verify</code>.</strong>
 <code>--verify</code> decodes the members one at a time. It can use the
 worker pool of extraction, with the same memory bound
@@ -8721,6 +8782,11 @@ slower than necessary (§8.4)</li>
 9). The CI workflow in <code>.github/workflows/ci.yml</code> passes on
 all five platforms. The first runs found a deadlock in the pipeline
 (§8.1), and four faults in tests and in the workflow (§15.1).</p></li>
+<li><p><strong>M9 — Format revision</strong> <em>(complete)</em>: a
+random data key that the passphrase wraps,
+<code>--change-passphrase</code> (§9.7), and a keyed member digest in
+encrypted archives (§6.2). Both change the format, so they come before a
+first release, with new test vectors and golden files.</p></li>
 </ol>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>

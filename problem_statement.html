@@ -1509,6 +1509,51 @@ nanosecond-resolution timestamps.</li>
 content, and the archive can be checked without being extracted.</li>
 <li>A crash part way through writing must never damage what was already
 in the archive.</li>
+<li>Two runs that change the same archive at the same time must never
+damage it, for example two backup jobs that overlap. The second run does
+not wait: it stops with a clear error, and the first one finishes
+normally. Reading an archive while another run changes it is always
+safe.</li>
+<li>Paths are stored relative to the archive, never absolute. A leading
+<code>/</code> or <code>..</code> is removed when the file is added, and
+the program says once that it did so. This follows <code>tar</code> and
+<code>zip</code>: an archive holds a portable tree, not a set of
+filesystem locations, so an archived <code>/etc/passwd</code> unpacks
+under the chosen directory and not over the system file. There is no
+option to keep absolute paths. On extraction the check is made again,
+because an archive may have been written by another program.</li>
+<li>Extraction can be directed at a chosen directory with
+<code>-d</code>, as <code>unzip</code> does. The directory is created if
+it is not there. Nothing is ever written outside that directory, and in
+particular an archive must not be able to write through a symbolic link
+that points out of it.</li>
+<li>Frequently used parameters, compression above all, must be settable
+without typing them every time: by environment variable and by a
+configuration file (<code>.eictarrc</code>). The command line wins over
+the environment, which wins over the configuration file. The
+configuration file is the user’s own, in the home directory, or one
+named explicitly with <code>--config</code>. There is no configuration
+file read from the current directory: the program must not change
+behaviour because of where it was run from. What the operation is
+(create, extract, and so on), which archive to use, and the passphrase
+are never taken from the environment or a configuration file.</li>
+<li>The program must be tested extensively, at two levels, and the tests
+are part of the deliverable rather than an afterthought:
+<ul>
+<li><strong>Unit tests</strong> in the code, next to each package. Every
+format structure, codec, key-schedule step and path rule has its own
+test. No milestone is finished until its tests are written and
+passing.</li>
+<li><strong>Operational tests</strong> that drive the built binary end
+to end, the way a user drives it, against real files on a real
+filesystem. These cover the full lifecycle: create, list, extract,
+append, delete, replace, compact, verify. The test suite must also prove
+the hard parts: that a tampered archive is detected, that a crash at any
+write step leaves the archive intact, that a second run that changes the
+archive at the same time is refused, that extraction cannot write
+outside its destination, and that metadata survives a round trip
+untouched.</li>
+</ul></li>
 </ol>
 <h2 id="decisions">Decisions</h2>
 <p>These resolve the open questions in the constraints above.
@@ -1533,13 +1578,18 @@ of the file as the commit record</td>
 </tr>
 <tr class="even">
 <td>Encryption</td>
-<td>XChaCha20-Poly1305 AEAD over 4 MiB chunks, Argon2id key derivation,
-a separate derived subkey per member</td>
+<td>XChaCha20-Poly1305 AEAD over 4 MiB chunks, a separate derived subkey
+per member. A random data key per archive, sealed under a key that
+Argon2id derives from the passphrase, so the passphrase can change
+(<code>--change-passphrase</code>) without encrypting the content
+again</td>
 </tr>
 <tr class="odd">
 <td>Index encryption</td>
 <td>Optional, <code>--encrypt-index</code>, off by default. An
-unencrypted index reveals file names, sizes and permissions</td>
+unencrypted index reveals file names, sizes and permissions. In an
+encrypted archive the member digests are keyed, so they reveal nothing
+about the content</td>
 </tr>
 <tr class="even">
 <td><code>ccrypt</code></td>
@@ -1560,16 +1610,44 @@ binaries</td>
 <td>Member order inside the archive is not significant, so a single
 writer appends whichever worker finishes first</td>
 </tr>
+<tr class="even">
+<td>CLI style</td>
+<td>Classical UNIX options, not subcommands. The operation is chosen by
+an option letter (<code>-c</code>, <code>-r</code>, <code>-t</code>,
+<code>-x</code>), short options bundle (<code>-cvf</code>), and every
+short option has a long form</td>
+</tr>
 </tbody>
 </table>
 <h2 id="out-of-scope-for-v1">Out of scope for v1</h2>
 <ul>
-<li>Deduplication between members, and delta or incremental
-storage.</li>
+<li><strong>Delta storage between versions.</strong> When a stored file
+changes, we replace it: the new content goes in whole and the old member
+is tombstoned. We do not keep a base version plus a chain of patches. A
+file appended N times therefore holds N full copies until it is
+compacted.</li>
+<li><strong>Incremental archiving of a tree</strong> in the sense of
+<code>tar   --listed-incremental</code>, where a snapshot file records
+what was archived last time so the next run takes only the changes. This
+sits above the format and can be added later without changing the
+archive layout.</li>
+<li><strong>Content deduplication</strong>, meaning: storing identical
+content once, where identical is decided by the content itself rather
+than by the inode. Hardlinks are detected and stored once; two unrelated
+copies of the same file are not. Neither whole-file dedup nor
+chunk-level dedup (the content-defined chunking that borg and restic
+use) is in v1. Whole-file dedup is cheap to add later and
+<code>doc/design.md</code> §15 records what it needs.</li>
 <li>Public-key recipients. The format leaves room for them.</li>
 <li>Reading an archive from a pipe. The footer index needs a seekable
 file.</li>
 <li>Archive-wide signatures.</li>
+<li>Metadata on platforms other than Linux, macOS, FreeBSD, NetBSD and
+OpenBSD. On other platforms the program archives content, directories
+and links only. The four platforms besides Linux have the limits in
+<code>doc/design.md</code> §15.1: macOS records no ACLs and does not
+create pipes, and OpenBSD has no extended attributes. The tests run on
+all five platforms in CI.</li>
 </ul>
 </body>
 </html>
