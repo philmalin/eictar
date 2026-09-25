@@ -58,7 +58,7 @@ func BenchmarkCreate(b *testing.B) {
 		b.Run(spec, func(b *testing.B) {
 			b.SetBytes(total)
 			for i := 0; i < b.N; i++ {
-				archive := filepath.Join(b.TempDir(), "b.eictar")
+				archive := filepath.Join(b.TempDir(), "b.ect")
 				if _, err := CreateArchive(CreateConfig{
 					Archive: archive, Paths: []string{"small", "large", "random"}, BaseDir: tree.Root,
 					Options: Options{Codec: name, Params: params},
@@ -78,7 +78,7 @@ func BenchmarkExtract(b *testing.B) {
 	tree, total := benchTree(b)
 	for _, spec := range benchCodecs {
 		name, params := splitSpec(spec)
-		archive := filepath.Join(b.TempDir(), "b.eictar")
+		archive := filepath.Join(b.TempDir(), "b.ect")
 		if _, err := CreateArchive(CreateConfig{
 			Archive: archive, Paths: []string{"small", "large", "random"}, BaseDir: tree.Root,
 			Options: Options{Codec: name, Params: params},

@@ -9,7 +9,7 @@ import (
 //
 // A pattern matches when it equals the path, when it glob-matches it, or when
 // it names a directory the path lies under. That last rule is what makes
-// `eictar -xf a.eictar src` extract everything below src, which is what a user
+// `eictar -xf a.ect src` extract everything below src, which is what a user
 // means by naming a directory.
 //
 // A pattern with no slash also matches by name, at any depth: it matches a

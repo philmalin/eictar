@@ -77,7 +77,7 @@ func TestXattrsFromAnotherPlatform(t *testing.T) {
 func TestPipeExtraction(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Text("f.txt", 0o644, "x").Fifo("pipe", 0o640)
-	archive := filepath.Join(t.TempDir(), "p.eictar")
+	archive := filepath.Join(t.TempDir(), "p.ect")
 	if _, err := CreateArchive(CreateConfig{Archive: archive, Paths: []string{"f.txt", "pipe"}, BaseDir: tree.Root}); err != nil {
 		t.Fatal(err)
 	}

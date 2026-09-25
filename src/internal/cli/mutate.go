@@ -58,6 +58,7 @@ func runDelete(o *Options, stdout, stderr io.Writer) error {
 	_, err := archive.DeleteMembers(archive.DeleteConfig{
 		Archive:  o.Archive,
 		Patterns: o.Args,
+		Regex:    o.regex,
 		Open:     openFor(o, rep),
 		Reporter: rep,
 	})
@@ -163,6 +164,7 @@ func runVerify(o *Options, stdout, stderr io.Writer) error {
 	res, err := archive.VerifyArchive(archive.VerifyConfig{
 		Archive:  o.Archive,
 		Patterns: o.Args,
+		Regex:    o.regex,
 		Open:     openFor(o, rep),
 		Quick:    o.Quick,
 		Reporter: progress,

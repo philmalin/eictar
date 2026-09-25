@@ -39,7 +39,7 @@ func TestMutationLifecycle(t *testing.T) {
 		name := map[bool]string{false: "plain", true: "encrypted"}[encrypted]
 		t.Run(name, func(t *testing.T) {
 			tree := fixture(t)
-			archive := filepath.Join(t.TempDir(), "life.eictar")
+			archive := filepath.Join(t.TempDir(), "life.ect")
 			var key []string
 			if encrypted {
 				key = []string{"--passphrase-file", passFile(t, "correct horse")}
@@ -110,7 +110,7 @@ func fileSize(t *testing.T, path string) int64 {
 // is a usage error, and the archive is unchanged.
 func TestUnmatchedPatternsAndConflictsExitTwo(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	runOK(t, tree.Root, "-cf", archive, "work")
 	before, err := os.ReadFile(archive)
 	if err != nil {
@@ -140,7 +140,7 @@ func TestUnmatchedPatternsAndConflictsExitTwo(t *testing.T) {
 
 func TestUpdateSkipsWhatIsCurrent(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	runOK(t, tree.Root, "-cf", archive, "work")
 	size := fileSize(t, archive)
 
@@ -161,7 +161,7 @@ func TestUpdateSkipsWhatIsCurrent(t *testing.T) {
 
 func TestVerifyReportsDamage(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	runOK(t, tree.Root, "-cf", archive, "--compress", "none", "work")
 
 	// With no compression the content is on disk as it is; damage one byte
@@ -194,7 +194,7 @@ func TestVerifyReportsDamage(t *testing.T) {
 // (doc/design.md 9.1 and 9.5).
 func TestKilledAppendIsRepaired(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	runOK(t, tree.Root, "-cf", archive, "work")
 	before, err := os.ReadFile(archive)
 	if err != nil {
@@ -264,7 +264,7 @@ func TestKilledAppendIsRepaired(t *testing.T) {
 // exit 4 and says why; the first finishes normally (doc/design.md 9.6).
 func TestOverlappingAppendsAreRefused(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	runOK(t, tree.Root, "-cf", archive, "work")
 	size := fileSize(t, archive)
 
@@ -314,7 +314,7 @@ func TestEveryCodecInOneArchive(t *testing.T) {
 	for i := range codecs {
 		tree.Text(filepath.Join("w", strings.Repeat("f", i+1)), 0o644, strings.Repeat("codec test data. ", 5000+i))
 	}
-	archive := filepath.Join(t.TempDir(), "mixed.eictar")
+	archive := filepath.Join(t.TempDir(), "mixed.ect")
 	for i, c := range codecs {
 		op := "-rf"
 		if i == 0 {
@@ -340,7 +340,7 @@ func TestEveryCodecInOneArchive(t *testing.T) {
 // spec is a usage error that leaves the archive alone.
 func TestRecompress(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	runOK(t, tree.Root, "-cf", archive, "--compress", "s2", "work")
 	before, err := os.ReadFile(archive)
 	if err != nil {

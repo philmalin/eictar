@@ -13,6 +13,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/codec"
 	"github.com/philmalin/eictar/src/internal/crypt"
 	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/fsutil"
 	"github.com/philmalin/eictar/src/internal/meta"
 	"github.com/philmalin/eictar/src/internal/pipeline"
 )
@@ -118,6 +119,7 @@ func AppendArchive(cfg AppendConfig) (Stats, error) {
 type DeleteConfig struct {
 	Archive  string
 	Patterns []string
+	Regex    fsutil.Regexps // -R
 	Open     OpenOptions
 	Reporter Reporter
 }
@@ -126,8 +128,8 @@ type DeleteConfig struct {
 // new generation. The blobs stay until --compact.
 func DeleteMembers(cfg DeleteConfig) (Stats, error) {
 	var stats Stats
-	if len(cfg.Patterns) == 0 {
-		return stats, errors.New("--delete needs at least one pattern")
+	if len(cfg.Patterns) == 0 && len(cfg.Regex) == 0 {
+		return stats, errors.New("--delete needs at least one pattern or -R")
 	}
 
 	w, err := OpenAppend(cfg.Archive, Options{}, cfg.Open)
@@ -141,7 +143,7 @@ func DeleteMembers(cfg DeleteConfig) (Stats, error) {
 			live = append(live, m)
 		}
 	}
-	deleted, err := selectMembers(live, cfg.Patterns)
+	deleted, err := selectMembers(live, cfg.Patterns, cfg.Regex)
 	if err != nil {
 		w.Abort()
 		return stats, err
@@ -571,6 +573,7 @@ func syncDir(dir string) error {
 type VerifyConfig struct {
 	Archive  string
 	Patterns []string
+	Regex    fsutil.Regexps // -R
 	Open     OpenOptions
 	// Quick checks the structure only and reads no member data.
 	Quick    bool
@@ -604,7 +607,7 @@ func VerifyArchive(cfg VerifyConfig) (VerifyResult, error) {
 		return res, nil
 	}
 
-	members, err := selectMembers(r.Members(), cfg.Patterns)
+	members, err := selectMembers(r.Members(), cfg.Patterns, cfg.Regex)
 	if err != nil {
 		return res, err
 	}

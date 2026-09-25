@@ -16,6 +16,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/codec"
 	"github.com/philmalin/eictar/src/internal/crypt"
 	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/fsutil"
 	"github.com/philmalin/eictar/src/internal/meta"
 	"github.com/philmalin/eictar/src/internal/testutil"
 )
@@ -36,7 +37,7 @@ func mutTree(t *testing.T) *testutil.Tree {
 func mkArchive(t *testing.T, tree *testutil.Tree, encrypted bool, paths ...string) string {
 	t.Helper()
 	cfg := CreateConfig{
-		Archive: filepath.Join(t.TempDir(), "m.eictar"),
+		Archive: filepath.Join(t.TempDir(), "m.ect"),
 		Paths:   paths,
 		BaseDir: tree.Root,
 		Options: Options{Codec: "zstd", ChunkSize: 4096},
@@ -201,7 +202,7 @@ func TestOnConflictSkipAndError(t *testing.T) {
 func TestPathNamedTwiceIsArchivedOnce(t *testing.T) {
 	tree := mutTree(t)
 	rep := &recordingReporter{}
-	archive := filepath.Join(t.TempDir(), "d.eictar")
+	archive := filepath.Join(t.TempDir(), "d.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archive, Paths: []string{"t/a.txt", "t"}, BaseDir: tree.Root,
 		Options: Options{Codec: "zstd"}, Reporter: rep,
@@ -513,7 +514,7 @@ func TestCrashAtEveryCut(t *testing.T) {
 			}
 			dir := t.TempDir()
 			for cut := len(before) + 1; cut < len(after); cut += step {
-				path := filepath.Join(dir, "cut.eictar")
+				path := filepath.Join(dir, "cut.ect")
 				if err := os.WriteFile(path, after[:cut], 0o644); err != nil {
 					t.Fatal(err)
 				}
@@ -672,7 +673,7 @@ func TestKeepGoingHardlinkToAFailedFile(t *testing.T) {
 	}
 	tree := mutTree(t)
 	tree.Hardlink("t/z.txt", "t/a.txt").Unreadable("t/a.txt")
-	archive := filepath.Join(t.TempDir(), "k.eictar")
+	archive := filepath.Join(t.TempDir(), "k.ect")
 	stats, err := CreateArchive(CreateConfig{
 		Archive: archive, Paths: []string{"t"}, BaseDir: tree.Root,
 		Options: Options{Codec: "zstd"}, KeepGoing: true,
@@ -715,7 +716,7 @@ func TestCompactThroughASymlink(t *testing.T) {
 	if _, err := DeleteMembers(DeleteConfig{Archive: archive, Patterns: []string{"t/a.txt"}}); err != nil {
 		t.Fatal(err)
 	}
-	link := filepath.Join(t.TempDir(), "link.eictar")
+	link := filepath.Join(t.TempDir(), "link.ect")
 	if err := os.Symlink(archive, link); err != nil {
 		t.Fatal(err)
 	}
@@ -773,7 +774,7 @@ func TestFailedCreateKeepsTheOldArchive(t *testing.T) {
 func TestCreateThroughASymlink(t *testing.T) {
 	tree := mutTree(t)
 	archive := mkArchive(t, tree, false, "t")
-	link := filepath.Join(t.TempDir(), "link.eictar")
+	link := filepath.Join(t.TempDir(), "link.ect")
 	if err := os.Symlink(archive, link); err != nil {
 		t.Fatal(err)
 	}
@@ -795,7 +796,7 @@ func TestCreateThroughASymlink(t *testing.T) {
 // not the file being written, but it must not go into the new one.
 func TestCreateSkipsTheArchiveItReplaces(t *testing.T) {
 	tree := mutTree(t)
-	archive := tree.Path("t/self.eictar")
+	archive := tree.Path("t/self.ect")
 	for range 2 {
 		if _, err := CreateArchive(CreateConfig{
 			Archive: archive, Paths: []string{"t"}, BaseDir: tree.Root,
@@ -961,7 +962,7 @@ func TestCorruptChunkIsDamage(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tree := testutil.NewTree(t)
 			tree.Text("f.txt", 0o644, strings.Repeat("compressible text ", 4000))
-			archive := filepath.Join(t.TempDir(), "c.eictar")
+			archive := filepath.Join(t.TempDir(), "c.ect")
 			if _, err := CreateArchive(CreateConfig{Archive: archive, Paths: []string{"f.txt"},
 				BaseDir: tree.Root, Options: Options{Codec: name}}); err != nil {
 				t.Fatal(err)
@@ -1088,7 +1089,7 @@ func TestEncryptedDigestIsKeyed(t *testing.T) {
 	for _, enc := range []bool{false, true} {
 		tree := testutil.NewTree(t)
 		tree.File("f", 0o644, content)
-		cfg := CreateConfig{Archive: filepath.Join(t.TempDir(), "k.eictar"), Paths: []string{"f"},
+		cfg := CreateConfig{Archive: filepath.Join(t.TempDir(), "k.ect"), Paths: []string{"f"},
 			BaseDir: tree.Root, Options: Options{Codec: "none"}}
 		if enc {
 			// EncryptIndex false: the index, digests and all, is readable.
@@ -1237,5 +1238,151 @@ func TestChangePassphraseRefusals(t *testing.T) {
 	entries, _ := os.ReadDir(filepath.Dir(enc))
 	if len(entries) != 1 {
 		t.Errorf("files left beside the archive: %v", entries)
+	}
+}
+
+func mustRegex(t *testing.T, exprs ...string) fsutil.Regexps {
+	t.Helper()
+	rs, err := fsutil.CompileRegexps(exprs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rs
+}
+
+// regexTree has matches at several depths, and a directory to exclude.
+func regexTree(t *testing.T) *testutil.Tree {
+	t.Helper()
+	tree := testutil.NewTree(t)
+	tree.Dir("r", 0o755).Dir("r/dir", 0o755).Dir("r/deep", 0o755).Dir("r/deep/dir", 0o755).Dir("r/cache", 0o755)
+	tree.Text("r/dir/a1.txt", 0o644, "a1")
+	tree.Text("r/dir/g1.txt", 0o644, "g1")
+	tree.Text("r/deep/dir/f42.txt", 0o644, "f42")
+	tree.Text("r/cache/b2.txt", 0o644, "cached")
+	tree.Text("r/top.txt", 0o644, "top")
+	return tree
+}
+
+func livePaths(t *testing.T, archive string) []string {
+	t.Helper()
+	live, _, _ := state(t, archive, false)
+	return live
+}
+
+// TestRegexFiltersTheWalk: -R stores only what matches, at any depth, and
+// not the directories above it; --exclude-regex does not enter a directory
+// (doc/design.md 10.11).
+func TestRegexFiltersTheWalk(t *testing.T) {
+	tree := regexTree(t)
+	cfg := CreateConfig{
+		Archive: filepath.Join(t.TempDir(), "r.ect"), Paths: []string{"r"}, BaseDir: tree.Root,
+		Options:      Options{Codec: "zstd"},
+		Regex:        mustRegex(t, `.*/dir/[a-f][0-9]+\.txt`, `.*/[a-z][0-9]\.txt`),
+		ExcludeRegex: mustRegex(t, `.*/cache`),
+	}
+	if _, err := CreateArchive(cfg); err != nil {
+		t.Fatal(err)
+	}
+	// g1 matches the second expression only; b2 matches it too, but its
+	// directory is excluded, and an exclusion wins.
+	want := "r/deep/dir/f42.txt,r/dir/a1.txt,r/dir/g1.txt"
+	if got := strings.Join(livePaths(t, cfg.Archive), ","); got != want {
+		t.Errorf("members %s, want %s", got, want)
+	}
+	// Extraction makes the parents that the archive does not hold.
+	if got := extractOne(t, cfg.Archive, false, "r/deep/dir/f42.txt"); got != "f42" {
+		t.Errorf("content %q", got)
+	}
+
+	// An expression whose only matches are in an excluded directory matches
+	// nothing: the walk never sees them.
+	cfg.Archive = filepath.Join(t.TempDir(), "r.ect")
+	cfg.Regex = mustRegex(t, `.*/cache/.*`)
+	if _, err := CreateArchive(cfg); !errors.Is(err, ErrNoMatch) {
+		t.Errorf("-R inside an excluded directory: %v, want ErrNoMatch", err)
+	}
+}
+
+// TestRegexThatMatchesNothingChangesNothing: on create no file is left, and
+// on append the archive keeps every byte.
+func TestRegexThatMatchesNothingChangesNothing(t *testing.T) {
+	tree := regexTree(t)
+	archive := filepath.Join(t.TempDir(), "r.ect")
+	_, err := CreateArchive(CreateConfig{Archive: archive, Paths: []string{"r"}, BaseDir: tree.Root,
+		Regex: mustRegex(t, `.*\.txt`, `nothing`)})
+	if !errors.Is(err, ErrNoMatch) || !strings.Contains(err.Error(), `"nothing"`) {
+		t.Fatalf("create: %v, want ErrNoMatch naming the expression", err)
+	}
+	if _, err := os.Stat(archive); !os.IsNotExist(err) {
+		t.Errorf("a failed create left %s: %v", archive, err)
+	}
+
+	archive = mkArchive(t, tree, false, "r/top.txt")
+	before := readAll(t, archive)
+	_, err = appendTo(t, archive, tree, false, func(c *AppendConfig) { c.Regex = mustRegex(t, `.*\.md`) }, "r")
+	if !errors.Is(err, ErrNoMatch) {
+		t.Fatalf("append: %v, want ErrNoMatch", err)
+	}
+	if !bytes.Equal(before, readAll(t, archive)) {
+		t.Error("a refused append changed the archive")
+	}
+}
+
+// TestRegexSelectsMembers covers the reads: -R filters what the patterns
+// select, each expression must match, and --exclude-regex on a directory
+// takes its contents.
+func TestRegexSelectsMembers(t *testing.T) {
+	tree := regexTree(t)
+	archive := mkArchive(t, tree, false, "r")
+	list := func(patterns []string, re, ex fsutil.Regexps) ([]string, error) {
+		ms, err := List(ListConfig{Archive: archive, Patterns: patterns, Regex: re, ExcludeRegex: ex})
+		var out []string
+		for _, m := range ms {
+			out = append(out, m.Path)
+		}
+		return out, err
+	}
+
+	got, err := list(nil, mustRegex(t, `.*[0-9]\.txt`), nil)
+	if err != nil || strings.Join(got, ",") != "r/cache/b2.txt,r/deep/dir/f42.txt,r/dir/a1.txt,r/dir/g1.txt" {
+		t.Errorf("-R alone: %q, %v", got, err)
+	}
+	got, err = list([]string{"r/dir"}, mustRegex(t, `.*[0-9]\.txt`), nil)
+	if err != nil || strings.Join(got, ",") != "r/dir/a1.txt,r/dir/g1.txt" {
+		t.Errorf("a pattern and -R: %q, %v", got, err)
+	}
+	// A directory match does not take its contents.
+	got, err = list(nil, mustRegex(t, `r/dir`), nil)
+	if err != nil || strings.Join(got, ",") != "r/dir" {
+		t.Errorf("-R on a directory: %q, %v", got, err)
+	}
+	got, err = list(nil, nil, mustRegex(t, `.*/cache`))
+	if err != nil || strings.Contains(strings.Join(got, ","), "cache") {
+		t.Errorf("--exclude-regex on a directory: %q, %v", got, err)
+	}
+	// Matched by the pattern's selection only: r/top.txt is outside r/dir.
+	if _, err := list([]string{"r/dir"}, mustRegex(t, `r/top\.txt`), nil); !errors.Is(err, ErrNoMatch) {
+		t.Errorf("an -R outside the patterns: %v, want ErrNoMatch", err)
+	}
+
+	dest := t.TempDir()
+	if _, err := Extract(ExtractConfig{Archive: archive, Destination: dest, Regex: mustRegex(t, `.*/g1\.txt`)}); err != nil {
+		t.Fatal(err)
+	}
+	if b := readAll(t, filepath.Join(dest, "r/dir/g1.txt")); string(b) != "g1" {
+		t.Errorf("extracted %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "r/dir/a1.txt")); !os.IsNotExist(err) {
+		t.Errorf("-R extracted a file that it does not match: %v", err)
+	}
+	if _, err := VerifyArchive(VerifyConfig{Archive: archive, Regex: mustRegex(t, `.*\.txt`)}); err != nil {
+		t.Errorf("verify: %v", err)
+	}
+
+	if _, err := DeleteMembers(DeleteConfig{Archive: archive, Regex: mustRegex(t, `r/(dir|deep)/.*`)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(livePaths(t, archive), ","); got != "r,r/cache,r/cache/b2.txt,r/deep,r/dir,r/top.txt" {
+		t.Errorf("after delete -R: %s", got)
 	}
 }

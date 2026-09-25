@@ -61,6 +61,9 @@ individually encrypted.
    does.  The directory is created if it is not there.  Nothing is ever
    written outside that directory, and in particular an archive must not be
    able to write through a symbolic link that points out of it.
+1. Paths can be selected by regular expression, as well as by name and
+   glob: on the paths to add, and on the members to list, extract, verify
+   or delete.  The expression matches the whole stored path.
 1. Frequently used parameters, compression above all, must be settable
    without typing them every time: by environment variable and by a
    configuration file (`.eictarrc`).  The command line wins over the
@@ -102,6 +105,7 @@ gives the full reasoning and the exact formats.
 | Default codec | zstd, alongside xz, gzip, flate, s2 and stored |
 | Concurrency | Member order inside the archive is not significant, so a single writer appends whichever worker finishes first |
 | CLI style | Classical UNIX options, not subcommands.  The operation is chosen by an option letter (`-c`, `-r`, `-t`, `-x`), short options bundle (`-cvf`), and every short option has a long form |
+| Archive name | The conventional extension is `.ect`.  Create adds it to a name that has no extension, and the other operations find that name |
 | License | GPL-3.0.  The name "eictar" is reserved: a modified version that is distributed must use another name (`TRADEMARKS.md`) |
 
 

@@ -84,7 +84,7 @@ func (s *sequence) flipCheck() error {
 		data[off] ^= bit
 		where = append(where, fmt.Sprintf("%d^%#02x", off, bit))
 	}
-	damaged := filepath.Join(s.dir, "damaged.eictar")
+	damaged := filepath.Join(s.dir, "damaged.ect")
 	if err := os.WriteFile(damaged, data, 0o600); err != nil {
 		return err
 	}

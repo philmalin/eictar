@@ -39,9 +39,11 @@ type entry struct {
 // walkOptions controls what the walker includes.
 type walkOptions struct {
 	baseDir       string
-	dereference   bool     // -h: archive what a link points at
-	exclude       []string // --exclude and -X patterns
-	oneFileSystem bool     // --one-file-system
+	dereference   bool           // -h: archive what a link points at
+	exclude       []string       // --exclude and -X patterns
+	regex         fsutil.Regexps // -R: store only the paths that match
+	excludeRegex  fsutil.Regexps // --exclude-regex
+	oneFileSystem bool           // --one-file-system
 }
 
 // walker turns the requested paths into entries.
@@ -59,10 +61,23 @@ type walker struct {
 	entered map[string]bool
 	// rootDev is the device of the path being walked, for --one-file-system.
 	rootDev uint64
+	// regexHit records which -R expressions matched a path.
+	regexHit []bool
 }
 
 func newWalker(opt walkOptions, visit func(entry) error) *walker {
-	return &walker{opt: opt, visit: visit, entered: map[string]bool{}}
+	return &walker{opt: opt, visit: visit, entered: map[string]bool{}, regexHit: make([]bool, len(opt.regex))}
+}
+
+// unmatched reports the first -R expression that matched no path: a mistyped
+// expression must not give a quietly empty archive (doc/design.md 10.11).
+func (w *walker) unmatched() error {
+	for i, hit := range w.regexHit {
+		if !hit {
+			return fmt.Errorf("-R %q %w", w.opt.regex[i].Expr, ErrNoMatch)
+		}
+	}
+	return nil
 }
 
 // Walk visits one requested path and everything beneath it.
@@ -89,7 +104,7 @@ func (w *walker) walk(src, rel string) error {
 	}
 	// An excluded directory is not entered: that is what excluding a
 	// directory means, and it is how tar behaves.
-	if stored != fsutil.RootPath && fsutil.MatchAny(w.opt.exclude, stored) {
+	if stored != fsutil.RootPath && (fsutil.MatchAny(w.opt.exclude, stored) || w.opt.excludeRegex.MatchAny(stored)) {
 		return nil
 	}
 
@@ -153,10 +168,22 @@ func (w *walker) walk(src, rel string) error {
 }
 
 // emit hands an entry to the visitor, unless it names the archived tree's
-// root, which has no name of its own to store.
+// root, which has no name of its own to store, or -R leaves it out. A
+// directory that -R leaves out is still entered: a match can be deeper down.
 func (w *walker) emit(e entry) error {
 	if e.Stored == fsutil.RootPath {
 		return nil
+	}
+	if len(w.opt.regex) > 0 {
+		hit := false
+		for i, re := range w.opt.regex {
+			if re.Match(e.Stored) {
+				w.regexHit[i], hit = true, true
+			}
+		}
+		if !hit {
+			return nil
+		}
 	}
 	return w.visit(e)
 }

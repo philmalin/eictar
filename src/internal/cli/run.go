@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -98,11 +101,56 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 		return exitCodeFor(err)
 	}
 
+	if name := archiveName(opts.Op, opts.Archive); name != opts.Archive {
+		if opts.Op == OpCreate && !opts.Quiet {
+			fmt.Fprintf(stderr, "eictar: creating %s\n", name)
+		}
+		opts.Archive = name
+	}
+
 	if err := dispatch(opts, stdout, stderr); err != nil {
 		fmt.Fprintf(stderr, "eictar: %v\n", err)
 		return exitCodeFor(err)
 	}
 	return ExitOK
+}
+
+// ArchiveExt is the conventional extension of an archive (doc/design.md
+// 10.12). The program finds an archive by its magic, not by its name.
+const ArchiveExt = ".ect"
+
+// archiveName applies the extension rule of doc/design.md 10.12. Create adds
+// .ect to a name with no extension. Every other operation uses the name with
+// .ect when no file has the name as typed and that one exists, so that it
+// finds what create made. A file with the name as typed always wins. A
+// directory does not: `eictar -cf backup backup` makes backup.ect beside the
+// directory backup, and -tf backup must find it.
+func archiveName(op Operation, name string) string {
+	if name == "" || hasExtension(name) || strings.HasSuffix(name, "/") ||
+		strings.HasSuffix(name, string(filepath.Separator)) {
+		return name
+	}
+	if op == OpCreate {
+		return name + ArchiveExt
+	}
+	if !op.NeedsArchive() {
+		return name
+	}
+	if fi, err := os.Stat(name); err == nil && !fi.IsDir() || err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return name
+	}
+	if _, err := os.Stat(name + ArchiveExt); err == nil {
+		return name + ArchiveExt
+	}
+	return name
+}
+
+// hasExtension reports whether the last element of a path, without its
+// leading dots, has a dot: "a.tar" and "home.2026-09" have one, "backup" and
+// ".backup" do not.
+func hasExtension(name string) bool {
+	base := strings.TrimLeft(filepath.Base(name), ".")
+	return strings.Contains(base, ".")
 }
 
 // dispatch runs the selected operation.

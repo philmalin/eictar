@@ -54,6 +54,7 @@ var configKeys = map[string][]Operation{
 
 	"exclude":         append([]Operation{OpList, OpExtract}, adding...),
 	"exclude-from":    append([]Operation{OpList, OpExtract}, adding...),
+	"exclude-regex":   append([]Operation{OpList, OpExtract}, adding...),
 	"dereference":     adding,
 	"one-file-system": adding,
 
@@ -94,6 +95,7 @@ var refusedKeys = map[string]string{
 	"files-from":          "the paths are given on the command line only",
 	"to-stdout":           "where extracted content goes is given on the command line only",
 	"recompress":          "--recompress is part of the operation, given on the command line only",
+	"regex":               "-R selects what the operation works on, given on the command line only",
 	"config":              "a configuration cannot name another one",
 	"no-config":           "--no-config is given on the command line only",
 	"show-config":         "--show-config is given on the command line only",
@@ -308,7 +310,7 @@ func (l *layers) add(key, value, where string, fromFile bool) error {
 	if err := checkKey(key, where); err != nil {
 		return err
 	}
-	if key == "exclude" {
+	if key == "exclude" || key == "exclude-regex" {
 		l.settings[key] = append(l.settings[key], setting{key, value, where})
 		return nil
 	}

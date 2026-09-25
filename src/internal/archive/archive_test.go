@@ -63,7 +63,7 @@ func TestRoundTrip(t *testing.T) {
 		for _, chunk := range []int{512, 4096, 1 << 20} {
 			t.Run(fmt.Sprintf("%s/chunk=%d", codecName, chunk), func(t *testing.T) {
 				tree := buildTree(t, chunk)
-				archivePath := filepath.Join(t.TempDir(), "a.eictar")
+				archivePath := filepath.Join(t.TempDir(), "a.ect")
 
 				stats, err := CreateArchive(CreateConfig{
 					Archive: archivePath,
@@ -99,7 +99,7 @@ func TestChunkingIsRecorded(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.File("big.bin", 0o644, bytes.Repeat([]byte("x"), chunk*3+1))
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"big.bin"},
@@ -149,7 +149,7 @@ func TestIncompressibleChunksStorePlaintext(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.File("random.bin", 0o644, random)
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"random.bin"},
@@ -186,7 +186,7 @@ func TestEmptyArchive(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Dir("empty", 0o755)
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"empty"},
@@ -216,7 +216,7 @@ func TestDamageIsDetected(t *testing.T) {
 		tree.File("a.txt", 0o644, []byte(strings.Repeat("data ", 1000)))
 		tree.File("b.txt", 0o644, []byte("second member"))
 
-		archivePath := filepath.Join(t.TempDir(), "a.eictar")
+		archivePath := filepath.Join(t.TempDir(), "a.ect")
 		if _, err := CreateArchive(CreateConfig{
 			Archive: archivePath,
 			Paths:   []string{"a.txt", "b.txt"},
@@ -304,7 +304,7 @@ func TestExtractRefusesUnsafeMemberPath(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.File("a.txt", 0o644, []byte("content"))
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"a.txt"},
@@ -333,7 +333,7 @@ func TestOverwritePolicies(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.File("a.txt", 0o644, []byte("from the archive"))
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"a.txt"},
@@ -381,7 +381,7 @@ func TestPatternsSelectMembers(t *testing.T) {
 		File("tree/b.go", 0o644, []byte("b")).
 		File("tree/sub/c.txt", 0o644, []byte("c"))
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"tree"},
@@ -433,7 +433,7 @@ func TestSymlinkRoundTrip(t *testing.T) {
 		Symlink("tree/to-dir", "sub").
 		Symlink("tree/escaping", "../../outside.txt")
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	stats, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"tree"},
@@ -510,7 +510,7 @@ func TestExtractRefusesWritingThroughSymlink(t *testing.T) {
 	staging := testutil.NewTree(t)
 	staging.Dir("payload", 0o755).Text("payload/pwned.txt", 0o644, "owned")
 
-	archivePath := filepath.Join(t.TempDir(), "evil.eictar")
+	archivePath := filepath.Join(t.TempDir(), "evil.ect")
 	w, err := Create(archivePath, Options{Codec: "none"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -568,7 +568,7 @@ func TestDereferenceFollowsLinks(t *testing.T) {
 		Symlink("tree/link-to-file", "real.txt").
 		Symlink("tree/link-to-dir", "real-dir")
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive:     archivePath,
 		Paths:       []string{"tree"},
@@ -611,7 +611,7 @@ func TestDereferenceDetectsLoops(t *testing.T) {
 	tree.Symlink("tree/sub/loop", "..")
 
 	_, err := CreateArchive(CreateConfig{
-		Archive:     filepath.Join(t.TempDir(), "a.eictar"),
+		Archive:     filepath.Join(t.TempDir(), "a.ect"),
 		Paths:       []string{"tree"},
 		BaseDir:     tree.Root,
 		Options:     Options{Codec: "none"},
@@ -630,7 +630,7 @@ func TestDanglingLinkUnderDereferenceIsAnError(t *testing.T) {
 	tree.Symlink("dangling", "nowhere.txt")
 
 	_, err := CreateArchive(CreateConfig{
-		Archive:     filepath.Join(t.TempDir(), "a.eictar"),
+		Archive:     filepath.Join(t.TempDir(), "a.ect"),
 		Paths:       []string{"dangling"},
 		BaseDir:     tree.Root,
 		Options:     Options{Codec: "none"},
@@ -647,7 +647,7 @@ func TestSymlinkOverwrite(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Text("real.txt", 0o644, "content").Symlink("link", "real.txt")
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"real.txt", "link"},
@@ -700,7 +700,7 @@ func TestSymlinkChtimesDoesNotRetimeTarget(t *testing.T) {
 	realTime := time.Unix(1_000_000_000, 0)
 	tree.SetTimes("real.txt", realTime, realTime)
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"real.txt", "link"},
@@ -733,7 +733,7 @@ func TestSocketIsSkippedWithNotice(t *testing.T) {
 	tree.Text("real.txt", 0o644, "x").Socket("sock")
 
 	rep := &recordingReporter{}
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	stats, err := CreateArchive(CreateConfig{
 		Archive:  archivePath,
 		Paths:    []string{"real.txt", "sock"},
@@ -781,7 +781,7 @@ func TestKeepGoingSkipsBadMembers(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Text("good.txt", 0o644, "fine").Unreadable("locked.txt")
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	stats, err := CreateArchive(CreateConfig{
 		Archive:   archivePath,
 		Paths:     []string{"good.txt", "locked.txt"},
@@ -936,7 +936,7 @@ func TestMixedChunkCompressibility(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.File("mixed.bin", 0o644, want)
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"mixed.bin"},
@@ -990,7 +990,7 @@ func TestArchiveIsNotArchivedIntoItself(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Text("real.txt", 0o644, "content")
 
-	archivePath := filepath.Join(tree.Root, "inside.eictar")
+	archivePath := filepath.Join(tree.Root, "inside.ect")
 	stats, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"."},
@@ -1006,7 +1006,7 @@ func TestArchiveIsNotArchivedIntoItself(t *testing.T) {
 		t.Fatalf("List: %v", err)
 	}
 	for _, m := range members {
-		if strings.Contains(m.Path, "inside.eictar") {
+		if strings.Contains(m.Path, "inside.ect") {
 			t.Errorf("the archive archived itself as %q", m.Path)
 		}
 	}
@@ -1021,7 +1021,7 @@ func TestSkippedMembersAreNotCountedAsExtracted(t *testing.T) {
 	tree.Text("a.txt", 0o644, "from the archive").
 		Text("b.txt", 0o644, "also from the archive")
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"a.txt", "b.txt"},
@@ -1091,7 +1091,7 @@ func TestConcurrencyDeterminism(t *testing.T) {
 	extractWith := func(t *testing.T, workers int) string {
 		t.Helper()
 
-		archivePath := filepath.Join(t.TempDir(), fmt.Sprintf("j%d.eictar", workers))
+		archivePath := filepath.Join(t.TempDir(), fmt.Sprintf("j%d.ect", workers))
 		if _, err := CreateArchive(CreateConfig{
 			Archive: archivePath,
 			Paths:   []string{"tree"},
@@ -1135,7 +1135,7 @@ func TestIndexIsStableAcrossWorkerCounts(t *testing.T) {
 	tree := buildVariedTree(t, chunk)
 
 	describe := func(workers int) []string {
-		archivePath := filepath.Join(t.TempDir(), "a.eictar")
+		archivePath := filepath.Join(t.TempDir(), "a.ect")
 		if _, err := CreateArchive(CreateConfig{
 			Archive: archivePath,
 			Paths:   []string{"tree"},
@@ -1180,7 +1180,7 @@ func TestSpillThresholdIsHonoured(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.File("big.bin", 0o644, big).Text("small.txt", 0o644, "small")
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive:        archivePath,
 		Paths:          []string{"big.bin", "small.txt"},
@@ -1205,7 +1205,7 @@ func TestSpillThresholdIsHonoured(t *testing.T) {
 func TestTinyMemoryLimit(t *testing.T) {
 	tree := buildVariedTree(t, 4096)
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive:     archivePath,
 		Paths:       []string{"tree"},
@@ -1236,7 +1236,7 @@ func TestManyMembersAcrossWorkers(t *testing.T) {
 		tree.Text(fmt.Sprintf("many/f%03d.txt", i), 0o644, strings.Repeat("x", i))
 	}
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	stats, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"many"},
@@ -1271,7 +1271,7 @@ func TestManyMembersAcrossWorkers(t *testing.T) {
 func craftArchive(t *testing.T, codecName string, payload []byte, mutate func(m *format.Member)) (string, error) {
 	t.Helper()
 
-	archivePath := filepath.Join(t.TempDir(), "crafted.eictar")
+	archivePath := filepath.Join(t.TempDir(), "crafted.ect")
 	w, err := Create(archivePath, Options{Codec: codecName})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -1383,7 +1383,7 @@ func TestCraftedOffsetIsRefused(t *testing.T) {
 // TestRegularFileWithoutDigestIsRefused: the digest is the only thing that
 // catches a member pointed at the wrong bytes, so it is mandatory for content.
 func TestRegularFileWithoutDigestIsRefused(t *testing.T) {
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	w, err := Create(archivePath, Options{Codec: "none"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -1414,7 +1414,7 @@ func TestFailedMemberLeavesExistingFileAlone(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Text("important.txt", 0o644, "the new version")
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"important.txt"},
@@ -1470,7 +1470,7 @@ func TestPrivateDirectoryIsNeverWorldTraversable(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Dir("secret", 0o700).Text("secret/key.txt", 0o600, "sensitive")
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   []string{"secret"},
@@ -1548,7 +1548,7 @@ func passphrase(s string) PassphraseFunc {
 func encryptedArchive(t *testing.T, tree *testutil.Tree, paths []string, codecName string, encryptIndex bool) string {
 	t.Helper()
 
-	archivePath := filepath.Join(t.TempDir(), "enc.eictar")
+	archivePath := filepath.Join(t.TempDir(), "enc.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath,
 		Paths:   paths,
@@ -1735,7 +1735,7 @@ func TestEncryptedTamperIsCaught(t *testing.T) {
 		{"in the tag of the first chunk", blobStart + int64(m.Chunks[0]) - 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			damaged := filepath.Join(t.TempDir(), "damaged.eictar")
+			damaged := filepath.Join(t.TempDir(), "damaged.ect")
 			copyFile(t, archivePath, damaged)
 			flipByteAt(t, damaged, tc.at)
 
@@ -1796,7 +1796,7 @@ func TestPlaintextMetadataTamperIsNotDetected(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Text("notes.txt", 0o644, "harmless content")
 
-	archivePath := filepath.Join(t.TempDir(), "plain.eictar")
+	archivePath := filepath.Join(t.TempDir(), "plain.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath, Paths: []string{"notes.txt"},
 		BaseDir: tree.Root, Options: Options{Codec: "none"},
@@ -1933,7 +1933,7 @@ func TestWriterRefusesKeysWithoutTheirArchiveID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = Create(filepath.Join(t.TempDir(), "a.eictar"), Options{
+	_, err = Create(filepath.Join(t.TempDir(), "a.ect"), Options{
 		Codec: "none", Keys: keys, Salt: salt, WrappedKey: wrapped,
 		KDFParams: testKDF,
 		// no ArchiveUUID

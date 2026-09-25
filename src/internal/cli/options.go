@@ -12,6 +12,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/archive"
 	"github.com/philmalin/eictar/src/internal/crypt"
 	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/fsutil"
 )
 
 // Operation is the single action a run performs. Exactly one is selected per
@@ -133,6 +134,12 @@ type Options struct {
 	FilesFrom   string
 	Exclude     []string
 	ExcludeFrom string
+	// Regex and ExcludeRegex are -R and --exclude-regex (doc/design.md
+	// 10.11). validate compiles them into regex and excludeRegex.
+	Regex        []string
+	ExcludeRegex []string
+	regex        fsutil.Regexps
+	excludeRegex fsutil.Regexps
 
 	Dereference   bool
 	OneFileSystem bool
@@ -249,6 +256,8 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs.StringVarP(&o.FilesFrom, "files-from", "T", "", "read paths from this file, - for stdin")
 	fs.StringArrayVar(&o.Exclude, "exclude", nil, "exclude paths matching this glob")
 	fs.StringVarP(&o.ExcludeFrom, "exclude-from", "X", "", "read exclude globs from this file")
+	fs.StringArrayVarP(&o.Regex, "regex", "R", nil, "keep only paths that this regular expression matches in full")
+	fs.StringArrayVar(&o.ExcludeRegex, "exclude-regex", nil, "exclude paths that this regular expression matches in full")
 
 	fs.BoolVarP(&o.Dereference, "dereference", "h", false, "follow symlinks instead of storing them")
 	fs.BoolVar(&o.OneFileSystem, "one-file-system", false, "do not cross mount points")
@@ -611,11 +620,20 @@ func (o *Options) validate() error {
 		{"no-acls", append([]Operation{OpExtract}, adding...)},
 		{"exclude", append([]Operation{OpList, OpExtract}, adding...)},
 		{"exclude-from", append([]Operation{OpList, OpExtract}, adding...)},
+		{"exclude-regex", append([]Operation{OpList, OpExtract}, adding...)},
+		{"regex", append([]Operation{OpList, OpExtract, OpVerify, OpDelete}, adding...)},
 	}
 	for _, sc := range scoped {
 		if o.explicit[sc.name] && !containsOp(sc.ops, o.Op) {
 			return &UsageError{fmt.Errorf("--%s does not apply to %v", sc.name, o.Op)}
 		}
+	}
+	var err error
+	if o.regex, err = fsutil.CompileRegexps(o.Regex); err != nil {
+		return &UsageError{fmt.Errorf("-R: %w", err)}
+	}
+	if o.excludeRegex, err = fsutil.CompileRegexps(o.ExcludeRegex); err != nil {
+		return &UsageError{fmt.Errorf("--exclude-regex: %w", err)}
 	}
 
 	// chown and mknod need root. Refusing up front says so once; letting
@@ -676,8 +694,8 @@ func (o *Options) validate() error {
 			return &UsageError{fmt.Errorf("%v needs at least one path, or -T FILE", o.Op)}
 		}
 	case OpDelete:
-		if len(o.Args) == 0 {
-			return &UsageError{fmt.Errorf("--delete needs at least one pattern")}
+		if len(o.Args) == 0 && len(o.Regex) == 0 {
+			return &UsageError{fmt.Errorf("--delete needs at least one pattern, or -R")}
 		}
 	case OpCompact, OpChangePassphrase, OpInfo, OpRepair, OpListCodecs:
 		if len(o.Args) > 0 {

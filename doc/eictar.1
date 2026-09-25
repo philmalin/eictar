@@ -132,6 +132,18 @@ The archive. It is necessary for every operation except
 .B \-\-list\-codecs
 and
 .BR \-\-show\-config .
+The conventional extension is
+.BR .ect .
+.B \-c
+adds it to a name with no extension, and says so: \fB\-cf backup\fP makes
+.BR backup.ect .
+The other operations then find
+.B backup.ect
+by the name
+.BR backup .
+A name with an extension, such as
+.BR backup.tar ,
+stays as it is.
 .TP
 .BI \-d " dir" "\fR, \fP\-\-destination " dir
 Extract into
@@ -161,6 +173,28 @@ An excluded directory is not entered. It can be given more than once.
 .BI \-X " file" "\fR, \fP\-\-exclude\-from " file
 Read one glob from each line of
 .IR file .
+.TP
+.BI \-R " re" "\fR, \fP\-\-regex " re
+Keep only the paths that the regular expression
+.I re
+matches in full (see PATTERNS). With
+.BR \-c ,
+.B \-r
+and
+.BR \-u ,
+it filters what the walk finds. With
+.BR \-t ,
+.BR \-x ,
+.B \-\-verify
+and
+.BR \-\-delete ,
+it filters the members. It can be given more than once.
+.TP
+.BI \-\-exclude\-regex " re"
+Leave out the paths that
+.I re
+matches in full. An excluded directory is not entered, and it takes its
+contents. It can be given more than once.
 .TP
 .BR \-h ", " \-\-dereference
 Store what a symbolic link points to, not the link.
@@ -399,6 +433,30 @@ takes
 .B a/cache
 and everything under it. Each pattern must match at least one member.
 .PP
+.B \-R
+and
+.B \-\-exclude\-regex
+take regular expressions in the RE2 syntax of Go. An expression must match
+the whole stored path: the path in the archive, relative, with
+.B /
+between the names. Thus
+.B \(aq.*/dir/[a\-f][0\-9]+\e.txt\(aq
+matches
+.B x/dir/a1.txt
+but not
+.BR x/dir/a1.txt.bak .
+In an expression,
+.B .
+is any character: write
+.B \e.
+for a dot, and put the expression in single quotes for the shell. Unlike a
+pattern, an expression that matches a directory does not take its contents:
+write
+.B \(aqbuild(/.*)?\(aq
+for that. Each
+.B \-R
+must match at least one path or member.
+.PP
 Put paths and patterns that start with
 .B \-
 after
@@ -595,7 +653,7 @@ with strong compression:
 .PP
 .nf
 .RS
-eictar \-cef home.eictar \-C ~ \-\-compress zstd:level=19 Documents
+eictar \-cef home.ect \-C ~ \-\-compress zstd:level=19 Documents
 .RE
 .fi
 .PP
@@ -603,8 +661,8 @@ Add what changed since then, and check the result:
 .PP
 .nf
 .RS
-eictar \-uf home.eictar \-C ~ \-\-update\-mode different Documents
-eictar \-\-verify \-f home.eictar
+eictar \-uf home.ect \-C ~ \-\-update\-mode different Documents
+eictar \-\-verify \-f home.ect
 .RE
 .fi
 .PP
@@ -612,7 +670,7 @@ Extract one directory into another place:
 .PP
 .nf
 .RS
-eictar \-xf home.eictar \-d /tmp/restore Documents/letters
+eictar \-xf home.ect \-d /tmp/restore Documents/letters
 .RE
 .fi
 .PP
@@ -620,7 +678,7 @@ Remove old versions, and encode everything again with xz:
 .PP
 .nf
 .RS
-eictar \-\-compact \-f home.eictar \-\-recompress xz:preset=9
+eictar \-\-compact \-f home.ect \-\-recompress xz:preset=9
 .RE
 .fi
 .PP
@@ -628,7 +686,7 @@ Change the passphrase, and make the key derivation stronger:
 .PP
 .nf
 .RS
-eictar \-\-change\-passphrase \-f home.eictar \-\-kdf\-memory 1048576
+eictar \-\-change\-passphrase \-f home.ect \-\-kdf\-memory 1048576
 .RE
 .fi
 .SH FILES

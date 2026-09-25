@@ -43,7 +43,7 @@ func TestLifecycle(t *testing.T) {
 	for _, codecName := range []string{"none", "zstd", "zstd:level=19"} {
 		t.Run(codecName, func(t *testing.T) {
 			tree := fixture(t)
-			archive := filepath.Join(t.TempDir(), "backup.eictar")
+			archive := filepath.Join(t.TempDir(), "backup.ect")
 
 			create := testutil.Run(t, tree.Root, "-cvf", archive, "--compress", codecName, "work")
 			if create.ExitCode != exitOK {
@@ -86,7 +86,7 @@ func TestLifecycle(t *testing.T) {
 // not exist.
 func TestDestinationIsCreated(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "work"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d (stderr: %s)", res.ExitCode, res.Stderr)
@@ -107,7 +107,7 @@ func TestDestinationIsCreated(t *testing.T) {
 // destination rather than over the system.
 func TestAbsolutePathsAreStripped(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	absPath := filepath.Join(tree.Root, "work", "README.md")
 
 	create := testutil.Run(t, tree.Root, "-cf", archive, absPath)
@@ -145,7 +145,7 @@ func TestAbsolutePathsAreStripped(t *testing.T) {
 
 func TestSelectiveExtract(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "work"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d", res.ExitCode)
@@ -167,7 +167,7 @@ func TestSelectiveExtract(t *testing.T) {
 
 func TestToStdout(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "work"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d", res.ExitCode)
@@ -188,7 +188,7 @@ func TestToStdout(t *testing.T) {
 
 func TestKeepExisting(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "work"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d", res.ExitCode)
@@ -220,7 +220,7 @@ func TestKeepExisting(t *testing.T) {
 // is what lets a backup script tell a broken archive from a full disk.
 func TestDamagedArchiveExitsCorrupt(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "work"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d", res.ExitCode)
@@ -248,11 +248,11 @@ func TestDamagedArchiveExitsCorrupt(t *testing.T) {
 }
 
 func TestMissingArchive(t *testing.T) {
-	res := testutil.Run(t, t.TempDir(), "-tf", "nonesuch.eictar")
+	res := testutil.Run(t, t.TempDir(), "-tf", "nonesuch.ect")
 	if res.ExitCode == exitOK {
 		t.Error("listing a missing archive succeeded")
 	}
-	if !strings.Contains(res.Stderr, "nonesuch.eictar") {
+	if !strings.Contains(res.Stderr, "nonesuch.ect") {
 		t.Errorf("stderr = %q, want it to name the file", res.Stderr)
 	}
 }
@@ -271,7 +271,7 @@ func TestListCodecs(t *testing.T) {
 
 func TestUnknownCodecIsRefused(t *testing.T) {
 	tree := fixture(t)
-	res := testutil.Run(t, tree.Root, "-cf", filepath.Join(t.TempDir(), "a.eictar"),
+	res := testutil.Run(t, tree.Root, "-cf", filepath.Join(t.TempDir(), "a.ect"),
 		"--compress", "brotli", "work")
 	if res.ExitCode == exitOK {
 		t.Fatal("an unknown codec was accepted")
@@ -289,7 +289,7 @@ func TestKeepGoingReportsPartial(t *testing.T) {
 	// partial run rather than a clean one.
 	tree.Text("good.txt", 0o644, "content").Unreadable("locked.txt")
 
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	res := testutil.Run(t, tree.Root, "-cf", archive, "--keep-going", "good.txt", "locked.txt")
 	if res.ExitCode != exitPartial {
 		t.Errorf("exit %d, want %d (stderr: %s)", res.ExitCode, exitPartial, res.Stderr)
@@ -313,7 +313,7 @@ func TestSymlinkLifecycle(t *testing.T) {
 		Symlink("work/dangling", "gone.txt").
 		Symlink("work/dir-link", "sub")
 
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "work"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d (stderr: %s)", res.ExitCode, res.Stderr)
 	}
@@ -346,7 +346,7 @@ func TestDereferenceOption(t *testing.T) {
 		Text("work/real.txt", 0o644, "content").
 		Symlink("work/link", "real.txt")
 
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	if res := testutil.Run(t, tree.Root, "-chf", archive, "work"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d (stderr: %s)", res.ExitCode, res.Stderr)
 	}
@@ -381,7 +381,7 @@ func TestJSONListingIsValidJSON(t *testing.T) {
 		Text("caf\xe9.txt", 0o644, "latin-1 name").
 		Symlink("link", "plain.txt")
 
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "."); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d (stderr: %s)", res.ExitCode, res.Stderr)
 	}
@@ -438,7 +438,7 @@ func TestArchiveDoesNotSwallowItself(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Dir("work", 0o755).Text("work/a.txt", 0o644, "content")
 
-	res := testutil.Run(t, tree.Root, "-cf", "work/self.eictar", "work")
+	res := testutil.Run(t, tree.Root, "-cf", "work/self.ect", "work")
 	if res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d (stderr: %s)", res.ExitCode, res.Stderr)
 	}
@@ -446,8 +446,8 @@ func TestArchiveDoesNotSwallowItself(t *testing.T) {
 		t.Errorf("stderr = %q, want a notice that the archive was skipped", res.Stderr)
 	}
 
-	list := testutil.Run(t, tree.Root, "-tf", "work/self.eictar")
-	if strings.Contains(list.Stdout, "self.eictar") {
+	list := testutil.Run(t, tree.Root, "-tf", "work/self.ect")
+	if strings.Contains(list.Stdout, "self.ect") {
 		t.Errorf("the archive archived itself:\n%s", list.Stdout)
 	}
 }
@@ -457,7 +457,7 @@ func TestArchiveDoesNotSwallowItself(t *testing.T) {
 // not filled with carriage returns.
 func TestProgressNeedsATerminal(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	for _, args := range [][]string{
 		{"-cf", archive, "--progress", "work"},
 		{"-xf", archive, "--progress", "-d", t.TempDir()},
@@ -479,7 +479,7 @@ func TestWorkerCountsAgree(t *testing.T) {
 
 	var extracted []string
 	for _, workers := range []string{"1", "2", "8", "32"} {
-		archive := filepath.Join(dir, "j"+workers+".eictar")
+		archive := filepath.Join(dir, "j"+workers+".ect")
 		create := testutil.Run(t, tree.Root, "-cf", archive, "-j", workers,
 			"--compress", "zstd:level=9", "work")
 		if create.ExitCode != exitOK {
@@ -497,7 +497,7 @@ func TestWorkerCountsAgree(t *testing.T) {
 		// walk order, so the worker count cannot reorder it.
 		list := testutil.Run(t, tree.Root, "-tf", archive)
 		if workers != "1" {
-			first := testutil.Run(t, tree.Root, "-tf", filepath.Join(dir, "j1.eictar"))
+			first := testutil.Run(t, tree.Root, "-tf", filepath.Join(dir, "j1.ect"))
 			if list.Stdout != first.Stdout {
 				t.Errorf("-j %s listed a different order:\n%s\nvs\n%s",
 					workers, list.Stdout, first.Stdout)
@@ -518,7 +518,7 @@ func TestWorkerCountsAgree(t *testing.T) {
 // must be identical anyway.
 func TestMemoryLimitAndSpill(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 
 	create := testutil.Run(t, tree.Root, "-cf", archive,
 		"-j", "8", "--chunk-size", "64KiB",
@@ -556,7 +556,7 @@ func TestLargeMemberSpansManyChunks(t *testing.T) {
 	// hundreds of chunks at the size below.
 	tree.Text("big.txt", 0o644, strings.Repeat("the quick brown fox. ", 500_000))
 
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	if res := testutil.Run(t, tree.Root, "-cf", archive,
 		"--chunk-size", "64KiB", "-j", "4", "big.txt"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d (stderr: %s)", res.ExitCode, res.Stderr)
@@ -595,7 +595,7 @@ func TestEncryptedLifecycle(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tree := fixture(t)
 			pass := passFile(t, "correct horse battery staple")
-			archive := filepath.Join(t.TempDir(), "enc.eictar")
+			archive := filepath.Join(t.TempDir(), "enc.ect")
 
 			args := append([]string{"-cf", archive, "-e",
 				"--passphrase-file", pass, "--kdf-memory", "8192", "--kdf-time", "1",
@@ -632,7 +632,7 @@ func TestWrongPassphraseExitsThree(t *testing.T) {
 	tree := fixture(t)
 	right := passFile(t, "right one")
 	wrong := passFile(t, "wrong one")
-	archive := filepath.Join(t.TempDir(), "enc.eictar")
+	archive := filepath.Join(t.TempDir(), "enc.ect")
 
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "-e",
 		"--passphrase-file", right, "--kdf-memory", "8192", "--kdf-time", "1",
@@ -654,7 +654,7 @@ func TestWrongPassphraseExitsThree(t *testing.T) {
 func TestEncryptedArchiveWithoutPassphraseFails(t *testing.T) {
 	tree := fixture(t)
 	pass := passFile(t, "a passphrase")
-	archive := filepath.Join(t.TempDir(), "enc.eictar")
+	archive := filepath.Join(t.TempDir(), "enc.ect")
 
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "-e",
 		"--passphrase-file", pass, "--kdf-memory", "8192", "--kdf-time", "1",
@@ -677,7 +677,7 @@ func TestEncryptedArchiveWithoutPassphraseFails(t *testing.T) {
 // passphrase, whatever the passphrase options say.
 func TestPlaintextArchiveNeverPrompts(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "plain.eictar")
+	archive := filepath.Join(t.TempDir(), "plain.ect")
 
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "work"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d", res.ExitCode)
@@ -692,7 +692,7 @@ func TestPlaintextArchiveNeverPrompts(t *testing.T) {
 // TestPassphraseEnv covers the scripted route, and the warning it carries.
 func TestPassphraseEnv(t *testing.T) {
 	tree := fixture(t)
-	archive := filepath.Join(t.TempDir(), "enc.eictar")
+	archive := filepath.Join(t.TempDir(), "enc.ect")
 
 	res := testutil.RunEnv(t, tree.Root, []string{"EICTAR_TEST_PASS=from the environment"},
 		"-cf", archive, "-e", "--passphrase-env", "EICTAR_TEST_PASS",
@@ -720,7 +720,7 @@ func TestPassphraseEnv(t *testing.T) {
 func TestPlaintextArchiveWithPassphraseIsRefused(t *testing.T) {
 	tree := fixture(t)
 	pass := passFile(t, "whatever")
-	archive := filepath.Join(t.TempDir(), "plain.eictar")
+	archive := filepath.Join(t.TempDir(), "plain.ect")
 
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "work"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d", res.ExitCode)
@@ -786,7 +786,7 @@ func metadataFixture(t *testing.T) *testutil.Tree {
 // with -p for the special bits, and the socket is skipped with a notice.
 func TestMetadataLifecycle(t *testing.T) {
 	tree := metadataFixture(t)
-	archive := filepath.Join(t.TempDir(), "meta.eictar")
+	archive := filepath.Join(t.TempDir(), "meta.ect")
 
 	create := testutil.Run(t, tree.Root, "-cf", archive, "work")
 	if create.ExitCode != exitOK {
@@ -819,7 +819,7 @@ func TestMetadataLifecycle(t *testing.T) {
 func TestSocketIsSkippedThroughTheBinary(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Dir("work", 0o755).Text("work/f.txt", 0o644, "x").Socket("work/sock")
-	archive := filepath.Join(t.TempDir(), "s.eictar")
+	archive := filepath.Join(t.TempDir(), "s.ect")
 
 	create := testutil.Run(t, tree.Root, "-cf", archive, "work")
 	if create.ExitCode != exitOK || !strings.Contains(create.Stderr, "socket ignored") {
@@ -834,7 +834,7 @@ func TestSocketIsSkippedThroughTheBinary(t *testing.T) {
 // TestLongListingShowsMetadata: owner, codec, special bits and link targets.
 func TestLongListingShowsMetadata(t *testing.T) {
 	tree := metadataFixture(t)
-	archive := filepath.Join(t.TempDir(), "meta.eictar")
+	archive := filepath.Join(t.TempDir(), "meta.ect")
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "work"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d", res.ExitCode)
 	}
@@ -870,7 +870,7 @@ func TestExcludeThroughTheBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "--exclude", "*.key", "-X", excludes, "work"); res.ExitCode != exitOK {
 		t.Fatalf("create: exit %d (stderr: %s)", res.ExitCode, res.Stderr)
 	}
@@ -889,7 +889,7 @@ func TestRootOnlyOptionsRefusedForUsers(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("needs an ordinary user; this run is root")
 	}
-	res := testutil.Run(t, t.TempDir(), "-xf", "whatever.eictar", "--preserve-owner")
+	res := testutil.Run(t, t.TempDir(), "-xf", "whatever.ect", "--preserve-owner")
 	if res.ExitCode != exitUsage {
 		t.Errorf("exit %d, want %d (stderr: %s)", res.ExitCode, exitUsage, res.Stderr)
 	}
@@ -907,7 +907,7 @@ func TestListingLevels(t *testing.T) {
 	tree.Dir("d", 0o755).
 		Text("d/text.txt", 0o644, strings.Repeat("hello world ", 20000)).
 		Symlink("d/link", "text.txt")
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	if res := testutil.Run(t, tree.Root, "-cf", archive, "--compress", "zstd:level=3", "d"); res.ExitCode != exitOK {
 		t.Fatalf("create: %s", res.Stderr)
 	}
@@ -972,7 +972,7 @@ func TestListingLevels(t *testing.T) {
 func TestChangePassphrase(t *testing.T) {
 	tree := fixture(t)
 	oldPass := passFile(t, "the old one")
-	archive := filepath.Join(t.TempDir(), "enc.eictar")
+	archive := filepath.Join(t.TempDir(), "enc.ect")
 	runOK(t, tree.Root, "-cf", archive, "-e", "--encrypt-index", "--passphrase-file", oldPass,
 		"--kdf-memory", "8192", "--kdf-time", "1", "work")
 
@@ -1000,10 +1000,74 @@ func TestChangePassphrase(t *testing.T) {
 	testutil.CompareTrees(t, filepath.Join(tree.Root, "work"), filepath.Join(dest, "work"),
 		testutil.CompareOptions{Mode: true, MTime: true})
 
-	plain := filepath.Join(t.TempDir(), "plain.eictar")
+	plain := filepath.Join(t.TempDir(), "plain.ect")
 	runOK(t, tree.Root, "-cf", plain, "work")
 	res = testutil.Run(t, tree.Root, "--change-passphrase", "-f", plain, "--new-passphrase-file", newPass)
 	if res.ExitCode == exitOK || !strings.Contains(res.Stderr, "not encrypted") {
 		t.Errorf("a plaintext archive: exit %d (stderr: %s), want a refusal", res.ExitCode, res.Stderr)
+	}
+}
+
+// TestArchiveExtension: -cf NAME makes NAME.ect and says so, and the other
+// operations find it by the name as typed (doc/design.md 10.12).
+func TestArchiveExtension(t *testing.T) {
+	tree := fixture(t)
+	dir := t.TempDir()
+	name := filepath.Join(dir, "backup")
+	res := runOK(t, tree.Root, "-cf", name, "work")
+	if !strings.Contains(res.Stderr, "backup.ect") {
+		t.Errorf("stderr = %q, want a notice naming backup.ect", res.Stderr)
+	}
+	if _, err := os.Stat(name + ".ect"); err != nil {
+		t.Fatalf("no backup.ect: %v", err)
+	}
+	if _, err := os.Stat(name); !os.IsNotExist(err) {
+		t.Errorf("a file with the name as typed exists: %v", err)
+	}
+	if list := runOK(t, tree.Root, "-tf", name); !strings.Contains(list.Stdout, "work/README.md") {
+		t.Errorf("-tf backup:\n%s", list.Stdout)
+	}
+	// An archive named after the directory it holds: work.ect beside work,
+	// and -tf work finds the archive, not the directory.
+	runOK(t, tree.Root, "-cf", "work", "work")
+	if list := runOK(t, tree.Root, "-tf", "work"); !strings.Contains(list.Stdout, "work/src/main.go") {
+		t.Errorf("-tf work:\n%s", list.Stdout)
+	}
+	// -q keeps the notice out; a name with an extension is kept.
+	res = runOK(t, tree.Root, "-cqf", filepath.Join(dir, "other.tar"), "work")
+	if res.Stderr != "" {
+		t.Errorf("stderr = %q under -q", res.Stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "other.tar")); err != nil {
+		t.Errorf("other.tar: %v", err)
+	}
+}
+
+// TestRegexThroughTheBinary: -R selects on create and on extract, and one
+// that matches nothing is exit 2.
+func TestRegexThroughTheBinary(t *testing.T) {
+	tree := fixture(t)
+	archive := filepath.Join(t.TempDir(), "r.ect")
+	runOK(t, tree.Root, "-cf", archive, "-R", `.*\.(go|md)`, "work")
+	list := listing(t, tree.Root, "-f", archive)
+	if strings.Join(list, ",") != "work/README.md,work/src/main.go" {
+		t.Errorf("members: %q", list)
+	}
+	dest := t.TempDir()
+	runOK(t, tree.Root, "-xf", archive, "-d", dest, "-R", `.*\.go`)
+	if _, err := os.Stat(filepath.Join(dest, "work/src/main.go")); err != nil {
+		t.Error(err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "work/README.md")); !os.IsNotExist(err) {
+		t.Errorf("README.md extracted: %v", err)
+	}
+	for _, args := range [][]string{
+		{"-tf", archive, "-R", "nothing"},
+		{"-tf", archive, "-R", "bad[("},
+		{"-cf", filepath.Join(t.TempDir(), "n.ect"), "-R", `.*\.rs`, "work"},
+	} {
+		if res := testutil.Run(t, tree.Root, args...); res.ExitCode != exitUsage {
+			t.Errorf("%q: exit %d, want %d (stderr: %s)", args, res.ExitCode, exitUsage, res.Stderr)
+		}
 	}
 }

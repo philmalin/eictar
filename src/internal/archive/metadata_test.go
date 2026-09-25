@@ -71,7 +71,7 @@ func metadataTree(t *testing.T) *testutil.Tree {
 
 func createAndExtract(t *testing.T, tree *testutil.Tree, restore RestoreOptions, enc *EncryptionConfig) string {
 	t.Helper()
-	archivePath := filepath.Join(t.TempDir(), "meta.eictar")
+	archivePath := filepath.Join(t.TempDir(), "meta.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath, Paths: []string{"tree"}, BaseDir: tree.Root,
 		Options: Options{Codec: "zstd", ChunkSize: 4096}, Encryption: enc,
@@ -156,7 +156,7 @@ func TestHolesSurviveAndCostNothing(t *testing.T) {
 		t.Skip("this filesystem does not make holes")
 	}
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath, Paths: []string{"tree/disk.img"}, BaseDir: tree.Root,
 		Options: Options{Codec: "none", ChunkSize: 4096},
@@ -190,7 +190,7 @@ func TestHolesSurviveAndCostNothing(t *testing.T) {
 // TestSparseToStdoutFillsHoles: -O gets the file as a reader sees it.
 func TestSparseToStdoutFillsHoles(t *testing.T) {
 	tree := metadataTree(t)
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath, Paths: []string{"tree/disk.img"}, BaseDir: tree.Root,
 		Options: Options{Codec: "zstd", ChunkSize: 4096},
@@ -215,7 +215,7 @@ func TestSparseToStdoutFillsHoles(t *testing.T) {
 // file, even when its content was recorded under another name.
 func TestHardlinkWithoutItsTarget(t *testing.T) {
 	tree := metadataTree(t)
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath, Paths: []string{"tree"}, BaseDir: tree.Root,
 		Options: Options{Codec: "zstd"},
@@ -257,7 +257,7 @@ func TestHardlinksShareOneBlob(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Text("a", 0o644, strings.Repeat("x", 100000)).Hardlink("b", "a").Hardlink("c", "a")
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath, Paths: []string{"a", "b", "c"}, BaseDir: tree.Root,
 		Options: Options{Codec: "none"},
@@ -289,7 +289,7 @@ func TestOwnerIsRecorded(t *testing.T) {
 	tree.Text("a", 0o644, "x")
 
 	for _, noOwner := range []bool{false, true} {
-		archivePath := filepath.Join(t.TempDir(), "a.eictar")
+		archivePath := filepath.Join(t.TempDir(), "a.ect")
 		if _, err := CreateArchive(CreateConfig{
 			Archive: archivePath, Paths: []string{"a"}, BaseDir: tree.Root,
 			Options: Options{Codec: "none"}, Metadata: MetadataOptions{NoOwner: noOwner},
@@ -317,7 +317,7 @@ func TestOwnerIsRecorded(t *testing.T) {
 
 func TestXattrOptions(t *testing.T) {
 	tree := metadataTree(t)
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath, Paths: []string{"tree/attrs.txt"}, BaseDir: tree.Root,
 		Options: Options{Codec: "none"}, Metadata: MetadataOptions{NoXattrs: true},
@@ -332,7 +332,7 @@ func TestXattrOptions(t *testing.T) {
 	}
 
 	// And on extract: recorded, but not applied.
-	archivePath = filepath.Join(t.TempDir(), "b.eictar")
+	archivePath = filepath.Join(t.TempDir(), "b.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath, Paths: []string{"tree/attrs.txt"}, BaseDir: tree.Root,
 		Options: Options{Codec: "none"},
@@ -386,7 +386,7 @@ func TestExcludePrunes(t *testing.T) {
 		Text("tree/secret.key", 0o600, "secret").
 		Text("tree/sub/other.key", 0o600, "also secret")
 
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{
 		Archive: archivePath, Paths: []string{"tree"}, BaseDir: tree.Root,
 		Options: Options{Codec: "none"}, Exclude: []string{"tree/cache", "*.key"},
@@ -431,7 +431,7 @@ func TestOneFileSystemStopsAtAMountPoint(t *testing.T) {
 // TestDeviceNodesNeedAsking: a device node in an archive is skipped with a
 // notice unless --preserve-devices was given.
 func TestDeviceNodesNeedAsking(t *testing.T) {
-	archivePath := filepath.Join(t.TempDir(), "dev.eictar")
+	archivePath := filepath.Join(t.TempDir(), "dev.ect")
 	w, err := Create(archivePath, Options{Codec: "none"})
 	if err != nil {
 		t.Fatal(err)
@@ -480,7 +480,7 @@ func TestDeviceNodesNeedAsking(t *testing.T) {
 // cannot steer it outside.
 func TestFifoCannotEscapeThroughALink(t *testing.T) {
 	outside := t.TempDir()
-	archivePath := filepath.Join(t.TempDir(), "evil.eictar")
+	archivePath := filepath.Join(t.TempDir(), "evil.ect")
 	w, err := Create(archivePath, Options{Codec: "none"})
 	if err != nil {
 		t.Fatal(err)
@@ -519,7 +519,7 @@ func TestOwnershipRestoredAsRoot(t *testing.T) {
 	if err := os.Chown(tree.Path("a"), 12345, 12345); err != nil {
 		t.Fatal(err)
 	}
-	archivePath := filepath.Join(t.TempDir(), "a.eictar")
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
 	if _, err := CreateArchive(CreateConfig{Archive: archivePath, Paths: []string{"a"},
 		BaseDir: tree.Root, Options: Options{Codec: "none"}}); err != nil {
 		t.Fatal(err)

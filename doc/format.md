@@ -33,6 +33,9 @@ index_offset  index               index_length bytes
 file size-96  trailer             96 bytes
 ```
 
+The conventional file name extension is `.ect`. A reader identifies an
+archive by the magic of the file header (§3), not by its name.
+
 The body starts at `64 + crypto_header_len`. The body has no framing: no
 separator and no length is between two blobs. Only the index says where each
 blob is. The body can also hold dead space: the blobs of deleted members, and

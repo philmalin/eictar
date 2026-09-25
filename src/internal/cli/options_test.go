@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -24,18 +26,18 @@ func mustParse(t *testing.T, argv ...string) *Options {
 // value-taking letter last.
 func TestParseBundling(t *testing.T) {
 	want := func(o *Options) bool {
-		return o.Op == OpCreate && o.Archive == "a.eictar" &&
+		return o.Op == OpCreate && o.Archive == "a.ect" &&
 			len(o.Args) == 1 && o.Args[0] == "path"
 	}
 
 	for _, argv := range [][]string{
-		{"-c", "-f", "a.eictar", "path"},
-		{"-cf", "a.eictar", "path"},
-		{"-cf=a.eictar", "path"},
-		{"--create", "--file", "a.eictar", "path"},
-		{"--create", "--file=a.eictar", "path"},
-		{"-c", "--file=a.eictar", "path"},
-		{"path", "-cf", "a.eictar"}, // interspersed
+		{"-c", "-f", "a.ect", "path"},
+		{"-cf", "a.ect", "path"},
+		{"-cf=a.ect", "path"},
+		{"--create", "--file", "a.ect", "path"},
+		{"--create", "--file=a.ect", "path"},
+		{"-c", "--file=a.ect", "path"},
+		{"path", "-cf", "a.ect"}, // interspersed
 	} {
 		t.Run(strings.Join(argv, " "), func(t *testing.T) {
 			if o := mustParse(t, argv...); !want(o) {
@@ -191,6 +193,10 @@ func TestParseUsageErrors(t *testing.T) {
 		{"recompress without compact", []string{"-cf", "a", "--recompress", "zstd", "p"}},
 		{"bad recompress spec", []string{"--compact", "-f", "a", "--recompress", "zstd:"}},
 		{"config and no-config", []string{"-tf", "a", "--config", "c", "--no-config"}},
+		{"bad regex", []string{"-tf", "a", "-R", "bad[("}},
+		{"bad exclude regex", []string{"-tf", "a", "--exclude-regex", "("}},
+		{"regex on compact", []string{"--compact", "-f", "a", "-R", "x"}},
+		{"exclude-regex on verify", []string{"--verify", "-f", "a", "--exclude-regex", "x"}},
 		{"change-passphrase with arguments", []string{"--change-passphrase", "-f", "a", "extra"}},
 		{"two new passphrase sources", []string{"--change-passphrase", "-f", "a",
 			"--new-passphrase-file", "f", "--new-passphrase-env", "V"}},
@@ -295,7 +301,7 @@ func TestRunWithNoArgumentsPrintsHelp(t *testing.T) {
 // something, a mistake is worth reporting as one.
 func TestRunWithArgumentsButNoOperationStillErrors(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"-f", "a.eictar"}, &stdout, &stderr); code != ExitUsage {
+	if code := Run([]string{"-f", "a.ect"}, &stdout, &stderr); code != ExitUsage {
 		t.Errorf("Run = %d, want %d", code, ExitUsage)
 	}
 	if stdout.Len() != 0 {
@@ -525,7 +531,7 @@ func TestTuningBounds(t *testing.T) {
 // -d it does not create one (doc/design.md 7.1).
 func TestChdirOnExtractMustExist(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"-xf", "nonexistent.eictar", "-C", "/nonexistent-directory-xyz"},
+	code := Run([]string{"-xf", "nonexistent.ect", "-C", "/nonexistent-directory-xyz"},
 		&stdout, &stderr)
 
 	if code == ExitOK {
@@ -614,14 +620,14 @@ func TestCompressionErrorsAreUsageErrors(t *testing.T) {
 		argv []string
 		want int
 	}{
-		{[]string{"-cf", dir + "/a.eictar", "--compress", "nonesuch", dir}, ExitUsage},
-		{[]string{"-cf", dir + "/a.eictar", "--compress", "zstd:level=99", dir}, ExitUsage},
-		{[]string{"-cf", dir + "/a.eictar", "--compress", "zstd:levle=3", dir}, ExitUsage},
-		{[]string{"-cf", dir + "/a.eictar", "--compress", "xz:preset=10", dir}, ExitUsage},
-		{[]string{"-cf", dir + "/a.eictar", "--compress", "s2:mode=fastest", dir}, ExitUsage},
+		{[]string{"-cf", dir + "/a.ect", "--compress", "nonesuch", dir}, ExitUsage},
+		{[]string{"-cf", dir + "/a.ect", "--compress", "zstd:level=99", dir}, ExitUsage},
+		{[]string{"-cf", dir + "/a.ect", "--compress", "zstd:levle=3", dir}, ExitUsage},
+		{[]string{"-cf", dir + "/a.ect", "--compress", "xz:preset=10", dir}, ExitUsage},
+		{[]string{"-cf", dir + "/a.ect", "--compress", "s2:mode=fastest", dir}, ExitUsage},
 		// -z and -J select codecs that exist since M7.
-		{[]string{"-czf", dir + "/a.eictar", dir}, ExitOK},
-		{[]string{"-cJf", dir + "/a.eictar", dir}, ExitOK},
+		{[]string{"-czf", dir + "/a.ect", dir}, ExitOK},
+		{[]string{"-cJf", dir + "/a.ect", dir}, ExitOK},
 	} {
 		t.Run(strings.Join(tc.argv[:len(tc.argv)-1], " "), func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
@@ -742,5 +748,72 @@ func TestVersionPrefersTheLinkerValue(t *testing.T) {
 	Version = "1.2.3"
 	if got := version(); got != "1.2.3" {
 		t.Errorf("version() = %q, want the linker value 1.2.3", got)
+	}
+}
+
+// TestRegexOptions: -R bundles as a short option and repeats, and --delete
+// takes it in place of a pattern (doc/design.md 10.11).
+func TestRegexOptions(t *testing.T) {
+	o := mustParse(t, "-tR", `.*\.go`, "-f", "a", "--regex", "b/.*", "--exclude-regex", ".*/vendor")
+	if len(o.regex) != 2 || len(o.excludeRegex) != 1 || !o.regex.MatchAny("x/y.go") || o.regex.MatchAny("x/y.gox") {
+		t.Errorf("regex %v, exclude %v", o.Regex, o.ExcludeRegex)
+	}
+	mustParse(t, "--delete", "-f", "a", "-R", "old/.*")
+	mustParse(t, "-cf", "a", "-R", ".*", "p")
+	mustParse(t, "--verify", "-f", "a", "-R", ".*")
+}
+
+// TestArchiveName: create adds .ect to a name with no extension, and the
+// other operations find the name that create made (doc/design.md 10.12).
+func TestArchiveName(t *testing.T) {
+	dir := t.TempDir()
+	at := func(name string) string { return filepath.Join(dir, name) }
+	for _, tc := range []struct{ in, want string }{
+		{"backup", "backup.ect"},
+		{"backup.tar", "backup.tar"},
+		{"home.2026-09", "home.2026-09"},
+		{".backup", ".backup.ect"},
+		{"backup.ect", "backup.ect"},
+	} {
+		if got := archiveName(OpCreate, at(tc.in)); got != at(tc.want) {
+			t.Errorf("create %s: %s, want %s", tc.in, filepath.Base(got), tc.want)
+		}
+	}
+
+	// Nothing exists: the name stays, so the error names what was typed.
+	if got := archiveName(OpList, at("backup")); got != at("backup") {
+		t.Errorf("list, nothing there: %s", got)
+	}
+	if err := os.WriteFile(at("backup.ect"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []Operation{OpList, OpExtract, OpAppend, OpDelete, OpInfo} {
+		if got := archiveName(op, at("backup")); got != at("backup.ect") {
+			t.Errorf("%v: %s, want backup.ect", op, filepath.Base(got))
+		}
+	}
+	// A directory with the name as typed does not: create made backup.ect
+	// beside it, and that is what the name means.
+	if err := os.Mkdir(at("backup"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if got := archiveName(OpList, at("backup")); got != at("backup.ect") {
+		t.Errorf("list, a directory there: %s, want backup.ect", filepath.Base(got))
+	}
+	if got := archiveName(OpCreate, at("backup")); got != at("backup.ect") {
+		t.Errorf("create, a directory there: %s, want backup.ect", filepath.Base(got))
+	}
+	// A file with the name as typed wins.
+	if err := os.Remove(at("backup")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(at("backup"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := archiveName(OpList, at("backup")); got != at("backup") {
+		t.Errorf("list, both there: %s", filepath.Base(got))
+	}
+	if got := archiveName(OpListCodecs, ""); got != "" {
+		t.Errorf("no archive: %q", got)
 	}
 }

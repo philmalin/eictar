@@ -50,6 +50,11 @@ type CreateConfig struct {
 	// Exclude lists patterns for --exclude and -X. An excluded directory is
 	// not entered.
 	Exclude []string
+	// Regex is -R: only the walked paths that match are stored, and each
+	// expression must match one (doc/design.md 10.11). ExcludeRegex is
+	// --exclude-regex, which works like Exclude.
+	Regex        fsutil.Regexps
+	ExcludeRegex fsutil.Regexps
 	// OneFileSystem is --one-file-system: a mount point is recorded, empty.
 	OneFileSystem bool
 	// Metadata selects which metadata is recorded.
@@ -224,6 +229,8 @@ func addPaths(w *Writer, cfg CreateConfig, workers int, prepare func(*capturer))
 		baseDir:       cfg.BaseDir,
 		dereference:   cfg.Dereference,
 		exclude:       cfg.Exclude,
+		regex:         cfg.Regex,
+		excludeRegex:  cfg.ExcludeRegex,
 		oneFileSystem: cfg.OneFileSystem,
 	}, visit)
 	var walkErr error
@@ -231,6 +238,9 @@ func addPaths(w *Writer, cfg CreateConfig, workers int, prepare func(*capturer))
 		if walkErr = wk.Walk(p); walkErr != nil {
 			break
 		}
+	}
+	if walkErr == nil {
+		walkErr = wk.unmatched()
 	}
 
 	// Finish drains the pool whatever happened, so that no goroutine is left
@@ -352,10 +362,12 @@ func budgetFor(limit int64, workers, chunkSize int) int64 {
 
 // ListConfig drives listing.
 type ListConfig struct {
-	Archive    string
-	Patterns   []string
-	Exclude    []string // --exclude and -X
-	Passphrase PassphraseFunc
+	Archive      string
+	Patterns     []string
+	Exclude      []string       // --exclude and -X
+	Regex        fsutil.Regexps // -R
+	ExcludeRegex fsutil.Regexps // --exclude-regex
+	Passphrase   PassphraseFunc
 	// RequireEncryption refuses an archive that is not encrypted; see
 	// ErrNotEncrypted.
 	RequireEncryption bool
@@ -421,11 +433,11 @@ func ListArchive(cfg ListConfig) (*Listing, error) {
 		}
 	}
 
-	members, err := selectMembers(all, cfg.Patterns)
+	members, err := selectMembers(all, cfg.Patterns, cfg.Regex)
 	if err != nil {
 		return nil, err
 	}
-	members = excludeMembers(members, cfg.Exclude)
+	members = excludeMembers(members, cfg.Exclude, cfg.ExcludeRegex)
 	sort.Slice(members, func(i, j int) bool { return members[i].Path < members[j].Path })
 	l.Members = members
 	return l, nil
@@ -442,28 +454,55 @@ func List(cfg ListConfig) ([]format.Member, error) {
 
 // excludeMembers drops the members that match an exclude pattern, and
 // everything under a directory that matches one.
-func excludeMembers(members []format.Member, exclude []string) []format.Member {
-	if len(exclude) == 0 {
+func excludeMembers(members []format.Member, exclude []string, excludeRegex fsutil.Regexps) []format.Member {
+	if len(exclude) == 0 && len(excludeRegex) == 0 {
 		return members
 	}
 	out := members[:0:0]
 	for _, m := range members {
-		if !fsutil.MatchAny(exclude, m.Path) {
+		if !fsutil.MatchAny(exclude, m.Path) && !excludeRegex.MatchAnyOrParent(m.Path) {
 			out = append(out, m)
 		}
 	}
 	return out
 }
 
-// selectMembers keeps the members that match any pattern. No patterns means
-// every member.
+// selectMembers keeps the members that match any pattern, and then, with -R,
+// those that match any expression. No patterns means every member.
 //
-// Each pattern must match at least one member, or the result is ErrNoMatch:
+// Each pattern and each expression must match at least one member, or the
+// result is ErrNoMatch:
 // a mistyped name must be reported, not answered with an empty listing or an
 // extraction that quietly leaves the file out. tar does the same. It lives
 // here rather than in fsutil so that the path helpers stay free of the format
 // types.
-func selectMembers(members []format.Member, patterns []string) ([]format.Member, error) {
+func selectMembers(members []format.Member, patterns []string, regex fsutil.Regexps) ([]format.Member, error) {
+	members, err := selectByPattern(members, patterns)
+	if err != nil || len(regex) == 0 {
+		return members, err
+	}
+	matched := make([]bool, len(regex))
+	out := make([]format.Member, 0, len(members))
+	for _, m := range members {
+		hit := false
+		for i, re := range regex {
+			if re.Match(m.Path) {
+				matched[i], hit = true, true
+			}
+		}
+		if hit {
+			out = append(out, m)
+		}
+	}
+	for i, ok := range matched {
+		if !ok {
+			return nil, fmt.Errorf("-R %q %w", regex[i].Expr, ErrNoMatch)
+		}
+	}
+	return out, nil
+}
+
+func selectByPattern(members []format.Member, patterns []string) ([]format.Member, error) {
 	if len(patterns) == 0 {
 		return members, nil
 	}

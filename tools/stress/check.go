@@ -31,16 +31,22 @@ func (s *sequence) checkArchive() error {
 // checkExtract extracts archive (the members matching patterns, or all) and
 // compares the result with want.
 func (s *sequence) checkExtract(archive string, patterns []string, want Model) error {
+	return s.checkExtractArgs(archive, withPaths(nil, patterns), want)
+}
+
+// checkExtractArgs extracts archive with extra arguments (patterns, or -R)
+// and compares the result with want.
+func (s *sequence) checkExtractArgs(archive string, extra []string, want Model) error {
 	out := filepath.Join(s.dir, "out")
 	if err := removeAll(out); err != nil {
 		return err
 	}
-	args := withPaths([]string{"-xf", archive, "-d", out}, patterns)
+	args := append([]string{"-xf", archive, "-d", out}, extra...)
 	if _, err := s.r.expect(true, args...); err != nil {
 		return fmt.Errorf("extract: %w", err)
 	}
 	if err := compareTree(out, want); err != nil {
-		return fmt.Errorf("extract %v: %w", patterns, err)
+		return fmt.Errorf("extract %v: %w", extra, err)
 	}
 	return nil
 }

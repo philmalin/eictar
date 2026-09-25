@@ -95,8 +95,8 @@ func TestGolden(t *testing.T) {
 		file      string
 		encrypted bool
 	}{
-		{"plain.eictar", false},
-		{"encrypted.eictar", true},
+		{"plain.ect", false},
+		{"encrypted.ect", true},
 	} {
 		t.Run(tc.file, func(t *testing.T) {
 			path := filepath.Join(goldenDir, tc.file)

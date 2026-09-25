@@ -102,6 +102,8 @@ func addConfig(o *Options, rep *reporter) (archive.CreateConfig, error) {
 		Dereference:   o.Dereference,
 		KeepGoing:     o.KeepGoing,
 		Exclude:       exclude,
+		Regex:         o.regex,
+		ExcludeRegex:  o.excludeRegex,
 		OneFileSystem: o.OneFileSystem,
 		Metadata: archive.MetadataOptions{
 			NoOwner: o.NoOwner, NoXattrs: o.NoXattrs, NoACLs: o.NoACLs,
@@ -162,6 +164,8 @@ func runList(o *Options, stdout, stderr io.Writer) error {
 		Archive:           o.Archive,
 		Patterns:          o.Args,
 		Exclude:           exclude,
+		Regex:             o.regex,
+		ExcludeRegex:      o.excludeRegex,
 		Passphrase:        askFor(o, &reporter{errOut: stderr, quiet: o.Quiet}),
 		RequireEncryption: o.expectsEncryption(),
 	})
@@ -246,6 +250,8 @@ func runExtract(o *Options, stdout, stderr io.Writer) error {
 	stats, err := archive.Extract(archive.ExtractConfig{
 		Archive:           o.Archive,
 		Exclude:           exclude,
+		Regex:             o.regex,
+		ExcludeRegex:      o.excludeRegex,
 		Passphrase:        askFor(o, rep),
 		RequireEncryption: o.expectsEncryption(),
 		Restore: archive.RestoreOptions{

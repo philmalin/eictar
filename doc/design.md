@@ -643,7 +643,7 @@ content on standard output has no destination directory.
 
 In `tar`, `-d` means `--compare`. In `zip`, it deletes entries. Neither
 meaning causes a problem here. This tool has no compare operation, and `-d`
-does not select an operation. Thus `eictar -d out -f a.eictar` fails the
+does not select an operation. Thus `eictar -d out -f a.ect` fails the
 one-operation rule, and it deletes nothing.
 
 ### 7.2 The archive never contains itself
@@ -1365,7 +1365,7 @@ whose encryption was removed (§14).
 
 | Short | Long | Meaning | Built |
 |-------|------|---------|-------|
-| `-f` | `--file ARCHIVE` | the archive to use (necessary) | M1 |
+| `-f` | `--file ARCHIVE` | the archive to use (necessary). A name with no extension gets `.ect` (§10.12). | M1 |
 | `-d` | `--destination DIR` | extract into DIR, and create DIR if it does not exist. Extraction only. | M2 |
 | `-C` | `--directory DIR` | change to DIR first. DIR must exist. More than one `-C` is refused (open question 2, §1.3). | M2 |
 | `-v` | `--verbose` | list members during the operation. Repeat for more detail. With `-t`, `-v` gives the long listing and `-vv` adds more (§10.9). | M2 |
@@ -1378,6 +1378,8 @@ whose encryption was removed (§14).
 | `-T` | `--files-from FILE` | read the paths from FILE, or from stdin if FILE is `-` | M2 |
 | | `--exclude GLOB` | can be repeated. Applies to create, append, update, list and extract. An excluded directory is not entered. | M5 |
 | `-X` | `--exclude-from FILE` | one glob on each line. Blank lines are ignored. There is no comment syntax, because a file name can start with `#`. | M5 |
+| `-R` | `--regex RE` | can be repeated. Keep only the paths that match a regular expression (§10.11). Create, append, update, list, extract, verify and delete. | after M9 |
+| | `--exclude-regex RE` | can be repeated. Leave out the paths that match. An excluded directory is not entered, and on a read it takes its contents (§10.11). | after M9 |
 | `-h` | `--dereference` | follow links and store what they point to | M2 |
 | | `--one-file-system` | do not enter other filesystems. A mount point is recorded, empty. Create, append and update. | M5 |
 | `-p` | `--preserve-permissions` | also restore setuid, setgid and sticky (§7.7). Extract only. | M5 |
@@ -1481,7 +1483,7 @@ value never causes this error.
 |------|---------|
 | 0 | success |
 | 1 | the operation completed, but one or more members failed under `--keep-going` |
-| 2 | usage error: an unknown option, no operation, two operations, no `-f`, a bad compression spec. Also a pattern that matches no member, for `-t`, `-x`, `--verify` and `--delete`, and a path that is already in the archive under `--on-conflict=error`. Nothing is changed or extracted. |
+| 2 | usage error: an unknown option, no operation, two operations, no `-f`, a bad compression spec. Also a pattern that matches no member, for `-t`, `-x`, `--verify` and `--delete`, an `-R` that matches no path or member, a regular expression that does not compile, and a path that is already in the archive under `--on-conflict=error`. Nothing is changed or extracted. |
 | 3 | the archive failed a check. Causes: corrupt data, an unsafe member path, a wrong passphrase or a failed tag. Also a plaintext archive when a passphrase source was given. |
 | 4 | any other failure, usually an I/O error on the archive or the filesystem |
 | 70 | an option that is not built yet (`EX_SOFTWARE`). The message names the milestone. Since M7, no option gives it. |
@@ -1503,7 +1505,7 @@ pflag registers nothing, and the short option does not exist.
 
 Option parsing has its own unit tests (§13.1). They cover every combined
 form, the one-operation rule and each path to exit 2. The old `tar` form
-without the leading dash (`eictar cf archive.eictar path`) is **not**
+without the leading dash (`eictar cf archive.ect path`) is **not**
 supported. It makes the first positional argument unclear, and modern `tar`
 keeps it only for compatibility.
 
@@ -1515,7 +1517,7 @@ each line. `-tv` (or `--long`) prints the long listing. `-tvv` adds more
 columns and a line of totals.
 
 ```
-$ eictar -tvf a.eictar
+$ eictar -tvf a.ect
 drwxrwxr-x  psm/psm       -       -      -  -             2026-09-24 17:59:19  d
 -rw-rw-r--  psm/psm  200000  200000   0.0%  zstd:level=3  2026-09-24 17:59:19  d/random.bin
 -rw-rw-r--  psm/psm  240001    1432  99.4%  zstd:level=3  2026-09-24 17:59:19  d/text.txt
@@ -1597,6 +1599,63 @@ result (§13.4). `--delete cache` deleted the directory `a/cache`, but its
 members stayed, and `--exclude cache` hid `a/cache` but not its contents. A
 directory that a pattern matches now takes its contents, at any depth.
 
+**Regular expressions.** `-R RE` (`--regex`) and `--exclude-regex RE` use
+the RE2 syntax of Go's `regexp` package. The time of a match is linear in the
+length of the path, so no expression can make the program hang. An
+expression that does not compile is a usage error (exit 2).
+
+- An expression must match the **whole** stored path. The program puts it
+  in `^(?:` and `)$`. Thus `dir/a1\.txt` does not match `olddir/a1.txt.bak`.
+- The expression sees the **stored path**: relative, with `/` between the
+  names, on every platform. It does not see the path on the disk. Thus
+  `-C ~ -R 'Documents/.*\.pdf' Documents` gives the same result on every
+  machine.
+- In an expression, `.` is any character. Write `\.` for a dot.
+- A byte of a path that is not valid UTF-8 counts as one character, which
+  `.` matches. An expression cannot hold such a byte.
+
+`-R` **keeps only** the paths that match one of its expressions. On create,
+append and update, it filters what the walk finds below the path arguments.
+The walk enters every directory, because a match can be deeper down. A
+directory is stored only if it matches, and extraction creates the parent
+directories that the archive does not hold. On `-t`, `-x`, `--verify`
+and `--delete`, it filters the members that the patterns select, or all members
+when there are no patterns. `--delete` needs a pattern or an `-R`.
+
+Unlike a pattern, a match of a directory does not take its contents.
+`-R 'build'` keeps the directory `build` only, and `-R 'build(/.*)?'` keeps
+it with its contents.
+
+`--exclude-regex` **leaves out** the paths that match. It works like
+`--exclude`. On create, append and update, the walk does not enter an
+excluded directory. On a read, an excluded directory also excludes its
+contents, so that a list of an archive agrees with the walk that made it.
+An exclusion wins over `-R` and over the patterns.
+
+Each `-R` must match at least one path, or the operation stops with exit 2
+and changes nothing (§10.7), as a pattern does. A mistyped expression is
+reported, not answered with an empty result. `--exclude-regex` has no such
+check, as `--exclude` has none.
+
+### 10.12 Archive name
+
+The conventional extension of an archive is `.ect`. The program finds an
+archive by the magic of its header (§3.1), not by its name. Thus any name
+works, and the extension is only for people.
+
+**Create adds `.ect` to a name with no extension.** `-cf backup` makes
+`backup.ect`, and the program writes a notice that names the file, except
+under `-q`. It does so whatever exists with the name as typed. Thus
+`-cf backup backup` makes `backup.ect` from the directory `backup`. A name has an extension when its last element, without leading
+dots, has a dot. Thus `-cf backup.tar` and `-cf home.2026-09` keep the name
+as typed, and `-cf .backup` makes `.backup.ect`.
+
+**The other operations find the name that create made.** If the name has no
+extension, no file has that name, and the same name with `.ect` exists, the
+program uses that file. Thus `-tf backup` lists `backup.ect`. A file with
+the name as typed always wins. A directory with that name does not count, so
+`-tf backup` finds `backup.ect` next to the directory `backup`.
+
 ## 11. Configuration: environment variables and the configuration file
 
 A long command line is tedious to type each time, for example:
@@ -1645,8 +1704,9 @@ line, and a configuration that sets one is an error:
 - **The operation** (`-c`, `-x`, `-t`, `-r`, `-u`, `--delete` and the others),
   and `--recompress`, which is part of compact. A configuration file must
   never change a create into an extract.
-- **What the operation works on:** `-f`, `-C`, `-d`, `-T`, `-O`, and all
-  positional paths and patterns.
+- **What the operation works on:** `-f`, `-C`, `-d`, `-T`, `-O`, `-R`, and
+  all positional paths and patterns. `--exclude-regex` can come from a
+  configuration, as `exclude` can.
 - **The passphrase and its sources** (§11.4).
 - `--config`, `--no-config` and `--show-config`.
 
@@ -2209,7 +2269,7 @@ Before most steps, the tree changes. A file gets new content, a new time or
 a new mode, or it goes, or it becomes a link, or new entries come. Then one
 operation runs: append with each `--on-conflict`, update with each
 `--update-mode`, delete, compact, compact with `--recompress`, or extraction
-by pattern. Each operation uses a random codec and random settings: chunk
+by pattern or by `-R`. Each operation uses a random codec and random settings: chunk
 size, workers, memory limit and spill threshold.
 
 A third of the sequences are encrypted, some with a sealed index. In these, a
@@ -2417,7 +2477,7 @@ denial of service, not a forgery. The derived subkeys are not set to zero
   members, marked by a new `index_kind` in the trailer flags.
 - **A streaming variant** that repeats member metadata inline, for use through
   a pipe.
-- **A detached signature** (`.eictar.sig`) of the trailer.
+- **A detached signature** (`.ect.sig`) of the trailer.
 
 ### 15.1 Other UNIX-like platforms
 
@@ -2619,7 +2679,9 @@ and pass, not that the feature ran once by hand.
    first release, with new test vectors and golden files.
 
 After M9, the module path is `github.com/philmalin/eictar`, and a release
-workflow makes the first release, v1.0.0 (§12.3).
+workflow makes the first release, v1.0.0 (§12.3). Before that release, two
+changes to the interface: the `.ect` extension (§10.12), and the selection
+by regular expression, `-R` and `--exclude-regex` (§10.11).
 
 
 ## Appendix A. Why these primitives, compared with AES

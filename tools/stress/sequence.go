@@ -7,8 +7,10 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // sequence is one archive and its history: a create, then steps of
@@ -44,7 +46,7 @@ func newSequence(seed uint64, dir, bin string, faults bool, st *stats) (*sequenc
 		faults: faults,
 		stats:  st,
 	}
-	s.archive = filepath.Join(dir, "archive.eictar")
+	s.archive = filepath.Join(dir, "archive.ect")
 	if err := os.MkdirAll(s.src, 0o755); err != nil {
 		return nil, err
 	}
@@ -352,9 +354,41 @@ func (s *sequence) extractSome() error {
 	for n := 1 + s.rnd.IntN(2); n > 0; n-- {
 		patterns = append(patterns, paths[s.rnd.IntN(len(paths))])
 	}
+	if s.rnd.IntN(3) == 0 && allUTF8(patterns) {
+		// -R with one expression for the chosen paths and everything below
+		// them: the same members as the patterns with a slash rule, and a
+		// test of the anchoring, since a name can be the prefix of another.
+		quoted := make([]string, len(patterns))
+		for i, p := range patterns {
+			quoted[i] = regexp.QuoteMeta(p)
+		}
+		re := "(" + strings.Join(quoted, "|") + ")(/.*)?"
+		want := Model{}
+		for p, e := range s.model {
+			for _, pat := range patterns {
+				if p == pat || strings.HasPrefix(p, pat+"/") {
+					want[p] = e
+				}
+			}
+		}
+		s.note("extract -R %q", re)
+		s.stats.ops["extract by -R"]++
+		return s.checkExtractArgs(s.archive, []string{"-R", re}, want)
+	}
 	s.note("extract %q", patterns)
 	s.stats.ops["extract by pattern"]++
 	return s.checkExtract(s.archive, patterns, s.model.selectPaths(patterns))
+}
+
+// allUTF8 reports whether every path is valid UTF-8. An expression cannot
+// hold a byte that is not, so -R cannot name such a path exactly.
+func allUTF8(paths []string) bool {
+	for _, p := range paths {
+		if !utf8.ValidString(p) {
+			return false
+		}
+	}
+	return true
 }
 
 // withPaths puts the paths or patterns after "--", so that a name that starts

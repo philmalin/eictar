@@ -57,11 +57,11 @@ func TestUsageErrors(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"no operation", []string{"-f", "a.eictar"}, "no operation selected"},
-		{"two operations", []string{"-c", "-x", "-f", "a.eictar", "p"}, "only one operation"},
+		{"no operation", []string{"-f", "a.ect"}, "no operation selected"},
+		{"two operations", []string{"-c", "-x", "-f", "a.ect", "p"}, "only one operation"},
 		{"no archive", []string{"-t"}, "requires -f"},
 		{"archive is a pipe", []string{"-cf", "-", "p"}, "cannot be a pipe"},
-		{"unknown option", []string{"-tf", "a.eictar", "--nonesuch"}, "unknown flag"},
+		{"unknown option", []string{"-tf", "a.ect", "--nonesuch"}, "unknown flag"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			res := testutil.Run(t, dir, tc.args...)
@@ -112,7 +112,7 @@ func TestConfigurationThroughTheBinary(t *testing.T) {
 	}
 	tree := testutil.NewTree(t)
 	tree.Text("f.txt", 0o644, strings.Repeat("configured ", 1000))
-	archive := filepath.Join(t.TempDir(), "a.eictar")
+	archive := filepath.Join(t.TempDir(), "a.ect")
 	env := []string{"HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, "none")}
 
 	create := testutil.RunEnv(t, tree.Root, env, "-cvf", archive, "f.txt")

@@ -20,14 +20,16 @@ import (
 
 // ExtractConfig drives extraction.
 type ExtractConfig struct {
-	Archive     string
-	Destination string // created if absent
-	Patterns    []string
-	Exclude     []string // --exclude and -X
-	Overwrite   OverwritePolicy
-	ToStdout    io.Writer // when non-nil, content goes here instead of to files
-	KeepGoing   bool
-	Reporter    Reporter
+	Archive      string
+	Destination  string // created if absent
+	Patterns     []string
+	Exclude      []string       // --exclude and -X
+	Regex        fsutil.Regexps // -R
+	ExcludeRegex fsutil.Regexps // --exclude-regex
+	Overwrite    OverwritePolicy
+	ToStdout     io.Writer // when non-nil, content goes here instead of to files
+	KeepGoing    bool
+	Reporter     Reporter
 
 	// Passphrase supplies the key for an encrypted archive.
 	Passphrase PassphraseFunc
@@ -98,11 +100,11 @@ func Extract(cfg ExtractConfig) (Stats, error) {
 	}
 	defer r.Close()
 
-	members, err := selectMembers(r.Members(), cfg.Patterns)
+	members, err := selectMembers(r.Members(), cfg.Patterns, cfg.Regex)
 	if err != nil {
 		return Stats{}, err
 	}
-	members = excludeMembers(members, cfg.Exclude)
+	members = excludeMembers(members, cfg.Exclude, cfg.ExcludeRegex)
 	sort.SliceStable(members, func(i, j int) bool { return members[i].Path < members[j].Path })
 
 	// Tombstones are included: a live hardlink can point to one (§9.2).
