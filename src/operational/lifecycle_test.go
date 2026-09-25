@@ -887,7 +887,7 @@ func TestExcludeThroughTheBinary(t *testing.T) {
 // file is touched.
 func TestRootOnlyOptionsRefusedForUsers(t *testing.T) {
 	if os.Geteuid() == 0 {
-		t.Skip("runs as an ordinary user")
+		t.Skip("needs an ordinary user; this run is root")
 	}
 	res := testutil.Run(t, t.TempDir(), "-xf", "whatever.eictar", "--preserve-owner")
 	if res.ExitCode != exitUsage {

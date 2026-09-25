@@ -354,7 +354,7 @@ func TestXattrOptions(t *testing.T) {
 // an ordinary user, and their absence is not an error.
 func TestPrivilegedXattrsNeedRoot(t *testing.T) {
 	if meta.IsRoot() {
-		t.Skip("runs as an ordinary user")
+		t.Skip("needs an ordinary user; this run is root")
 	}
 	archivePath, _ := craftArchive(t, "none", []byte("content"), func(m *format.Member) {
 		m.Xattrs = map[string][]byte{

@@ -118,9 +118,14 @@ func TestCompareTreesDetects(t *testing.T) {
 				tr := NewTree(t)
 				tr.Text("a.txt", 0o644, "alpha").
 					Symlink("link", "a.txt").
-					Hardlink("second", "a.txt").
-					Xattr("a.txt", "user.comment", []byte("original")).
-					Chmod("a.txt", 0o755|os.ModeSetuid)
+					Hardlink("second", "a.txt")
+				// Only the case that tests xattrs needs one. Xattr skips on a
+				// platform without them (OpenBSD), and in the shared fixture
+				// it skipped every case there.
+				if tc.opt.Xattrs {
+					tr.Xattr("a.txt", "user.comment", []byte("original"))
+				}
+				tr.Chmod("a.txt", 0o755|os.ModeSetuid)
 				tr.SetTimes("a.txt", time.Unix(1000, 0), time.Unix(2000, 0))
 				tr.SetLinkTimes("link", time.Unix(1000, 0), time.Unix(3000, 0))
 				return tr

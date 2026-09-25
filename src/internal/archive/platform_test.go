@@ -20,8 +20,14 @@ import (
 // FreeBSD and NetBSD take user.ok and refuse com.apple.quarantine. OpenBSD
 // has no extended attributes and refuses both.
 func TestXattrsFromAnotherPlatform(t *testing.T) {
-	probe := testutil.NewTree(t)
-	probe.Text("p", 0o644, "p").Xattr("p", "user.probe", []byte("x")) // skips if the filesystem has none
+	// Where the platform has xattrs, the filesystem must have them too, or
+	// every name is refused and the test means nothing: Xattr skips then.
+	// Where the platform has none (OpenBSD), the test runs: both names must
+	// be refused and listed.
+	if meta.Supports.Xattrs {
+		probe := testutil.NewTree(t)
+		probe.Text("p", 0o644, "p").Xattr("p", "user.probe", []byte("x"))
+	}
 
 	archive, err := craftArchive(t, "none", []byte("content"), func(m *format.Member) {
 		m.Xattrs = map[string][]byte{
