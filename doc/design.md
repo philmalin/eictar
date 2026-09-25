@@ -1,6 +1,6 @@
 # eictar — Design Document
 
-Status: in implementation. M1 to M7 are complete. The code of M8 is written, and waits for its CI run (§15.1).
+Status: M1 to M8 are complete. The CI workflow passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
 Date: 2026-09-24
 Applies to: v1 (format version 1.0)
 
@@ -2224,8 +2224,8 @@ denial of service, not a forgery. The derived subkeys are not set to zero
 
 ### 15.1 Other UNIX-like platforms
 
-**Status: the code is in M8. The support is not claimed until CI passes on
-each platform** (see "Testing" below).
+**Status: complete in M8.** The CI workflow passes on all five platforms (see
+"Testing" below).
 
 The metadata code (`src/internal/meta`) has a part that all five platforms
 share, and a small file for each platform. On any other platform (Windows,
@@ -2303,9 +2303,19 @@ filesystem.
 
 `.github/workflows/ci.yml` runs `make check` on Linux and macOS,
 and in virtual machines for FreeBSD, NetBSD and OpenBSD. NetBSD and OpenBSD
-have no race detector, so they run `make check-norace`. The workflow does not
-run from this project yet: it needs a GitHub repository. Until it passes on a
-platform, eictar does not claim support for that platform.
+have no race detector, so they run `make check-norace`. A platform is
+supported while the workflow passes on it.
+
+The first runs found five faults that no run on Linux had shown:
+
+- `.tmp` is not in the repository, and `vet` and `fmt` did not create it.
+- A configuration test used a worker count that is the default on a CI
+  runner with two CPUs.
+- The pipeline deadlock of §8.1, which the check for that test found.
+- The hole test expected the 4 KiB granularity of ext4. ZFS reports 128 KiB
+  records.
+- A recompress test expected holes on NetBSD and OpenBSD, which store files
+  dense. Also, the NetBSD job used `sort -V`, which NetBSD does not have.
 
 illumos is different again. Its xattrs are a hidden directory for each file,
 which is a separate model.
@@ -2437,12 +2447,12 @@ and pass, not that the feature ran once by hand.
    - each file took a new 4 MiB read buffer, and create was up to 7 times
      slower than necessary (§8.4)
    - a gzip chunk carried a meaningless time
-8. **M8 — Other UNIX-like platforms** *(code written, waits for CI)*:
-   metadata on macOS, FreeBSD, NetBSD and OpenBSD, as §15.1 describes. Open
-   questions 4 and 5 are decided (§1.1, rows 8 and 9). The CI workflow is in
-   `.github/workflows/ci.yml`. The code builds and passes `go vet` on each
-   platform, and the tests pass on Linux. The milestone is complete when the
-   workflow passes on all five platforms.
+8. **M8 — Other UNIX-like platforms** *(complete)*: metadata on macOS,
+   FreeBSD, NetBSD and OpenBSD, as §15.1 describes. Open questions 4 and 5
+   are decided (§1.1, rows 8 and 9). The CI workflow in
+   `.github/workflows/ci.yml` passes on all five platforms. The first runs
+   found a deadlock in the pipeline (§8.1), and four faults in tests and in
+   the workflow (§15.1).
 
 
 ## Appendix A. Why these primitives, compared with AES

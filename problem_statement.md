@@ -127,5 +127,5 @@ gives the full reasoning and the exact formats.
   OpenBSD.  On other platforms the program archives content, directories and
   links only.  The four platforms besides Linux have the limits in
   `doc/design.md` §15.1: macOS records no ACLs and does not create pipes,
-  and OpenBSD has no extended attributes.  Their support counts only once
-  their tests pass on them.
+  and OpenBSD has no extended attributes.  The tests run on all five
+  platforms in CI.
