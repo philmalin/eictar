@@ -203,21 +203,45 @@ func (zstdFactory) trainSize(p Params) (int, error) {
 	return n, nil
 }
 
-// train makes a dictionary in the zstd format. The trainer of
-// klauspost/compress/dict is experimental, and it can fail, or panic, on
-// small or uniform input; either way the result is "no dictionary".
-func (zstdFactory) train(p Params, samples [][]byte, size int, id uint32) (out []byte, err error) {
+// train makes a dictionary in the zstd format, of at most size bytes in all.
+// The trainer of klauspost/compress/dict is experimental, and it can fail,
+// or panic, on small or uniform input; either way the result is "no
+// dictionary".
+//
+// The trainer's size is that of the dictionary's content. The header and the
+// entropy tables come on top, about 100 bytes, so a dictionary asked for at
+// the 1 MiB limit came out above it. When the result is too large, the
+// trainer runs again with the content smaller by the excess.
+func (f zstdFactory) train(p Params, samples [][]byte, size int, id uint32) ([]byte, error) {
 	level, err := intParam(p, "level", zstdLevelDefault, zstdLevelMin, zstdLevelMax)
 	if err != nil {
 		return nil, err
 	}
+	content := size
+	for range 4 {
+		out, err := f.trainOnce(samples, content, id, level)
+		if err != nil {
+			return nil, err
+		}
+		if len(out) <= size {
+			return out, nil
+		}
+		content -= len(out) - size + 64
+		if content < zstdTrainMin/2 {
+			break
+		}
+	}
+	return nil, fmt.Errorf("the dictionary trainer could not keep the dictionary within %d bytes", size)
+}
+
+func (zstdFactory) trainOnce(samples [][]byte, content int, id uint32, level int) (out []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			out, err = nil, fmt.Errorf("the dictionary trainer failed: %v", r)
 		}
 	}()
 	out, err = dict.BuildZstdDict(samples, dict.Options{
-		MaxDictSize: size,
+		MaxDictSize: content,
 		HashBytes:   6,
 		ZstdDictID:  id,
 		ZstdLevel:   zstd.EncoderLevelFromZstd(level),

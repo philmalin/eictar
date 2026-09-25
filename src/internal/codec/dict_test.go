@@ -151,3 +151,20 @@ func TestTrainingFailsCleanly(t *testing.T) {
 		t.Error("DictID accepted text")
 	}
 }
+
+// TestTrainedDictionaryFitsItsSize: train=SIZE bounds the whole dictionary,
+// its header and entropy tables too. The trainer's own size is the content
+// only, and at train=1M the result was above the 1 MiB limit of the format.
+// At 4 KiB the first result is 4160 bytes, so the retry runs here too.
+func TestTrainedDictionaryFitsItsSize(t *testing.T) {
+	files := sourceLike(3000)
+	for _, size := range []int{4 << 10, 8 << 10} {
+		d, err := TrainDict("zstd", nil, files, size, 40000)
+		if err != nil {
+			t.Fatalf("size %d: %v", size, err)
+		}
+		if len(d) > size {
+			t.Errorf("asked for %d bytes, got %d", size, len(d))
+		}
+	}
+}

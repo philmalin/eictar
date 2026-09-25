@@ -76,6 +76,12 @@ func (w *Writer) train(samples [][]byte, size int) ([]byte, uint32, error) {
 		return nil, 0, err
 	}
 	content, err := codec.TrainDict(w.codecName, w.params, samples, size, id)
+	if err == nil && len(content) > format.MaxDictSize {
+		// The codec keeps within size, and size within the limit. This is
+		// the check that the index makes on Close, made before any member
+		// is compressed, so that a fault costs a notice and not the run.
+		err = fmt.Errorf("the dictionary is %d bytes, above the %d limit", len(content), format.MaxDictSize)
+	}
 	return content, id, err
 }
 

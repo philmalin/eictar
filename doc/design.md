@@ -304,6 +304,12 @@ library `klauspost/compress/dict` trains it. The library calls its trainer
 experimental. A poor dictionary costs ratio, not correctness: each member's
 digest is still checked, and the zstd frame names its dictionary.
 
+The size bounds the whole dictionary. The trainer's own size is that of the
+content only, and the header and the tables add about 100 bytes. Thus when
+the result is too large, the writer trains again with less content. Before
+this rule, `train=1M` gave a dictionary above the 1 MiB limit. The index
+check then refused the archive at the end of the run.
+
 **Training is a pass before the compression.** The writer walks the paths,
 with the same filters, and makes a list of the regular files and their
 sizes. It takes the first 32 KiB of each file as a sample. When the samples
