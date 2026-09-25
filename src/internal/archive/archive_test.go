@@ -1657,30 +1657,52 @@ func TestEncryptedContentIsNotOnDisk(t *testing.T) {
 	}
 }
 
-// TestEncryptIndexHidesMetadata: --encrypt-index is what keeps filenames out
-// of the file. Without it they are visible, which is the documented default.
+// TestEncryptIndexHidesMetadata: without --encrypt-index, anyone can read the
+// index - the names, sizes and modes - with no key. With it, nobody can.
+//
+// The test decodes the index with no key, and does not search the file for
+// a name. An unsealed index is still compressed, and whether zstd leaves a
+// short name as plain bytes depends on the rest of the index, down to each
+// member's random salt. The search passed on Linux every time and failed now
+// and then on macOS, where the index also holds the attributes that macOS
+// adds to new files.
 func TestEncryptIndexHidesMetadata(t *testing.T) {
+	const name = "distinctive-filename.txt"
 	tree := testutil.NewTree(t)
-	tree.Text("distinctive-filename.txt", 0o644, "content")
+	tree.Text(name, 0o644, "content")
 
-	for _, tc := range []struct {
-		encryptIndex bool
-		wantVisible  bool
-	}{
-		{false, true},
-		{true, false},
-	} {
-		t.Run(fmt.Sprintf("encrypt-index=%v", tc.encryptIndex), func(t *testing.T) {
-			archivePath := encryptedArchive(t, tree,
-				[]string{"distinctive-filename.txt"}, "none", tc.encryptIndex)
-
+	for _, sealed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("encrypt-index=%v", sealed), func(t *testing.T) {
+			archivePath := encryptedArchive(t, tree, []string{name}, "none", sealed)
 			raw, err := os.ReadFile(archivePath)
 			if err != nil {
 				t.Fatalf("reading: %v", err)
 			}
-			visible := bytes.Contains(raw, []byte("distinctive-filename.txt"))
-			if visible != tc.wantVisible {
-				t.Errorf("filename visible = %v, want %v", visible, tc.wantVisible)
+			var tr format.Trailer
+			if err := tr.UnmarshalBinary(raw); err != nil {
+				t.Fatal(err)
+			}
+			if tr.IndexEncrypted() != sealed {
+				t.Fatalf("index sealed = %v, want %v", tr.IndexEncrypted(), sealed)
+			}
+			indexBytes := raw[tr.IndexOffset : tr.IndexOffset+tr.IndexLength]
+
+			// A reader with no key: no opener for a sealed index.
+			ix, err := format.DecodeIndex(indexBytes, tr.Flags, nil)
+			if sealed {
+				if err == nil {
+					t.Fatal("a sealed index decoded without the key")
+				}
+				if bytes.Contains(raw, []byte(name)) {
+					t.Error("the name is in the file although the index is sealed")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("an unsealed index did not decode without a key: %v", err)
+			}
+			if len(ix.Members) != 1 || ix.Members[0].Path != name {
+				t.Errorf("the index read without a key has %d members; want the one named %s", len(ix.Members), name)
 			}
 		})
 	}
