@@ -54,8 +54,14 @@ jobs:
         with:
           envs: GOTOOLCHAIN
           prepare: /usr/sbin/pkg_add go gmake
+          # pkgsrc can install Go as "go", or only with its version in the
+          # name (go124). Find it without sort -V, which NetBSD does not have.
           # NetBSD has no race detector.
-          run: gmake check-norace GO=$(ls -d /usr/pkg/bin/go1* | sort -V | tail -1)
+          run: |
+            GO=$(command -v go || true)
+            [ -n "$GO" ] || GO=$(ls /usr/pkg/bin/go1[0-9]* /usr/pkg/go*/bin/go 2>/dev/null | tail -1)
+            echo "Go: $GO"
+            gmake check-norace GO="$GO"
 
   openbsd:
     runs-on: ubuntu-latest

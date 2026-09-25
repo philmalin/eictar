@@ -5,6 +5,11 @@
 
 # The toolchain. CI and other machines give their own: make check GO=go
 GO          ?= /opt/go/bin/go
+# An empty GO would run whatever the first word of the recipe names: for
+# "$(GO) fmt", the text formatter fmt(1).
+ifeq ($(strip $(GO)),)
+$(error GO is empty; give the go command, for example GO=go)
+endif
 export GOMODCACHE := $(CURDIR)/.gocache
 # The build cache, which also holds the fuzz corpus. Go's default is
 # ~/.cache/go-build, outside the project.

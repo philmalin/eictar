@@ -13,6 +13,7 @@ import (
 	"eictar/src/internal/codec"
 	"eictar/src/internal/crypt"
 	"eictar/src/internal/format"
+	"eictar/src/internal/meta"
 	"eictar/src/internal/testutil"
 )
 
@@ -926,7 +927,8 @@ func TestRecompress(t *testing.T) {
 				t.Fatal(err)
 			}
 			testutil.CompareTrees(t, tree.Path("t"), filepath.Join(dest, "t"),
-				testutil.CompareOptions{Mode: true, Holes: true})
+				testutil.CompareOptions{Mode: true,
+					Holes: meta.Supports.Holes && tree.Holes("t/holes.img")})
 		})
 	}
 }
