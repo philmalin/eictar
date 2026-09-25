@@ -2025,9 +2025,9 @@ new major version (§3).
 A push of the tag starts the release workflow
 (`.github/workflows/release.yml`). The workflow runs `make check` on Linux.
 Then `make release` builds one binary for each platform of §15.1, on amd64
-and on arm64, with the man page, `LICENSE` and `TRADEMARKS.md`. The workflow
-packs each one in a `.tar.gz` file, writes `SHA256SUMS`, and makes a draft
-release with these files.
+and on arm64, with the man page, `README.md`, `LICENSE` and `TRADEMARKS.md`.
+The workflow packs each one in a `.tar.gz` file, writes `SHA256SUMS`, and
+makes a draft release with these files.
 
 The ci workflow runs on the same tag, on all five platforms. The draft is
 published by hand, after that run passes too. Windows builds, but it is not
