@@ -770,7 +770,6 @@ func metadataFixture(t *testing.T) *testutil.Tree {
 		Hardlink("work/alias", "work/private/data").
 		Fifo("work/pipe", 0o600).
 		Symlink("work/link", "attrs.txt").
-		Socket("work/sock").
 		Sparse("work/disk.img", 0o644, 16<<20,
 			testutil.Segment{Offset: 0, Data: []byte("head")},
 			testutil.Segment{Offset: 8 << 20, Data: []byte("middle")})
@@ -793,9 +792,6 @@ func TestMetadataLifecycle(t *testing.T) {
 	if create.ExitCode != exitOK {
 		t.Fatalf("create: exit %d (stderr: %s)", create.ExitCode, create.Stderr)
 	}
-	if !strings.Contains(create.Stderr, "socket ignored") {
-		t.Errorf("stderr = %q, want a notice that the socket was ignored", create.Stderr)
-	}
 
 	dest := t.TempDir()
 	res := testutil.Run(t, tree.Root, "-xpf", archive, "-d", dest)
@@ -806,9 +802,7 @@ func TestMetadataLifecycle(t *testing.T) {
 		t.Errorf("stderr = %q, want a notice that the pipe was skipped", res.Stderr)
 	}
 
-	// The socket does not come back, by design. Nor does a pipe where the
-	// platform cannot make one safely.
-	os.Remove(tree.Path("work/sock"))
+	// A pipe does not come back where the platform cannot make one safely.
 	if !platform.pipes {
 		os.Remove(tree.Path("work/pipe"))
 	}
@@ -816,6 +810,25 @@ func TestMetadataLifecycle(t *testing.T) {
 		testutil.CompareOptions{Mode: true, Special: true, MTime: true,
 			Hardlinks: true, Xattrs: platform.xattrs,
 			Holes: platform.holes && tree.Holes("work/disk.img")})
+}
+
+// TestSocketIsSkippedThroughTheBinary: a socket has no content and cannot be
+// recreated, so create skips it with a notice and archives the rest. It is a
+// test of its own, so that a platform where a test cannot make a socket skips
+// only this, not the whole metadata lifecycle.
+func TestSocketIsSkippedThroughTheBinary(t *testing.T) {
+	tree := testutil.NewTree(t)
+	tree.Dir("work", 0o755).Text("work/f.txt", 0o644, "x").Socket("work/sock")
+	archive := filepath.Join(t.TempDir(), "s.eictar")
+
+	create := testutil.Run(t, tree.Root, "-cf", archive, "work")
+	if create.ExitCode != exitOK || !strings.Contains(create.Stderr, "socket ignored") {
+		t.Errorf("create: exit %d, stderr %q; want success and a notice that the socket was ignored",
+			create.ExitCode, create.Stderr)
+	}
+	if list := testutil.Run(t, tree.Root, "-tf", archive).Stdout; strings.Contains(list, "sock") {
+		t.Errorf("the socket was archived:\n%s", list)
+	}
 }
 
 // TestLongListingShowsMetadata: owner, codec, special bits and link targets.
