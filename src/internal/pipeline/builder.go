@@ -94,6 +94,7 @@ func New(cfg Config) *Builder {
 	if cfg.Budget == nil {
 		cfg.Budget = NewBudget(0)
 	}
+	cfg.Budget.atLeast(2 * int64(cfg.ChunkSize))
 	return &Builder{
 		cfg: cfg,
 		// One slot per worker keeps the queue short: the budget, not the
@@ -263,7 +264,7 @@ func (b *Builder) AddFile(m format.Member, r io.Reader, digest io.Writer) error 
 		// The budget is taken before the read and held until the encoded
 		// chunk has landed, so an unread chunk cannot start until an earlier
 		// one has finished.
-		b.cfg.Budget.Acquire(int64(b.cfg.ChunkSize))
+		b.acquireFor(mb)
 
 		if b.scratch == nil {
 			b.scratch = make([]byte, b.cfg.ChunkSize)
@@ -352,6 +353,29 @@ func (b *Builder) AddFile(m format.Member, r io.Reader, digest io.Writer) error 
 	return nil
 }
 
+// acquireFor takes the budget for the next chunk of mb.
+//
+// It must not wait for budget that only mb itself can give back. The chunks
+// of mb that the workers have finished are in its spool, in memory, and they
+// hold budget until the member is complete; the member cannot be complete
+// until this reader goes on. When the budget is full of them, the reader and
+// the spool wait for each other for ever. That happened: 2 workers and 512-byte
+// chunks hung a create, and with the defaults a file of 24 to 32 MiB on a
+// two-CPU machine could do the same.
+//
+// So when the budget is not free at once, mb's spool moves to disk first.
+// Everything else that holds budget - chunks in the workers, finished
+// members on their way to the emitter - is released without this reader,
+// so the wait that follows ends.
+func (b *Builder) acquireFor(mb *memberBuild) {
+	n := int64(b.cfg.ChunkSize)
+	if b.cfg.Budget.TryAcquire(n) {
+		return
+	}
+	mb.spill()
+	b.cfg.Budget.Acquire(n)
+}
+
 // sum returns the digest accumulated so far, or nil if there was no hasher.
 func sum(digest io.Writer) []byte {
 	if h, ok := digest.(interface{ Sum(b []byte) []byte }); ok {
@@ -415,6 +439,19 @@ func (mb *memberBuild) close() {
 	if mb.spool != nil {
 		mb.spool.Close()
 		mb.spool = nil
+	}
+}
+
+// spill moves the member's spool to disk, giving its memory back to the
+// budget. A failure fails the member, as a failed spool write does.
+func (mb *memberBuild) spill() {
+	mb.mu.Lock()
+	defer mb.mu.Unlock()
+	if mb.spool == nil {
+		return
+	}
+	if err := mb.spool.Spill(); err != nil && mb.failed == nil {
+		mb.failed = err
 	}
 }
 

@@ -87,6 +87,15 @@ func (s *Spool) spill() error {
 	return nil
 }
 
+// Spill moves the spool to disk now, if it is still in memory, and gives its
+// memory back to the budget.
+func (s *Spool) Spill() error {
+	if s.file != nil {
+		return nil
+	}
+	return s.spill()
+}
+
 // Size is the number of bytes spooled so far.
 func (s *Spool) Size() int64 { return s.size }
 

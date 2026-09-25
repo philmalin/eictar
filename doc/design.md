@@ -830,8 +830,8 @@ On Linux, the program reads RAM from `/proc/meminfo`. The reader goroutine
 reserves one chunk of budget before each read. The worker releases the
 reservation when it has handed the chunk to the spool.
 
-Two rules prevent deadlock. The first version of M3 deadlocked, and these
-rules are the fix:
+Four rules prevent deadlock. The first version of M3 deadlocked, and so did
+M7 on a small machine. These rules are the fix:
 
 - **Nothing waits for budget while it holds budget.** A worker releases its
   chunk reservation *before* it adds the chunk to the spool, because the
@@ -840,6 +840,19 @@ rules are the fix:
   complete. A spool that waits for budget can wait for itself. Thus it uses a
   non-blocking `TryAcquire`. If that fails, the spool moves to disk, which is
   also the correct response to low memory.
+- **The reader does not wait for its own member.** While the reader reads a
+  member, the finished chunks of that member are in its spool, and they hold
+  budget. The member is complete only when the reader goes on. Thus, if the
+  budget is not free at once, the reader first moves that spool to disk, and
+  then it waits. Everything else that holds budget is released without the
+  reader.
+
+  Until M8, this rule was missing. With 2 workers and 512-byte chunks, a
+  create stopped for ever. With the defaults, a file of 24 to 32 MiB on a
+  machine with two CPUs was able to do the same. A run of the tests as on a
+  CI runner with two CPUs found it.
+- **The budget is at least two chunks.** The reader holds one chunk while it
+  waits for the next. The builder raises a smaller budget to two chunks.
 
 A request that is larger than the whole budget goes through immediately.
 Waiting cannot help it. Also, the requester can be the only holder that can

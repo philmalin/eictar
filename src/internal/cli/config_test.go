@@ -31,17 +31,17 @@ func parseErr(t *testing.T, argv ...string) error {
 // wins over the configuration file, which wins over the default.
 func TestConfigPrecedence(t *testing.T) {
 	home := t.TempDir()
-	writeConfig(t, filepath.Join(home, ".eictarrc"), "workers = 3\nchunk-size = 1MiB\n")
+	writeConfig(t, filepath.Join(home, ".eictarrc"), "workers = 301\nchunk-size = 1MiB\n")
 
 	withEnv(t, home)
-	if o := mustParse(t, "-cf", "a", "p"); o.Workers != 3 || o.ChunkSize != 1<<20 {
+	if o := mustParse(t, "-cf", "a", "p"); o.Workers != 301 || o.ChunkSize != 1<<20 {
 		t.Errorf("file: workers=%d chunk=%v", o.Workers, o.ChunkSize)
 	}
-	withEnv(t, home, "EICTAR_WORKERS=5")
-	if o := mustParse(t, "-cf", "a", "p"); o.Workers != 5 || o.ChunkSize != 1<<20 {
+	withEnv(t, home, "EICTAR_WORKERS=305")
+	if o := mustParse(t, "-cf", "a", "p"); o.Workers != 305 || o.ChunkSize != 1<<20 {
 		t.Errorf("environment: workers=%d chunk=%v", o.Workers, o.ChunkSize)
 	}
-	if o := mustParse(t, "-cf", "a", "-j", "7", "p"); o.Workers != 7 {
+	if o := mustParse(t, "-cf", "a", "-j", "307", "p"); o.Workers != 307 {
 		t.Errorf("command line: workers=%d", o.Workers)
 	}
 }
@@ -159,11 +159,16 @@ func TestPassphraseVariableIsNotASetting(t *testing.T) {
 
 func TestNoConfigIgnoresFileAndEnvironment(t *testing.T) {
 	home := t.TempDir()
-	writeConfig(t, filepath.Join(home, ".eictarrc"), "workers = 2\n")
+	// 977 workers is a number no machine gives as its default. The test once
+	// used 2, which is the default on a two-CPU CI runner, and so failed there
+	// although --no-config worked.
+	writeConfig(t, filepath.Join(home, ".eictarrc"), "workers = 977\n")
 	withEnv(t, home, "EICTAR_CHUNK_SIZE=1MiB", "EICTAR_BOGUS=1")
 	o := mustParse(t, "-cf", "a", "--no-config", "p")
-	if o.Workers == 2 || o.ChunkSize == 1<<20 {
-		t.Errorf("--no-config still read the configuration: workers=%d chunk=%v", o.Workers, o.ChunkSize)
+	d := Defaults()
+	if o.Workers != d.Workers || o.ChunkSize != d.ChunkSize {
+		t.Errorf("--no-config still read the configuration: workers=%d chunk=%v, want the defaults %d and %v",
+			o.Workers, o.ChunkSize, d.Workers, d.ChunkSize)
 	}
 }
 
@@ -171,20 +176,20 @@ func TestNoConfigIgnoresFileAndEnvironment(t *testing.T) {
 // then ~/.eictarrc; and never the current directory.
 func TestConfigFileSearch(t *testing.T) {
 	home := t.TempDir()
-	writeConfig(t, filepath.Join(home, ".eictarrc"), "workers = 2\n")
-	writeConfig(t, filepath.Join(home, ".config", "eictar", "config"), "workers = 3\n")
-	named := writeConfig(t, filepath.Join(t.TempDir(), "named"), "workers = 4\n")
-	envNamed := writeConfig(t, filepath.Join(t.TempDir(), "env"), "workers = 5\n")
+	writeConfig(t, filepath.Join(home, ".eictarrc"), "workers = 302\n")
+	writeConfig(t, filepath.Join(home, ".config", "eictar", "config"), "workers = 303\n")
+	named := writeConfig(t, filepath.Join(t.TempDir(), "named"), "workers = 304\n")
+	envNamed := writeConfig(t, filepath.Join(t.TempDir(), "env"), "workers = 305\n")
 
 	withEnv(t, home)
-	if o := mustParse(t, "-cf", "a", "p"); o.Workers != 3 {
+	if o := mustParse(t, "-cf", "a", "p"); o.Workers != 303 {
 		t.Errorf("the XDG file did not come before ~/.eictarrc: workers=%d", o.Workers)
 	}
 	withEnv(t, home, "EICTAR_CONFIG="+envNamed)
-	if o := mustParse(t, "-cf", "a", "p"); o.Workers != 5 {
+	if o := mustParse(t, "-cf", "a", "p"); o.Workers != 305 {
 		t.Errorf("EICTAR_CONFIG: workers=%d", o.Workers)
 	}
-	if o := mustParse(t, "-cf", "a", "--config", named, "p"); o.Workers != 4 {
+	if o := mustParse(t, "-cf", "a", "--config", named, "p"); o.Workers != 304 {
 		t.Errorf("--config: workers=%d", o.Workers)
 	}
 	if err := parseErr(t, "-cf", "a", "--config", filepath.Join(home, "missing"), "p"); err == nil {
