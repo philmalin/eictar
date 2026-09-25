@@ -1,0 +1,4 @@
+.gocache/
+.gobuildcache/
+.tmp/
+.build/

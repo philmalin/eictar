@@ -1,0 +1,69 @@
+# The tests on every platform that eictar claims (doc/design.md 15.1).
+#
+# A cross-compile proves only that the code builds. The metadata of each
+# platform - xattrs, holes, no-follow calls - differs in ways that only a test
+# run on that platform finds. A platform is supported when this workflow
+# passes on it, and not before.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # go.mod asks for Go 1.27. A system package that is older fetches the right
+  # toolchain itself.
+  GOTOOLCHAIN: auto
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make check GO=go
+      - run: make fuzz GO=go FUZZTIME=20s
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make check GO=go
+
+  freebsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/freebsd-vm@v1
+        with:
+          envs: GOTOOLCHAIN
+          prepare: pkg install -y go gmake
+          run: gmake check GO=go
+
+  netbsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/netbsd-vm@v1
+        with:
+          envs: GOTOOLCHAIN
+          prepare: /usr/sbin/pkg_add go gmake
+          # NetBSD has no race detector.
+          run: gmake check-norace GO=$(ls -d /usr/pkg/bin/go1* | sort -V | tail -1)
+
+  openbsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/openbsd-vm@v1
+        with:
+          envs: GOTOOLCHAIN
+          prepare: pkg_add go gmake
+          # OpenBSD has no race detector.
+          run: gmake check-norace GO=go

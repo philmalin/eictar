@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n '^```' doc/design.md)",
+      "Bash(grep -c '^```' doc/design.md)",
+      "Read(//opt/go-1.27.1/bin/**)",
+      "Bash(/opt/go/bin/go version *)",
+      "Bash(/opt/go/bin/go env *)",
+      "Bash(mkdir *)",
+      "Bash(cd *)",
+      "Bash(export GOMODCACHE=/data/repositories/llm/personal/eictar/.gocache)",
+      "Bash(/opt/go/bin/gofmt -l -w src/)",
+      "Bash(/opt/go/bin/go build *)",
+      "Bash(/opt/go/bin/go vet *)"
+    ]
+  }
+}

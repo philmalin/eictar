@@ -1,0 +1,577 @@
+.\" eictar(1) - the encrypted individually-compressed tar
+.\" View it with: man ./doc/eictar.1
+.TH EICTAR 1 "2026-09-24" "eictar" "User Commands"
+.SH NAME
+eictar \- archive files, each compressed and optionally encrypted on its own
+.SH SYNOPSIS
+.B eictar
+.B \-c
+.B \-f
+.I archive
+.RI [ options ]
+.IR path ...
+.br
+.B eictar
+.BR \-r | \-u
+.B \-f
+.I archive
+.RI [ options ]
+.IR path ...
+.br
+.B eictar
+.BR \-t | \-x | \-\-verify
+.B \-f
+.I archive
+.RI [ options ]
+.RI [ pattern ...]
+.br
+.B eictar
+.B \-\-delete
+.B \-f
+.I archive
+.IR pattern ...
+.br
+.B eictar
+.BR \-\-compact | \-\-repair | \-\-info
+.B \-f
+.I archive
+.RI [ options ]
+.br
+.B eictar
+.BR \-\-list\-codecs | \-\-show\-config | \-\-help | \-\-version
+.SH DESCRIPTION
+.B eictar
+works like
+.BR tar (1),
+but it compresses each member separately, and it can encrypt each member
+separately. An index at the end of the archive lists every member, so a
+listing reads only the end of the file, and an extraction of one file reads
+only that file.
+.PP
+The archive is one seekable file. It cannot be read from a pipe or written
+to one.
+.PP
+Changes to an archive add a new generation after the old one. The old
+generation stays intact until the new one is complete, so a crash does not
+damage what the archive held. A deleted or replaced member stays in the file
+as a tombstone until
+.B \-\-compact
+removes it.
+.PP
+Paths are stored relative. A leading
+.B /
+or
+.B ..
+is removed when a file is added, and the program says so one time. There is
+no option to keep an absolute path. Extraction checks each path again, and
+it never writes outside its destination, not even through a symbolic link.
+.SH OPERATIONS
+Give exactly one operation.
+.TP
+.BR \-c ", " \-\-create
+Create a new archive. An existing file at the path is replaced only when the
+new archive is complete. If the create fails, the old file stays as it was.
+.TP
+.BR \-r ", " \-\-append
+Add paths to an archive. A path that is already in the archive is replaced;
+.B \-\-on\-conflict
+changes that.
+.TP
+.BR \-u ", " \-\-update
+Add only the paths whose copy in the archive is out of date.
+.B \-\-update\-mode
+selects the test.
+.TP
+.BR \-t ", " \-\-list
+List the members. With
+.BR \-v ,
+give the long listing. With
+.BR \-vv ,
+give more columns and a line of totals.
+.TP
+.BR \-x ", " \-\-extract
+Extract the members, into the current directory or into
+.BR \-d .
+.TP
+.B \-\-delete
+Mark the members that match each pattern as deleted. Each pattern must match
+a member, or nothing changes.
+.TP
+.B \-\-compact
+Write the archive again without its dead space: tombstones, and old indexes.
+.TP
+.B \-\-verify
+Decode every member and check every digest and every authentication tag,
+without extraction.
+.TP
+.B \-\-repair
+After a crash during a change, cut the file back to the last complete
+generation. An archive that opens correctly is not changed.
+.TP
+.B \-\-info
+Show the header, the encryption settings, the generation, the member counts,
+the codecs and the dead space.
+.TP
+.B \-\-list\-codecs
+Show each codec with its parameters, defaults and ranges.
+.SH OPTIONS
+.SS Archive and paths
+.TP
+.BI \-f " archive" "\fR, \fP\-\-file " archive
+The archive. It is necessary for every operation except
+.B \-\-list\-codecs
+and
+.BR \-\-show\-config .
+.TP
+.BI \-d " dir" "\fR, \fP\-\-destination " dir
+Extract into
+.IR dir ,
+and create it if it does not exist.
+.TP
+.BI \-C " dir" "\fR, \fP\-\-directory " dir
+Change to
+.I dir
+first.
+.I dir
+must exist.
+.TP
+.BI \-T " file" "\fR, \fP\-\-files\-from " file
+Read the paths from
+.IR file ,
+or from standard input if
+.I file
+is
+.BR \- .
+.TP
+.BI \-\-exclude " glob"
+Leave out the paths that match
+.IR glob .
+An excluded directory is not entered. It can be given more than once.
+.TP
+.BI \-X " file" "\fR, \fP\-\-exclude\-from " file
+Read one glob from each line of
+.IR file .
+.TP
+.BR \-h ", " \-\-dereference
+Store what a symbolic link points to, not the link.
+.TP
+.B \-\-one\-file\-system
+Do not enter other filesystems. A mount point is stored, empty.
+.SS Compression
+.TP
+.BI \-Z " spec" "\fR, \fP\-\-compress " spec
+Compress with
+.IR spec :
+.B none
+or
+.IR name [: key = value [, key = value ]...].
+The default is
+.BR zstd .
+All the members that one operation adds use the same codec. An archive can
+hold members from different codecs.
+.TP
+.BR \-z ", " \-\-gzip
+The same as
+.BR "\-\-compress gzip" .
+.TP
+.BR \-J ", " \-\-xz
+The same as
+.BR "\-\-compress xz" .
+.TP
+.B \-\-zstd
+The same as
+.BR "\-\-compress zstd" .
+.TP
+.BI \-\-chunk\-size " size"
+Compress in chunks of
+.I size
+bytes, from 512 B to 256 MiB. The default is 4 MiB. A size can have a unit:
+KiB, MiB or GiB.
+.SS Encryption
+.TP
+.BR \-e ", " \-\-encrypt
+Encrypt the new archive. The program asks for the passphrase two times. Only
+.B \-c
+takes this option: every later operation uses the passphrase of the archive.
+.TP
+.B \-\-encrypt\-index
+Also encrypt the index, which hides the names, sizes and digests.
+.TP
+.BI \-\-passphrase\-file " file"
+Read the passphrase from the first line of
+.IR file .
+If the archive is not encrypted, the program refuses it with exit 3.
+.TP
+.BI \-\-passphrase\-env " var"
+Read the passphrase from the environment variable
+.IR var .
+Other processes can see the environment, so the program prints a warning.
+.TP
+.BI \-\-kdf\-time " n" "\fR, \fP\-\-kdf\-memory " kib "\fR, \fP\-\-kdf\-threads " n
+The Argon2id cost: passes (1 to 64, default 3), memory in KiB (at most
+4194304, default 262144), and threads (default 4).
+.SS Changes
+.TP
+.BI \-\-on\-conflict " mode"
+With
+.BR \-r :
+what to do with a path that is already in the archive.
+.B replace
+(the default),
+.BR skip ,
+or
+.BR error ,
+which stops and changes nothing.
+.TP
+.BI \-\-update\-mode " mode"
+With
+.BR \-u :
+.B newer
+(the default) takes a file whose modification time is later.
+.B different
+takes a file whose time or size is different, in either direction.
+.B digest
+reads each file and takes it if its content is different.
+.TP
+.BI \-\-recompress " spec"
+With
+.BR \-\-compact :
+encode every member again with
+.IR spec .
+.TP
+.B \-\-quick
+With
+.BR \-\-verify :
+check only the structure, and read no member data.
+.SS Extraction
+.TP
+.BR \-k ", " \-\-keep\-existing
+Never replace an existing file.
+.TP
+.B \-\-overwrite
+Replace existing files. This is the default.
+.TP
+.B \-\-newer\-only
+Replace an existing file only when the member is newer.
+.TP
+.BR \-O ", " \-\-to\-stdout
+Write the content to standard output.
+.TP
+.BR \-p ", " \-\-preserve\-permissions
+Also restore the setuid, setgid and sticky bits.
+.TP
+.B \-\-preserve\-owner
+Restore the owner. Only root can do this.
+.TP
+.B \-\-preserve\-devices
+Create device nodes. Only root can do this.
+.TP
+.BR \-\-no\-xattrs ", " \-\-no\-acls ", " \-\-no\-owner
+When adding, do not record this metadata. When extracting, do not restore
+it.
+.SS Output and work
+.TP
+.BR \-v ", " \-\-verbose
+Show each member as it is processed. With
+.BR \-t ,
+see
+.BR LISTING .
+.TP
+.BR \-q ", " \-\-quiet
+Show errors only.
+.TP
+.B \-\-long
+With
+.BR \-t :
+the same as
+.BR \-v .
+.TP
+.B \-\-json
+With
+.BR \-t :
+a JSON listing with every field, for programs.
+.TP
+.B \-\-progress
+Show a progress line on standard error, when it is a terminal.
+.TP
+.BI \-j " n" "\fR, \fP\-\-workers " n
+Use
+.I n
+workers, from 1 to 1024. The default is the number of CPUs.
+.TP
+.BI \-\-memory\-limit " size"
+The memory for data in flight. The default comes from the size of the
+machine.
+.TP
+.BI \-\-spill\-threshold " size"
+Above this size, a member waits on disk, not in memory. The default is
+32 MiB.
+.TP
+.B \-\-keep\-going
+Continue after an error on one member, and exit with 1 at the end.
+.SS Configuration
+.TP
+.BI \-\-config " file"
+Read the configuration from
+.IR file .
+.TP
+.B \-\-no\-config
+Read no configuration file and no
+.B EICTAR_*
+variable.
+.TP
+.B \-\-show\-config
+Show each setting, its value and where the value came from, then exit.
+.SH LISTING
+.B \-tv
+gives one line for each member:
+.PP
+.nf
+.RS
+\-rw\-r\-\-r\-\-  alice/staff  240001  1432  99.4%  zstd:level=3  2026\-09\-24 17:59:19  d/text.txt
+.RE
+.fi
+.PP
+The columns are the type and mode, the owner, the size, the stored size, the
+percentage that compression saved, the codec, the modification time and the
+path. A member with no data of its own shows
+.B \-
+for the stored size, the percentage and the codec. A hardlink shares the
+data of its target. The percentage can be less than zero. For example, each
+chunk in an encrypted archive carries 16 bytes of authentication tag, which
+is more than a tiny file.
+.PP
+.B \-tvv
+adds the chunk count,
+.B sealed
+for an encrypted member, and the start of the BLAKE3 digest. A last line
+gives the totals.
+.SH CODECS
+.TP
+.B zstd
+Zstandard. Parameters:
+.B level
+1 to 22 (default 3), and
+.B long
+10 to 30, the window size as a power of 2.
+.TP
+.BR gzip ", " flate
+DEFLATE, in a gzip member or raw. Parameter:
+.B level
+1 to 9 (default 6).
+.TP
+.B xz
+LZMA2, as in
+.BR xz (1),
+stored without the .xz container. Parameter:
+.B preset
+0 to 9 (default 6). It is slower than the C
+.BR xz ,
+and every preset uses the faster match finder.
+.TP
+.B s2
+S2, of the Snappy family: very fast, with a lower ratio. Parameter:
+.B mode
+fast, better (default) or best.
+.TP
+.B none
+No compression.
+.PP
+A chunk that compression makes larger is stored as it is. Examples:
+.BR "\-\-compress zstd:level=19,long=27" ,
+.BR "\-\-compress xz:preset=9" .
+.SH CONFIGURATION
+Settings come from these places. The first has priority:
+.IP 1. 4
+the command line
+.IP 2. 4
+.B EICTAR_*
+environment variables
+.IP 3. 4
+the configuration file
+.IP 4. 4
+the built-in defaults
+.PP
+The configuration file is the first of:
+.BR \-\-config ,
+.BR $EICTAR_CONFIG ,
+.BR $XDG_CONFIG_HOME/eictar/config
+(or
+.BR ~/.config/eictar/config ),
+and
+.BR ~/.eictarrc .
+A file in the current directory is never read. The program refuses a
+configuration file that another user owns, or that the group or other users
+can write.
+.PP
+Each line is
+.IB key " = " value\fR,\fP
+where the key is a long option without its dashes. A
+.B #
+at the start of a line, or after a space, starts a comment.
+.B [codec.\fIname\fP]
+sections give default parameters for one codec:
+.PP
+.nf
+.RS
+compress   = zstd
+workers    = 8
+exclude    = *.o
+exclude    = .cache
+
+[codec.zstd]
+level = 19
+.RE
+.fi
+.PP
+A variable is
+.B EICTAR_
+and the long option in capitals, with
+.B _
+for
+.BR \- ,
+for example
+.B EICTAR_CHUNK_SIZE=8MiB
+and
+.BR EICTAR_CODEC_ZSTD_LEVEL=19 .
+.PP
+A configured value applies only to the operations that use it. The
+operation, the archive, the paths and the passphrase never come from a
+configuration. An unknown key or variable is an error, so that a spelling
+mistake is not ignored.
+.B \-v
+names the configuration file that was read. Scripts can use
+.B \-\-no\-config
+so that only the command line decides.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+The operation completed, but some members failed under
+.BR \-\-keep\-going .
+.TP
+.B 2
+A usage error: a bad option, a bad configuration, a pattern that matches
+nothing, or a conflict under
+.BR \-\-on\-conflict=error .
+Nothing was changed.
+.TP
+.B 3
+The archive failed a check: damaged data, a wrong passphrase, a failed
+authentication tag, an unsafe path, or a plain archive where a passphrase
+was given.
+.TP
+.B 4
+Any other error, for example an I/O error, or another eictar that is
+changing the archive.
+.TP
+.B 70
+An option that this build does not support yet.
+.SH ENVIRONMENT
+.TP
+.B EICTAR_CONFIG
+The configuration file.
+.TP
+.BI EICTAR_ option
+A setting; see
+.BR CONFIGURATION .
+.TP
+.BR XDG_CONFIG_HOME ", " HOME
+Where the configuration file is.
+.SH SECURITY
+.IP \(bu 2
+Without
+.BR \-\-encrypt\-index ,
+the index is readable: names, sizes, times, owners, and the BLAKE3 digest of
+each file. With the digests, a person who has a copy of a file can find out
+if the archive holds it.
+.IP \(bu 2
+An encrypted archive detects changes to its content and to its index. A
+plain archive detects damage, but not a person who writes the file again.
+To know that an archive is the one that you made, keep its hash in a safe
+place.
+.IP \(bu 2
+With
+.BR \-O ,
+the content goes to standard output while it is decoded. For a damaged
+member of a plain archive, some bytes can come out before the digest check
+fails. The exit status says so.
+.IP \(bu 2
+Two eictar processes cannot change one archive at the same time: the second
+stops with exit 4. The lock is advisory, and it is not reliable on NFS.
+.IP \(bu 2
+The passphrase cannot change in this version. Every key comes from it.
+.IP \(bu 2
+.B \-\-update\-mode=newer
+misses a file that a restore from backup made older. Use
+.B different
+for backups.
+.SH PLATFORMS
+Linux has all the metadata. macOS, FreeBSD, NetBSD and OpenBSD have the
+owner, the special bits, the times, hardlinks and symbolic links, with these
+limits:
+.IP \(bu 2
+macOS records no ACLs, and extraction skips named pipes and device nodes
+with a notice. APFS refuses a file name that is not UTF-8.
+.IP \(bu 2
+NetBSD and OpenBSD store a file with holes dense.
+.IP \(bu 2
+OpenBSD has no extended attributes.
+.PP
+Extended attribute names are stored as the source platform gives them:
+.B user.comment
+on Linux,
+.B com.apple.quarantine
+on macOS. Extraction sets each name that the destination takes, and one
+notice lists the others. On other platforms, eictar stores content,
+directories and links only.
+.SH EXAMPLES
+Create an encrypted archive of ~/Documents, stored as
+.BR Documents/... ,
+with strong compression:
+.PP
+.nf
+.RS
+eictar \-cef home.eictar \-C ~ \-\-compress zstd:level=19 Documents
+.RE
+.fi
+.PP
+Add what changed since then, and check the result:
+.PP
+.nf
+.RS
+eictar \-uf home.eictar \-C ~ \-\-update\-mode different Documents
+eictar \-\-verify \-f home.eictar
+.RE
+.fi
+.PP
+Extract one directory into another place:
+.PP
+.nf
+.RS
+eictar \-xf home.eictar \-d /tmp/restore Documents/letters
+.RE
+.fi
+.PP
+Remove old versions, and encode everything again with xz:
+.PP
+.nf
+.RS
+eictar \-\-compact \-f home.eictar \-\-recompress xz:preset=9
+.RE
+.fi
+.SH FILES
+.TP
+.B ~/.eictarrc
+The configuration file, when there is no other.
+.SH SEE ALSO
+.BR tar (1),
+.BR zstd (1),
+.BR xz (1)
+.PP
+.I doc/design.md
+gives the design, and
+.I doc/format.md
+specifies the archive format.

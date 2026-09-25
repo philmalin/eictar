@@ -1,0 +1,361 @@
+# eictar archive format, version 1.0
+
+This document specifies the bytes of an eictar archive. With it, you can
+write a reader or a writer without the eictar source code.
+`doc/design.md` gives the reasons for each choice. This document gives only
+the rules.
+
+The committed archives in `src/internal/archive/testdata/golden/` are
+examples of this format, one plain and one encrypted. The passphrase of the
+encrypted example is `golden`. The fixed test vectors of the key schedule are
+in `src/internal/crypt/crypt_test.go`.
+
+## 1. Conventions
+
+- All integers are little-endian, except the chunk index in an AEAD nonce and
+  in an AAD, which is big-endian (§7.3).
+- `CRC-32C` is CRC-32 with the Castagnoli polynomial.
+- `BLAKE3-256` is BLAKE3 with 32 bytes of output. "Keyed BLAKE3" is the keyed
+  mode of BLAKE3 with a 32-byte key.
+- `u64le(x)` is the 8-byte little-endian form of `x`, and `u64be(x)` is the
+  big-endian form.
+- `||` joins byte strings.
+- "Refuse" means that a reader stops with an error and gives no content from
+  the archive.
+
+## 2. Layout
+
+```
+offset 0      file header         64 bytes
+64            crypto header       crypto_header_len bytes (0 if not encrypted)
+body start    blobs, old indexes and old trailers, in any order
+index_offset  index               index_length bytes
+file size-96  trailer             96 bytes
+```
+
+The body starts at `64 + crypto_header_len`. The body has no framing: no
+separator and no length is between two blobs. Only the index says where each
+blob is. The body can also hold dead space: the blobs of deleted members, and
+the indexes and trailers of earlier generations (§10).
+
+## 3. File header
+
+| Offset | Size | Field | Value |
+|-------:|-----:|-------|-------|
+| 0 | 8 | magic | `45 49 43 54 41 52 1A 0A` ("EICTAR\x1a\n") |
+| 8 | 2 | format_major | 1 |
+| 10 | 2 | format_minor | 0 |
+| 12 | 4 | header_flags | bit 0: the archive is encrypted. The other bits are 0. |
+| 16 | 8 | created_unix_nanos | the time of creation, as a signed integer |
+| 24 | 16 | archive_uuid | 16 random bytes |
+| 40 | 4 | crypto_header_len | 0 when bit 0 of header_flags is 0. More than 0, and at most 65536, when it is 1. |
+| 44 | 16 | reserved | zero |
+| 60 | 4 | crc32c | CRC-32C of bytes 0 to 59 |
+
+A reader refuses a header with a wrong magic or a wrong CRC. It also refuses
+a format_major that it does not know, and a flag and a length that do not
+agree.
+
+## 4. Crypto header
+
+The crypto header exists only when the archive is encrypted. It is
+`crypto_header_len` bytes: a `u32le` length `n`, then `n` bytes of CBOR (§8.1)
+that encode this map:
+
+| Key | Type | Value |
+|-----|------|-------|
+| `v` | uint | 1 |
+| `kdf` | text | `argon2id` |
+| `salt` | bytes | 16 bytes, the Argon2id salt |
+| `time` | uint | Argon2id passes, 1 to 64 |
+| `memory` | uint | Argon2id memory in KiB, at least 8 × threads, at most 4194304 |
+| `threads` | uint | Argon2id lanes, 1 to 255 |
+| `aead` | text | `xchacha20poly1305` |
+| `check` | bytes | 32 bytes, the check value (§7.1) |
+| `recipients` | array | reserved. A reader refuses a crypto header that has it. |
+
+A reader applies the limits on `time` and `memory` before it asks for a
+passphrase. A crafted header can ask for a derivation that never ends.
+
+## 5. Blobs and chunks
+
+Each member with content has one blob: `len` bytes at offset `off` of the
+file. The blob is a sequence of chunks, back to back. The member's `chunks`
+array gives the length on disk of each chunk, in order.
+
+The **payload** of a member is the content that its blob stores. For a
+member without `sparse`, it is the whole content, `size` bytes. For a member
+with `sparse`, it is the bytes of the data segments, back to back (§9.3).
+
+The payload is cut into plaintext chunks of `chunk` bytes. The last chunk
+can be shorter, but it is never empty. An empty payload has no chunks, and
+the member has no `chunk`.
+
+Each plaintext chunk becomes a chunk on disk in two steps:
+
+1. **Compress** it with the member's codec (§6). If the result is not
+   shorter than the plaintext chunk, keep the plaintext chunk instead.
+2. **Seal** it, if the archive is encrypted (§7.3).
+
+A reader reverses the steps. After it unseals a chunk, it compares the length
+with the expected plaintext length of that chunk. If they are equal, the
+chunk is stored as it is, and the reader does not decompress it. If not, the
+reader decompresses it, and the result must have exactly the expected length.
+Compression never keeps a result that is as long as the plaintext, so this
+test has only one meaning.
+
+The expected plaintext length of chunk `i` is `chunk`, except for the last
+chunk, which has the rest of the payload.
+
+## 6. Codecs
+
+The index has a catalog of codecs. Each member names an entry of the catalog
+by its position, or `-1` for no codec. A catalog entry is a map with `name`
+(text) and `params` (a map from text to a number or a text). The parameters
+record the settings of the writer. A reader does not need them.
+
+| Name | One compressed chunk is |
+|------|-------------------------|
+| `zstd` | one Zstandard frame (RFC 8878). The writer puts a content checksum in the frame. |
+| `flate` | one raw DEFLATE stream (RFC 1951) that ends with a final block |
+| `gzip` | one gzip member (RFC 1952), with MTIME 0 and no name. A reader refuses a second member after the first. |
+| `s2` | one S2 block: a uvarint of the decoded length, then S2 block elements (the block format of `github.com/klauspost/compress/s2`, a superset of the Snappy block format) |
+| `xz` | one raw LZMA2 stream, with no `.xz` container, that ends with the end marker (a 0x00 control byte). The properties are lc=3, lp=0, pb=2. |
+
+**For `xz`, a reader uses a dictionary of `max(4096, expected plaintext
+length)` bytes.** The stream does not state its dictionary size, and a reader
+must not take a larger number from anywhere else. The chunks are
+independent, so no match reaches back further than the start of its chunk.
+
+A decoder reads at most the expected plaintext length, and then one more
+byte to prove that the stream ends there. A chunk that decodes to more or to
+less is refused.
+
+## 7. Cryptography
+
+### 7.1 Keys
+
+```
+master  = Argon2id(passphrase, salt, time, memory, threads, 32 bytes)
+check   = HKDF-SHA-256(ikm = master, salt = empty, info = "eictar/v1/check"      || archive_uuid)
+indexK  = HKDF-SHA-256(ikm = master, salt = empty, info = "eictar/v1/index"      || archive_uuid || u64le(generation))
+authK   = HKDF-SHA-256(ikm = master, salt = empty, info = "eictar/v1/index-auth" || archive_uuid)
+memberK = HKDF-SHA-256(ikm = master, salt = enc.salt, info = "eictar/v1/member"  || archive_uuid)
+```
+
+Each output is 32 bytes. The info strings are ASCII, with no terminator. The
+passphrase is its bytes as given, with no normalization.
+
+A reader derives `master`, and compares `check` with the crypto header in
+constant time. If they are different, the passphrase is wrong.
+
+### 7.2 AEAD
+
+The AEAD is XChaCha20-Poly1305: a 32-byte key, a 24-byte nonce and a 16-byte
+tag after the ciphertext.
+
+### 7.3 Chunks
+
+Chunk `i` of a member (the first chunk has `i = 0`) is sealed with:
+
+```
+key   = memberK of the member
+nonce = 16 zero bytes || u64be(i)
+aad   = u64le(member.id) || u64be(i) || final
+final = 0x01 for the last chunk of the member, 0x00 for the others
+```
+
+The chunk on disk is the ciphertext and the tag. It is 16 bytes longer than
+the compressed or stored chunk.
+
+A writer must give a member a new random `enc.salt`, and so a new `memberK`,
+each time that it seals content for the member. The same key with the same
+chunk index and different content uses one nonce two times.
+
+### 7.4 Sealed index
+
+When bit 0 of trailer_flags is 1, the index on disk is:
+
+```
+nonce || AEAD-seal(indexK, nonce, compressed index, aad = u64le(generation))
+```
+
+The nonce is 24 random bytes. A writer must not take the nonce from the
+generation, because two different indexes can have the same generation.
+
+### 7.5 Index digest
+
+The trailer records a digest of the index bytes on disk:
+
+```
+digest = BLAKE3-256(archive_uuid || u64le(generation) || index bytes on disk)
+```
+
+In an encrypted archive, the BLAKE3 is keyed with `authK`, whether or not the
+index is sealed. In a plain archive, it has no key. A reader checks the
+digest before it unseals or decodes the index, and compares it in constant
+time.
+
+A reader must also refuse a plain archive when its user expected an
+encrypted one. Someone who removes the encryption can write a plain index
+with an unkeyed digest.
+
+## 8. Index
+
+### 8.1 Encoding
+
+The index is encoded in these steps:
+
+1. CBOR (RFC 8949) of the Index map (§8.2). Map keys are sorted bytewise.
+   Arrays and maps have a definite length. There are no tags and no
+   duplicate keys. Text strings can hold any bytes, because a path is not
+   always UTF-8.
+2. Zstandard, one frame, when bit 1 of trailer_flags is 1. A writer always
+   sets it.
+3. The seal of §7.4, when bit 0 of trailer_flags is 1.
+
+A reader reverses the steps. It limits the decompressed index to 1 GiB, and
+the number of members to 4194304.
+
+### 8.2 Index map
+
+| Key | Type | Value |
+|-----|------|-------|
+| `v` | uint | 1, the version of this schema |
+| `gen` | uint | the generation, equal to the trailer |
+| `codecs` | array | the catalog (§6). Absent when it is empty. |
+| `members` | array | the Member maps |
+
+### 8.3 Member map
+
+| Key | Type | Presence | Value |
+|-----|------|----------|-------|
+| `id` | uint | always | unique in the index, never 0, never reused |
+| `gen` | uint | always | the generation that added the member |
+| `path` | text | always | the stored path (§9.1) |
+| `type` | text | always | `reg`, `dir`, `symlink`, `hardlink`, `fifo`, `sock`, `chardev` or `blockdev` |
+| `mode` | uint | always | permission bits with setuid, setgid and sticky: at most `07777` |
+| `uid`, `gid` | uint | both or neither | the owner. Absent when the writer did not record it. |
+| `uname`, `gname` | text | optional | the owner by name |
+| `mtime` | int | always | nanoseconds since the Unix epoch |
+| `atime`, `ctime` | int | optional | nanoseconds since the Unix epoch |
+| `size` | uint | always | the logical length of the content. 0 for a type without content. |
+| `link` | text | `symlink` only, and required there | the target of the link, as recorded |
+| `hardlink` | uint | `hardlink` only, and required there | the `id` of a `reg` member |
+| `rdev` | array of 2 uint | `chardev` and `blockdev` only, and required there | major, minor |
+| `xattrs` | map, text to bytes | optional | extended attributes, POSIX ACLs included, with each name as the source platform gives it (`user.comment` on Linux and the BSDs, `com.apple.quarantine` on macOS). Names of 1 to 255 bytes, values of at most 65536 bytes, at most 1024 entries. |
+| `sparse` | array of maps | `reg` only, optional | data segments, each `{ "off": uint, "len": uint }` |
+| `digest` | bytes | required for `reg` | BLAKE3-256 of the payload (§5), with no key |
+| `codec` | int | always | a catalog position, or -1 |
+| `chunk` | uint | when there are chunks | plaintext bytes in each chunk, at most 268435456 |
+| `enc` | map | in an encrypted archive, on a member with content | `{ "salt": 16 bytes }` |
+| `off` | uint | when there is a blob | the offset of the blob in the file |
+| `len` | uint | when there is a blob | the length of the blob |
+| `chunks` | array of uint | when there are chunks | the length on disk of each chunk |
+| `dead` | bool | tombstones only | true |
+
+Only `reg` members have content. A member of another type has no `off`,
+`len`, `chunks` or `chunk`, and its `size` is 0. A `reg` member with an empty
+payload has no chunks.
+
+A reader ignores a map key that it does not know. A writer that adds a key
+that an older reader must not ignore changes `format_minor` or
+`format_major`.
+
+### 8.4 Checks
+
+A reader refuses an index that breaks any of these rules:
+
+- the rules of presence and type in §8.3, and the limits in them
+- two members with the same `id`
+- a `codec` that is not -1 and not a catalog position
+- a `hardlink` whose `id` is not a `reg` member of the index. The target can
+  be a tombstone.
+- `sparse` segments that are empty, out of order, overlapping, or that end
+  after `size`
+- `chunks` whose total is not `len`
+- a payload that does not need exactly the number of chunks in `chunks`: it
+  must be more than `chunk × (n − 1)` and at most `chunk × n`
+- a blob that does not lie inside `[body start, index_offset)`
+- a count of members without `dead` that is not the trailer's
+  live_member_count
+
+The index checks do not require stored paths. A reader can list an archive
+with a bad path, so that a person can see what is in it. A reader that
+extracts refuses the bad member (§9.1).
+
+## 9. Members
+
+### 9.1 Stored paths
+
+A stored path is relative, with `/` between its components. No component is
+empty, `.` or `..`, and the path does not start with `/`. The one exception is
+the path `.`, for the root of the archived tree. A path is a sequence of
+bytes, and it does not have to be UTF-8.
+
+An extractor refuses a member whose path breaks this rule. It also refuses to
+write through a symbolic link that an earlier member made.
+
+### 9.2 Hardlinks
+
+A `hardlink` member has no content. It names a `reg` member, whose content
+it shares. That member can be a tombstone: a newer generation can replace
+one name of a hardlinked file, and the other names keep the old content.
+
+### 9.3 Sparse files
+
+A `reg` member with `sparse` is a file with holes. Its payload is the bytes
+of the segments, in the order of the array. To rebuild the file, write each
+segment at its `off`, and make the file `size` bytes long. The rest of the
+file is zero.
+
+## 10. Trailer and generations
+
+| Offset | Size | Field | Value |
+|-------:|-----:|-------|-------|
+| 0 | 8 | magic | "EICTRAIL" |
+| 8 | 2 | format_major | equal to the header |
+| 10 | 2 | format_minor | equal to the header |
+| 12 | 4 | trailer_flags | bit 0: the index is sealed. Bit 1: the index is compressed. Bit 0 only in an encrypted archive. |
+| 16 | 8 | generation | 1 for a new archive, 1 more for each later index |
+| 24 | 8 | index_offset | inside the body, at or after the body start |
+| 32 | 8 | index_length | the index ends at or before the trailer |
+| 40 | 8 | prev_index_offset | the index of the generation before, or 0 |
+| 48 | 8 | live_member_count | members without `dead` |
+| 56 | 32 | index_digest | §7.5 |
+| 88 | 4 | reserved | zero |
+| 92 | 4 | crc32c | CRC-32C of bytes 0 to 91 |
+
+The last 96 bytes of the file are the trailer, and they are the commit
+record. A reader uses only that trailer. It does not go back to an earlier
+generation by itself.
+
+A writer changes an archive in this order:
+
+1. Write the new blobs after the **end of the file**. The old trailer stays
+   where it is.
+2. Write the new index, which lists every member, old and new, with `dead`
+   on the members that this generation removes.
+3. Make steps 1 and 2 durable, then write the new trailer with
+   `generation + 1`, then make it durable.
+
+If step 3 does not complete, the file does not end with a valid trailer, and
+a reader refuses it. The repair is to find the last valid trailer before the
+end, and to cut the file after it. A candidate is valid only when every check
+of this document passes for a file that ends after it.
+
+A compact writes a new file with the same header and crypto header, and
+the same `archive_uuid`, because every `memberK` depends on it. It uses the
+next generation, and a `prev_index_offset` of 0.
+
+## 11. Limits
+
+| Item | Limit |
+|------|-------|
+| crypto_header_len | 65536 bytes |
+| Argon2id `time` | 64 |
+| Argon2id `memory` | 4194304 KiB |
+| `chunk` | 268435456 bytes |
+| decompressed index | 1 GiB |
+| members in one index | 4194304 |
+| xattr name, value, count | 255 bytes, 65536 bytes, 1024 |
