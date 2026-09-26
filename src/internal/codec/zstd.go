@@ -14,8 +14,15 @@ func init() { Register(zstdFactory{}) }
 
 // zstd parameter ranges. The level range matches the zstd command line so a
 // number a user already knows means the same thing here.
+//
+// The library has four speeds, not 22 levels: 1-2 is its fastest, 3-5 its
+// default, 6-9 better, and 10-22 best (EncoderLevelFromZstd). Thus 12 and 19
+// give the same archive. The default is 12, the best speed: about 5% smaller
+// than 3 on source code, and about 3.4 times slower to create, with the same
+// extraction speed (doc/design.md 10.2). 12 rather than 19, so that it stays
+// a sensible level if the library gains finer ones.
 const (
-	zstdLevelMin, zstdLevelMax, zstdLevelDefault = 1, 22, 3
+	zstdLevelMin, zstdLevelMax, zstdLevelDefault = 1, 22, 12
 	zstdLongMin, zstdLongMax                     = 10, 30
 	// zstdLongBare is the window of zstd --long given alone.
 	zstdLongBare = 27

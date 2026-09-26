@@ -1,6 +1,6 @@
 .\" eictar(1) - the encrypted individually-compressed tar
 .\" View it with: man ./doc/eictar.1
-.TH EICTAR 1 "2026-09-24" "eictar" "User Commands"
+.TH EICTAR 1 "2026-09-26" "eictar" "User Commands"
 .SH NAME
 eictar \- archive files, each compressed and optionally encrypted on its own
 .SH SYNOPSIS
@@ -112,7 +112,10 @@ option gives.
 .TP
 .B \-\-verify
 Decode every member and check every digest and every authentication tag,
-without extraction.
+without extraction. Data that several files share is decoded one time.
+Patterns and
+.B \-R
+select the members to check.
 .TP
 .B \-\-repair
 After a crash during a change, cut the file back to the last complete
@@ -120,7 +123,8 @@ generation. An archive that opens correctly is not changed.
 .TP
 .B \-\-info
 Show the header, the encryption settings, the generation, the member counts,
-the codecs and the dead space.
+the codecs, the dictionaries, the files that share another's data, and the
+dead space.
 .TP
 .B \-\-list\-codecs
 Show each codec with its parameters, defaults and ranges.
@@ -206,7 +210,12 @@ Do not enter other filesystems. A mount point is stored, empty.
 Store each copy of the same content in full. By default, a file whose
 content the archive already holds shares that data, and stores nothing of
 its own. Damage to shared data affects each file that shares it. This
-option keeps damage inside one file, at the cost of space.
+option keeps damage inside one file, at the cost of space. Only
+.BR \-c ,
+.B \-r
+and
+.B \-u
+take it.
 .SS Compression
 .TP
 .BI \-Z " spec" "\fR, \fP\-\-compress " spec
@@ -222,7 +231,8 @@ alone means its \(lqon\(rq value, the same as
 and
 .IB key =off
 turns it off. The default is
-.BR zstd .
+.BR zstd ,
+at level 12.
 All the members that one operation adds use the same codec. An archive can
 hold members from different codecs.
 .TP
@@ -400,7 +410,7 @@ gives one line for each member:
 .PP
 .nf
 .RS
-\-rw\-r\-\-r\-\-  alice/staff  240001  1432  99.4%  zstd:level=3  2026\-09\-24 17:59:19  d/text.txt
+\-rw\-r\-\-r\-\-  alice/staff  240001  1432  99.4%  zstd:level=12  2026\-09\-24 17:59:19  d/text.txt
 .RE
 .fi
 .PP
@@ -414,9 +424,10 @@ too, and the path ends with
 .BI "same as " path\fR,\fP
 .BR "same as its earlier version" ,
 or
-.BI "same as deleted " path\fR.\fP The percentage can be less than zero. For example, each
-chunk in an encrypted archive carries 16 bytes of authentication tag, which
-is more than a tiny file.
+.BI "same as deleted " path\fR.\fP
+The percentage can be less than zero. For example, each chunk in an
+encrypted archive carries 16 bytes of authentication tag, which is more
+than a tiny file.
 .PP
 .B \-tvv
 adds the chunk count,
@@ -424,14 +435,12 @@ adds the chunk count,
 for an encrypted member, and the start of the BLAKE3 digest. A last line
 gives the totals, and the files that share another's data.
 .SH PATTERNS
-The operations
 .BR \-t ,
 .BR \-x ,
-.B \-\-verify
+.BR \-\-verify ,
+.B \-\-delete
 and
-.BR \-\-delete ,
-and
-.BR \-\-exclude ,
+.B \-\-exclude
 take patterns. A pattern matches a member when it is the member's path, or
 a directory that the member is under, or a glob that matches the whole path
 (a
@@ -483,7 +492,7 @@ after
 .B zstd
 Zstandard. Parameters:
 .B level
-1 to 22 (default 3);
+1 to 22 (default 12);
 .B long
 10 to 30, the window size as a power of 2, or alone for 27, as with
 .BR "zstd \-\-long" ;
@@ -492,6 +501,16 @@ and
 The chunks are independent, so a window larger than
 .B \-\-chunk\-size
 has no effect, and the program warns.
+.IP
+The zstd library of eictar has four speeds, not 22 levels: levels 1 and 2
+are the fastest, 3 to 5 the default speed, 6 to 9 better, and 10 to 22 the
+best. Thus
+.B level=12
+and
+.B level=19
+make the same archive. The default, 12, is the best speed: about 5% smaller
+than level 3, and about 3 times slower to create. Extraction is as fast at
+every level.
 .IP
 .B train
 makes a dictionary from the start of each file before the compression, and
@@ -574,7 +593,8 @@ exclude    = *.o
 exclude    = .cache
 
 [codec.zstd]
-level = 19
+level = 12
+train = on
 .RE
 .fi
 .PP
@@ -607,8 +627,10 @@ The operation completed, but some members failed under
 .BR \-\-keep\-going .
 .TP
 .B 2
-A usage error: a bad option, a bad configuration, a pattern that matches
-nothing, or a conflict under
+A usage error: a bad option, a bad configuration, a pattern or an
+.B \-R
+that matches nothing, a regular expression that is not valid, or a conflict
+under
 .BR \-\-on\-conflict=error .
 Nothing was changed.
 .TP
@@ -638,9 +660,11 @@ Where the configuration file is.
 .IP \(bu 2
 Without
 .BR \-\-encrypt\-index ,
-the index is readable: names, sizes, times and owners. The digest of each
-file is a keyed BLAKE3 hash. Thus a person who has a copy of a file cannot
-find out from the digests if the archive holds it.
+the index is readable: names, sizes, times and owners. In an encrypted
+archive, the digest of each file is a keyed BLAKE3 hash. Thus a person who
+has a copy of a file cannot find out from the digests if the archive holds
+it. Equal digests, and files that share data, still show which files have
+the same content.
 .IP \(bu 2
 An encrypted archive detects changes to its content and to its index. A
 plain archive detects damage, but not a person who writes the file again.
@@ -688,13 +712,14 @@ directories and links only.
 .SH EXAMPLES
 Create an encrypted archive of ~/Documents, stored as
 .BR Documents/... ,
-with strong compression:
+with zstd at the default level 12:
 .PP
 .nf
 .RS
-eictar \-cef home.ect \-C ~ \-\-compress zstd:level=19 Documents
+eictar \-cef home.ect \-C ~ Documents
 .RE
 .fi
+
 .PP
 Add what changed since then, and check the result:
 .PP
@@ -728,7 +753,29 @@ Change the passphrase, and make the key derivation stronger:
 eictar \-\-change\-passphrase \-f home.ect \-\-kdf\-memory 1048576
 .RE
 .fi
+.PP
+Extract only the PDF files below Documents, at any depth:
+.PP
+.nf
+.RS
+eictar \-xf home.ect \-R 'Documents/.*\e.pdf'
+.RE
+.fi
+.PP
+Archive a source tree fast, with a dictionary, and without the build
+directories:
+.PP
+.nf
+.RS
+eictar \-cf src.ect \-Z zstd:level=3,train \-\-exclude\-regex '.*/build' project
+.RE
+.fi
 .SH FILES
+.TP
+.B ~/.config/eictar/config
+The configuration file, or
+.B $XDG_CONFIG_HOME/eictar/config
+when that variable is set.
 .TP
 .B ~/.eictarrc
 The configuration file, when there is no other.

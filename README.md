@@ -12,15 +12,15 @@ can encrypt each one. The index is at the end of the archive. Thus eictar can:
 $ eictar -cf home Documents
 eictar: creating home.ect
 $ eictar -tvf home.ect
-drwxr-xr-x  phil/phil       0       -     -  -             2026-09-25 22:53:21  Documents
--rw-r--r--  phil/phil  288894   36269  87.4%  zstd:level=3  2026-09-25 22:53:21  Documents/numbers.txt
+drwxr-xr-x  phil/phil       0       -     -  -              2026-09-25 22:53:21  Documents
+-rw-r--r--  phil/phil  288894   32498  88.8%  zstd:level=12  2026-09-25 22:53:21  Documents/numbers.txt
 $ eictar -xf home.ect -d /tmp/restore Documents/numbers.txt
 ```
 
 ## Features
 
-- **Compression for each file**: zstd (the default), xz, gzip, flate and s2,
-  or none. Each append can use a different codec. `--list-codecs` shows
+- **Compression for each file**: zstd (the default, at level 12), xz, gzip,
+  flate and s2, or none. Each append can use a different codec. `--list-codecs` shows
   the codecs and their parameters.
 - **Dictionaries**: `-Z zstd:train` learns the text that the files share,
   such as license headers and imports, and stores it once in the archive.
@@ -67,66 +67,147 @@ make check            # the unit and operational tests
 man ./doc/eictar.1    # the manual page
 ```
 
-## Examples
+## Common tasks
+
+### Create, list and extract
+
+```
+eictar -cf photos Pictures             # makes photos.ect
+eictar -tf photos                      # the paths
+eictar -tvf photos                     # a long listing, as tar -tv
+eictar -xf photos                      # extract here
+eictar -xf photos -d /tmp/restore      # extract into /tmp/restore
+```
 
 The conventional extension is `.ect`. `-c` adds it to a name with no
-extension, and the other operations find `home.ect` by the name `home`.
+extension, and the other operations find `photos.ect` by the name `photos`.
+Paths are stored relative: `-C DIR` changes to DIR first, so that
+`eictar -cf home -C ~ Documents` stores `Documents/...`.
 
-Create an archive with strong compression:
+With no options, eictar uses these defaults:
 
-```
-eictar -cf home.ect -C ~ --compress zstd:level=19 Documents
-```
+| Setting | Default |
+|---|---|
+| compression | zstd at level 12 |
+| chunk size | 4 MiB |
+| workers (`-j`) | the number of CPUs |
+| memory for data in flight | a quarter of the RAM |
+| identical files | stored one time (`--no-dedup` turns this off) |
+| encryption | off |
+| extraction | replaces existing files, and restores permissions and times, not owners |
 
-Archive a source tree with a dictionary:
+`eictar --show-config` shows each setting, and where its value came from.
 
-```
-eictar -cf src.ect -Z zstd:level=19,train project/
-```
-
-Create an encrypted archive, with a hidden index. The program asks for the
-passphrase two times:
-
-```
-eictar -cef secret.ect --encrypt-index Documents
-```
-
-Add only the files that changed, then make sure that the archive is correct:
+### Encryption
 
 ```
-eictar -uf home.ect -C ~ --update-mode different Documents
-eictar --verify -f home.ect
+eictar -cef secret Documents                    # asks for a passphrase two times
+eictar -cef secret --encrypt-index Documents    # also hides the names and sizes
+eictar -tf secret                               # asks for the passphrase
+eictar -xf secret --passphrase-file ~/.secret   # for a script: the first line of the file
+eictar --change-passphrase -f secret            # asks for the old one, then the new one
 ```
 
-Extract only the PDF files below `Documents`, at any depth:
+You choose encryption when you create the archive. Every later operation
+uses the same passphrase. Without `--encrypt-index`, a person with the
+archive can read the names, sizes and times of the files, but not their
+content.
+
+### Compression
 
 ```
-eictar -xf home.ect -R 'Documents/.*\.pdf'
+eictar -cf a Documents                     # zstd, level 12 (the default)
+eictar -cf a -Z zstd:level=3 Documents     # faster, a little larger
+eictar -cf a -J Documents                  # xz: smaller, slower
+eictar -cf a -z Documents                  # gzip
+eictar -cf a -Z s2 Documents               # very fast, larger
+eictar -cf a -Z none Documents             # no compression
+eictar --list-codecs                       # every codec and its parameters
 ```
 
-Delete a directory, then remove the old generations and encode everything
-again with xz:
+The zstd library of eictar has four speeds, not 22 levels. Levels 1 and 2
+are the fastest, 3 to 5 the default speed, 6 to 9 better, and 10 to 22 the
+best. Thus `level=12` and `level=19` make the same archive. On source code,
+level 12 is about 5% smaller than level 3 and about 3 times slower to
+create. Extraction is as fast at every level.
+
+### Many small, similar files: a dictionary
 
 ```
-eictar --delete -f home.ect Documents/old
-eictar --compact -f home.ect --recompress xz:preset=9
+eictar -cf src -Z zstd:train project           # a dictionary of 112 KiB
+eictar -cf src -Z zstd:train=1M project        # a larger one, for a large tree
 ```
 
-Change the passphrase of an encrypted archive:
+`train` learns the text that the files share, such as license headers and
+imports, and stores it one time in the archive. Each file can still be
+extracted alone. The gain is largest for many small text files, and near
+zero for large or compressed files. A later `-r` or `-u` with `train` uses
+the same dictionary.
+
+For large files, `long` gives zstd a larger window. The window works only
+inside one chunk, so give a chunk size to match:
 
 ```
-eictar --change-passphrase -f secret.ect
+eictar -cf images -Z zstd:long --chunk-size 128MiB disk-images
 ```
 
-Show the archive's settings and generation:
+### Backups: add, update, delete and compact
 
 ```
-eictar --info -f home.ect
+eictar -uf home -C ~ --update-mode different Documents   # add only what changed
+eictar -rf home -C ~ Documents/new.txt                   # add, replacing an older copy
+eictar --delete -f home Documents/old                    # mark as deleted
+eictar --compact -f home                                 # remove deleted data and old copies
+eictar --compact -f home --recompress xz                 # the same, and encode everything again
 ```
 
-A script can give the passphrase with `--passphrase-file FILE` or
-`--passphrase-env VAR`. Default settings can come from `~/.eictarrc` and
-`EICTAR_*` variables: see `eictar --show-config` and the manual page.
+Each change adds a new generation after the old one. A crash does not damage
+what the archive held before, and `eictar --repair -f home` removes an
+incomplete generation. Deleted and replaced files keep their space until
+`--compact`. Use `--update-mode different` for backups: the default,
+`newer`, misses a file that a restore from backup made older.
+
+### Select files
+
+```
+eictar -xf home Documents/letters              # a directory and its contents
+eictar -tf home '*.pdf'                         # a name at any depth
+eictar -cf src --exclude '*.o' project          # leave files out
+eictar -xf home -R 'Documents/.*\.pdf'          # a regular expression, on the whole path
+eictar -cf src --exclude-regex '.*/build' project
+```
+
+A regular expression must match the whole stored path, such as
+`Documents/2026/tax.pdf`. In an expression, `.` is any character, so write
+`\.` for a dot, and put the expression in single quotes.
+
+### Check an archive
+
+```
+eictar --verify -f home       # decode everything, and check every digest
+eictar --info -f home         # size, codecs, dictionaries, shared content, dead space
+eictar -tvvf home             # the long listing, with digests and totals
+```
+
+In `-tv`, a file that shares the data of an identical file ends with
+`same as PATH`.
+
+### Settings in a file
+
+Put the settings that you always use in `~/.eictarrc`:
+
+```ini
+workers = 8
+exclude = *.o
+
+[codec.zstd]
+level = 12
+train = on
+```
+
+An option on the command line wins over the file: `-Z zstd:train=off`
+turns `train` off for one run. `--no-config` ignores the file and the
+`EICTAR_*` variables.
 
 ## Exit status
 

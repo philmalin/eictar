@@ -102,7 +102,7 @@ gives the full reasoning and the exact formats.
 | Index encryption | Optional, `--encrypt-index`, off by default.  An unencrypted index reveals file names, sizes and permissions.  In an encrypted archive the member digests are keyed, so they reveal nothing about the content |
 | `ccrypt` | Dropped.  `golang.org/x/crypto` covers the requirement |
 | Dependencies | Pure-Go third-party modules allowed.  No CGO, no external binaries |
-| Default codec | zstd, alongside xz, gzip, flate, s2 and stored |
+| Default codec | zstd at level 12, the best speed of its library, alongside xz, gzip, flate, s2 and stored |
 | Identical content | A file whose content the archive already holds shares that data, and stores nothing of its own.  `--no-dedup` stores each copy in full |
 | Dictionaries | `-Z zstd:train` trains a zstd dictionary from the files and stores it in the archive, encrypted when the archive is.  Each member stays independent |
 | Concurrency | Member order inside the archive is not significant, so a single writer appends whichever worker finishes first |

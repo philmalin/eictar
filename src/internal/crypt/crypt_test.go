@@ -71,6 +71,14 @@ func TestKeyScheduleVectors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wrap: %v", err)
 	}
+	dictKey, err := k.DictKey(testSalt)
+	if err != nil {
+		t.Fatalf("DictKey: %v", err)
+	}
+	sealedDict, err := SealDict(dictKey, 40000, []byte("vector dictionary"))
+	if err != nil {
+		t.Fatalf("SealDict: %v", err)
+	}
 
 	for _, tc := range []struct {
 		name string
@@ -94,6 +102,12 @@ func TestKeyScheduleVectors(t *testing.T) {
 				"a27ac7f6ea48fd1138b0be74c0c0363f22a9d813948aa4b853f21218"},
 		{"keyed index digest", digest[:],
 			"51a0e9b88f6251abfd4c95b3d5324128128e9a08449ea476fd129275d4204bf5"},
+		// The dictionary key agrees with HKDF-SHA-256 as doc/format.md 7.1
+		// defines it, computed apart from this code.
+		{"dictionary key", dictKey,
+			"eac283aab5bbff42d7adc69ddfa705e2da15e812838cc66b9e9b1de791abc3f4"},
+		{"sealed dictionary", sealedDict,
+			"85e3fc013fd12eefd3dd560d5f7d811de3dd0882eb9eb55e02da49409d4f6847aa"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := hex.EncodeToString(tc.got); got != tc.want {

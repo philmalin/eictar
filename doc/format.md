@@ -6,9 +6,15 @@ write a reader or a writer without the eictar source code.
 the rules.
 
 The committed archives in `src/internal/archive/testdata/golden/` are
-examples of this format, one plain and one encrypted. The passphrase of the
-encrypted example is `golden`. The fixed test vectors of the key schedule are
-in `src/internal/crypt/crypt_test.go`.
+examples of this format:
+
+- `plain.ect`: three generations, with a tombstone
+- `encrypted.ect`: the same, encrypted, with a sealed index
+- `dict.ect`: encrypted, with a sealed dictionary (§6.1)
+- `shared.ect`: members that share the content of another (§8.5)
+
+The passphrase of the encrypted examples is `golden`. The fixed test vectors
+of the key schedule are in `src/internal/crypt/crypt_test.go`.
 
 ## 1. Conventions
 
@@ -28,7 +34,7 @@ in `src/internal/crypt/crypt_test.go`.
 ```
 offset 0      file header         64 bytes
 64            crypto header       crypto_header_len bytes (0 if not encrypted)
-body start    blobs, old indexes and old trailers, in any order
+body start    member and dictionary blobs, old indexes and old trailers, in any order
 index_offset  index               index_length bytes
 file size-96  trailer             96 bytes
 ```
@@ -83,7 +89,7 @@ passphrase. A crafted header can ask for a derivation that never ends.
 ## 5. Blobs and chunks
 
 Each member with content has one blob: `len` bytes at offset `off` of the
-file. The blob is a sequence of chunks, back to back. The member's `chunks`
+file. The exception is a member that shares the content of another (§8.5). The blob is a sequence of chunks, back to back. The member's `chunks`
 array gives the length on disk of each chunk, in order.
 
 The **payload** of a member is the content that its blob stores. For a
@@ -276,7 +282,7 @@ A Dict map:
 
 | Key | Type | Value |
 |-----|------|-------|
-| `id` | uint | the dictionary id, 1 to 2^32 − 1, unique in the index |
+| `id` | uint | the dictionary id, 1 to 2^32 − 1, unique in the index. A writer takes it from 32768 to 2^31 − 1, the range that RFC 8878 leaves free. |
 | `gen` | uint | the generation that added it |
 | `size` | uint | the length of the dictionary, 1 to 1048576 |
 | `digest` | bytes | 32 bytes (§6.1) |
@@ -307,7 +313,7 @@ A Dict map:
 | `digest` | bytes | required for `reg` | BLAKE3-256 of the payload (§5): keyed with `contentK` (§7.1) in an encrypted archive, with no key in a plain one |
 | `codec` | int | always | a catalog position, or -1 |
 | `chunk` | uint | when there are chunks | plaintext bytes in each chunk, at most 268435456 |
-| `enc` | map | in an encrypted archive, on a member with content | `{ "salt": 16 bytes }` |
+| `enc` | map | in an encrypted archive, on a member with a blob of its own | `{ "salt": 16 bytes }` |
 | `off` | uint | when there is a blob | the offset of the blob in the file |
 | `len` | uint | when there is a blob | the length of the blob |
 | `chunks` | array of uint | when there are chunks | the length on disk of each chunk |
@@ -427,7 +433,9 @@ of this document passes for a file that ends after it.
 
 A compact writes a new file with the same header and crypto header, and
 the same `archive_uuid`, because every `memberK` depends on it. It uses the
-next generation, and a `prev_index_offset` of 0.
+next generation, and a `prev_index_offset` of 0. A change of passphrase is a
+compact with a new crypto header: a new `salt`, new Argon2id parameters and
+a new `key` (§7.1). The blobs do not change.
 
 ## 11. Limits
 

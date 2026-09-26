@@ -1,7 +1,8 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete. The CI workflow passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
-Date: 2026-09-24
+Status: M1 to M11 are complete, and v1.0.0 is tagged. The CI workflow passes
+on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
+Date: 2026-09-26
 Applies to: v1 (format version 1.0)
 
 This document specifies the on-disk format, the concurrency model, the command
@@ -67,6 +68,10 @@ result, a listing or a selective extraction does not read the member data.
 | 9 | Xattrs across platforms | Names are recorded exactly. Each name is applied where the destination takes it, and one notice lists the rest (§7.7). Decided for M8, from open question 5. |
 | 10 | Module path | `github.com/philmalin/eictar` (§12). Decided for the first release, from open question 3. |
 | 11 | License | GPL-3.0 (`LICENSE`). Under section 7(e), the license gives no right to use the name "eictar" for a modified version (`TRADEMARKS.md`). |
+| 12 | Archive name | The conventional extension is `.ect`. Create adds it to a name with no extension (§10.12). |
+| 13 | Selection by regular expression | `-R` and `--exclude-regex`. An expression matches the whole stored path (§10.11). |
+| 14 | Dictionaries | `-Z zstd:train` trains a zstd dictionary from the files, and the archive stores it (§4.2, M10). |
+| 15 | Identical content | Stored one time. A copy refers to the blob of the member that holds it (§4.3, M11). |
 
 ### 1.2 Non-goals for v1
 
@@ -75,21 +80,18 @@ result, a listing or a selective extraction does not read the member data.
   tombstone). There is no chain of patches.
 
   A chain makes extraction slower as the history grows, and it breaks when a
-  member in the middle is deleted. The cost of this decision: a file that you
-  append N times occupies N full copies until `--compact` removes the dead
-  copies.
+  member in the middle is deleted. This decision has a cost. A file that you
+  append N times occupies N full copies, until `--compact` removes the dead
+  copies. §15.2 records a measurement of the cost.
 - **Incremental archives, as in `tar --listed-incremental`.** That feature
   keeps a snapshot of a tree so that the next run stores only the changes.
   It is a feature above the format. It can come later with no change to the
   bytes on disk.
-- **Content deduplication.** There are two kinds:
-  - *Whole-file.* Identical content in unrelated files is stored once.
-    Hardlink detection does not find these files. This kind is simple to add
-    later (§15).
-  - *Chunk-level.* A shared store of chunks, as borg and restic use. This kind
-    changes the storage model. Members become lists of shared chunks instead
-    of one continuous blob. That needs a chunk index, reference counts and a
-    garbage collector. For these reasons it is not in v1.
+- **Chunk-level deduplication.** A shared store of chunks, as borg and restic
+  use. It changes the storage model: members become lists of shared chunks,
+  not one continuous blob. That needs a chunk index, reference counts and a
+  garbage collector. For these reasons it is not in v1. Whole-file
+  deduplication is in v1 (§4.3).
 - **Public-key recipients** (as in `age`). The format keeps space for them
   (§6.2).
 - **Pipes.** The program cannot read or write an archive through a pipe. The
@@ -108,7 +110,7 @@ decided for the first release (§1.1, row 10).
 
 | # | Question | Sections | Needed by |
 |---|----------|----------|-----------|
-| 2 | **Interleaved `-C`.** `tar` accepts `-C a x -C b y` and changes directory between the path arguments. That needs the argument order, which the option parser does not keep. Until this question is decided, more than one `-C` is a usage error. | §7.1, §10.4 | M7 |
+| 2 | **Interleaved `-C`.** `tar` accepts `-C a x -C b y` and changes directory between the path arguments. That needs the argument order, which the option parser does not keep. Until this question is decided, more than one `-C` is a usage error. | §7.1, §10.4 | no milestone |
 
 ### 1.4 Terms
 
@@ -118,13 +120,15 @@ Each term has one meaning in this document.
 |------|---------|
 | member | One entry in the archive: a file, a directory or a link. |
 | blob | The bytes of one member's content in the body of the archive. |
+| owner | The member whose blob holds the content that another member shares (§4.3). |
+| dictionary | Text that zstd uses as the start of each chunk, stored in the archive (§4.2). |
 | chunk | A fixed-size piece of a member's content. Each chunk is compressed, and sealed, separately. |
 | index | The catalog of all members, stored near the end of the archive. |
 | trailer | The fixed 96-byte record at the end of the file. It points to the index. |
 | generation | A counter that increases each time the program writes a new index. |
 | tombstone | A member marked dead. Listings ignore it. Its blob stays until `--compact`. |
 | seal | To encrypt and authenticate with the AEAD. "Unseal" is the reverse. |
-| digest | A BLAKE3-256 value of some bytes. |
+| digest | A BLAKE3-256 value of some bytes. In an encrypted archive, the digest of content is keyed (§6.2). |
 | reader, writer | The parts of the program that open and create archives. |
 
 
@@ -145,6 +149,7 @@ offset 0
 +--------------------------------------------------+
 | Crypto header   (length in the header, if encrypted)|
 +--------------------------------------------------+
+| Dictionary blob (§4.2), if any                   |
 | Member blob 0                                    |
 | Member blob 1                                    |
 | ...                                              |  body
@@ -167,10 +172,10 @@ The reader opens an archive in this sequence:
 4. Read the index bytes that the trailer points to.
 5. Check the index digest that the trailer records (§6.4).
 6. If the index is sealed, unseal it. Then decompress it and decode it.
-7. Check the byte range of every member against the archive.
+7. Check the byte range of every member and dictionary against the archive.
 
-Step 7 exists because `Index.Validate` has no file to compare with. A member
-range must start at or after the body and end at or before the index. A
+Step 7 exists because `Index.Validate` has no file to compare with. A blob
+must start at or after the body and end at or before the index. A
 member that points into the header, into the index, or past the end of the
 file is a corrupt index. Without this step, a bad range can return the wrong
 bytes as file content.
@@ -200,8 +205,10 @@ AEAD stream constructions.
 | 44 | 16 | `reserved` | must be zero |
 | 60 | 4 | `crc32c` | of bytes 0..59 |
 
-The `\x1a\n` in the magic stops a terminal early when you `cat` an archive.
-It also makes simple text-or-binary detection give the correct result.
+The magic follows the idea of the PNG signature. The `\x1a` stops the display
+of the file by the `type` command of DOS and Windows. The `\n` shows a
+transfer in text mode, which changes line endings, because the magic is then
+wrong.
 
 ### 3.2 Trailer (96 bytes, the last 96 bytes of the file)
 
@@ -220,8 +227,8 @@ It also makes simple text-or-binary detection give the correct result.
 | 88 | 4 | `reserved` | zero |
 | 92 | 4 | `crc32c` | of bytes 0..91 |
 
-The writer writes the trailer with one `pwrite`. That write is the commit
-point for the whole archive (§9).
+The writer writes the trailer with one `write` call. That write is the
+commit point for the whole archive (§9).
 
 The two flag words are different Go types, `HeaderFlags` and
 `TrailerFlags`. Both use bit 0 of a `uint32`, and both are about encryption.
@@ -282,9 +289,10 @@ but it has no tag arithmetic to get wrong.
 A codec that compresses each file alone cannot use what the files have in
 common: license headers, imports, and other text that many files repeat.
 `tar | zstd` compresses one stream, so it stores such text one time. A
-dictionary gives most of that result, and the members stay independent.
-zstd trains a dictionary of about 112 KiB from samples of the files. Then each chunk is compressed as if the dictionary came before it,
-and text that the dictionary holds costs a few bytes.
+dictionary gives most of that result, and the members stay independent. The
+writer trains a dictionary of about 112 KiB from samples of the files. Then
+each chunk is compressed as if the dictionary came before it, and text that
+the dictionary holds costs a few bytes.
 
 A measurement on 441 Go source files of 15 KiB on average, at the strongest
 zstd level, gave these sizes:
@@ -297,9 +305,11 @@ zstd level, gave these sizes:
 
 The dictionary has a fixed cost. Thus the gain grows with the number of
 files. For large files and for data that is already compressed, the gain is
-almost zero.
+almost zero. On the library tree of §4.3, the small files take only 20.5 MB
+of 245 MB, and a dictionary saved about 1 MB. At 1 MiB, it saved 1.5 MB
+more.
 
-**`-Z zstd:train` makes a dictionary** (§10.2). Only zstd has one. The
+**`-Z zstd:train` makes a dictionary** (§10.2). Only zstd has dictionaries. The
 library `klauspost/compress/dict` trains it. The library calls its trainer
 experimental. A poor dictionary costs ratio, not correctness: each member's
 digest is still checked, and the zstd frame names its dictionary.
@@ -327,8 +337,8 @@ entry names the dictionary of its codec (§5.1). A reader needs only the
 dictionary of the members that it reads.
 
 **In an encrypted archive, the dictionary is content.** It holds pieces of
-the files, so the writer seals it with a key of its own (§6.3). The index
-digest of the dictionary is keyed like the member digests (§6.2).
+the files, so the writer seals it with a key of its own (§6.3). Its digest
+in the index is keyed, like the member digests (§6.2).
 
 **`-r` and `-u` with `train` use the archive's newest dictionary,** when
 there is one. A few changed files are a poor sample, and the dictionary from
@@ -349,8 +359,12 @@ A tree often holds files with the same content. Examples are copies of a
 library in two places, generated files, and files that a later version did
 not change. A member whose content is the same as that of a member already
 in the archive does not need a blob of its own. It **refers** to the blob of
-that member, the **owner**. A measurement on a library tree of 8514 files found 1023
-copies that took 26.8 MB of 245 MB.
+that member, the **owner**.
+
+A library tree of 8514 files had 1023 copies, which took 26.8 MB of 245 MB.
+With references and a dictionary, its archive is 214 MB.
+`tar | zstd --long=27` makes 180 MB of the same tree, and §15.2 explains
+most of the difference.
 
 A reference is not a hardlink. A hardlink is one file with two names, and
 extraction makes it again as one file. A reference is two files, each with
@@ -364,10 +378,14 @@ risk.
 
 **The emitter finds each duplicate.** It is the one goroutine that writes
 blobs (§8). It keeps a map of the owners of the archive, by digest, size and
-sparse map. When a member's payload is already in the map, the emitter
-does not write its blob, and the member records a reference to the owner.
-This rule catches every duplicate, two copies in one run too. But the
-workers compress the copy for nothing.
+sparse map. When a member's payload is already in the map, the emitter does
+not write its blob, and the member records a reference to the owner. This
+rule catches two copies in one run too, but the workers compress the copy
+for nothing.
+
+The emitter uses an owner that the run wrote, or an old owner that passed
+its check (below). Otherwise it writes the blob, and the new member becomes
+the owner for the rest of the run.
 
 **A file whose size is the size of an owner is hashed first.** A duplicate
 must have the size of its owner. Thus a file with a size that no owner has is
@@ -464,7 +482,7 @@ Member := {
   "rdev":    [major, minor],
   "xattrs":  { "user.foo": <bytes>, ... },   # POSIX ACLs are stored here
   "sparse":  [ { "off": <uint64>, "len": <uint64> }, ... ],  # data segments; absent = dense; the blob holds only these
-  "digest":  <32 bytes>,     # BLAKE3-256 of the plaintext content
+  "digest":  <32 bytes>,     # BLAKE3-256 of the payload (§5.2), keyed when encrypted
   "codec":   <int>,          # index into "codecs"; -1 = stored
   "chunk":   4194304,        # plaintext bytes per chunk; absent when empty
   "enc":     { "salt": <16 bytes> },          # absent when not encrypted
@@ -480,9 +498,9 @@ the text that the user typed. Many members can share one catalog entry. A
 catalog entry with `dict` is a different entry from the same codec without
 it, and a reader needs `dict`, but not `params`, to decode.
 
-A dictionary blob is one chunk. It is not compressed, because a dictionary
-is itself dense. The writer takes each id from a random number, and takes a
-new one if the archive has it already.
+A dictionary blob has no chunks. It is one message, and it is not
+compressed, because a dictionary is itself dense. The writer takes each id
+from a random number, and takes another one if the archive has it already.
 
 `uid` and `gid` are optional. With `--no-owner` they are absent, which is
 different from uid 0. A stored zero means root to a reader that restores
@@ -534,6 +552,12 @@ The validator also checks that each field belongs to the member's type:
 - Only a symlink has `link`, and a symlink must have it.
 - Only a hardlink has `hardlink`, and it must name a `reg` member. That rule
   excludes chains, cycles and links to directories.
+- Only a `reg` member has `data`. It names an owner with a blob, with the
+  same size, sparse map and digest, and without `data` itself (§4.3). The
+  member has no blob, chunks, codec or key of its own.
+- A dictionary has a unique id that is not 0, a size of 1 byte to 1 MiB and
+  a digest. A catalog entry names only a dictionary that the index holds,
+  and only for zstd. An index holds at most 1024 dictionaries.
 - Only a device has `rdev`, and a device must have two values.
 - Only a `reg` member has `sparse`. The segments must be in order, must not
   overlap or be empty, and must end inside `size`.
@@ -551,7 +575,7 @@ the step that refuses a bad path (§7).
 
 ### 5.3 CBOR policy
 
-The library defaults are wrong for this format in three ways.
+The library defaults are wrong for this format in four ways.
 `src/internal/format/cbor.go` sets the correct behavior:
 
 - **The encoder sorts map keys bytewise.** Go map order changes from run to
@@ -595,7 +619,7 @@ change.
 | Passphrase KDF | Argon2id | `golang.org/x/crypto/argon2` |
 | AEAD | XChaCha20-Poly1305 (24-byte nonce, 16-byte tag) | `golang.org/x/crypto/chacha20poly1305` |
 | Subkey derivation | HKDF-SHA-256 | `golang.org/x/crypto/hkdf` |
-| Content digest | BLAKE3-256 | `lukechampine.com/blake3` |
+| Content digest | BLAKE3-256, keyed in an encrypted archive (§6.2) | `lukechampine.com/blake3` |
 
 XChaCha20 is better than AES-GCM here for three reasons. It is fast without
 AES-NI. Its 24-byte nonce removes the risk of nonce collisions. Its pure-Go
@@ -643,6 +667,7 @@ indexK   = HKDF(dataK, info = "eictar/v1/index"      || archive_uuid || generati
 authK    = HKDF(dataK, info = "eictar/v1/index-auth" || archive_uuid)
 contentK = HKDF(dataK, info = "eictar/v1/content"    || archive_uuid)
 memberK  = HKDF(dataK, info = "eictar/v1/member"     || archive_uuid, salt = member.salt)
+dictK    = HKDF(dataK, info = "eictar/v1/dict"       || archive_uuid, salt = dict.salt)
 ```
 
 A wrong passphrase gives another KEK, and the seal of `key` fails its tag. The
@@ -757,9 +782,9 @@ The reason is not obvious. The chunk AAD includes `member_id`, `chunk_index`
 and the final flag. It does not include the path, the mode or any other
 field of the index.
 
-Suppose the members are sealed but the index is plain,
-and the digest has no key. Then an attacker with no passphrase can rename a
-member from `notes.txt` to `.ssh/authorized_keys`. The attacker can also add
+Suppose that the members are sealed, but the index is plain and its digest
+has no key. Then an attacker with no passphrase can rename a member from
+`notes.txt` to `.ssh/authorized_keys`. The attacker can also add
 an execute bit, point a path at a different blob, or tombstone members. Every
 chunk still passes its tag, because no tag covers these fields.
 
@@ -952,11 +977,11 @@ macOS has none (`com.apple.quarantine`). FreeBSD and NetBSD have two, which
 eictar writes as `user.` and `system.`. An archive keeps each name as the
 source platform gave it, and does not translate it.
 
-On extraction, the reader
-sets each name that the options allow. A name that the destination does not
-take is counted, and one notice at the end of the run lists those names.
-Examples are a macOS name on Linux, a Linux `security.*` name on FreeBSD, and
-any name on a filesystem without xattrs. The member does not fail.
+On extraction, the reader sets each name that the options allow. A name that
+the destination does not take is counted, and one notice at the end of the run
+lists those names. Examples are a macOS name on Linux, a Linux `security.*`
+name on FreeBSD, and any name on a filesystem without xattrs. The member does
+not fail.
 
 On create, an xattr larger than the format allows (64 KiB) is left out with a
 notice, and the file is archived. Linux never makes one that large, but a
@@ -1000,6 +1025,11 @@ sockets too. This is the one type that is skipped, not refused.
   content, and later names point to it. It finds holes with `SEEK_DATA` and
   `SEEK_HOLE`, and reads only the data segments.
 
+  A file with the size of stored content is hashed first. If the archive
+  holds its content, it becomes a reference and goes to the emitter with no
+  payload (§4.3). With `-Z zstd:train`, a walk of the same paths comes first,
+  to take the samples of the dictionary (§4.2).
+
   It reads each regular file in order, one chunk at a time, and sends the
   chunks to the workers. It holds each chunk back until it knows if
   another chunk follows, so that the last chunk can be sealed as final
@@ -1017,6 +1047,9 @@ sockets too. This is the one type that is skipped, not refused.
   real offset in the index, and releases the spool. Member order in the
   archive has no meaning, so the emitter never waits for a specific member.
   One large file does not block the others.
+
+  A member whose content the archive holds already becomes a reference, and
+  the emitter writes no blob for it (§4.3).
 
 The writer gives member ids in **walk order**, not in the order that members
 finish. It sorts the index by id before it writes the index. Thus the byte
@@ -1068,16 +1101,16 @@ The zstd encoder of klauspost keeps a pool of states for its callers. The
 size of the pool comes from `WithEncoderConcurrency`. `EncodeAll` holds one
 state for the whole call.
 
-An encoder with a pool of 1, shared by many
-workers, is correct and free of races, but it is fully serial. The workers
+An encoder with a pool of 1, shared by many workers, is correct and free of
+races, but it is fully serial. The workers
 run, but only one of them compresses at a time.
 
 The first version of M3 had this fault, and a measurement showed it. With
 207 MB at zstd level 12, `-j 1` took 3.15 s and `-j 8` took 3.28 s. User time
 was equal to wall time.
 
-When the pool size is equal to the worker count, the
-same work takes 0.57 s at `-j 8`. User time stays at approximately 3.3 s.
+When the pool size is equal to the worker count, the same work takes 0.57 s
+at `-j 8`. User time stays at approximately 3.3 s.
 Thus `codec.NewEncoder` takes the concurrency as an argument. A codec
 conformance test fails if a shared encoder is serial.
 
@@ -1104,7 +1137,7 @@ Extraction has four phases:
 
 Each worker decodes into a buffer of its member's chunk size. The chunk size
 comes from the index, so the reader limits the number of workers against the
-memory budget: `workers × 2 × chunk_size` must fit. Without --memory-limit,
+memory budget: `workers × 2 × chunk_size` must fit. Without `--memory-limit`,
 the budget is 25% of RAM, or 512 MiB when RAM is not known.
 
 ### 8.4 Measured performance
@@ -1128,7 +1161,9 @@ modules of the build, 77 MB in 1754 files, on 32 CPUs.
 
 **An eictar archive is 4% to 13% larger.** It compresses each file alone,
 so it cannot use a pattern that repeats across files. A `tar` stream can.
-This is the cost of the design (§1.1).
+This is the cost of the design (§1.1). A dictionary (§4.2) and references to
+identical content (§4.3) take back part of it. These measurements are from
+before them.
 
 **Strong compression is much faster:**
 13 times for zstd level 19, and 11 times for gzip. The chunks of all files
@@ -1163,8 +1198,9 @@ path stays as it was. Before the M6 review, create truncated that file at
 the start and removed it after an error, so one mistyped source path
 destroyed a backup.
 
-The new file gets the permissions of the file that it replaces. If the path is a symbolic link, the file that the link points to is
-replaced, and the link stays. The walk skips both the temporary file and the
+The new file gets the permissions of the file that it replaces. If the path
+is a symbolic link, the file that the link points to is replaced, and the
+link stays. The walk skips both the temporary file and the
 old archive, so neither goes into the new archive.
 
 ### 9.1 The write sequence
@@ -1172,8 +1208,9 @@ old archive, so neither goes into the new archive.
 Append, update and delete all use this sequence:
 
 1. Open the archive for reading and writing. Check it, and load the index.
-2. Write the new member blobs **after the old trailer**, at the old end of the
-   file. The old index and the old trailer stay in place as dead space.
+2. Write the new blobs **after the old trailer**, at the old end of the
+   file. A new dictionary comes first, if the run trains one (§4.2). The old
+   index and the old trailer stay in place as dead space.
 3. `fsync` the data.
 4. Write the new index. Then `fsync`.
 5. Write the 96-byte trailer with `generation + 1` and
@@ -1236,8 +1273,9 @@ The same rule applies to a tombstone that a live reference names (§4.3).
 ### 9.3 Compact
 
 `--compact` writes a new archive to a temporary file beside the original. It
-copies the live blobs, and the blobs of the tombstones that live hardlinks
-point to, byte for byte. It does not decompress or unseal a blob.
+copies the live blobs byte for byte. It also copies the blobs of the
+tombstones that a live hardlink points to, or whose content a live member
+shares (§4.3). It does not decompress or unseal a blob.
 
 The new archive keeps the uuid, the crypto header and the encryption settings
 of the original. It uses the next generation. Then the program renames the new
@@ -1251,16 +1289,22 @@ that the link points to, and the link stays.
 
 Compact copies each dictionary that a kept member uses, byte for byte, and
 drops the others. A dictionary that no live member uses is dead space.
+Compact also drops each catalog entry that no kept member uses, and gives
+the members the new positions. Thus no entry can name a dictionary that the
+new archive does not hold.
 
 If there is no dead space and no tombstone to remove, compact changes nothing
 and says so. For an encrypted archive, compact needs the passphrase, for the
 keyed index digest.
 
 **`--recompress SPEC` encodes every member again.** It decodes each kept
-member, and sends it through the same pipeline that create uses. The pipeline
-uses the codec of SPEC, and the `--chunk-size`, `-j` and memory options. A member keeps
-its id, its digest, its metadata and its tombstone mark. The catalog gets the
-one new entry.
+member, and sends it through the same pipeline that create uses. The
+pipeline uses the codec of SPEC, and the `--chunk-size`, `-j` and memory
+options. A member keeps its id, its digest, its metadata and its tombstone
+mark. A member that shares content stays a reference.
+
+The catalog gets the one new entry. With `train`, a new dictionary replaces
+the old ones.
 
 A sealed member gets a new member salt, and thus a new key. Its new chunks
 are new ciphertext at the old chunk indexes. Under the old key, each chunk
@@ -1277,14 +1321,19 @@ the header, the trailer, the index and the member ranges. It reads no member
 data. A damaged member gives exit 3, and the output names each one.
 
 `--verify` also decodes each tombstone that a selected hardlink points to,
-because extraction reads it. Patterns select members, as for `-t`, and each
-pattern must match at least one member. On
-success, `--verify` prints one summary line, unless `-q` is given. `-v` also
-prints each member that passed.
+or whose content a selected member shares, because extraction reads it. It
+decodes each blob one time. A hardlink or a reference passes or fails with
+the blob that it uses. Only the selected members count in the result.
+
+Patterns and `-R` select members, as for `-t`. Each pattern and each `-R`
+must match at least one member. On success, `--verify` prints one summary
+line, unless `-q` is given. `-v` also prints each member that passed.
 
 `--info` shows the header, the crypto parameters, the generation, the counts
 of live and dead members, the codecs in use, and the dead space. The dead
-space is the number of bytes that `--compact` removes.
+space is the number of bytes that `--compact` removes. It also shows each
+dictionary, and the members that share content with the bytes that they did
+not store.
 
 ### 9.5 Repair
 
@@ -1374,8 +1423,8 @@ wrapped key is not in the new file.
 On most filesystems, the blocks of the old file are free space until
 something writes over them. Thus a person can still read what the archive
 held then with a copy of the old file. The old passphrase and access to the
-disk are enough too. A change of passphrase
-cannot take back what someone already has. Only a new archive, with a new
+disk are enough too. A change of passphrase cannot take back what someone
+already has. Only a new archive, with a new
 data key, can protect new content from a leaked key.
 
 ---
@@ -1418,7 +1467,7 @@ a missing or doubled operation gets a short error on stderr and exit 2.
 | | `--compact` | Write the archive again without the tombstoned blobs | none | M6 |
 | | `--verify` | Check integrity without extraction | patterns (default: all) | M6 |
 | | `--repair` | Restore the last complete generation after an interrupted write (§9.5) | none | M6 |
-| | `--info` | Show the archive header, the codecs in use, counts and dead space | none | M6 |
+| | `--info` | Show the archive header, the codecs, the dictionaries, the counts, the shared content and the dead space | none | M6 |
 | | `--change-passphrase` | Seal the data key under a new passphrase, and write the archive again without its dead space (§9.7) | none | M9 |
 | | `--list-codecs` | Show each codec with its parameters, defaults and ranges | none | M2 |
 
@@ -1432,9 +1481,10 @@ on purpose.
 There is no `--replace` operation. `-r` replaces a path that is already in the
 archive (§9.2).
 
-`-f` is necessary for every operation except `--list-codecs`. There is no
-default archive and no tape device. The index is at the end of the file, so
-the file must be seekable, and a pipe is not possible (§1.2).
+`-f` is necessary for every operation except `--list-codecs`, and
+`--show-config` needs none. There is no default archive and no tape device.
+The index is at the end of the file, so the file must be seekable, and a pipe
+is not possible (§1.2).
 
 ### 10.2 Compression selection
 
@@ -1468,9 +1518,33 @@ value.
 
 | zstd key | Values | Default | Bare |
 |---|---|---|---|
-| `level` | 1..22 | 3 | needs a value |
+| `level` | 1..22 | 12 | needs a value |
 | `long` | `off`, or 10..30: the window is 2^long bytes | `off` | 27 |
 | `train` | `off`, or a dictionary size, 4 KiB..1 MiB | `off` | 112 KiB |
+
+**The zstd library has four speeds, not 22 levels.** `klauspost/compress`
+maps each level of the zstd command line to one of its speeds:
+
+- 1 and 2: fastest
+- 3 to 5: default
+- 6 to 9: better
+- 10 to 22: best
+
+Thus `level=12` and `level=19` give the same archive. A measurement on 126 MB of
+Go sources and module files, with 32 CPUs, gave these results:
+
+| Level | Speed of the library | Size | Create | Extract |
+|---|---|---|---|---|
+| 1 | fastest | 97.5 MB | 0.21 s | 0.10 s |
+| 3 | default | 94.7 MB | 0.21 s | 0.11 s |
+| 7 | better | 92.4 MB | 0.27 s | 0.10 s |
+| 12 or 19 | best | 90.4 MB | 0.72 s | 0.09 s |
+
+**The default level is 12**, the best speed. It is approximately 5% smaller
+than level 3, and a create takes approximately 3.4 times as long. The speed
+of extraction does not change. Until v1.0.0 the default was 3, the default
+of zstd. The default is 12, not 19, so that it stays a sensible level if the
+library gets finer levels.
 
 **A window larger than the chunk has no effect.** The chunks are
 independent (§4), so no match reaches back past the start of its chunk.
@@ -1484,7 +1558,7 @@ file. The index catalog stores the values in effect for each codec. `eictar
 
 | Codec | Library | Notes | Built |
 |-------|---------|-------|-------|
-| `zstd` | `klauspost/compress/zstd` | default. `level` 1..22, `long` 10..30, `train` (§4.2, M10) | M2 |
+| `zstd` | `klauspost/compress/zstd` | default. `level` 1..22 (default 12), `long` 10..30, `train` (§4.2, M10) | M2 |
 | `none` | — | stored | M2 |
 | `gzip`, `flate` | `klauspost/compress` | `level` 1..9, default 6. `gzip` is `flate` in a gzip member for each chunk. | M7 |
 | `xz` | `ulikunitz/xz` | `preset` 0..9, default 6. Raw LZMA2, slower than the C implementation. | M7 |
@@ -1500,13 +1574,14 @@ crafted chunk can make the reader allocate 4 GiB. A raw LZMA2 stream has no
 such field. The reader uses the chunk size as the dictionary, and that is
 always enough, because chunks are independent.
 
-The CRC-64 of the container repeats what the BLAKE3 digest checks. `doc/format.md` gives the exact form.
+The container also has a CRC-64, which only repeats what the BLAKE3 digest
+checks. `doc/format.md` gives the exact form of the stream.
 
 **Every `xz` preset uses the hash-chain match finder.** The C `xz` uses a
 binary tree from preset 4. The binary tree of `ulikunitz/xz` takes quadratic
 time on repetitive input. On 128 KiB of one repeated byte, it takes 10 s. On
-a 4 MiB chunk of zeroes, it takes hours. Thus a preset changes only the dictionary
-size, which is capped at the chunk size.
+a 4 MiB chunk of zeroes, it takes hours. Thus a preset changes only the
+dictionary size, which is capped at the chunk size.
 
 **`s2` and `flate` have no check of their own.** A changed byte can decode to
 wrong content of the right length. The BLAKE3 digest of the member finds it
@@ -1538,13 +1613,14 @@ agrees with the problem statement: one secret key for all members.
 `--encrypt` and `--encrypt-index` apply to create only. The `--kdf-*`
 options apply to create and to `--change-passphrase`. On any other operation
 they are a usage error, because the header of an existing archive fixes its
-encryption. The `--kdf-*` limits are the same
-limits that a reader applies (§6.2).
+encryption. The `--kdf-*` limits are the same limits that a reader applies
+(§6.2).
 
 The program reads the passphrase from the terminal with echo off. **On
-create, and for the new passphrase of a change, it asks two times**, because a mistyped passphrase cannot be
-recovered. No part of the program can find out later what you meant. The
-program asks only when an archive needs a passphrase. Thus a plaintext
+create, and for the new passphrase of a change, it asks two times**, because
+a mistyped passphrase cannot be recovered. No part of the program can find
+out later what you meant. The program asks only when an archive needs a
+passphrase. Thus a plaintext
 archive never prompts, and a usage error never asks for a secret. The prompt
 goes to stderr, so it cannot go into a redirected listing or into extracted
 content.
@@ -1575,7 +1651,7 @@ whose encryption was removed (§14).
 | | `--exclude GLOB` | can be repeated. Applies to create, append, update, list and extract. An excluded directory is not entered. | M5 |
 | `-X` | `--exclude-from FILE` | one glob on each line. Blank lines are ignored. There is no comment syntax, because a file name can start with `#`. | M5 |
 | `-R` | `--regex RE` | can be repeated. Keep only the paths that match a regular expression (§10.11). Create, append, update, list, extract, verify and delete. | after M9 |
-| | `--exclude-regex RE` | can be repeated. Leave out the paths that match. An excluded directory is not entered, and on a read it takes its contents (§10.11). | after M9 |
+| | `--exclude-regex RE` | can be repeated. Leave out the paths that match. An excluded directory is not entered, and on a read it takes its contents (§10.11). Create, append, update, list and extract. | after M9 |
 | `-h` | `--dereference` | follow links and store what they point to | M2 |
 | | `--no-dedup` | store each copy of the same content in full (§4.3). Create, append and update. | M11 |
 | | `--one-file-system` | do not enter other filesystems. A mount point is recorded, empty. Create, append and update. | M5 |
@@ -1647,7 +1723,8 @@ Until the stress tester found it (§13.4), such a file was archived again.
 each candidate in full. A sequential read costs much less than compression,
 encryption and a write. Thus on a large tree with few changes, `digest` is
 often the *fastest* mode and also the exact one. The index already stores a
-plaintext digest for each member (§5), so this mode needs no format change.
+digest of the content of each member (§5), so this mode needs no format
+change.
 
 In every mode, the program skips a path that fails the test. It does not
 read it again, it does not compress it again, and it does not change the
@@ -1665,9 +1742,9 @@ not built. Since M7, every option is built. The rule stays for the next
 option that is not, and a unit test keeps the rule working.
 
 If the program accepts such an option without a message, the result is
-wrong and no warning shows it. For example, an `--exclude` that
-excludes nothing gives a wrong archive. The archive contains the files that
-the user wanted to leave out. §11.2 applies the same rule to environment variables.
+wrong and no warning shows it. For example, an `--exclude` that excludes
+nothing gives a wrong archive. The archive contains the files that the user
+wanted to leave out. §11.2 applies the same rule to environment variables.
 
 The program reports a real usage error first. A user who made a typing
 mistake fixes the command line before learning that a feature is missing.
@@ -1715,7 +1792,7 @@ columns and a line of totals.
 
 ```
 $ eictar -tvf a.ect
-drwxrwxr-x  psm/psm       -       -      -  -             2026-09-24 17:59:19  d
+drwxrwxr-x  psm/psm       0       -      -  -             2026-09-24 17:59:19  d
 -rw-rw-r--  psm/psm  200000  200000   0.0%  zstd:level=3  2026-09-24 17:59:19  d/random.bin
 -rw-rw-r--  psm/psm  240001    1432  99.4%  zstd:level=3  2026-09-24 17:59:19  d/text.txt
 ```
@@ -1731,32 +1808,37 @@ The columns of the long listing are:
    in an encrypted archive.
 6. The codec, in the form that `--compress` takes.
 7. The modification time.
-8. The path, with ` -> target` for a symbolic link, ` link to path` for a
-   hardlink, and ` same as path` for a reference to an owner (§4.3).
+8. The path, with ` -> target` for a symbolic link and ` link to path` for
+   a hardlink. A reference to an owner (§4.3) ends with ` same as path`.
+   When the owner is a tombstone, it ends with ` same as its earlier
+   version` if the owner had the same path, and with ` same as deleted path`
+   if not.
 
 A member that has no blob shows `-` in columns 4 to 6. A hardlink has no blob
 of its own, because it shares the blob of its target. A reference shares the
-blob of its owner in the same way. For a sparse file, the
-stored size and the percentage use the data regions, not the holes. In an
-encrypted archive, the stored size includes the 16-byte tag of each chunk.
+blob of its owner in the same way. For a sparse file, the stored size and the
+percentage use the data regions, not the holes. In an encrypted archive, the
+stored size includes the 16-byte tag of each chunk.
 
 `-tvv` adds three columns before the time. They are the number of chunks,
 `sealed` for an encrypted member, and the first 16 hex digits of the BLAKE3
-digest. After
-the members, it prints one line of totals, for the listed members and for the
-archive:
+digest. A reference shows the digest of its content too, so that equal
+content has equal digests in the listing. After the members, `-tvv` prints
+one line of totals, for the listed members and for the archive:
 
 ```
-3 listed, 2 files, 440001 bytes stored in 201432 (54.2% saved); generation 1, 0 tombstoned
+7 listed, 4 files, 326688 bytes stored in 27341 (91.6% saved), 2 same as another (54670 bytes not stored); generation 1, 0 tombstoned
 ```
 
-The line of totals also gives the references, and the bytes that they did
-not store: `12 files same as another, 26.8 MB not stored`. `--info` gives
-the same two numbers for the whole archive.
+The part about references is there only when a listed member is one.
+`--info` gives the same two numbers for the whole archive, in the line
+`shared content`.
 
 `--json` always gives every field, including `stored_size`, `chunks`,
 `encrypted`, the full `digest`, and `codec` as an object with a name and the
-settings. A program must not have to ask for detail.
+settings. A reference has `same_as`, the path of its owner, and
+`same_as_deleted` when the owner is a tombstone. A program must not have to
+ask for detail.
 
 ### 10.10 Progress meter
 
@@ -1820,9 +1902,9 @@ expression that does not compile is a usage error (exit 2).
 append and update, it filters what the walk finds below the path arguments.
 The walk enters every directory, because a match can be deeper down. A
 directory is stored only if it matches, and extraction creates the parent
-directories that the archive does not hold. On `-t`, `-x`, `--verify`
-and `--delete`, it filters the members that the patterns select, or all members
-when there are no patterns. `--delete` needs a pattern or an `-R`.
+directories that the archive does not hold. On `-t`, `-x`, `--verify` and
+`--delete`, it filters the members that the patterns select, or all the
+members when there are no patterns. `--delete` needs a pattern or an `-R`.
 
 Unlike a pattern, a match of a directory does not take its contents.
 `-R 'build'` keeps the directory `build` only, and `-R 'build(/.*)?'` keeps
@@ -1848,8 +1930,8 @@ works, and the extension is only for people.
 **Create adds `.ect` to a name with no extension.** `-cf backup` makes
 `backup.ect`, and the program writes a notice that names the file, except
 under `-q`. It does so whatever exists with the name as typed. Thus
-`-cf backup backup` makes `backup.ect` from the directory `backup`. A name has an extension when its last element, without leading
-dots, has a dot. Thus `-cf backup.tar` and `-cf home.2026-09` keep the name
+`-cf backup backup` makes `backup.ect` from the directory `backup`. A name
+has an extension when its last element, without leading dots, has a dot. Thus `-cf backup.tar` and `-cf home.2026-09` keep the name
 as typed, and `-cf .backup` makes `.backup.ect`.
 
 **The other operations find the name that create made.** If the name has no
@@ -1968,7 +2050,8 @@ comment at the start of a line, or after a space or a tab. Thus
 `exclude = build#1` keeps its `#`.
 
 Keys are long option names without the leading dashes. A key can occur only
-one time, except `exclude`, which adds a glob on each line. Optional
+one time, except `exclude` and `exclude-regex`, which add one pattern on
+each line. Optional
 `[codec.NAME]` sections give defaults for one codec. The parser has no
 dependency, and it checks each codec value when it reads it, so that an error
 names the line.
@@ -1986,6 +2069,7 @@ exclude     = .cache
 [codec.zstd]
 level = 19
 long  = 27
+train = on
 
 [codec.xz]
 preset = 6
@@ -2010,9 +2094,9 @@ away. Two rules remain:
 - **The program checks ownership and mode**, for a `--config FILE` and for
   the default locations. It refuses a configuration file that another user
   owns, or that the group or other users can write. The owner can also be
-  root, for a file that an administrator installs. The file can set `exclude`.
-  Thus a person who can write it can make a backup smaller without a
-  message, and a refusal is better than a warning. On Windows, the program
+  root, for a file that an administrator installs. The file can set `exclude`
+  and `exclude-regex`. Thus a person who can write it can make a backup
+  smaller without a message, and a refusal is better than a warning. On Windows, the program
   does not read file ACLs, so it does not do this check.
 
 `-v` reports which configuration file the program read. Thus a user can find
@@ -2043,12 +2127,13 @@ The module cache is in `.gocache/`, the build cache in `.gobuildcache/`, and
 temporary files in `.tmp/`. All three are inside the project. The `Makefile`
 sets `GOMODCACHE`, `GOCACHE` and `TMPDIR`, so a build or a test run writes
 nothing outside the project directory. Until M7, the `Makefile` did not set
-`GOCACHE`, and Go used `~/.cache/go-build`. Use the
-`make` targets, not a bare `go` command:
+`GOCACHE`, and Go used `~/.cache/go-build`. Use the `make` targets, not a
+bare `go` command:
 
 | Target | Action |
 |--------|--------|
 | `make build` | build `.build/eictar`, stripped and with no local paths (`-trimpath -ldflags="-s -w"`). `make build VERSION=1.0.0` sets the version that `--version` prints. The default is `dev`. |
+| `make release` | build the release binaries in `.build/release/`, one directory for each platform (§12.3) |
 | `make test` | run the unit tests |
 | `make test-race` | run the unit tests with the race detector |
 | `make operational` | run the operational tests (§13.2) |
@@ -2059,25 +2144,31 @@ nothing outside the project directory. Until M7, the `Makefile` did not set
 | `make check-norace` | `make check` with `test` for `test-race`, for NetBSD and OpenBSD |
 | `make skips` | list each test that this platform skips, with its reason, and the totals |
 | `make stress` | random end-to-end tests against a model (§13.4). `STRESS="-duration 30m"` runs longer, and `STRESS="-seed N -sequences 1"` replays a failure. |
+| `make stress-build` | build the stress tester alone, as `.build/stress` |
 
 `GO=go` gives another toolchain, as CI does: `make check GO=go`.
 
 ```
 go.mod
+README.md, LICENSE         the introduction, and GPL-3.0
+TRADEMARKS.md              the reserved name, and the term of GPL-3.0 section 7(e)
+.github/workflows/         ci.yml, the tests on each platform; release.yml (§12.3)
 doc/                       design.md; format.md, the format reference; eictar.1, the man page
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
 tools/testskips/           lists the skipped tests and their reasons, for make skips (§13.3)
-tools/stress/              the stress tester: model, generator, runner, checks and faults (§13.4)
+tools/stress/              the stress tester: model, generator and profiles, runner, checks and faults (§13.4)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
                            mutate.go: append, update, delete, compact, verify, info, repair.
-src/internal/codec/        registry and factories: zstd, gzip, flate, xz, s2 and none
-src/internal/crypt/        Argon2id, the HKDF key schedule, chunk and index sealing
+                           dict.go: dictionaries (§4.2). dedup.go: identical content (§4.3).
+src/internal/codec/        registry and factories: zstd, gzip, flate, xz, s2 and none; dictionaries
+src/internal/crypt/        Argon2id, the wrapped data key, the HKDF key schedule, the sealing of
+                           chunks, indexes and dictionaries
 src/internal/pipeline/     Budget, Spool, Builder: the chunk pool and its memory budget
 src/internal/cli/          option parsing, the configuration layer (§11), operation dispatch,
                            passphrase input, output, the progress meter
-src/internal/fsutil/       StorePath and SafeJoin (§7), Match for patterns
+src/internal/fsutil/       StorePath and SafeJoin (§7), Match for patterns, Regexps for -R
 src/internal/meta/         xattrs, holes, device numbers, names, *at calls for pipes, devices, link times.
                            Linux, macOS, FreeBSD, NetBSD and OpenBSD, one file each for what differs (§15.1).
 src/internal/testutil/     fixture trees, tree comparison, the binary harness (§13.3)
@@ -2152,9 +2243,16 @@ next read reaches the end of the file (§8).
 Each codec registers itself in `init()`. Thus a new codec changes only one
 file.
 
+A codec with dictionaries also has a second interface, which the package
+does not export. Only zstd has it. The package functions `TrainSize`,
+`TrainDict`, `DictID`, `NewEncoderWithDict` and `NewDecoderWithDict` use it,
+and they refuse a dictionary for any other codec. The functions that take
+parameters also turn a key that stands alone into its value (§10.2), so each
+codec sees plain values.
+
 ### 12.2 Diagrams
 
-These diagrams show the source code at the end of M8. The first diagram
+These diagrams show the source code at the end of M11. The first diagram
 shows the packages. The other three follow the data through the three main
 paths: create, extract, and a change to an archive.
 
@@ -2170,7 +2268,7 @@ flowchart TD
     cli --> crypt
     cli --> format
     cli --> fsutil
-    archive["archive<br/>reader, writer, walk, capture,<br/>extract, mutate, lock"] --> pipeline
+    archive["archive<br/>reader, writer, walk, capture,<br/>extract, mutate, lock,<br/>dictionaries, shared content"] --> pipeline
     archive --> codec
     archive --> crypt
     archive --> format
@@ -2181,8 +2279,8 @@ flowchart TD
     pipeline --> format
     format["format<br/>header, trailer,<br/>index, CBOR"]
     crypt["crypt<br/>keys, AEAD"]
-    codec["codec<br/>zstd, gzip, flate,<br/>xz, s2, none"]
-    fsutil["fsutil<br/>paths, patterns"]
+    codec["codec<br/>zstd, gzip, flate,<br/>xz, s2, none,<br/>dictionaries"]
+    fsutil["fsutil<br/>paths, patterns,<br/>regular expressions"]
     meta["meta<br/>stat, xattrs, holes,<br/>*at calls"]
 
     format -.-> cbor[("fxamacker/cbor")]
@@ -2206,14 +2304,17 @@ emitter writes each finished member to the file, so that only one goroutine
 moves the file offset.
 
 Append and update use the same path. They start with `OpenAppend`, not
-`Create`.
+`Create`. Before the walk, `useDictionary` trains a dictionary, or takes the
+archive's newest one, when the codec asks for one (§4.2).
 
 ```mermaid
 flowchart LR
     subgraph walker["walker goroutine"]
         direction TB
-        walk["walk.go<br/>paths, exclude,<br/>one filesystem"] --> capture["capture.go<br/>stat, xattrs, holes,<br/>hardlinks, conflicts"]
-        capture --> add["Builder.AddFile<br/>read chunks,<br/>BLAKE3 digest"]
+        walk["walk.go<br/>paths, exclude, -R,<br/>one filesystem"] --> capture["capture.go<br/>stat, xattrs, holes,<br/>hardlinks, conflicts"]
+        capture --> same{"size of stored<br/>content?"}
+        same -- "yes: hash;<br/>equal content" --> ref["reference<br/>(no payload)"]
+        same -- "no, or not equal" --> add["Builder.AddFile<br/>read chunks,<br/>BLAKE3 digest"]
     end
     subgraph workers["worker pool (-j)"]
         direction TB
@@ -2223,8 +2324,9 @@ flowchart LR
     end
     subgraph emitter["emitter goroutine"]
         direction TB
-        append["Writer.AppendMember<br/>blob at the file offset"]
+        append["Writer.AppendMember<br/>equal content: a reference;<br/>else the blob at the file offset"]
     end
+    ref --> append
     add -- "chunk, budget held" --> enc
     spool -- "member complete" --> append
     append --> close["Writer.Close<br/>index, digest, trailer,<br/>sync, rename"]
@@ -2244,13 +2346,13 @@ flowchart TD
     unlock -- no --> dig
     kdf --> dig["index digest<br/>(keyed if encrypted)"]
     dig --> dec["unseal, decompress,<br/>decode, validate index"]
-    dec --> ranges["member ranges<br/>inside the body"]
-    ranges --> sel["select members:<br/>patterns, exclude"]
+    dec --> ranges["member and dictionary<br/>ranges inside the body"]
+    ranges --> sel["select members:<br/>patterns, -R, exclude"]
     sel --> p1["1. directories, links,<br/>pipes, devices<br/>(in path order)"]
     p1 --> p2["2. regular files<br/>(parallel workers)"]
     p2 --> p3["3. hardlinks"]
     p3 --> p4["4. directory metadata<br/>(deepest first)"]
-    p2 -.-> wm["WriteMember: read chunk,<br/>unseal, decompress,<br/>digest, then rename<br/>the temporary file"]
+    p2 -.-> wm["WriteMember: the owner's blob,<br/>its dictionary; read chunk,<br/>unseal, decompress, digest,<br/>then rename the temporary file"]
 ```
 
 **A change to an archive.** Append, update and delete write a new generation
@@ -2264,7 +2366,7 @@ sequenceDiagram
     participant F as archive file
     C->>F: open, flock (no wait), check the path is still this file
     C->>F: read the header, trailer and index (all the checks)
-    C->>F: write new blobs after the old trailer
+    C->>F: write a new dictionary, if trained, and the new blobs, after the old trailer
     C->>F: write the new index (it lists the tombstones)
     C->>F: fsync
     C->>F: write the new trailer, generation + 1
@@ -2314,9 +2416,13 @@ Every item in the lists below exists now, except the items marked "later".
   round trips, empty input, incompressible input, chunk boundaries, the
   parameter checks, refusal of bad parameters, and the parallel-encoder test
   of §8.2.
-- **Key schedule**: fixed vectors for the KEK, the wrapped data key, every
-  subkey, a sealed chunk, a sealed index and the keyed index digest. A failure here means that
-  existing archives no longer open. It never means "update the vector".
+- **Key schedule**: fixed vectors for the KEK, the wrapped data key, and
+  every subkey. Also for a sealed chunk, a sealed index, a sealed dictionary
+  and the keyed index digest. A failure here means that existing archives no
+  longer open.
+  It never means "update the vector". The vector of the dictionary key was
+  also calculated apart from the code, from the definition in
+  `doc/format.md`.
 - **Chunked AEAD**: tag checks, a wrong key, a chunk moved to another index or
   member, a changed final flag, and truncation. Each must fail.
 - **Crafted archives**: the reader must refuse each of these:
@@ -2325,6 +2431,9 @@ Every item in the lists below exists now, except the items marked "later".
   - a large chunk size
   - a blob outside the body
   - a regular file without a digest
+  - a member that shares content with a member of other content, or with
+    no blob
+  - a dictionary that the index does not hold, or on a codec other than zstd
   - KDF parameters above the limits
   - a downgrade to plaintext
   - changed metadata in an encrypted archive
@@ -2361,17 +2470,33 @@ Every item in the lists below exists now, except the items marked "later".
   feature exists. An xattr from macOS and one from Linux, extracted on each
   platform, are applied or listed in the one notice as §7.7 says. A pipe is
   created, or skipped with a notice on macOS.
-- **Golden files**: a plain and an encrypted archive in
-  `src/internal/archive/testdata/golden/`, each with three generations: a
-  create, an append that replaces a member, and a delete. The test opens
-  them, runs `--verify` on them and extracts them. Only a planned format change can write them
-  again, with `-update-golden`.
+- **Golden files**: four archives in
+  `src/internal/archive/testdata/golden/`. `plain.ect` and `encrypted.ect`
+  each have three generations: a create, an append that replaces a member,
+  and a delete. `dict.ect` is encrypted, with a sealed dictionary.
+  `shared.ect` has a reference to a live owner and a reference to a
+  tombstone. The tests open them, run `--verify` on them and extract them.
+  Only a planned format change can write them again, with `-update-golden`.
+- **Dictionaries** (§4.2):
+  - a gain on similar files
+  - a frame that decodes only with its own dictionary
+  - a dictionary within its size, and training that fails cleanly
+  - reuse on `-r`, compact and recompress
+  - damage to a plain and to a sealed dictionary
+- **Identical content** (§4.3):
+  - copies that share one blob, and `--no-dedup`
+  - sharing across generations, and with an earlier version
+  - a damaged old owner, which is not used
+  - delete, compact and recompress
+- **Selection**: `-R` and `--exclude-regex` on the walk and on each read, a
+  whole-path match, and an `-R` that matches nothing (§10.11). The `.ect`
+  name rule (§10.12).
 - **Mutation**: append after the old trailer, each `--on-conflict` policy,
   and each `--update-mode` case of §10.5. Also delete, `--verify`, `--info`,
   and the passphrase for each. Compact runs plain and encrypted, through a
-  symbolic link, and with a hardlink to a tombstone. Two tests check `--keep-going`. A path
-  that fails keeps its old member. A hardlink never points to a member that
-  failed.
+  symbolic link, and with a hardlink to a tombstone. Two tests check
+  `--keep-going`. A path that fails keeps its old member. A hardlink never
+  points to a member that failed.
 - **Crash consistency**: an append, cut at each byte between the old and the
   new length. Each cut must fail to open, and `--repair` must give back the
   old file exactly. A torn trailer gives the same result. The writer only
@@ -2416,8 +2541,8 @@ parts work.
 - **Crash consistency**: a real append is killed with `SIGKILL` part way
   through. The list must fail with exit 3 and name `--repair`. Then
   `--repair` must give back the old file exactly.
-- **`--verify`**: a changed byte in a blob gives exit 3, and the message names the
-  member. `--quick` passes, because it reads no member data.
+- **`--verify`**: a changed byte in a blob gives exit 3, and the message
+  names the member. `--quick` passes, because it reads no member data.
 - **Configuration**: a configuration file in `HOME` sets the codec, `-v`
   names the file, a misspelled variable gives exit 2, and `--show-config`
   runs with no operation. The unit tests cover the refusals. A file that
@@ -2430,6 +2555,13 @@ parts work.
   changes the codec of every member, and the extracted tree is the same.
 - **Progress**: with stderr not a terminal, `--progress` writes nothing
   there.
+- **Change of passphrase**: the new passphrase opens the archive, the old one
+  gives exit 3, and the new KDF parameters are in effect.
+- **Newer features**:
+  - `-R` on create and on extract
+  - the `.ect` name
+  - a dictionary, in `--info` and in the listing
+  - shared content, in the listing, in `--info` and in `--json`
 - **Scale** (nightly, later): 100,000 small files, and one file larger than
   memory.
 
@@ -2447,10 +2579,9 @@ parts work.
   and the totals. Each CI job runs it after `make check`, so that a green job
   also says what it did not test. The job's result stays the result of
   `make check`.
-- **Coverage and benchmarks** come later. `format`, `crypt` and `codec` need
-  high coverage, because a fault there is silent and permanent. Benchmarks
-  (`go test -bench`) compare compression, extraction and index load time
-  with `tar | zstd`.
+- **Coverage** comes later. `format`, `crypt` and `codec` need high
+  coverage, because a fault there is silent and permanent. The benchmarks
+  exist: `make bench` and `make compare` (§8.4).
 
 
 ### 13.4 Stress tester
@@ -2463,9 +2594,9 @@ tester finds the combinations that nobody did.
 
 **The model** is a map from each stored path to what an extraction must give
 back. That is the type, the content, the size, the mode, the time, and the
-target of a link. It changes only as eictar's rules say (§9.2, §10.5). Replace, skip,
-error, the three update modes, and delete with eictar's pattern rule are each
-a few lines of the tester.
+target of a link. It changes only as eictar's rules say (§9.2, §10.5).
+Replace, skip, error, the three update modes, and delete with eictar's
+pattern rule are each a few lines of the tester.
 
 **A sequence** creates an archive from a generated tree, and then takes steps.
 Before most steps, the tree changes. A file gets new content, a new time or
@@ -2497,7 +2628,8 @@ dictionary and shared content. The summary counts both, so that the coverage
 of these features is measured, not assumed.
 
 A third of the sequences are encrypted, some with a sealed index. In these, a
-step can also change the passphrase. After the change, the old passphrase must fail with exit 3.
+step can also change the passphrase. After the change, the old passphrase
+must fail with exit 3.
 
 **After each step** the tester makes three checks:
 
@@ -2507,14 +2639,15 @@ step can also change the passphrase. After the change, the old passphrase must f
    the parent directories that extraction makes itself.
 
 Some operations must be refused: a conflict under `--on-conflict=error`, an
-`-R` that matches nothing, and a delete pattern that matches nothing. Each must exit with 2, and must leave
-the archive byte for byte as it was.
+`-R` that matches nothing, and a delete pattern that matches nothing. Each
+must exit with 2, and must leave the archive byte for byte as it was.
 
 **The data** is random, text-like, repetitive or zeros, and it is often one
 byte on either side of a chunk boundary. The tree has deep directories, empty
-files, symbolic links, hardlinks, copies and sparse files. Its names have spaces,
-other scripts, and bytes that are not UTF-8 where the filesystem takes them. A name
-never holds a glob character, so that a path is a literal pattern.
+files, symbolic links, hardlinks, copies and sparse files. Its names have
+spaces, other scripts, and bytes that are not UTF-8 where the filesystem
+takes them. A name never holds a glob character, so that a path is a literal
+pattern.
 
 **The fault mode** is on by default. It adds two tests:
 
@@ -2525,8 +2658,8 @@ never holds a glob character, so that a path is a literal pattern.
 - **Damage.** In a copy of the archive, the tester flips one to four bits,
   often in the index and the trailer. `--verify` and extraction must agree.
   Both must refuse the copy with exit 3. Otherwise both must accept it and
-  give back the model exactly, because a bit in dead space harms nothing. Wrong content with
-  exit 0 is the failure that this test looks for.
+  give back the model exactly, because a bit in dead space harms nothing.
+  Wrong content with exit 0 is the failure that this test looks for.
 
 Any other exit code, a panic, or a command that runs for more than two
 minutes is a failure.
@@ -2535,8 +2668,8 @@ minutes is a failure.
 tree, `failure.txt` and `replay.sh`. `failure.txt` gives the seed and each
 step. `replay.sh` repeats the eictar commands. All randomness comes from the
 seed, and the file times come from a clock of the tester, never from the
-system clock. Thus `make stress STRESS="-seed N -sequences 1"` repeats a
-failed sequence exactly.
+system clock. Thus `make stress STRESS="-seed N -sequences 1 -profile P"`
+repeats a failed sequence exactly.
 
 **The tester is tested.** A bug put into eictar on purpose, where `-u` took
 an equal time as newer, failed the sixth sequence. The report named the file
@@ -2553,9 +2686,9 @@ a test of its own:
 - `-u --update-mode=digest` archived an unchanged sparse file again, when the
   filesystem reported its data regions in another way (§10.5).
 
-A default run of three minutes makes
-approximately 11,000 eictar commands, with approximately 200 crashes and 400
-damaged copies.
+A run of ten minutes, over all the profiles, made 146 sequences. They ran
+approximately 14,000 eictar commands, with 256 crashes and 510 damaged
+copies. 51 sequences ended with a dictionary, and 124 with shared content.
 
 ## 14. Security considerations
 
@@ -2568,7 +2701,12 @@ damaged copies.
 - **Content digests.** The plain index also shows the digest of each member.
   In an encrypted archive, the digest is keyed (§6.2), so it tells an
   observer nothing about the content. Before M9 it was not keyed, and it
-  showed if the archive held a file that the observer had.
+  showed if the archive held a file that the observer had. Equal keyed
+  digests still show that two members have the same content, and so does a
+  reference (§4.3).
+- **Dictionaries.** A dictionary holds pieces of the files, so in an
+  encrypted archive it is sealed like content (§6.3). Its size and its place
+  are in the index.
 - **Sizes.** With a plain index, the compressed length of every member and
   every chunk is visible. With `--encrypt-index`, they are **not** visible.
   The body has no framing (§4), so the blob boundaries exist only in the
@@ -2597,8 +2735,8 @@ damaged copies.
 - **The configuration never supplies a secret** (§11.4). The program reads no
   configuration file from the current directory, which can come from someone
   else's archive. It refuses a configuration file that another user owns
-  or can write. Such a file can set `exclude` and make a backup smaller
-  without a message.
+  or can write. Such a file can set `exclude` or `exclude-regex`, and make a
+  backup smaller without a message.
 
 ### 14.3 Extraction
 
@@ -2677,23 +2815,6 @@ denial of service, not a forgery. The derived subkeys are not set to zero
 ## 15. Future work (format-compatible)
 
 - **Public-key recipients** in the reserved `recipients` field.
-- **Whole-file deduplication.** The format already permits it. The index holds
-  a BLAKE3 digest of the plaintext of each member, and each member addresses
-  its payload as `(off, len)`. Thus two member records can point to the same
-  bytes. The implementation must add three things:
-  - A map from digest to `(off, len)`. The writer fills it during a write
-    and reads it before it encodes each member.
-  - **Reference counts**, so that `delete` and `compact` do not free a blob
-    that another member still uses. This part is easy to forget. A simple
-    compactor removes a shared blob.
-  - For an encrypted archive, a match on the *plaintext* digest, and the same
-    `enc.salt` for the members that share a blob. Without that, identical
-    files give different ciphertext.
-
-  This feature has a consequence. Anyone who can read the index can use the
-  digest column to find out if a known file is present. That is already true
-  of a plain index today. Deduplication makes people depend on the digests,
-  so the man page must say this when the feature comes.
 - **Content-defined chunking** with a table of chunk hashes, for chunk-level
   deduplication and rsync-style synchronization. §1.2 explains why this change
   is larger than it looks.
@@ -2827,10 +2948,10 @@ content digest, were decided for M9 (§6.2, §9.7).
   zstd can compress a file with the content of another member as its
   dictionary (`--patch-from`). Then the member is no longer independent of
   other members. Its extraction needs that member first, and it can need a
-  chain of versions. Delete and compact must keep
-  each member that another depends on, and damage to one blob reaches each
-  version after it. The problem statement puts delta storage out of scope for
-  v1. It is a candidate for a later format version, after M11.
+  chain of versions. Delete and compact must keep each member that another
+  depends on, and damage to one blob reaches each version after it. The
+  problem statement puts delta storage out of scope for v1. It is a candidate
+  for a later format version, after M11.
 
 
 ## 16. Implementation milestones
@@ -2842,8 +2963,8 @@ and pass, not that the feature ran once by hand.
 1. **M1 — Skeleton** *(complete)*: the module and the option parser. The
    `format` package, with the header, the trailer, the index and their fuzz
    tests. The `testutil` fixtures and the tree comparison. An operation that
-   is not built yet exits with 70 and names its milestone. That exit code and
-   the `notImplemented` helper go away with the last milestone.
+   is not built yet exits with 70 and names its milestone. Every operation is
+   built now, and the rule stays for an option that is not (§10.6).
 2. **M2 — Plaintext core** *(complete)*: create, list, extract and
    `--list-codecs`, with the codecs `none` and `zstd`. It supports regular
    files, directories and **symbolic links**. Links, `-h` and the `os.Root`
@@ -2860,8 +2981,8 @@ and pass, not that the feature ran once by hand.
    Argon2id, the HKDF key schedule, XChaCha20-Poly1305 for chunks, and the
    sealed and authenticated index. The milestone also added `--encrypt`,
    `--encrypt-index`, the passphrase sources, the KDF limits and the memory
-   check of §A.3. Fixed vectors test the key schedule. Tamper tests cover content, metadata, truncation, chunk
-   movement and downgrade.
+   check of §A.3. Fixed vectors test the key schedule. Tamper tests cover
+   content, metadata, truncation, chunk movement and downgrade.
 5. **M5 — Metadata** *(complete)*: `src/internal/meta`. Xattrs and ACLs,
    hardlinks, pipes, devices, holes, ownership by name and number, special
    mode bits with `-p`, and link times with `utimensat`. Also `--exclude`,
@@ -2891,8 +3012,9 @@ and pass, not that the feature ran once by hand.
 7. **M7 — Completion** *(complete)*: the configuration file and the
    environment variables (§11), and the codecs gzip, flate, xz and s2
    (§10.2). Also `--progress` (§10.10), `--recompress` (§9.3), and the
-   advisory lock for writers (§9.6). Also the man page (`doc/eictar.1`), the format reference
-   (`doc/format.md`), and the benchmarks (§8.4). Every option is built.
+   advisory lock for writers (§9.6). Also the man page (`doc/eictar.1`), the
+   format reference (`doc/format.md`), and the benchmarks (§8.4). Every
+   option is built.
 
    The work found and corrected these faults:
    - the xz reader took its dictionary size from the stream, so a crafted
@@ -2915,12 +3037,6 @@ and pass, not that the feature ran once by hand.
    passphrase wraps, `--change-passphrase` (§9.7), and a keyed member digest
    in encrypted archives (§6.2). Both change the format, so they come before a
    first release, with new test vectors and golden files.
-
-After M9, the module path is `github.com/philmalin/eictar`, and a release
-workflow makes the first release (§12.3) after M11. Before that release, two
-changes to the interface: the `.ect` extension (§10.12), and the selection
-by regular expression, `-R` and `--exclude-regex` (§10.11).
-
 10. **M10 — Dictionaries** *(complete)*: `-Z zstd:train` trains a zstd
     dictionary in a pass before the compression. The archive stores it,
     sealed when the archive is encrypted (§4.2, §5.1, §6.3). Codec
@@ -2933,6 +3049,11 @@ by regular expression, `-R` and `--exclude-regex` (§10.11).
     it is compressed. `--no-dedup` turns the rule off. It adds the member
     field `data`, so it comes before v1.0.0, with a new golden archive.
 
+Between M9 and M10, the module path became `github.com/philmalin/eictar`.
+The interface also got the `.ect` extension (§10.12), and selection by
+regular expression, `-R` and `--exclude-regex` (§10.11). After M11, the
+release workflow made the first release, v1.0.0 (§12.3).
+
 
 ## Appendix A. Why these primitives, compared with AES
 
@@ -2941,8 +3062,8 @@ mixes two layers. Argon2id is a key derivation function for passphrases.
 XChaCha20-Poly1305 is an AEAD cipher. AES alone is a block cipher, and it
 needs a mode.
 
-Thus the real comparisons are XChaCha20-Poly1305 against
-AES-256-GCM, and Argon2id against the KDF of the AES-based tool. The KDF is
+Thus the real comparisons are XChaCha20-Poly1305 against AES-256-GCM, and
+Argon2id against the KDF of the AES-based tool. The KDF is
 usually the weaker part.
 
 ### A.1 Cipher: XChaCha20-Poly1305 and AES-256-GCM
@@ -2973,8 +3094,8 @@ approximately 2^32 messages with one key. One reuse is a disaster: it exposes
 the GHASH key, and then any forgery is possible. XChaCha20 has a 192-bit
 nonce, so random nonces are always safe.
 
-In this design, the large nonce is necessary once. The per-member keys and the
-chunk counters of §6.2 never reuse a nonce. The index is different: one
+In this design, the large nonce is necessary once. The per-member keys and
+the chunk counters (§6.2, §6.3) never reuse a nonce. The index is different: one
 generation can get two different indexes (§6.3). Thus the index nonce is
 random, and only a 192-bit nonce makes a random nonce safe.
 
@@ -3026,8 +3147,8 @@ machine can ask a small machine for more memory than it has. Argon2id
 allocates that memory at once, so the result is an out-of-memory kill with no
 explanation.
 
-To prevent this, `eictar` compares the memory with the machine
-before it derives the key. It does this on create and on open. On open, it
+To prevent this, `eictar` compares the memory with the machine before it
+derives the key. It does this on create and on open. On open, it
 does it before the passphrase prompt. If the memory is more than half of the
 RAM, the program refuses with a message like this example:
 
