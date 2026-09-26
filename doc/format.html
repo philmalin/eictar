@@ -1509,9 +1509,19 @@ can write a reader or a writer without the eictar source code.
 document gives only the rules.</p>
 <p>The committed archives in
 <code>src/internal/archive/testdata/golden/</code> are examples of this
-format, one plain and one encrypted. The passphrase of the encrypted
-example is <code>golden</code>. The fixed test vectors of the key
-schedule are in <code>src/internal/crypt/crypt_test.go</code>.</p>
+format:</p>
+<ul>
+<li><code>plain.ect</code>: three generations, with a tombstone</li>
+<li><code>encrypted.ect</code>: the same, encrypted, with a sealed
+index</li>
+<li><code>dict.ect</code>: encrypted, with a sealed dictionary
+(§6.1)</li>
+<li><code>shared.ect</code>: members that share the content of another
+(§8.5)</li>
+</ul>
+<p>The passphrase of the encrypted examples is <code>golden</code>. The
+fixed test vectors of the key schedule are in
+<code>src/internal/crypt/crypt_test.go</code>.</p>
 <h2 id="conventions">1. Conventions</h2>
 <ul>
 <li>All integers are little-endian, except the chunk index in an AEAD
@@ -1528,7 +1538,7 @@ content from the archive.</li>
 <h2 id="layout">2. Layout</h2>
 <pre><code>offset 0      file header         64 bytes
 64            crypto header       crypto_header_len bytes (0 if not encrypted)
-body start    blobs, old indexes and old trailers, in any order
+body start    member and dictionary blobs, old indexes and old trailers, in any order
 index_offset  index               index_length bytes
 file size-96  trailer             96 bytes</code></pre>
 <p>The conventional file name extension is <code>.ect</code>. A reader
@@ -1687,7 +1697,8 @@ this map:</p>
 can ask for a derivation that never ends.</p>
 <h2 id="blobs-and-chunks">5. Blobs and chunks</h2>
 <p>Each member with content has one blob: <code>len</code> bytes at
-offset <code>off</code> of the file. The blob is a sequence of chunks,
+offset <code>off</code> of the file. The exception is a member that
+shares the content of another (§8.5). The blob is a sequence of chunks,
 back to back. The member’s <code>chunks</code> array gives the length on
 disk of each chunk, in order.</p>
 <p>The <strong>payload</strong> of a member is the content that its blob
@@ -1903,6 +1914,11 @@ GiB, and the number of members to 4194304.</p>
 </table>
 <p>A Dict map:</p>
 <table>
+<colgroup>
+<col style="width: 27%" />
+<col style="width: 33%" />
+<col style="width: 38%" />
+</colgroup>
 <thead>
 <tr class="header">
 <th>Key</th>
@@ -1914,7 +1930,9 @@ GiB, and the number of members to 4194304.</p>
 <tr class="odd">
 <td><code>id</code></td>
 <td>uint</td>
-<td>the dictionary id, 1 to 2^32 − 1, unique in the index</td>
+<td>the dictionary id, 1 to 2^32 − 1, unique in the index. A writer
+takes it from 32768 to 2^31 − 1, the range that RFC 8878 leaves
+free.</td>
 </tr>
 <tr class="even">
 <td><code>gen</code></td>
@@ -2094,7 +2112,7 @@ bytes, values of at most 65536 bytes, at most 1024 entries.</td>
 <tr class="even">
 <td><code>enc</code></td>
 <td>map</td>
-<td>in an encrypted archive, on a member with content</td>
+<td>in an encrypted archive, on a member with a blob of its own</td>
 <td><code>{ &quot;salt&quot;: 16 bytes }</code></td>
 </tr>
 <tr class="odd">
@@ -2308,7 +2326,10 @@ after it.</p>
 <p>A compact writes a new file with the same header and crypto header,
 and the same <code>archive_uuid</code>, because every
 <code>memberK</code> depends on it. It uses the next generation, and a
-<code>prev_index_offset</code> of 0.</p>
+<code>prev_index_offset</code> of 0. A change of passphrase is a compact
+with a new crypto header: a new <code>salt</code>, new Argon2id
+parameters and a new <code>key</code> (§7.1). The blobs do not
+change.</p>
 <h2 id="limits">11. Limits</h2>
 <table>
 <thead>

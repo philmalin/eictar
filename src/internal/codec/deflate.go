@@ -136,3 +136,9 @@ func (d *deflateDecoder) Decode(dst, src []byte, plainSize int) ([]byte, error) 
 }
 
 func (d *deflateDecoder) Close() error { return nil }
+
+// encodeMemory is what one Encode call holds: a pooled compressor of about
+// 1 MB, and the output.
+func (deflateFactory) encodeMemory(_ Params, maxChunk int) (int64, error) {
+	return int64(maxChunk) + 2<<20, nil
+}

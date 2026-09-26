@@ -145,7 +145,7 @@ func (w *Writer) storeDict(id uint32, content []byte) error {
 // dictionary, and points the catalog at an entry that names it. It must run
 // before the pipeline starts.
 func (w *Writer) switchEncoder(id uint32, content []byte) error {
-	enc, err := codec.NewEncoderWithDict(w.codecName, w.params, w.concurrency, content)
+	enc, err := codec.NewEncoderWith(w.codecName, w.params, codec.EncoderOptions{Concurrency: w.concurrency, Dict: content, MaxChunk: w.chunkSize})
 	if err != nil {
 		return err
 	}

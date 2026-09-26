@@ -130,7 +130,8 @@ func Create(path string, opt Options) (*Writer, error) {
 	if codecName == "" {
 		codecName = "none"
 	}
-	enc, err := codec.NewEncoder(codecName, opt.Params, opt.Concurrency)
+	enc, err := codec.NewEncoderWith(codecName, opt.Params,
+		codec.EncoderOptions{Concurrency: opt.Concurrency, MaxChunk: chunkSize})
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +295,8 @@ func OpenAppend(path string, opt Options, open OpenOptions) (*Writer, error) {
 	if codecName == "" {
 		codecName = "none"
 	}
-	enc, err := codec.NewEncoder(codecName, opt.Params, opt.Concurrency)
+	enc, err := codec.NewEncoderWith(codecName, opt.Params,
+		codec.EncoderOptions{Concurrency: opt.Concurrency, MaxChunk: chunkSize})
 	if err != nil {
 		r.Close()
 		return nil, err

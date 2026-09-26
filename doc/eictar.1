@@ -510,7 +510,10 @@ and
 .B level=19
 make the same archive. The default, 12, is the best speed: about 5% smaller
 than level 3, and about 3 times slower to create. Extraction is as fast at
-every level.
+every level. The best speed holds about 44 MB of memory for each worker that
+compresses at the same time. The program runs no more of them than fit in a
+sixteenth of the RAM, or in half of
+.BR \-\-memory\-limit .
 .IP
 .B train
 makes a dictionary from the start of each file before the compression, and

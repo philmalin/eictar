@@ -75,7 +75,7 @@ func AppendArchive(cfg AppendConfig) (Stats, error) {
 		workers = runtime.GOMAXPROCS(0)
 	}
 	opts := cfg.Options
-	opts.Concurrency = workers
+	opts.Concurrency = encoderSlots(opts, workers, cfg.MemoryLimit)
 
 	w, err := OpenAppend(cfg.Archive, opts, cfg.Open)
 	if err != nil {
@@ -569,13 +569,14 @@ func recompressBlobs(r *Reader, w *Writer, keep []format.Member, rc *RecompressC
 	if name == "" {
 		name = "none"
 	}
-	enc, err := codec.NewEncoder(name, rc.Params, workers)
+	slots := encoderSlots(Options{Codec: name, Params: rc.Params, ChunkSize: chunkSize}, workers, rc.MemoryLimit)
+	enc, err := codec.NewEncoderWith(name, rc.Params, codec.EncoderOptions{Concurrency: slots, MaxChunk: chunkSize})
 	if err != nil {
 		return 0, err
 	}
 
 	w.enc, w.codecName, w.chunkSize = enc, name, chunkSize
-	w.params, w.concurrency = rc.Params, workers
+	w.params, w.concurrency = rc.Params, slots
 	defer func() { w.enc.Close() }()
 	w.codecRef, w.addedCodec = format.NoCodec, false
 	w.index.Codecs = nil

@@ -2062,3 +2062,31 @@ func TestAffordabilityCheck(t *testing.T) {
 		t.Errorf("unknown RAM caused a refusal: %v", err)
 	}
 }
+
+// TestEncoderSlotsFitTheMemory: the encoder states of all workers must fit in
+// the memory; the default zstd level holds 44 MB for each (doc/design.md 8.2).
+// 32 workers on a machine of CI ran out of memory before this rule.
+func TestEncoderSlotsFitTheMemory(t *testing.T) {
+	zstd12 := Options{Codec: "zstd"}
+	for _, tc := range []struct {
+		name    string
+		opts    Options
+		workers int
+		limit   int64
+		ram     int64
+		want    int
+	}{
+		{"4 GiB of RAM, level 12", zstd12, 32, 0, 4 << 30, 5},    // 256 MiB / 44 MiB
+		{"64 GiB of RAM, level 12", zstd12, 32, 0, 64 << 30, 32}, // all of them
+		{"a memory limit", zstd12, 32, 1 << 30, 64 << 30, 11},    // 512 MiB / 44 MiB
+		{"RAM not known", zstd12, 32, 0, 0, 5},                   // 256 MiB
+		{"a tiny machine", zstd12, 32, 0, 256 << 20, 1},          // never fewer than 1
+		{"level 3", Options{Codec: "zstd", Params: codec.Params{"level": "3"}}, 32, 0, 4 << 30, 25},
+		{"none", Options{}, 32, 0, 1 << 30, 32},
+		{"a bad spec", Options{Codec: "zstd", Params: codec.Params{"level": "99"}}, 8, 0, 1 << 30, 8},
+	} {
+		if got := encoderSlotsOn(tc.opts, tc.workers, tc.limit, tc.ram); got != tc.want {
+			t.Errorf("%s: %d slots, want %d", tc.name, got, tc.want)
+		}
+	}
+}

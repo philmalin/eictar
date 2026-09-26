@@ -123,12 +123,26 @@ func Lookup(name string) (Factory, error) {
 // NewEncoder builds an encoder for name with params, to be shared by
 // concurrency goroutines.
 func NewEncoder(name string, p Params, concurrency int) (Encoder, error) {
-	return NewEncoderWithDict(name, p, concurrency, nil)
+	return NewEncoderWith(name, p, EncoderOptions{Concurrency: concurrency})
 }
 
-// NewEncoderWithDict is NewEncoder with a dictionary (doc/design.md 4.2).
-// A nil dictionary means none. Only a codec that has dictionaries takes one.
-func NewEncoderWithDict(name string, p Params, concurrency int, dict []byte) (Encoder, error) {
+// EncoderOptions are what an encoder needs beyond its parameters.
+type EncoderOptions struct {
+	// Concurrency is how many Encode calls may run at once. The encoder
+	// keeps a state for each, and a caller over the number waits. The
+	// writer bounds it by memory (doc/design.md 8.2).
+	Concurrency int
+	// Dict is a dictionary (doc/design.md 4.2), or nil. Only a codec that
+	// has dictionaries takes one.
+	Dict []byte
+	// MaxChunk is the largest input of one Encode call, or 0 when it is not
+	// known. zstd needs no window larger than a chunk, and a smaller window
+	// saves memory with no change in the result.
+	MaxChunk int
+}
+
+// NewEncoderWith builds an encoder with options.
+func NewEncoderWith(name string, p Params, o EncoderOptions) (Encoder, error) {
 	f, err := Lookup(name)
 	if err != nil {
 		return nil, err
@@ -136,22 +150,69 @@ func NewEncoderWithDict(name string, p Params, concurrency int, dict []byte) (En
 	if p, err = normalize(p, f.Describe()); err != nil {
 		return nil, err
 	}
-	if concurrency < 1 {
-		concurrency = 1
-	}
-	if dict == nil {
-		return f.NewEncoder(p, concurrency)
-	}
-	df, ok := f.(dictFactory)
-	if !ok {
+	o.Concurrency = max(1, o.Concurrency)
+	var enc Encoder
+	switch of, ok := f.(optionsFactory); {
+	case ok:
+		enc, err = of.newEncoderWith(p, o)
+	case o.Dict != nil:
 		return nil, fmt.Errorf("codec %s has no dictionaries", name)
+	default:
+		enc, err = f.NewEncoder(p, o.Concurrency)
 	}
-	return df.newDictEncoder(p, concurrency, dict)
+	if err != nil {
+		return nil, err
+	}
+	return &limited{Encoder: enc, slots: make(chan struct{}, o.Concurrency)}, nil
+}
+
+// limited lets at most cap(slots) Encode calls run at once. zstd limits
+// itself with its pool of states; the other codecs allocate for each call,
+// and this bounds what they hold at one time (doc/design.md 8.2).
+type limited struct {
+	Encoder
+	slots chan struct{}
+}
+
+func (l *limited) Encode(dst, src []byte) ([]byte, error) {
+	l.slots <- struct{}{}
+	defer func() { <-l.slots }()
+	return l.Encoder.Encode(dst, src)
+}
+
+// optionsFactory is a codec that uses EncoderOptions beyond Concurrency: a
+// dictionary, or the chunk size. Only zstd is one.
+type optionsFactory interface {
+	newEncoderWith(p Params, o EncoderOptions) (Encoder, error)
+}
+
+// memoryFactory is a codec that knows the memory of one Encode call in
+// progress: its state and its buffers.
+type memoryFactory interface {
+	encodeMemory(p Params, maxChunk int) (int64, error)
+}
+
+// EncodeMemory estimates the bytes that one Encode call in progress holds,
+// for chunks of at most maxChunk bytes. The writer divides its memory by it
+// to bound the calls that run at once (doc/design.md 8.2). The estimates
+// come from measurements, and they are rounded up.
+func EncodeMemory(name string, p Params, maxChunk int) (int64, error) {
+	f, err := Lookup(name)
+	if err != nil {
+		return 0, err
+	}
+	if p, err = normalize(p, f.Describe()); err != nil {
+		return 0, err
+	}
+	if mf, ok := f.(memoryFactory); ok {
+		return mf.encodeMemory(p, maxChunk)
+	}
+	// An input and an output buffer, and a little state.
+	return 2*int64(maxChunk) + 1<<20, nil
 }
 
 // dictFactory is a codec with dictionaries. Only zstd has them.
 type dictFactory interface {
-	newDictEncoder(p Params, concurrency int, dict []byte) (Encoder, error)
 	newDictDecoder(maxPlain int, dict []byte) (Decoder, error)
 	// trainSize is the dictionary size that p asks for, or 0.
 	trainSize(p Params) (int, error)

@@ -69,13 +69,14 @@ func (zstdFactory) Describe() Spec {
 }
 
 func (f zstdFactory) NewEncoder(p Params, concurrency int) (Encoder, error) {
-	return f.newDictEncoder(p, concurrency, nil)
+	return f.newEncoderWith(p, EncoderOptions{Concurrency: concurrency})
 }
 
-// newDictEncoder builds the encoder, with a dictionary when dict is not nil.
+// newEncoderWith builds the encoder, with a dictionary when o.Dict is not nil.
 // The train key is checked here but does not change the encoder: the writer
 // trains the dictionary and hands it in (doc/design.md 4.2).
-func (f zstdFactory) newDictEncoder(p Params, concurrency int, dictionary []byte) (Encoder, error) {
+func (f zstdFactory) newEncoderWith(p Params, o EncoderOptions) (Encoder, error) {
+	concurrency, dictionary := o.Concurrency, o.Dict
 	spec := f.Describe()
 	if err := checkParams(p, spec); err != nil {
 		return nil, err
@@ -104,9 +105,17 @@ func (f zstdFactory) newDictEncoder(p Params, concurrency int, dictionary []byte
 		zstd.WithEncoderConcurrency(concurrency),
 	}
 	resolved := map[string]any{"level": level}
+	window := 0 // the library's own, for the level
 	if _, ok := p["long"]; ok {
-		opts = append(opts, zstd.WithWindowSize(1<<long))
+		window = 1 << long
 		resolved["long"] = long
+	}
+	// No match reaches back past the start of its chunk (doc/design.md 4),
+	// so a window larger than the chunk holds nothing, but the library
+	// allocates it: 300 MB for each state at long=27. A window of the chunk,
+	// rounded up to a power of 2, gives the same result.
+	if w := zstdWindow(window, level, o.MaxChunk); w != window || window != 0 {
+		opts = append(opts, zstd.WithWindowSize(w))
 	}
 	if dictionary != nil {
 		opts = append(opts, zstd.WithEncoderDict(dictionary))
@@ -192,6 +201,56 @@ func (z *zstdDecoder) Decode(dst, src []byte, plainSize int) ([]byte, error) {
 func (z *zstdDecoder) Close() error {
 	z.dec.Close()
 	return nil
+}
+
+// zstdWindow is the window that the encoder uses: the one asked for (0: the
+// library's for the level), but no larger than a chunk needs. The library
+// takes a power of 2 from 1 KiB to 512 MiB.
+func zstdWindow(window, level, maxChunk int) int {
+	if window == 0 {
+		window = zstdLevelWindow(level)
+	}
+	if maxChunk > 0 {
+		need := 1 << 10
+		for need < maxChunk && need < 1<<29 {
+			need <<= 1
+		}
+		window = min(window, need)
+	}
+	return window
+}
+
+// zstdLevelWindow is the library's window for each of its speeds.
+func zstdLevelWindow(level int) int {
+	if zstd.EncoderLevelFromZstd(level) == zstd.SpeedBestCompression {
+		return 8 << 20
+	}
+	return 4 << 20
+}
+
+// encodeMemory is what one encoder state holds, from measurements: a base for
+// each speed of the library, and two buffers of the window (doc/design.md
+// 8.2). At level 12 with 4 MiB chunks, it is 44 MB.
+func (zstdFactory) encodeMemory(p Params, maxChunk int) (int64, error) {
+	level, err := intParam(p, "level", zstdLevelDefault, zstdLevelMin, zstdLevelMax)
+	if err != nil {
+		return 0, err
+	}
+	long, err := intParam(p, "long", 0, zstdLongMin, zstdLongMax)
+	if err != nil {
+		return 0, err
+	}
+	window := 0
+	if _, ok := p["long"]; ok {
+		window = 1 << long
+	}
+	base := map[zstd.EncoderLevel]int64{
+		zstd.SpeedFastest:           1 << 20,
+		zstd.SpeedDefault:           2 << 20,
+		zstd.SpeedBetterCompression: 5 << 20,
+		zstd.SpeedBestCompression:   36 << 20,
+	}[zstd.EncoderLevelFromZstd(level)]
+	return base + 2*int64(zstdWindow(window, level, maxChunk)), nil
 }
 
 // trainSize reads the train key: 0 when it is absent.

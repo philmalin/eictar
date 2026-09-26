@@ -43,3 +43,6 @@ func (c noneCodec) Decode(dst, src []byte, plainSize int) ([]byte, error) {
 
 func (noneCodec) Resolved() map[string]any { return nil }
 func (noneCodec) Close() error             { return nil }
+
+// encodeMemory is zero: none keeps its input as it is.
+func (noneFactory) encodeMemory(Params, int) (int64, error) { return 0, nil }

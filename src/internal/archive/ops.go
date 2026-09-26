@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"sort"
 
+	"github.com/philmalin/eictar/src/internal/codec"
 	"github.com/philmalin/eictar/src/internal/crypt"
 	"github.com/philmalin/eictar/src/internal/format"
 	"github.com/philmalin/eictar/src/internal/fsutil"
@@ -90,9 +91,9 @@ func CreateArchive(cfg CreateConfig) (Stats, error) {
 	}
 
 	// The encoder is shared by every worker, so it has to be built knowing
-	// how many there are.
+	// how many there are, and how many of its states the memory holds.
 	opts := cfg.Options
-	opts.Concurrency = workers
+	opts.Concurrency = encoderSlots(opts, workers, cfg.MemoryLimit)
 
 	if cfg.Encryption != nil {
 		if err := cfg.Encryption.apply(&opts); err != nil {
@@ -350,6 +351,41 @@ func checkAffordableOn(p crypt.KDFParams, ram int64) error {
 			need/(1<<20), ram/(1<<20))
 	}
 	return nil
+}
+
+// encoderSlots is how many Encode calls may run at once: one for each worker,
+// but no more than the memory holds (doc/design.md 8.2). One state of zstd at
+// its best speed holds 44 MB, and one at long=27 held 300 MB before the
+// window was capped at the chunk. With 32 workers, that was more than the
+// machines of CI had. Workers above the number wait for a free state.
+func encoderSlots(opts Options, workers int, limit int64) int {
+	return encoderSlotsOn(opts, workers, limit, totalMemory())
+}
+
+// encoderSlotsOn is encoderSlots for a given amount of RAM, so that the rule
+// can be tested without a small machine. The states may use half of
+// --memory-limit when it is given, and a sixteenth of the RAM when not.
+func encoderSlotsOn(opts Options, workers int, limit, ram int64) int {
+	name := opts.Codec
+	if name == "" {
+		name = "none"
+	}
+	chunk := opts.ChunkSize
+	if chunk <= 0 {
+		chunk = DefaultChunkSize
+	}
+	per, err := codec.EncodeMemory(name, opts.Params, chunk)
+	if err != nil || per <= 0 {
+		return max(1, workers) // a bad spec is reported when the encoder is built
+	}
+	budget := ram / 16
+	switch {
+	case limit > 0:
+		budget = limit / 2
+	case ram <= 0:
+		budget = 256 << 20
+	}
+	return min(max(1, workers), max(1, int(budget/per)))
 }
 
 // budgetFor sizes the in-flight memory allowance.

@@ -95,7 +95,7 @@ func TestDictionaryRoundTrip(t *testing.T) {
 		t.Fatalf("DictID = %d, %v", id, err)
 	}
 	plain, _ := NewEncoder("zstd", nil, 1)
-	withDict, err := NewEncoderWithDict("zstd", nil, 1, dict)
+	withDict, err := NewEncoderWith("zstd", nil, EncoderOptions{Concurrency: 1, Dict: dict})
 	if err != nil {
 		t.Fatal(err)
 	}

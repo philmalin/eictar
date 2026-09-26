@@ -1114,6 +1114,22 @@ at `-j 8`. User time stays at approximately 3.3 s.
 Thus `codec.NewEncoder` takes the concurrency as an argument. A codec
 conformance test fails if a shared encoder is serial.
 
+**The number of encoder states is also bounded by memory.** A state of zstd
+at its best speed holds approximately 44 MB with 4 MiB chunks, and an xz
+compression holds approximately 30 MB. With 32 workers, that is more than
+1 GB. After the default level became 12, the test machines of FreeBSD and
+OpenBSD ran out of memory.
+
+Thus each codec estimates the memory of one compression in progress. The
+writer makes no more states than fit in one sixteenth of the RAM. When
+`--memory-limit` is given, the states can use half of it. There is always at
+least one state. The workers above the number wait for a free state.
+
+**zstd caps its window at the chunk size**, rounded up to a power of 2. No
+match reaches back past the start of its chunk (§4), so a larger window
+holds nothing, but the library allocates it. At `long=27`, each state held
+300 MB. The result of the compression does not change.
+
 A `--codec-workers` option for real codec threads (for one very large file)
 is not in v1. For this reason it is not in §10.4.
 
@@ -2454,6 +2470,11 @@ Every item in the lists below exists now, except the items marked "later".
   `--no-config`, comments, `--show-config` with its sources, and the
   variable of `--passphrase-env`. A `.eictarrc` in the current directory has
   no effect.
+- **Encoder memory** (§8.2):
+  - the window of zstd fits the chunk
+  - the estimate of each codec
+  - a limit on the compressions at once
+  - the number of states for each amount of RAM and each memory limit
 - **Codecs, worst case**: each codec at its strongest setting compresses
   4 MiB of zeroes in less than 10 s. The test proves why the xz binary tree
   is not used (§10.2).

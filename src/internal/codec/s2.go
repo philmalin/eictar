@@ -113,3 +113,9 @@ func (d *s2Decoder) Decode(dst, src []byte, plainSize int) ([]byte, error) {
 }
 
 func (d *s2Decoder) Close() error { return nil }
+
+// encodeMemory is what one Encode call holds, from measurements: two
+// buffers of the chunk. At 4 MiB chunks, it is 9 MB.
+func (s2Factory) encodeMemory(_ Params, maxChunk int) (int64, error) {
+	return 2*int64(max(maxChunk, 1<<20)) + 1<<20, nil
+}
