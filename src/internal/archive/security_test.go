@@ -106,7 +106,24 @@ func TestOpenWalkedRefusesASwap(t *testing.T) {
 		t.Error("a symbolic link put there after the walk was followed")
 	}
 
+	// A hardlink to the secret: a regular file, but another inode.
 	os.Remove(file)
+	if err := os.Link(secret, file); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openWalked(e); !errors.Is(err, errChangedDuringWalk) {
+		t.Errorf("a hardlink to another file at the path: %v, want errChangedDuringWalk", err)
+	}
+
+	// Another new file. The walked file is moved aside, not removed: Linux,
+	// NetBSD and OpenBSD give a freed inode number to the next file at once,
+	// and a new file with the walked inode is the same file to this check.
+	// That is safe: such a file is only content that someone could have
+	// written into the walked file.
+	os.Remove(file)
+	os.WriteFile(file, []byte("mine again"), 0o644)
+	e = walked()
+	os.Rename(file, file+".aside")
 	os.WriteFile(file, []byte("another"), 0o644)
 	if _, err := openWalked(e); !errors.Is(err, errChangedDuringWalk) {
 		t.Errorf("another file at the path: %v, want errChangedDuringWalk", err)

@@ -111,8 +111,16 @@ makes sure that the open file has the device and the inode that the walk
 saw. Otherwise the member fails, as for a read error. The capture, the
 samples of a dictionary and `-u --update-mode=digest` all use it.
 
-**Tests.** `TestOpenWalkedRefusesASwap` puts a link, and then another file,
-in place of a walked file. `TestCreateSkipsAFileThatBecameALink` does the
+**Limit.** A file that someone deletes and creates again can get the same
+inode number. Linux, NetBSD and OpenBSD give a freed number to the next file
+at once. Such a file passes the check. That is safe: it holds only content
+that the user can also write into the walked file. A link, or a hardlink
+to another file, always has another inode, and the check refuses it.
+
+**Tests.** `TestOpenWalkedRefusesASwap` puts a symbolic link, a hardlink to
+another file, and another new file in place of a walked file. The first
+version of the test deleted the walked file, and CI found that the new file
+then often got its inode. `TestCreateSkipsAFileThatBecameALink` does the
 same through the capture of a member.
 
 ### Finding 4. A planted link in the archive path (medium)
