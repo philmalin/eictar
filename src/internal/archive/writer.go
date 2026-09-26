@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"lukechampine.com/blake3"
@@ -25,6 +26,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/crypt"
 	"github.com/philmalin/eictar/src/internal/format"
 	"github.com/philmalin/eictar/src/internal/fsutil"
+	"github.com/philmalin/eictar/src/internal/meta"
 )
 
 // Defaults for the writer and the pipeline.
@@ -499,6 +501,9 @@ func (w *Writer) Close() error {
 // replacing a 0600 archive with a 0644 one would be a silent change of who
 // can read it. A new file gets 0666 less the umask, as os.Create does.
 func createTarget(path string) (string, os.FileMode, error) {
+	if err := checkLinks(path); err != nil {
+		return "", 0, err
+	}
 	target := path
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		target = resolved
@@ -560,6 +565,34 @@ func createTemp(target string, mode os.FileMode) (*os.File, string, error) {
 		}
 	}
 	return f, tmpPath, nil
+}
+
+// ErrUnsafeLink means -f names a path through a symbolic link that the
+// program does not follow (doc/Security_Audit.md, finding 4).
+var ErrUnsafeLink = errors.New("a symbolic link that another user planted in a shared directory")
+
+// checkLinks refuses a path through a symbolic link that the kernel would not
+// follow for open(2) under fs.protected_symlinks. The writer resolves the
+// path itself and renames over the target, so the kernel's rule never
+// applies: a link /tmp/backup.ect -> /etc/passwd, planted by another user,
+// made a create by root replace /etc/passwd.
+func checkLinks(path string) error {
+	clean := filepath.Clean(path)
+	prefix := ""
+	if filepath.IsAbs(clean) {
+		prefix = string(filepath.Separator)
+	}
+	for _, part := range strings.Split(strings.TrimPrefix(clean, prefix), string(filepath.Separator)) {
+		prefix = filepath.Join(prefix, part)
+		fi, err := os.Lstat(prefix)
+		if err != nil {
+			return nil // what does not exist is not a link; the caller reports it
+		}
+		if fi.Mode()&os.ModeSymlink != 0 && !meta.MayFollow(prefix, fi) {
+			return fmt.Errorf("%s: %w; the program does not follow it", prefix, ErrUnsafeLink)
+		}
+	}
+	return nil
 }
 
 // SameFile reports whether fi is the file this writer is writing. The walk

@@ -329,7 +329,11 @@ type CompactResult struct {
 func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	var res CompactResult
 
-	// Through a symlink, the rename must replace the file, not the link.
+	// Through a symlink, the rename must replace the file, not the link, and
+	// the link must be one that the program follows (checkLinks).
+	if err := checkLinks(cfg.Archive); err != nil {
+		return res, err
+	}
 	path, err := filepath.EvalSymlinks(cfg.Archive)
 	if err != nil {
 		return res, fmt.Errorf("resolving %s: %w", cfg.Archive, err)

@@ -266,6 +266,7 @@ The index is encoded in these steps:
 3. The seal of §7.4, when bit 0 of trailer_flags is 1.
 
 A reader reverses the steps. It limits the decompressed index to 1 GiB, and
+to 200 times the compressed index or 64 MiB, whichever is more. It limits
 the number of members to 4194304.
 
 ### 8.2 Index map
@@ -381,7 +382,9 @@ the path `.`, for the root of the archived tree. A path is a sequence of
 bytes, and it does not have to be UTF-8.
 
 An extractor refuses a member whose path breaks this rule. It also refuses to
-write through a symbolic link that an earlier member made.
+write through a symbolic link that an earlier member made. It does not apply
+a member `.` to its destination. The archive does not own that directory,
+and the member changes its mode, its owner and its times.
 
 ### 9.2 Hardlinks
 
@@ -445,7 +448,7 @@ a new `key` (§7.1). The blobs do not change.
 | Argon2id `time` | 64 |
 | Argon2id `memory` | 4194304 KiB |
 | `chunk` | 268435456 bytes |
-| decompressed index | 1 GiB |
+| decompressed index | 1 GiB, and at most 200 × its compressed size or 64 MiB, whichever is more |
 | members in one index | 4194304 |
 | dictionaries in one index, dictionary size | 1024, 1048576 bytes |
 | xattr name, value, count | 255 bytes, 65536 bytes, 1024 |

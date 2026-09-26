@@ -1,6 +1,6 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete, and v1.0.0 is tagged. The CI workflow passes
+Status: M1 to M11 are complete, and v1.0.2 is the current release. The CI workflow passes
 on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
 Date: 2026-09-26
 Applies to: v1 (format version 1.0)
@@ -949,21 +949,35 @@ directory.
 ### 7.7 Metadata on extraction
 
 The defaults are safe. Extraction restores what a user can restore, and
-nothing that needs privilege or gives it:
+nothing that needs privilege or gives it. `-p` is the one consent to
+restore the rest exactly, as in `tar`:
 
 | Metadata | Default | Option |
 |----------|---------|--------|
-| permission bits | restored | |
+| permission bits | restored, less the umask for a user who is not root | `-p` restores them exactly |
 | setuid, setgid, sticky | **not** restored | `-p` restores them |
 | atime, mtime | restored, links included | |
 | owner | not changed | `--preserve-owner`, as root |
 | `user.*` xattrs, and names with no namespace (macOS) | restored | `--no-xattrs` omits them |
-| POSIX ACLs | restored | `--no-acls` omits them |
-| `security.*`, `trusted.*` and other `system.*` xattrs | restored only as root | `--no-xattrs` omits them |
+| POSIX ACLs | restored as root | `-p` restores them for any user. `--no-acls` omits them. |
+| `security.*`, `trusted.*` and other `system.*` xattrs | **not** restored | `-p` restores them, as root |
 | FIFOs | created, except on macOS (§15.1) | |
 | device nodes | skipped with a notice | `--preserve-devices`, as root |
 | sockets | skipped with a notice | |
 | holes | kept | |
+
+**An archive cannot open a file to other users by itself.** Without `-p`, a
+user who is not root gets each mode less the umask, as with `tar`. An ACL
+can give access as a mode can, so it needs root or `-p` too. One notice
+counts the ACLs and attributes that `-p` restores. Until the audit of
+v1.0.1 (`doc/Security_Audit.md`), an archive's 0666 file and 0777 directory
+kept those modes.
+
+**The root of the archived tree is never applied to the destination.** A
+member whose path is `.` changes the mode, the times and the owner of the
+destination itself. The writer never stores one. The reader skips one
+with a notice. A crafted archive made a destination of 0755 into 0777
+before this rule.
 
 **The owner goes on before the mode.** `chown` clears the setuid bit, so a
 mode set first loses it. On a regular file, the owner, the xattrs and the mode
@@ -975,10 +989,14 @@ and by name. The same uid on two machines is rarely the same person, but the
 same user name usually is. If the name does not exist on this machine, the
 reader uses the recorded number. `tar` uses the same rule.
 
-**Privileged xattrs need root.** `security.*` often holds an SELinux label
-that belongs to one machine. `trusted.*` needs `CAP_SYS_ADMIN`. Other
-`system.*` names belong to one filesystem type, and on FreeBSD and NetBSD the
-system namespace needs root.
+**Privileged xattrs need root and `-p`.** `security.capability` gives a
+program Linux capabilities, as setuid gives it a user. Restored by default,
+an archive can install a program that makes any user root. Until the audit,
+these names were restored for root with no option.
+
+`security.*` also holds an SELinux label that belongs to one machine.
+`trusted.*` needs `CAP_SYS_ADMIN`. Other `system.*` names belong to one
+filesystem type, and on FreeBSD and NetBSD the system namespace needs root.
 
 **Xattr names are recorded exactly, and applied where they fit.** Each
 platform names xattrs differently. Linux uses namespaces (`user.comment`).
@@ -1225,8 +1243,17 @@ destroyed a backup.
 
 The new file gets the permissions of the file that it replaces. If the path
 is a symbolic link, the file that the link points to is replaced, and the
-link stays. The walk skips both the temporary file and the
-old archive, so neither goes into the new archive.
+link stays. The walk skips both the temporary file and the old archive, so
+neither goes into the new archive.
+
+**A symbolic link in the path must be one that the kernel follows.** Take a
+sticky directory that everyone can write, such as `/tmp`. There, Linux
+follows a link only when it belongs to the caller or to the owner of the
+directory (`fs.protected_symlinks`). The writer resolves the path itself and
+renames over the target, so the kernel's rule never applies. Thus the writer
+applies the rule to each link in the path, for create, compact and change of
+passphrase. Before the audit, a link `/tmp/backup.ect -> /etc/passwd` that
+another user planted made a create by root replace `/etc/passwd`.
 
 ### 9.1 The write sequence
 
@@ -1680,7 +1707,7 @@ whose encryption was removed (§14).
 | `-h` | `--dereference` | follow links and store what they point to | M2 |
 | | `--no-dedup` | store each copy of the same content in full (§4.3). Create, append and update. | M11 |
 | | `--one-file-system` | do not enter other filesystems. A mount point is recorded, empty. Create, append and update. | M5 |
-| `-p` | `--preserve-permissions` | also restore setuid, setgid and sticky (§7.7). Extract only. | M5 |
+| `-p` | `--preserve-permissions` | restore modes exactly, with setuid, setgid and sticky, and not less the umask. Also restore ACLs for any user, and privileged xattrs as root (§7.7). Extract only. | M5 |
 | | `--preserve-owner` | restore the owner (§7.7). Extract only. Without root, exit 2. | M5 |
 | | `--preserve-devices` | create device nodes. Extract only. Without root, exit 2. | M5 |
 | | `--no-xattrs`, `--no-acls`, `--no-owner` | on create, append and update, do not record that metadata. On extract, do not apply it. | M5 |
@@ -1783,7 +1810,7 @@ value never causes this error.
 | 0 | success |
 | 1 | the operation completed, but one or more members failed under `--keep-going` |
 | 2 | usage error: an unknown option, no operation, two operations, no `-f`, a bad compression spec. Also a pattern that matches no member, for `-t`, `-x`, `--verify` and `--delete`, an `-R` that matches no path or member, a regular expression that does not compile, and a path that is already in the archive under `--on-conflict=error`. Nothing is changed or extracted. |
-| 3 | the archive failed a check. Causes: corrupt data, an unsafe member path, a wrong passphrase or a failed tag. Also a plaintext archive when a passphrase source was given. |
+| 3 | the archive failed a check. Causes: corrupt data, an unsafe member path, a wrong passphrase or a failed tag. Also a plaintext archive when a passphrase source was given, and an archive path through a link that the program does not follow (§9). |
 | 4 | any other failure, usually an I/O error on the archive or the filesystem |
 | 70 | an option that is not built yet (`EX_SOFTWARE`). The message names the milestone. Since M7, no option gives it. |
 
@@ -2498,6 +2525,15 @@ Every item in the lists below exists now, except the items marked "later".
   sparse file, survive (§9.3).
 - **Progress meter**: the status line, no drawing before the first byte, and
   no meter without a terminal (§10.10).
+- **Security regressions**: one test for each finding of
+  `doc/Security_Audit.md`:
+  - the decision for each class of xattr
+  - a member `.`
+  - a file that becomes a link after the walk
+  - the rule for links in the archive path
+  - the umask
+  - the expansion of the index
+  - a passphrase file that other users can read
 - **Man page and help**: `doc/eictar.1` and `--help` name every long option
   of the parser, and the help gives each short form. No line of the help is
   wider than 80 columns.
@@ -2730,7 +2766,9 @@ copies. 51 sequences ended with a dictionary, and 124 with shared content.
 ### 14.1 What an observer sees
 
 - **The plain index (the default) shows** every file name, size, mode,
-  timestamp and xattr. This default is useful, but the man page must state it
+  timestamp, link target and xattr, with its value. A value can say more than
+  a name: macOS records in `com.apple.metadata:kMDItemWhereFroms` the address
+  that a file came from. This default is useful, but the man page must state it
   clearly. `--encrypt-index` hides it. Then an observer sees only that the
   archive exists, and its total size.
 - **Content digests.** The plain index also shows the digest of each member.
@@ -2751,6 +2789,15 @@ copies. 51 sequences ended with a dictionary, and 124 with shared content.
   BREACH. It needs an attacker who can put chosen content into the same
   member as a secret. An archive is not such an adaptive setting, so the design
   accepts this risk. `--compress none` removes it.
+- **Dictionaries and shared content work across files** (§4.2, §4.3). Thus
+  the inference no longer needs the same member. Suppose that an attacker can
+  put files into a tree that is archived again and again, and can see the
+  size of the archive. A copy of a file that the archive holds adds almost
+  nothing, so the attacker can test a guess of a whole file. With `train`, a
+  file that looks like the secret files compresses better.
+
+  `--encrypt-index` hides the size of each member, but not the size of the
+  archive. For such a tree, use `--no-dedup` and no `train`.
 
 ### 14.2 Keys and passphrases
 
@@ -2767,6 +2814,8 @@ copies. 51 sequences ended with a dictionary, and 124 with shared content.
   subkeys to zero, and it does not lock memory. Go can copy memory without
   notice, so zeroing is only a partial protection. `--passphrase-env` prints
   a warning.
+- **A passphrase file that other users can read gives a warning**, as ssh
+  gives for a key.
 - **The configuration never supplies a secret** (§11.4). The program reads no
   configuration file from the current directory, which can come from someone
   else's archive. It refuses a configuration file that another user owns
@@ -2780,9 +2829,11 @@ copies. 51 sequences ended with a dictionary, and 124 with shared content.
   archive. Extraction never follows a link and never goes through a linked
   directory.
 - **Metadata.** By default, extraction restores nothing that needs privilege
-  or gives it. Setuid, setgid and sticky need `-p`. Owners need
+  or gives it. Setuid, setgid, privileged xattrs and exact modes need `-p`,
+  and a user who is not root gets each mode less the umask. Owners need
   `--preserve-owner`, and device nodes need `--preserve-devices`, both as
-  root. Privileged xattrs need root. §7.7 gives the full table.
+  root. A member `.` never changes the destination. §7.7 gives the full
+  table.
 - **New node types.** Pipes and device nodes are created with `*at` calls, on
   a directory descriptor from `os.Root` and a single name component. A
   planted link cannot redirect them. A test proves this for a pipe.
@@ -2790,7 +2841,8 @@ copies. 51 sequences ended with a dictionary, and 124 with shared content.
   A chunk that decodes to another size is an error.
 - **Allocation from a crafted archive.** Before the reader uses a number to
   size a buffer, it applies a limit to that number:
-  - the index length: `MaxIndexSize`, 1 GiB
+  - the index length: `MaxIndexSize`, 1 GiB, and at most 200 times its
+    compressed size, or 64 MiB, whichever is more
   - array elements: the input length, and `MaxIndexMembers`
   - the chunk size: `MaxChunkSize`, 256 MiB (§5.2)
   - the crypto header length: 64 KiB
@@ -2846,6 +2898,27 @@ keyed digest, so a changed flag stops the archive from opening. That is a
 denial of service, not a forgery. The derived subkeys are not set to zero
 (§14.2). The downgrade gap above applies only without a passphrase source.
 
+
+### 14.5 Archiving a tree that other users can write
+
+A backup often runs as root, over directories that other users can write.
+Such a user can change the tree while the program walks it, and can plant
+links where the program writes. Two rules apply:
+
+- **The writer opens a walked file only as it was walked.** Between the
+  walk's `lstat` and the open, a user can put a symbolic link to
+  `/etc/shadow` in place of a file. The open does not follow a link, except
+  with `-h`. The file that it opens must have the device and the inode that
+  the walk saw. Otherwise the member fails, as for a read error. This rule
+  also applies to the samples of a dictionary and to `-u
+  --update-mode=digest`.
+- **The archive path follows only the links that the kernel follows** (§9).
+
+### 14.6 Audit
+
+`doc/Security_Audit.md` records the review of v1.0.1: eight findings, the
+fixes of v1.0.2, and a test for each fix. It also lists what the review
+examined and found sound.
 
 ## 15. Future work (format-compatible)
 
@@ -3087,7 +3160,14 @@ and pass, not that the feature ran once by hand.
 Between M9 and M10, the module path became `github.com/philmalin/eictar`.
 The interface also got the `.ect` extension (§10.12), and selection by
 regular expression, `-R` and `--exclude-regex` (§10.11). After M11, the
-release workflow made the first release, v1.0.0 (§12.3).
+release workflow made the first release, v1.0.0 (§12.3). The next release,
+v1.0.1, made zstd level 12 the default, and bounded the memory of the
+encoders (§8.2).
+
+**v1.0.2 is a security release.** A review of v1.0.1 found eight problems
+(`doc/Security_Audit.md`). Two were serious for a root user with an archive
+from someone else: privileged xattrs, and a member `.`. The release fixes six,
+each with a test (§7.7, §9, §14), and documents the other two (§14.1).
 
 
 ## Appendix A. Why these primitives, compared with AES

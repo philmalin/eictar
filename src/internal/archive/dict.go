@@ -269,8 +269,8 @@ func (r *Reader) dictFor(m *format.Member) ([]byte, error) {
 // the real walk meets the same file and reports it there.
 func sampleTree(w *Writer, cfg CreateConfig, size int) ([][]byte, error) {
 	type file struct {
-		src string
-		n   int
+		e entry
+		n int
 	}
 	var files []file
 	oldArchive, oldErr := os.Stat(cfg.Archive)
@@ -286,7 +286,7 @@ func sampleTree(w *Writer, cfg CreateConfig, size int) ([][]byte, error) {
 			(oldErr == nil && os.SameFile(e.Info, oldArchive)) {
 			return nil
 		}
-		files = append(files, file{e.Src, int(min(e.Info.Size(), sampleSize))})
+		files = append(files, file{e, int(min(e.Info.Size(), sampleSize))})
 		return nil
 	})
 	for _, p := range cfg.Paths {
@@ -299,7 +299,9 @@ func sampleTree(w *Writer, cfg CreateConfig, size int) ([][]byte, error) {
 	}
 	var samples [][]byte
 	for _, i := range pickSamples(sizes, size) {
-		f, err := os.Open(files[i].src)
+		// As the capture does: a link put there after the walk is not
+		// followed, or its target would go into the dictionary.
+		f, err := openWalked(files[i].e)
 		if err != nil {
 			continue
 		}

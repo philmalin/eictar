@@ -264,7 +264,7 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs.BoolVar(&o.OneFileSystem, "one-file-system", false, "do not cross mount points")
 	fs.BoolVar(&o.NoDedup, "no-dedup", false, "store each copy of the same content in full")
 
-	fs.BoolVarP(&o.PreservePermissions, "preserve-permissions", "p", false, "restore modes exactly")
+	fs.BoolVarP(&o.PreservePermissions, "preserve-permissions", "p", false, "restore modes exactly, special bits, ACLs, and privileged xattrs as root")
 	fs.BoolVar(&o.PreserveOwner, "preserve-owner", false, "restore uid and gid (needs root)")
 	fs.BoolVar(&o.PreserveDevices, "preserve-devices", false, "recreate device nodes (needs root)")
 	fs.BoolVar(&o.NoXattrs, "no-xattrs", false, "do not store or restore extended attributes")

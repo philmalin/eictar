@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -111,4 +112,47 @@ func growRead(call func(buf []byte) (int, error)) ([]byte, error) {
 
 func isUnsupported(err error) bool {
 	return errors.Is(err, unix.ENOTSUP) || errors.Is(err, unix.EOPNOTSUPP)
+}
+
+// Umask returns the process's file mode creation mask. It sets the mask to
+// read it and puts it back, so it must run before other goroutines create
+// files: Extract calls it before its workers start.
+func Umask() uint32 {
+	m := unix.Umask(0)
+	unix.Umask(m)
+	return uint32(m)
+}
+
+// OpenNoFollow opens a file for reading, and fails if the last name is a
+// symbolic link. The writer uses it for a file that the walk found as a
+// regular file, so that a link put there after the walk is not followed
+// (doc/design.md 14.3).
+func OpenNoFollow(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW, 0)
+}
+
+// MayFollow applies the rule of the Linux fs.protected_symlinks setting to a
+// symbolic link: in a directory that everyone can write and that is sticky,
+// such as /tmp, a link is followed only when its owner is the caller or the
+// owner of the directory. The kernel applies the rule to open(2). The writer
+// resolves -f itself, so it applies the rule too (doc/design.md 9).
+func MayFollow(link string, linkInfo fs.FileInfo) bool {
+	dir, err := os.Stat(filepath.Dir(link))
+	if err != nil {
+		return false
+	}
+	owner, dirOwner := Stat(linkInfo), Stat(dir)
+	if !owner.OK || !dirOwner.OK {
+		return false
+	}
+	return mayFollow(dir.Mode(), owner.UID, dirOwner.UID, uint32(os.Geteuid()))
+}
+
+// mayFollow is the rule of MayFollow, apart from the filesystem, so that a
+// link of another user can be tested without one.
+func mayFollow(dirMode fs.FileMode, linkUID, dirUID, euid uint32) bool {
+	if dirMode&fs.ModeSticky == 0 || dirMode.Perm()&0o002 == 0 {
+		return true
+	}
+	return linkUID == euid || linkUID == dirUID
 }

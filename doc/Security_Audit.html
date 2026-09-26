@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>Format</title>
+  <title>Security Audit</title>
   <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -1446,940 +1446,407 @@ text-decoration: underline;
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">Format</h1>
+<h1 class="title">Security Audit</h1>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
-<li><a href="#eictar-archive-format-version-1.0" id="toc-eictar-archive-format-version-1.0">eictar archive format,
-version 1.0</a>
+<li><a href="#eictar-security-audit" id="toc-eictar-security-audit">eictar security audit</a>
 <ul>
-<li><a href="#conventions" id="toc-conventions">1. Conventions</a></li>
-<li><a href="#layout" id="toc-layout">2. Layout</a></li>
-<li><a href="#file-header" id="toc-file-header">3. File header</a></li>
-<li><a href="#crypto-header" id="toc-crypto-header">4. Crypto
-header</a></li>
-<li><a href="#blobs-and-chunks" id="toc-blobs-and-chunks">5. Blobs and
-chunks</a></li>
-<li><a href="#codecs" id="toc-codecs">6. Codecs</a>
+<li><a href="#scope-and-method" id="toc-scope-and-method">1. Scope and
+method</a></li>
+<li><a href="#summary" id="toc-summary">2. Summary</a></li>
+<li><a href="#findings" id="toc-findings">3. Findings</a>
 <ul>
-<li><a href="#dictionaries" id="toc-dictionaries">6.1
-Dictionaries</a></li>
+<li><a href="#finding-1.-privileged-extended-attributes-high" id="toc-finding-1.-privileged-extended-attributes-high">Finding 1.
+Privileged extended attributes (high)</a></li>
+<li><a href="#finding-2.-a-member-.-changed-the-destination-high" id="toc-finding-2.-a-member-.-changed-the-destination-high">Finding 2. A
+member <code>.</code> changed the destination (high)</a></li>
+<li><a href="#finding-3.-a-file-that-becomes-a-link-after-the-walk-medium" id="toc-finding-3.-a-file-that-becomes-a-link-after-the-walk-medium">Finding
+3. A file that becomes a link after the walk (medium)</a></li>
+<li><a href="#finding-4.-a-planted-link-in-the-archive-path-medium" id="toc-finding-4.-a-planted-link-in-the-archive-path-medium">Finding 4.
+A planted link in the archive path (medium)</a></li>
+<li><a href="#finding-5.-the-umask-and-acls-on-extraction-medium-to-low" id="toc-finding-5.-the-umask-and-acls-on-extraction-medium-to-low">Finding
+5. The umask and ACLs on extraction (medium to low)</a></li>
+<li><a href="#finding-6.-the-expansion-of-the-index-low" id="toc-finding-6.-the-expansion-of-the-index-low">Finding 6. The
+expansion of the index (low)</a></li>
+<li><a href="#finding-7.-size-side-channels-across-files-low-documented" id="toc-finding-7.-size-side-channels-across-files-low-documented">Finding
+7. Size side channels across files (low; documented)</a></li>
+<li><a href="#finding-8.-a-passphrase-file-that-others-can-read-low" id="toc-finding-8.-a-passphrase-file-that-others-can-read-low">Finding
+8. A passphrase file that others can read (low)</a></li>
+<li><a href="#finding-9.-information" id="toc-finding-9.-information">Finding 9. Information</a></li>
 </ul></li>
-<li><a href="#cryptography" id="toc-cryptography">7. Cryptography</a>
-<ul>
-<li><a href="#keys" id="toc-keys">7.1 Keys</a></li>
-<li><a href="#aead" id="toc-aead">7.2 AEAD</a></li>
-<li><a href="#chunks" id="toc-chunks">7.3 Chunks</a></li>
-<li><a href="#sealed-index" id="toc-sealed-index">7.4 Sealed
-index</a></li>
-<li><a href="#index-digest" id="toc-index-digest">7.5 Index
-digest</a></li>
-<li><a href="#sealed-dictionary" id="toc-sealed-dictionary">7.6 Sealed
-dictionary</a></li>
-</ul></li>
-<li><a href="#index" id="toc-index">8. Index</a>
-<ul>
-<li><a href="#encoding" id="toc-encoding">8.1 Encoding</a></li>
-<li><a href="#index-map" id="toc-index-map">8.2 Index map</a></li>
-<li><a href="#member-map" id="toc-member-map">8.3 Member map</a></li>
-<li><a href="#checks" id="toc-checks">8.4 Checks</a></li>
-<li><a href="#shared-content" id="toc-shared-content">8.5 Shared
-content</a></li>
-<li><a href="#paths-in-the-index" id="toc-paths-in-the-index">8.6 Paths
-in the index</a></li>
-</ul></li>
-<li><a href="#members" id="toc-members">9. Members</a>
-<ul>
-<li><a href="#stored-paths" id="toc-stored-paths">9.1 Stored
-paths</a></li>
-<li><a href="#hardlinks" id="toc-hardlinks">9.2 Hardlinks</a></li>
-<li><a href="#sparse-files" id="toc-sparse-files">9.3 Sparse
-files</a></li>
-</ul></li>
-<li><a href="#trailer-and-generations" id="toc-trailer-and-generations">10. Trailer and generations</a></li>
-<li><a href="#limits" id="toc-limits">11. Limits</a></li>
+<li><a href="#what-the-review-found-sound" id="toc-what-the-review-found-sound">4. What the review found
+sound</a></li>
+<li><a href="#recommendations-for-later" id="toc-recommendations-for-later">5. Recommendations for later</a></li>
 </ul></li>
 </ul>
 </nav>
-<h1 id="eictar-archive-format-version-1.0">eictar archive format,
-version 1.0</h1>
-<p>This document specifies the bytes of an eictar archive. With it, you
-can write a reader or a writer without the eictar source code.
-<code>doc/design.md</code> gives the reasons for each choice. This
-document gives only the rules.</p>
-<p>The committed archives in
-<code>src/internal/archive/testdata/golden/</code> are examples of this
-format:</p>
+<h1 id="eictar-security-audit">eictar security audit</h1>
+<table>
+<tbody>
+<tr class="odd">
+<td>Version reviewed</td>
+<td>v1.0.1</td>
+</tr>
+<tr class="even">
+<td>Fixes in</td>
+<td>v1.0.2</td>
+</tr>
+<tr class="odd">
+<td>Date</td>
+<td>2026-09-26</td>
+</tr>
+<tr class="even">
+<td>Scope</td>
+<td>the source code, the archive format, and encrypted archives</td>
+</tr>
+</tbody>
+</table>
+<h2 id="scope-and-method">1. Scope and method</h2>
+<p>The review read the code of each part where untrusted data enters, or
+where the program acts with the rights of its user:</p>
 <ul>
-<li><code>plain.ect</code>: three generations, with a tombstone</li>
-<li><code>encrypted.ect</code>: the same, encrypted, with a sealed
-index</li>
-<li><code>dict.ect</code>: encrypted, with a sealed dictionary
-(§6.1)</li>
-<li><code>shared.ect</code>: members that share the content of another
-(§8.5)</li>
+<li>the parser of an archive: the header, the crypto header, the
+trailer, the index, and every length, offset and count in them</li>
+<li>the decoder of each codec, against decompression bombs</li>
+<li>extraction: paths, links, special files, modes, owners and extended
+attributes</li>
+<li>the cryptography: the key schedule, the nonces, what each AAD binds,
+the sealed dictionary, and what an encrypted archive shows</li>
+<li>the writer: how it opens the files of a tree, its temporary files,
+and the archive path</li>
+<li>the passphrase and the configuration</li>
 </ul>
-<p>The passphrase of the encrypted examples is <code>golden</code>. The
-fixed test vectors of the key schedule are in
-<code>src/internal/crypt/crypt_test.go</code>.</p>
-<h2 id="conventions">1. Conventions</h2>
-<ul>
-<li>All integers are little-endian, except the chunk index in an AEAD
-nonce and in an AAD, which is big-endian (§7.3).</li>
-<li><code>CRC-32C</code> is CRC-32 with the Castagnoli polynomial.</li>
-<li><code>BLAKE3-256</code> is BLAKE3 with 32 bytes of output. “Keyed
-BLAKE3” is the keyed mode of BLAKE3 with a 32-byte key.</li>
-<li><code>u64le(x)</code> is the 8-byte little-endian form of
-<code>x</code>, and <code>u64be(x)</code> is the big-endian form.</li>
-<li><code>||</code> joins byte strings.</li>
-<li>“Refuse” means that a reader stops with an error and gives no
-content from the archive.</li>
-</ul>
-<h2 id="layout">2. Layout</h2>
-<pre><code>offset 0      file header         64 bytes
-64            crypto header       crypto_header_len bytes (0 if not encrypted)
-body start    member and dictionary blobs, old indexes and old trailers, in any order
-index_offset  index               index_length bytes
-file size-96  trailer             96 bytes</code></pre>
-<p>The conventional file name extension is <code>.ect</code>. A reader
-identifies an archive by the magic of the file header (§3), not by its
-name.</p>
-<p>The body starts at <code>64 + crypto_header_len</code>. The body has
-no framing: no separator and no length is between two blobs. Only the
-index says where each blob is. The body can also hold dead space: the
-blobs of deleted members, and the indexes and trailers of earlier
-generations (§10).</p>
-<h2 id="file-header">3. File header</h2>
+<p>“Tested” means that the review made the attack happen, before the
+fix. “Code” means that the review found it in the code, and gives the
+place.</p>
+<h2 id="summary">2. Summary</h2>
 <table>
 <colgroup>
-<col style="width: 28%" />
-<col style="width: 21%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
 <col style="width: 25%" />
 <col style="width: 25%" />
 </colgroup>
 <thead>
 <tr class="header">
-<th style="text-align: right;">Offset</th>
-<th style="text-align: right;">Size</th>
-<th>Field</th>
-<th>Value</th>
+<th>#</th>
+<th>Severity</th>
+<th>Finding</th>
+<th>Status in v1.0.2</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">8</td>
-<td>magic</td>
-<td><code>45 49 43 54 41 52 1A 0A</code> (“EICTAR1a”)</td>
-</tr>
-<tr class="even">
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">2</td>
-<td>format_major</td>
 <td>1</td>
-</tr>
-<tr class="odd">
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">2</td>
-<td>format_minor</td>
-<td>0</td>
+<td>High</td>
+<td>Extraction as root restored <code>security.*</code> extended
+attributes, file capabilities too</td>
+<td>Fixed</td>
 </tr>
 <tr class="even">
-<td style="text-align: right;">12</td>
-<td style="text-align: right;">4</td>
-<td>header_flags</td>
-<td>bit 0: the archive is encrypted. The other bits are 0.</td>
+<td>2</td>
+<td>High</td>
+<td>A member <code>.</code> changed the destination directory
+itself</td>
+<td>Fixed</td>
 </tr>
 <tr class="odd">
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">8</td>
-<td>created_unix_nanos</td>
-<td>the time of creation, as a signed integer</td>
+<td>3</td>
+<td>Medium</td>
+<td>Create followed a symbolic link that took the place of a file after
+the walk</td>
+<td>Fixed</td>
 </tr>
 <tr class="even">
-<td style="text-align: right;">24</td>
-<td style="text-align: right;">16</td>
-<td>archive_uuid</td>
-<td>16 random bytes</td>
+<td>4</td>
+<td>Medium</td>
+<td>The archive path followed a link that another user planted in
+<code>/tmp</code></td>
+<td>Fixed</td>
 </tr>
 <tr class="odd">
-<td style="text-align: right;">40</td>
-<td style="text-align: right;">4</td>
-<td>crypto_header_len</td>
-<td>0 when bit 0 of header_flags is 0. More than 0, and at most 65536,
-when it is 1.</td>
+<td>5</td>
+<td>Medium to low</td>
+<td>Extraction ignored the umask, and restored ACLs for any user</td>
+<td>Fixed</td>
 </tr>
 <tr class="even">
-<td style="text-align: right;">44</td>
-<td style="text-align: right;">16</td>
-<td>reserved</td>
-<td>zero</td>
+<td>6</td>
+<td>Low</td>
+<td>A small plain archive made a listing allocate 1 GiB</td>
+<td>Fixed</td>
 </tr>
 <tr class="odd">
-<td style="text-align: right;">60</td>
-<td style="text-align: right;">4</td>
-<td>crc32c</td>
-<td>CRC-32C of bytes 0 to 59</td>
+<td>7</td>
+<td>Low</td>
+<td>Dictionaries and shared content let an attacker test for a file,
+from the size of the archive</td>
+<td>Documented</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td>Low</td>
+<td>A passphrase file that other users can read gave no warning</td>
+<td>Fixed</td>
+</tr>
+<tr class="odd">
+<td>9</td>
+<td>Information</td>
+<td>An unsealed index shows link targets and xattr values; other known
+limits</td>
+<td>Documented</td>
 </tr>
 </tbody>
 </table>
-<p>A reader refuses a header with a wrong magic or a wrong CRC. It also
-refuses a format_major that it does not know, and a flag and a length
-that do not agree.</p>
-<h2 id="crypto-header">4. Crypto header</h2>
-<p>The crypto header exists only when the archive is encrypted. It is
-<code>crypto_header_len</code> bytes: a <code>u32le</code> length
-<code>n</code>, then <code>n</code> bytes of CBOR (§8.1) that encode
-this map:</p>
-<table>
-<colgroup>
-<col style="width: 27%" />
-<col style="width: 33%" />
-<col style="width: 38%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th>Key</th>
-<th>Type</th>
-<th>Value</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>v</code></td>
-<td>uint</td>
-<td>1</td>
-</tr>
-<tr class="even">
-<td><code>kdf</code></td>
-<td>text</td>
-<td><code>argon2id</code></td>
-</tr>
-<tr class="odd">
-<td><code>salt</code></td>
-<td>bytes</td>
-<td>16 bytes, the Argon2id salt</td>
-</tr>
-<tr class="even">
-<td><code>time</code></td>
-<td>uint</td>
-<td>Argon2id passes, 1 to 64</td>
-</tr>
-<tr class="odd">
-<td><code>memory</code></td>
-<td>uint</td>
-<td>Argon2id memory in KiB, at least 8 × threads, at most 4194304</td>
-</tr>
-<tr class="even">
-<td><code>threads</code></td>
-<td>uint</td>
-<td>Argon2id lanes, 1 to 255</td>
-</tr>
-<tr class="odd">
-<td><code>aead</code></td>
-<td>text</td>
-<td><code>xchacha20poly1305</code></td>
-</tr>
-<tr class="even">
-<td><code>key</code></td>
-<td>bytes</td>
-<td>72 bytes, the wrapped data key (§7.1)</td>
-</tr>
-<tr class="odd">
-<td><code>recipients</code></td>
-<td>array</td>
-<td>reserved. A reader refuses a crypto header that has it.</td>
-</tr>
-</tbody>
-</table>
-<p>A reader applies the limits on <code>time</code> and
-<code>memory</code> before it asks for a passphrase. A crafted header
-can ask for a derivation that never ends.</p>
-<h2 id="blobs-and-chunks">5. Blobs and chunks</h2>
-<p>Each member with content has one blob: <code>len</code> bytes at
-offset <code>off</code> of the file. The exception is a member that
-shares the content of another (§8.5). The blob is a sequence of chunks,
-back to back. The member’s <code>chunks</code> array gives the length on
-disk of each chunk, in order.</p>
-<p>The <strong>payload</strong> of a member is the content that its blob
-stores. For a member without <code>sparse</code>, it is the whole
-content, <code>size</code> bytes. For a member with <code>sparse</code>,
-it is the bytes of the data segments, back to back (§9.3).</p>
-<p>The payload is cut into plaintext chunks of <code>chunk</code> bytes.
-The last chunk can be shorter, but it is never empty. An empty payload
-has no chunks, and the member has no <code>chunk</code>.</p>
-<p>Each plaintext chunk becomes a chunk on disk in two steps:</p>
-<ol type="1">
-<li><strong>Compress</strong> it with the member’s codec (§6). If the
-result is not shorter than the plaintext chunk, keep the plaintext chunk
-instead.</li>
-<li><strong>Seal</strong> it, if the archive is encrypted (§7.3).</li>
-</ol>
-<p>A reader reverses the steps. After it unseals a chunk, it compares
-the length with the expected plaintext length of that chunk. If they are
-equal, the chunk is stored as it is, and the reader does not decompress
-it. If not, the reader decompresses it, and the result must have exactly
-the expected length. Compression never keeps a result that is as long as
-the plaintext, so this test has only one meaning.</p>
-<p>The expected plaintext length of chunk <code>i</code> is
-<code>chunk</code>, except for the last chunk, which has the rest of the
-payload.</p>
-<h2 id="codecs">6. Codecs</h2>
-<p>The index has a catalog of codecs. Each member names an entry of the
-catalog by its position, or <code>-1</code> for no codec. A catalog
-entry is a map with <code>name</code> (text), <code>params</code> (a map
-from text to a number or a text), and <code>dict</code> (uint,
-optional). The parameters record the settings of the writer. A reader
-does not need them. <code>dict</code> is the id of the dictionary (§6.1)
-that the codec used, and a reader needs it to decode.</p>
-<table>
-<colgroup>
-<col style="width: 19%" />
-<col style="width: 80%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th>Name</th>
-<th>One compressed chunk is</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>zstd</code></td>
-<td>one Zstandard frame (RFC 8878). The writer puts a content checksum
-in the frame.</td>
-</tr>
-<tr class="even">
-<td><code>flate</code></td>
-<td>one raw DEFLATE stream (RFC 1951) that ends with a final block</td>
-</tr>
-<tr class="odd">
-<td><code>gzip</code></td>
-<td>one gzip member (RFC 1952), with MTIME 0 and no name. A reader
-refuses a second member after the first.</td>
-</tr>
-<tr class="even">
-<td><code>s2</code></td>
-<td>one S2 block: a uvarint of the decoded length, then S2 block
-elements (the block format of
-<code>github.com/klauspost/compress/s2</code>, a superset of the Snappy
-block format)</td>
-</tr>
-<tr class="odd">
-<td><code>xz</code></td>
-<td>one raw LZMA2 stream, with no <code>.xz</code> container, that ends
-with the end marker (a 0x00 control byte). The properties are lc=3,
-lp=0, pb=2.</td>
-</tr>
-</tbody>
-</table>
-<p><strong>For <code>xz</code>, a reader uses a dictionary of
-<code>max(4096, expected plaintext length)</code> bytes.</strong> The
-stream does not state its dictionary size, and a reader must not take a
-larger number from anywhere else. The chunks are independent, so no
-match reaches back further than the start of its chunk.</p>
-<p>A decoder reads at most the expected plaintext length, and then one
-more byte to prove that the stream ends there. A chunk that decodes to
-more or to less is refused.</p>
-<h3 id="dictionaries">6.1 Dictionaries</h3>
-<p>A <code>zstd</code> catalog entry with <code>dict</code> compresses
-each chunk with a Zstandard dictionary. The dictionary is in the
-Zstandard dictionary format (RFC 8878, section 5): the magic
-<code>37 A4 30 EC</code>, then the dictionary id as a
-<code>u32le</code>. The dictionary id is the <code>id</code> of its Dict
-map (§8.2). Each frame names the id of its dictionary, and a reader
-refuses a frame whose id is different.</p>
-<p>The dictionary blob is <code>len</code> bytes at offset
-<code>off</code>, one message. It is not compressed. When
-<code>enc</code> is present, the blob is sealed (§7.6). Otherwise, it is
-the dictionary as it is, and <code>len</code> equals
-<code>size</code>.</p>
-<p>A reader checks a dictionary before it decodes a member with it:</p>
+<p>Findings 1 to 4 matter most when root extracts an archive from
+someone else, or archives a tree that other users can write. Each fix
+has a test in <code>src/internal/archive/security_test.go</code>,
+<code>src/internal/meta/meta_unix_test.go</code>,
+<code>src/internal/format/index_test.go</code> or
+<code>src/internal/cli/passphrase_test.go</code>.</p>
+<h2 id="findings">3. Findings</h2>
+<h3 id="finding-1.-privileged-extended-attributes-high">Finding 1.
+Privileged extended attributes (high)</h3>
+<p><strong>Where:</strong> <code>applyXattrs</code> in
+<code>src/internal/archive/extract.go</code>, and
+<code>ClassifyXattr</code> in <code>src/internal/meta/meta.go</code>.
+Found in the code.</p>
+<p><strong>Problem.</strong> Extraction put the names
+<code>security.*</code>, <code>trusted.*</code> and
+<code>system.*</code> into one class, “privileged”. It restored that
+class by default when the process was root.</p>
+<p><code>security.capability</code> holds the Linux file capabilities of
+a program. An archive can hold a program with
+<code>cap_setuid+ep</code>. Then an extraction by root installs a
+program that any user can run to become root.
+<code>security.selinux</code> also lets an archive choose the security
+label of a file.</p>
+<p>The design required <code>-p</code> for the setuid bit, and said that
+extraction restores “nothing that needs privilege or gives it”. The
+capabilities went around both.</p>
+<p><strong>Fix.</strong> Privileged attributes are restored only as root
+and with <code>-p</code>. <code>-p</code> is now the one consent to
+restore everything exactly (design §7.7). Without it, one notice counts
+what <code>-p</code> restores.</p>
+<p><strong>Test.</strong> <code>TestXattrPolicy</code> checks the
+decision for each class of attribute, for root and for other users, with
+and without <code>-p</code> and <code>--no-xattrs</code>. The decision
+is a function of its own, <code>xattrPolicy</code>, so that the test
+does not need root.</p>
+<h3 id="finding-2.-a-member-.-changed-the-destination-high">Finding 2. A
+member <code>.</code> changed the destination (high)</h3>
+<p><strong>Where:</strong> <code>finishDirs</code> in
+<code>src/internal/archive/extract.go</code>. Tested.</p>
+<p><strong>Problem.</strong> The format allows the path <code>.</code>,
+the root of the archived tree. The writer never stores it, but the
+reader accepted it. The last pass of extraction then applied its mode
+and its times to the destination itself, and its owner under
+<code>--preserve-owner</code>. A crafted archive made a destination of
+0755 into 0777. Extracted into <code>$HOME</code>, it makes the home
+directory open to every user. As root with
+<code>--preserve-owner -d /</code>, it gives <code>/</code> to another
+user.</p>
+<p><strong>Fix.</strong> Extraction removes a member <code>.</code> and
+says so in a notice. The destination is never changed.</p>
+<p><strong>Test.</strong>
+<code>TestExtractDoesNotChangeTheDestination</code> extracts a crafted
+archive, and checks that the destination keeps its mode, and the
+notice.</p>
+<h3 id="finding-3.-a-file-that-becomes-a-link-after-the-walk-medium">Finding
+3. A file that becomes a link after the walk (medium)</h3>
+<p><strong>Where:</strong> <code>submitFile</code> and
+<code>sameContent</code> in
+<code>src/internal/archive/capture.go</code>, and
+<code>sampleTree</code> in <code>src/internal/archive/dict.go</code>.
+Found in the code.</p>
+<p><strong>Problem.</strong> The walk found each file with
+<code>lstat</code>. Then the writer opened it with <code>os.Open</code>,
+which follows a symbolic link.</p>
+<p>Between the two calls, a user who can write the directory can put a
+link to <code>/etc/shadow</code> in place of a file. A backup by root
+then stores <code>/etc/shadow</code> under that user’s file name. A
+later restore of “my files” gives it to the user. With
+<code>train</code>, parts of it also go into the dictionary.</p>
+<p><strong>Fix.</strong> <code>openWalked</code> opens with
+<code>O_NOFOLLOW</code>, except under <code>-h</code>, and then makes
+sure that the open file has the device and the inode that the walk saw.
+Otherwise the member fails, as for a read error. The capture, the
+samples of a dictionary and <code>-u --update-mode=digest</code> all use
+it.</p>
+<p><strong>Tests.</strong> <code>TestOpenWalkedRefusesASwap</code> puts
+a link, and then another file, in place of a walked file.
+<code>TestCreateSkipsAFileThatBecameALink</code> does the same through
+the capture of a member.</p>
+<h3 id="finding-4.-a-planted-link-in-the-archive-path-medium">Finding 4.
+A planted link in the archive path (medium)</h3>
+<p><strong>Where:</strong> <code>createTarget</code> in
+<code>src/internal/archive/writer.go</code>, and
+<code>CompactArchive</code> in
+<code>src/internal/archive/mutate.go</code>. Found in the code.</p>
+<p><strong>Problem.</strong> The writer resolves <code>-f</code> with
+<code>filepath.EvalSymlinks</code>, and renames the new archive over the
+target. Suppose that another user plants
+<code>/tmp/backup.ect -&gt; /etc/passwd</code>. Then
+<code>eictar -cf /tmp/backup.ect</code> by root replaces
+<code>/etc/passwd</code>.</p>
+<p>Linux refuses such a link to <code>open(2)</code> in a sticky
+directory that everyone can write (<code>fs.protected_symlinks</code>).
+That rule protects <code>tar</code>. But the writer resolved the link
+itself, so the rule never applied.</p>
+<p><strong>Fix.</strong> <code>checkLinks</code> applies the rule of the
+kernel to each link in the path, for create, compact and change of
+passphrase. A link in such a directory is followed only when it belongs
+to the caller or to the owner of the directory. Otherwise the program
+stops with exit 3.</p>
+<p><strong>Tests.</strong> <code>TestMayFollow</code> checks the rule
+for links of other users, which a test cannot make.
+<code>TestCheckLinksFollowsOwnLinks</code> checks that a link of one’s
+own in a sticky directory still works.</p>
+<h3 id="finding-5.-the-umask-and-acls-on-extraction-medium-to-low">Finding
+5. The umask and ACLs on extraction (medium to low)</h3>
+<p><strong>Where:</strong> <code>meta.FileMode</code> and
+<code>applyXattrs</code>. Tested.</p>
+<p><strong>Problem.</strong> Extraction gave each file the mode of the
+archive, exactly. An archive’s 0666 file and 0777 directory became files
+that every user can write, whatever the umask of the user. POSIX ACLs
+were also restored by default, and an ACL can give access to other
+users, as a mode can. <code>tar</code> applies the umask for a user who
+is not root.</p>
+<p><strong>Fix.</strong> For a user who is not root, and without
+<code>-p</code>, each mode is less the umask. ACLs are restored as root,
+or with <code>-p</code>.</p>
+<p><strong>Test.</strong> <code>TestExtractAppliesTheUmask</code>
+extracts a 0666 file and a 0777 directory with and without
+<code>-p</code>. <code>TestXattrPolicy</code> covers the ACLs.</p>
+<h3 id="finding-6.-the-expansion-of-the-index-low">Finding 6. The
+expansion of the index (low)</h3>
+<p><strong>Where:</strong> <code>DecodeIndex</code> in
+<code>src/internal/format/index.go</code>. Found in the code.</p>
+<p><strong>Problem.</strong> A compressed index expanded up to
+<code>MaxIndexSize</code>, 1 GiB, and so a plain archive of a few KiB
+made a listing allocate 1 GiB. An encrypted archive was safe, because
+its keyed digest is checked before the index is decompressed.</p>
+<p><strong>Fix.</strong> An index can also expand only to 200 times its
+compressed size, or to 64 MiB, whichever is more. A real index
+compresses 5 to 20 times.</p>
+<p><strong>Test.</strong> <code>TestIndexExpansionIsBounded</code>
+decodes 100 MiB of zeros from a small frame, and checks the refusal and
+the limits.</p>
+<h3 id="finding-7.-size-side-channels-across-files-low-documented">Finding
+7. Size side channels across files (low; documented)</h3>
+<p><strong>Problem.</strong> Until M10 and M11, each file was compressed
+alone. Thus the content of one file never changed the stored size of
+another. Now two features work across files:</p>
 <ul>
-<li>the tag, when it is sealed</li>
-<li>that its length is <code>size</code></li>
-<li>its <code>digest</code>: BLAKE3-256 of the dictionary, keyed like
-the member digests (§8.3)</li>
-<li>that its magic and its id are correct</li>
+<li><strong>Shared content (§4.3 of the design).</strong> A copy of a
+file that the archive holds adds almost nothing.</li>
+<li><strong>Dictionaries (§4.2).</strong> A file that looks like the
+files of the dictionary compresses better.</li>
 </ul>
-<h2 id="cryptography">7. Cryptography</h2>
-<h3 id="keys">7.1 Keys</h3>
-<pre><code>dataK    = 32 random bytes, made when the archive is created
-KEK      = Argon2id(passphrase, salt, time, memory, threads, 32 bytes)
-key      = nonce || XChaCha20-Poly1305(KEK, nonce, dataK, aad = &quot;eictar/v1/wrap&quot; || archive_uuid)
-indexK   = HKDF-SHA-256(ikm = dataK, salt = empty, info = &quot;eictar/v1/index&quot;      || archive_uuid || u64le(generation))
-authK    = HKDF-SHA-256(ikm = dataK, salt = empty, info = &quot;eictar/v1/index-auth&quot; || archive_uuid)
-contentK = HKDF-SHA-256(ikm = dataK, salt = empty, info = &quot;eictar/v1/content&quot;    || archive_uuid)
-memberK  = HKDF-SHA-256(ikm = dataK, salt = enc.salt, info = &quot;eictar/v1/member&quot;  || archive_uuid)
-dictK    = HKDF-SHA-256(ikm = dataK, salt = enc.salt, info = &quot;eictar/v1/dict&quot;    || archive_uuid)</code></pre>
-<p><code>key</code> is the field of the crypto header (§4): a 24-byte
-random nonce, then the 32-byte sealed data key and its 16-byte tag. Each
-HKDF output is 32 bytes. The info strings are ASCII, with no terminator.
-The passphrase is its bytes as given, with no normalization.</p>
-<p>A reader derives <code>KEK</code> and opens <code>key</code>. If the
-tag fails, the passphrase is wrong. A change of passphrase writes a new
-<code>salt</code>, new Argon2id parameters and a new <code>key</code>,
-but <code>dataK</code> and every subkey stay the same.</p>
-<h3 id="aead">7.2 AEAD</h3>
-<p>The AEAD is XChaCha20-Poly1305: a 32-byte key, a 24-byte nonce and a
-16-byte tag after the ciphertext.</p>
-<h3 id="chunks">7.3 Chunks</h3>
-<p>Chunk <code>i</code> of a member (the first chunk has
-<code>i = 0</code>) is sealed with:</p>
-<pre><code>key   = memberK of the member
-nonce = 16 zero bytes || u64be(i)
-aad   = u64le(member.id) || u64be(i) || final
-final = 0x01 for the last chunk of the member, 0x00 for the others</code></pre>
-<p>The chunk on disk is the ciphertext and the tag. It is 16 bytes
-longer than the compressed or stored chunk.</p>
-<p>A writer must give a member a new random <code>enc.salt</code>, and
-so a new <code>memberK</code>, each time that it seals content for the
-member. The same key with the same chunk index and different content
-uses one nonce two times.</p>
-<h3 id="sealed-index">7.4 Sealed index</h3>
-<p>When bit 0 of trailer_flags is 1, the index on disk is:</p>
-<pre><code>nonce || AEAD-seal(indexK, nonce, compressed index, aad = u64le(generation))</code></pre>
-<p>The nonce is 24 random bytes. A writer must not take the nonce from
-the generation, because two different indexes can have the same
-generation.</p>
-<h3 id="index-digest">7.5 Index digest</h3>
-<p>The trailer records a digest of the index bytes on disk:</p>
-<pre><code>digest = BLAKE3-256(archive_uuid || u64le(generation) || index bytes on disk)</code></pre>
-<p>In an encrypted archive, the BLAKE3 is keyed with <code>authK</code>,
-whether or not the index is sealed. In a plain archive, it has no key. A
-reader checks the digest before it unseals or decodes the index, and
-compares it in constant time.</p>
-<p>A reader must also refuse a plain archive when its user expected an
-encrypted one. Someone who removes the encryption can write a plain
-index with an unkeyed digest.</p>
-<h3 id="sealed-dictionary">7.6 Sealed dictionary</h3>
-<p>A dictionary (§6.1) of an encrypted archive is sealed as one
-message:</p>
-<pre><code>key    = dictK of the dictionary, from its enc.salt
-nonce  = 24 zero bytes
-aad    = u32le(id)
-blob   = AEAD-seal(key, nonce, dictionary, aad)</code></pre>
-<p>A writer must give each dictionary a new random salt. Each dictionary
-key then seals one message only, so the fixed nonce is safe.</p>
-<h2 id="index">8. Index</h2>
-<h3 id="encoding">8.1 Encoding</h3>
-<p>The index is encoded in these steps:</p>
-<ol type="1">
-<li>CBOR (RFC 8949) of the Index map (§8.2). Map keys are sorted
-bytewise. Arrays and maps have a definite length. There are no tags and
-no duplicate keys. Text strings can hold any bytes, because a path is
-not always UTF-8.</li>
-<li>Zstandard, one frame, when bit 1 of trailer_flags is 1. A writer
-always sets it.</li>
-<li>The seal of §7.4, when bit 0 of trailer_flags is 1.</li>
-</ol>
-<p>A reader reverses the steps. It limits the decompressed index to 1
-GiB, and to 200 times the compressed index or 64 MiB, whichever is more.
-It limits the number of members to 4194304.</p>
-<h3 id="index-map">8.2 Index map</h3>
-<table>
-<thead>
-<tr class="header">
-<th>Key</th>
-<th>Type</th>
-<th>Value</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>v</code></td>
-<td>uint</td>
-<td>1, the version of this schema</td>
-</tr>
-<tr class="even">
-<td><code>gen</code></td>
-<td>uint</td>
-<td>the generation, equal to the trailer</td>
-</tr>
-<tr class="odd">
-<td><code>codecs</code></td>
-<td>array</td>
-<td>the catalog (§6). Absent when it is empty.</td>
-</tr>
-<tr class="even">
-<td><code>dicts</code></td>
-<td>array</td>
-<td>the Dict maps (§6.1). Absent when there are none.</td>
-</tr>
-<tr class="odd">
-<td><code>members</code></td>
-<td>array</td>
-<td>the Member maps</td>
-</tr>
-</tbody>
-</table>
-<p>A Dict map:</p>
-<table>
-<colgroup>
-<col style="width: 27%" />
-<col style="width: 33%" />
-<col style="width: 38%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th>Key</th>
-<th>Type</th>
-<th>Value</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>id</code></td>
-<td>uint</td>
-<td>the dictionary id, 1 to 2^32 − 1, unique in the index. A writer
-takes it from 32768 to 2^31 − 1, the range that RFC 8878 leaves
-free.</td>
-</tr>
-<tr class="even">
-<td><code>gen</code></td>
-<td>uint</td>
-<td>the generation that added it</td>
-</tr>
-<tr class="odd">
-<td><code>size</code></td>
-<td>uint</td>
-<td>the length of the dictionary, 1 to 1048576</td>
-</tr>
-<tr class="even">
-<td><code>digest</code></td>
-<td>bytes</td>
-<td>32 bytes (§6.1)</td>
-</tr>
-<tr class="odd">
-<td><code>enc</code></td>
-<td>map</td>
-<td><code>{ &quot;salt&quot;: 16 bytes }</code>, when the archive is
-encrypted</td>
-</tr>
-<tr class="even">
-<td><code>off</code></td>
-<td>uint</td>
-<td>the blob offset</td>
-</tr>
-<tr class="odd">
-<td><code>len</code></td>
-<td>uint</td>
-<td>the blob length: <code>size</code>, or <code>size + 16</code> when
-sealed</td>
-</tr>
-</tbody>
-</table>
-<h3 id="member-map">8.3 Member map</h3>
-<table>
-<colgroup>
-<col style="width: 17%" />
-<col style="width: 21%" />
-<col style="width: 35%" />
-<col style="width: 25%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th>Key</th>
-<th>Type</th>
-<th>Presence</th>
-<th>Value</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>id</code></td>
-<td>uint</td>
-<td>always</td>
-<td>unique in the index, never 0, never reused</td>
-</tr>
-<tr class="even">
-<td><code>gen</code></td>
-<td>uint</td>
-<td>always</td>
-<td>the generation that added the member</td>
-</tr>
-<tr class="odd">
-<td><code>path</code></td>
-<td>text</td>
-<td>always</td>
-<td>the stored path (§9.1)</td>
-</tr>
-<tr class="even">
-<td><code>type</code></td>
-<td>text</td>
-<td>always</td>
-<td><code>reg</code>, <code>dir</code>, <code>symlink</code>,
-<code>hardlink</code>, <code>fifo</code>, <code>sock</code>,
-<code>chardev</code> or <code>blockdev</code></td>
-</tr>
-<tr class="odd">
-<td><code>mode</code></td>
-<td>uint</td>
-<td>always</td>
-<td>permission bits with setuid, setgid and sticky: at most
-<code>07777</code></td>
-</tr>
-<tr class="even">
-<td><code>uid</code>, <code>gid</code></td>
-<td>uint</td>
-<td>both or neither</td>
-<td>the owner. Absent when the writer did not record it.</td>
-</tr>
-<tr class="odd">
-<td><code>uname</code>, <code>gname</code></td>
-<td>text</td>
-<td>optional</td>
-<td>the owner by name</td>
-</tr>
-<tr class="even">
-<td><code>mtime</code></td>
-<td>int</td>
-<td>always</td>
-<td>nanoseconds since the Unix epoch</td>
-</tr>
-<tr class="odd">
-<td><code>atime</code>, <code>ctime</code></td>
-<td>int</td>
-<td>optional</td>
-<td>nanoseconds since the Unix epoch</td>
-</tr>
-<tr class="even">
-<td><code>size</code></td>
-<td>uint</td>
-<td>always</td>
-<td>the logical length of the content. 0 for a type without
-content.</td>
-</tr>
-<tr class="odd">
-<td><code>link</code></td>
-<td>text</td>
-<td><code>symlink</code> only, and required there</td>
-<td>the target of the link, as recorded</td>
-</tr>
-<tr class="even">
-<td><code>hardlink</code></td>
-<td>uint</td>
-<td><code>hardlink</code> only, and required there</td>
-<td>the <code>id</code> of a <code>reg</code> member</td>
-</tr>
-<tr class="odd">
-<td><code>data</code></td>
-<td>uint</td>
-<td><code>reg</code> only, optional</td>
-<td>the <code>id</code> of the member whose blob holds this member’s
-content (§8.5)</td>
-</tr>
-<tr class="even">
-<td><code>rdev</code></td>
-<td>array of 2 uint</td>
-<td><code>chardev</code> and <code>blockdev</code> only, and required
-there</td>
-<td>major, minor</td>
-</tr>
-<tr class="odd">
-<td><code>xattrs</code></td>
-<td>map, text to bytes</td>
-<td>optional</td>
-<td>extended attributes, POSIX ACLs included, with each name as the
-source platform gives it (<code>user.comment</code> on Linux and the
-BSDs, <code>com.apple.quarantine</code> on macOS). Names of 1 to 255
-bytes, values of at most 65536 bytes, at most 1024 entries.</td>
-</tr>
-<tr class="even">
-<td><code>sparse</code></td>
-<td>array of maps</td>
-<td><code>reg</code> only, optional</td>
-<td>data segments, each <code>{ &quot;off&quot;: uint, &quot;len&quot;: uint }</code></td>
-</tr>
-<tr class="odd">
-<td><code>digest</code></td>
-<td>bytes</td>
-<td>required for <code>reg</code></td>
-<td>BLAKE3-256 of the payload (§5): keyed with <code>contentK</code>
-(§7.1) in an encrypted archive, with no key in a plain one</td>
-</tr>
-<tr class="even">
-<td><code>codec</code></td>
-<td>int</td>
-<td>always</td>
-<td>a catalog position, or -1</td>
-</tr>
-<tr class="odd">
-<td><code>chunk</code></td>
-<td>uint</td>
-<td>when there are chunks</td>
-<td>plaintext bytes in each chunk, at most 268435456</td>
-</tr>
-<tr class="even">
-<td><code>enc</code></td>
-<td>map</td>
-<td>in an encrypted archive, on a member with a blob of its own</td>
-<td><code>{ &quot;salt&quot;: 16 bytes }</code></td>
-</tr>
-<tr class="odd">
-<td><code>off</code></td>
-<td>uint</td>
-<td>when there is a blob</td>
-<td>the offset of the blob in the file</td>
-</tr>
-<tr class="even">
-<td><code>len</code></td>
-<td>uint</td>
-<td>when there is a blob</td>
-<td>the length of the blob</td>
-</tr>
-<tr class="odd">
-<td><code>chunks</code></td>
-<td>array of uint</td>
-<td>when there are chunks</td>
-<td>the length on disk of each chunk</td>
-</tr>
-<tr class="even">
-<td><code>dead</code></td>
-<td>bool</td>
-<td>tombstones only</td>
-<td>true</td>
-</tr>
-</tbody>
-</table>
-<p>Only <code>reg</code> members have content. A member of another type
-has no <code>off</code>, <code>len</code>, <code>chunks</code> or
-<code>chunk</code>, and its <code>size</code> is 0. A <code>reg</code>
-member with an empty payload has no chunks.</p>
-<p>A reader ignores a map key that it does not know. A writer that adds
-a key that an older reader must not ignore changes
-<code>format_minor</code> or <code>format_major</code>.</p>
-<h3 id="checks">8.4 Checks</h3>
-<p>A reader refuses an index that breaks any of these rules:</p>
+<p>Suppose that an attacker can put files into a tree that is archived
+again and again, and can see the size of the archive. Then the attacker
+can test if the archive holds a guessed file. With a dictionary, this is
+the attack CRIME across files, which the design accepted only inside one
+member. <code>--encrypt-index</code> hides the size of each member, but
+not the size of the archive.</p>
+<p><strong>Response.</strong> Documented in the design (§14.1), the man
+page and the README. For such a tree, use <code>--no-dedup</code> and no
+<code>train</code>. No code change: the features are useful, and the
+risk needs an unusual setting.</p>
+<h3 id="finding-8.-a-passphrase-file-that-others-can-read-low">Finding
+8. A passphrase file that others can read (low)</h3>
+<p><strong>Where:</strong> <code>warnIfInsecureSource</code> in
+<code>src/internal/cli/passphrase.go</code>.</p>
+<p><strong>Problem.</strong> <code>--passphrase-file</code> read a file
+that every user can read, with no message.</p>
+<p><strong>Fix.</strong> A warning, as ssh gives for a key: the file can
+be read by other users, and <code>chmod 600</code> it. The program still
+reads it.</p>
+<p><strong>Test.</strong>
+<code>TestPassphraseFileThatOthersCanRead</code> checks the modes 0600,
+0400, 0640 and 0644.</p>
+<h3 id="finding-9.-information">Finding 9. Information</h3>
 <ul>
-<li>the rules of presence and type in §8.3, and the limits in them</li>
-<li>two members with the same <code>id</code></li>
-<li>a <code>codec</code> that is not -1 and not a catalog position</li>
-<li>a catalog <code>dict</code> that names no Dict map, or that is on a
-codec other than <code>zstd</code></li>
-<li>a Dict map that breaks the rules of §8.2, or two with the same
-<code>id</code>, or more than 1024 of them</li>
-<li>a <code>hardlink</code> whose <code>id</code> is not a
-<code>reg</code> member of the index. The target can be a
-tombstone.</li>
-<li>a <code>data</code> that breaks the rules of §8.5</li>
-<li><code>sparse</code> segments that are empty, out of order,
-overlapping, or that end after <code>size</code></li>
-<li><code>chunks</code> whose total is not <code>len</code></li>
-<li>a payload that does not need exactly the number of chunks in
-<code>chunks</code>: it must be more than <code>chunk × (n − 1)</code>
-and at most <code>chunk × n</code></li>
-<li>a blob, of a member or of a dictionary, that does not lie inside
-<code>[body start, index_offset)</code></li>
-<li>a count of members without <code>dead</code> that is not the
-trailer’s live_member_count</li>
-</ul>
-<h3 id="shared-content">8.5 Shared content</h3>
-<p>A <code>reg</code> member with <code>data</code> has the content of
-another member, its owner, and no blob of its own. It has no
-<code>off</code>, <code>len</code>, <code>chunks</code>,
-<code>chunk</code> or <code>enc</code>, and its <code>codec</code> is
--1. A reader decodes the owner’s blob, with the owner’s codec, chunk
-size, key and <code>id</code> (§7.3), and checks the owner’s digest.</p>
-<p>A reader refuses a member with <code>data</code> unless all of these
-are true:</p>
+<li><strong>An unsealed index shows more than names.</strong> It also
+shows link targets, and the value of each extended attribute. A value
+can say much: macOS records the address that a file came from, in
+<code>com.apple.metadata:kMDItemWhereFroms</code>. Documented in the
+design (§14.1). <code>--encrypt-index</code> hides the index.</li>
+<li><strong>XChaCha20-Poly1305 does not commit to its key.</strong> One
+ciphertext can open under two keys, with work. This matters for a
+service that tests passphrases for someone else. It does not matter for
+an archive that its owner opens.</li>
+<li><strong>Known and documented limits:</strong>
 <ul>
-<li>the owner is a <code>reg</code> member of the index, with a blob,
-and without <code>data</code></li>
-<li>the owner has the same <code>size</code>, the same
-<code>sparse</code> and the same <code>digest</code></li>
+<li>The program sets the passphrase and the data key to zero, but not
+the subkeys (design §14.2).</li>
+<li>An archive can ask for up to 64 passes of Argon2id before its
+passphrase is checked (§6.2).</li>
+<li>A rollback to an older genuine archive, and a downgrade to plaintext
+without a passphrase source, are not detected (§14.4).</li>
+</ul></li>
 </ul>
-<p>The owner can be a tombstone.</p>
-<h3 id="paths-in-the-index">8.6 Paths in the index</h3>
-<p>The index checks do not require stored paths. A reader can list an
-archive with a bad path, so that a person can see what is in it. A
-reader that extracts refuses the bad member (§9.1).</p>
-<h2 id="members">9. Members</h2>
-<h3 id="stored-paths">9.1 Stored paths</h3>
-<p>A stored path is relative, with <code>/</code> between its
-components. No component is empty, <code>.</code> or <code>..</code>,
-and the path does not start with <code>/</code>. The one exception is
-the path <code>.</code>, for the root of the archived tree. A path is a
-sequence of bytes, and it does not have to be UTF-8.</p>
-<p>An extractor refuses a member whose path breaks this rule. It also
-refuses to write through a symbolic link that an earlier member made. It
-does not apply a member <code>.</code> to its destination. The archive
-does not own that directory, and the member changes its mode, its owner
-and its times.</p>
-<h3 id="hardlinks">9.2 Hardlinks</h3>
-<p>A <code>hardlink</code> member has no content. It names a
-<code>reg</code> member, whose content it shares. That member can be a
-tombstone: a newer generation can replace one name of a hardlinked file,
-and the other names keep the old content.</p>
-<h3 id="sparse-files">9.3 Sparse files</h3>
-<p>A <code>reg</code> member with <code>sparse</code> is a file with
-holes. Its payload is the bytes of the segments, in the order of the
-array. To rebuild the file, write each segment at its <code>off</code>,
-and make the file <code>size</code> bytes long. The rest of the file is
-zero.</p>
-<h2 id="trailer-and-generations">10. Trailer and generations</h2>
-<table>
-<colgroup>
-<col style="width: 28%" />
-<col style="width: 21%" />
-<col style="width: 25%" />
-<col style="width: 25%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th style="text-align: right;">Offset</th>
-<th style="text-align: right;">Size</th>
-<th>Field</th>
-<th>Value</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">8</td>
-<td>magic</td>
-<td>“EICTRAIL”</td>
-</tr>
-<tr class="even">
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">2</td>
-<td>format_major</td>
-<td>equal to the header</td>
-</tr>
-<tr class="odd">
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">2</td>
-<td>format_minor</td>
-<td>equal to the header</td>
-</tr>
-<tr class="even">
-<td style="text-align: right;">12</td>
-<td style="text-align: right;">4</td>
-<td>trailer_flags</td>
-<td>bit 0: the index is sealed. Bit 1: the index is compressed. Bit 0
-only in an encrypted archive.</td>
-</tr>
-<tr class="odd">
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">8</td>
-<td>generation</td>
-<td>1 for a new archive, 1 more for each later index</td>
-</tr>
-<tr class="even">
-<td style="text-align: right;">24</td>
-<td style="text-align: right;">8</td>
-<td>index_offset</td>
-<td>inside the body, at or after the body start</td>
-</tr>
-<tr class="odd">
-<td style="text-align: right;">32</td>
-<td style="text-align: right;">8</td>
-<td>index_length</td>
-<td>the index ends at or before the trailer</td>
-</tr>
-<tr class="even">
-<td style="text-align: right;">40</td>
-<td style="text-align: right;">8</td>
-<td>prev_index_offset</td>
-<td>the index of the generation before, or 0</td>
-</tr>
-<tr class="odd">
-<td style="text-align: right;">48</td>
-<td style="text-align: right;">8</td>
-<td>live_member_count</td>
-<td>members without <code>dead</code></td>
-</tr>
-<tr class="even">
-<td style="text-align: right;">56</td>
-<td style="text-align: right;">32</td>
-<td>index_digest</td>
-<td>§7.5</td>
-</tr>
-<tr class="odd">
-<td style="text-align: right;">88</td>
-<td style="text-align: right;">4</td>
-<td>reserved</td>
-<td>zero</td>
-</tr>
-<tr class="even">
-<td style="text-align: right;">92</td>
-<td style="text-align: right;">4</td>
-<td>crc32c</td>
-<td>CRC-32C of bytes 0 to 91</td>
-</tr>
-</tbody>
-</table>
-<p>The last 96 bytes of the file are the trailer, and they are the
-commit record. A reader uses only that trailer. It does not go back to
-an earlier generation by itself.</p>
-<p>A writer changes an archive in this order:</p>
-<ol type="1">
-<li>Write the new blobs after the <strong>end of the file</strong>. The
-old trailer stays where it is.</li>
-<li>Write the new index, which lists every member, old and new, with
-<code>dead</code> on the members that this generation removes.</li>
-<li>Make steps 1 and 2 durable, then write the new trailer with
-<code>generation + 1</code>, then make it durable.</li>
-</ol>
-<p>If step 3 does not complete, the file does not end with a valid
-trailer, and a reader refuses it. The repair is to find the last valid
-trailer before the end, and to cut the file after it. A candidate is
-valid only when every check of this document passes for a file that ends
-after it.</p>
-<p>A compact writes a new file with the same header and crypto header,
-and the same <code>archive_uuid</code>, because every
-<code>memberK</code> depends on it. It uses the next generation, and a
-<code>prev_index_offset</code> of 0. A change of passphrase is a compact
-with a new crypto header: a new <code>salt</code>, new Argon2id
-parameters and a new <code>key</code> (§7.1). The blobs do not
-change.</p>
-<h2 id="limits">11. Limits</h2>
-<table>
-<colgroup>
-<col style="width: 46%" />
-<col style="width: 53%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th>Item</th>
-<th>Limit</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>crypto_header_len</td>
-<td>65536 bytes</td>
-</tr>
-<tr class="even">
-<td>Argon2id <code>time</code></td>
-<td>64</td>
-</tr>
-<tr class="odd">
-<td>Argon2id <code>memory</code></td>
-<td>4194304 KiB</td>
-</tr>
-<tr class="even">
-<td><code>chunk</code></td>
-<td>268435456 bytes</td>
-</tr>
-<tr class="odd">
-<td>decompressed index</td>
-<td>1 GiB, and at most 200 × its compressed size or 64 MiB, whichever is
-more</td>
-</tr>
-<tr class="even">
-<td>members in one index</td>
-<td>4194304</td>
-</tr>
-<tr class="odd">
-<td>dictionaries in one index, dictionary size</td>
-<td>1024, 1048576 bytes</td>
-</tr>
-<tr class="even">
-<td>xattr name, value, count</td>
-<td>255 bytes, 65536 bytes, 1024</td>
-</tr>
-</tbody>
-</table>
+<h2 id="what-the-review-found-sound">4. What the review found sound</h2>
+<ul>
+<li><strong>Paths on extraction.</strong> Every file operation goes
+through <code>os.Root</code>. Special files and link times use
+<code>*at</code> calls with one name, on a directory descriptor. The
+review found no way out of the destination. It tried <code>..</code>, an
+absolute path, a planted link, and a hardlink to a file that the run did
+not write. A file is written to a temporary name with
+<code>O_EXCL</code>, and renamed into place, so the program never writes
+through an existing hardlink.</li>
+<li><strong>Decompression bombs.</strong> Each codec has a bound.
+<ul>
+<li>zstd: a frame that declares a window of 512 MiB or 2 GiB is refused
+before any allocation (tested).</li>
+<li>s2: the declared length must be the length that the index
+gives.</li>
+<li>gzip and flate: at most the expected length is read, and one more
+byte. gzip refuses a second member.</li>
+<li>xz: the dictionary is at most the chunk.</li>
+</ul></li>
+<li><strong>Allocation.</strong> Each number that sizes an allocation
+has a limit, which the program applies first. These numbers are:
+<ul>
+<li>the size of the index, the chunk size and the crypto header</li>
+<li>the number of members and of dictionaries</li>
+<li>the size of a dictionary</li>
+</ul></li>
+<li><strong>Keys and nonces.</strong>
+<ul>
+<li>Each archive, member and dictionary has its own key from HKDF.</li>
+<li>Each member and dictionary gets a new random salt when it is sealed:
+recompress, compact and change of passphrase never use a nonce two
+times.</li>
+<li>The nonce of the index is random.</li>
+<li>The AAD binds a chunk to its member, its place and the last
+chunk.</li>
+<li>Digests are keyed in an encrypted archive, and every comparison
+takes constant time.</li>
+<li>The data key is wrapped with its tag, so a wrong passphrase is found
+before any other read.</li>
+</ul></li>
+<li><strong>Shared content</strong> checks an old owner before it first
+uses it, and reads a shared blob with the key and the id of its
+owner.</li>
+<li><strong>Temporary and spill files</strong> have random names, are
+created with <code>O_EXCL</code> and mode 0600, and a spill file is
+removed from its directory at once.</li>
+<li><strong>Regular expressions</strong> use RE2, in linear time. Each
+expression must compile alone before the anchors go around it, so it
+cannot break out of them.</li>
+</ul>
+<h2 id="recommendations-for-later">5. Recommendations for later</h2>
+<ul>
+<li>Run the fuzz targets for longer, and add one for the parser of a
+zstd dictionary from an archive. A plain archive can give any bytes as a
+dictionary, with a correct unkeyed digest.</li>
+<li>Consider a separate option for privileged attributes, if users want
+capabilities without exact modes.</li>
+<li>Review the code again when a feature adds a new place where the
+archive’s data decides what the program does.</li>
+</ul>
 </body>
 </html>

@@ -205,9 +205,9 @@ func (c *capturer) submitFile(m format.Member, e entry) error {
 		return err
 	}
 
-	f, err := os.Open(e.Src)
+	f, err := openWalked(e)
 	if err != nil {
-		return fmt.Errorf("opening %s: %w", e.Src, err)
+		return err
 	}
 	defer f.Close()
 
@@ -297,6 +297,37 @@ func (c *capturer) shareIfCopy(m format.Member, e entry, src io.Reader, payload 
 		c.progress.Advance(n)
 	}
 	return true, nil
+}
+
+// errChangedDuringWalk means a path no longer names the file that the walk
+// found there.
+var errChangedDuringWalk = errors.New("changed after the walk found it; not archived")
+
+// openWalked opens the regular file that the walk found at e.Src, and makes
+// sure that it is still that file. Between the walk's lstat and this open,
+// someone who can write the directory can put a symbolic link there, to
+// /etc/shadow for example. A privileged backup of such a tree then stored the
+// target under the file's name (doc/Security_Audit.md, finding 3). The open
+// does not follow a link, except under -h, and the file must have the device
+// and inode that the walk saw.
+func openWalked(e entry) (*os.File, error) {
+	open := meta.OpenNoFollow
+	if e.Followed {
+		open = os.Open
+	}
+	f, err := open(e.Src)
+	if err != nil {
+		return nil, fmt.Errorf("opening %s: %w", e.Src, err)
+	}
+	fi, err := f.Stat()
+	if err == nil && (!fi.Mode().IsRegular() || !os.SameFile(fi, e.Info)) {
+		err = errChangedDuringWalk
+	}
+	if err != nil {
+		f.Close()
+		return nil, fmt.Errorf("%s: %w", e.Src, err)
+	}
+	return f, nil
 }
 
 // recordOwner stores the owner by number and by name, unless --no-owner.
@@ -428,9 +459,9 @@ func sameContent(old *format.Member, e entry, newHash func() hash.Hash) (bool, e
 	if uint64(size) != old.Size {
 		return false, nil
 	}
-	f, err := os.Open(e.Src)
+	f, err := openWalked(e)
 	if err != nil {
-		return false, fmt.Errorf("opening %s: %w", e.Src, err)
+		return false, err
 	}
 	defer f.Close()
 

@@ -5338,6 +5338,9 @@ What an observer sees</a></li>
 Keys and passphrases</a></li>
 <li><a href="#extraction" id="toc-extraction">14.3 Extraction</a></li>
 <li><a href="#integrity-and-its-limits" id="toc-integrity-and-its-limits">14.4 Integrity and its limits</a></li>
+<li><a href="#archiving-a-tree-that-other-users-can-write" id="toc-archiving-a-tree-that-other-users-can-write">14.5 Archiving a
+tree that other users can write</a></li>
+<li><a href="#audit" id="toc-audit">14.6 Audit</a></li>
 </ul></li>
 <li><a href="#future-work-format-compatible" id="toc-future-work-format-compatible">15. Future work
 (format-compatible)</a>
@@ -5363,9 +5366,9 @@ the usual choices</a></li>
 </ul>
 </nav>
 <h1 id="eictar-design-document">eictar — Design Document</h1>
-<p>Status: M1 to M11 are complete, and v1.0.0 is tagged. The CI workflow
-passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1). Date:
-2026-09-26 Applies to: v1 (format version 1.0)</p>
+<p>Status: M1 to M11 are complete, and v1.0.2 is the current release.
+The CI workflow passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD
+(§15.1). Date: 2026-09-26 Applies to: v1 (format version 1.0)</p>
 <p>This document specifies the on-disk format, the concurrency model,
 the command line and the internal package layout of <code>eictar</code>.
 It is the reference for all implementation work. When the code changes,
@@ -6575,7 +6578,8 @@ operation can apply to the link. The risk is small when extraction goes
 into a new directory.</p>
 <h3 id="metadata-on-extraction">7.7 Metadata on extraction</h3>
 <p>The defaults are safe. Extraction restores what a user can restore,
-and nothing that needs privilege or gives it:</p>
+and nothing that needs privilege or gives it. <code>-p</code> is the one
+consent to restore the rest exactly, as in <code>tar</code>:</p>
 <table>
 <colgroup>
 <col style="width: 37%" />
@@ -6592,8 +6596,8 @@ and nothing that needs privilege or gives it:</p>
 <tbody>
 <tr class="odd">
 <td>permission bits</td>
-<td>restored</td>
-<td></td>
+<td>restored, less the umask for a user who is not root</td>
+<td><code>-p</code> restores them exactly</td>
 </tr>
 <tr class="even">
 <td>setuid, setgid, sticky</td>
@@ -6617,14 +6621,15 @@ and nothing that needs privilege or gives it:</p>
 </tr>
 <tr class="even">
 <td>POSIX ACLs</td>
-<td>restored</td>
-<td><code>--no-acls</code> omits them</td>
+<td>restored as root</td>
+<td><code>-p</code> restores them for any user. <code>--no-acls</code>
+omits them.</td>
 </tr>
 <tr class="odd">
 <td><code>security.*</code>, <code>trusted.*</code> and other
 <code>system.*</code> xattrs</td>
-<td>restored only as root</td>
-<td><code>--no-xattrs</code> omits them</td>
+<td><strong>not</strong> restored</td>
+<td><code>-p</code> restores them, as root</td>
 </tr>
 <tr class="even">
 <td>FIFOs</td>
@@ -6648,6 +6653,18 @@ and nothing that needs privilege or gives it:</p>
 </tr>
 </tbody>
 </table>
+<p><strong>An archive cannot open a file to other users by
+itself.</strong> Without <code>-p</code>, a user who is not root gets
+each mode less the umask, as with <code>tar</code>. An ACL can give
+access as a mode can, so it needs root or <code>-p</code> too. One
+notice counts the ACLs and attributes that <code>-p</code> restores.
+Until the audit of v1.0.1 (<code>doc/Security_Audit.md</code>), an
+archive’s 0666 file and 0777 directory kept those modes.</p>
+<p><strong>The root of the archived tree is never applied to the
+destination.</strong> A member whose path is <code>.</code> changes the
+mode, the times and the owner of the destination itself. The writer
+never stores one. The reader skips one with a notice. A crafted archive
+made a destination of 0755 into 0777 before this rule.</p>
 <p><strong>The owner goes on before the mode.</strong>
 <code>chown</code> clears the setuid bit, so a mode set first loses it.
 On a regular file, the owner, the xattrs and the mode go on the
@@ -6658,10 +6675,14 @@ the owner by number and by name. The same uid on two machines is rarely
 the same person, but the same user name usually is. If the name does not
 exist on this machine, the reader uses the recorded number.
 <code>tar</code> uses the same rule.</p>
-<p><strong>Privileged xattrs need root.</strong> <code>security.*</code>
-often holds an SELinux label that belongs to one machine.
-<code>trusted.*</code> needs <code>CAP_SYS_ADMIN</code>. Other
-<code>system.*</code> names belong to one filesystem type, and on
+<p><strong>Privileged xattrs need root and <code>-p</code>.</strong>
+<code>security.capability</code> gives a program Linux capabilities, as
+setuid gives it a user. Restored by default, an archive can install a
+program that makes any user root. Until the audit, these names were
+restored for root with no option.</p>
+<p><code>security.*</code> also holds an SELinux label that belongs to
+one machine. <code>trusted.*</code> needs <code>CAP_SYS_ADMIN</code>.
+Other <code>system.*</code> names belong to one filesystem type, and on
 FreeBSD and NetBSD the system namespace needs root.</p>
 <p><strong>Xattr names are recorded exactly, and applied where they
 fit.</strong> Each platform names xattrs differently. Linux uses
@@ -6950,6 +6971,16 @@ backup.</p>
 the path is a symbolic link, the file that the link points to is
 replaced, and the link stays. The walk skips both the temporary file and
 the old archive, so neither goes into the new archive.</p>
+<p><strong>A symbolic link in the path must be one that the kernel
+follows.</strong> Take a sticky directory that everyone can write, such
+as <code>/tmp</code>. There, Linux follows a link only when it belongs
+to the caller or to the owner of the directory
+(<code>fs.protected_symlinks</code>). The writer resolves the path
+itself and renames over the target, so the kernel’s rule never applies.
+Thus the writer applies the rule to each link in the path, for create,
+compact and change of passphrase. Before the audit, a link
+<code>/tmp/backup.ect -&gt; /etc/passwd</code> that another user planted
+made a create by root replace <code>/etc/passwd</code>.</p>
 <h3 id="the-write-sequence">9.1 The write sequence</h3>
 <p>Append, update and delete all use this sequence:</p>
 <ol type="1">
@@ -7695,7 +7726,9 @@ Create, append and update.</td>
 <tr class="odd">
 <td><code>-p</code></td>
 <td><code>--preserve-permissions</code></td>
-<td>also restore setuid, setgid and sticky (§7.7). Extract only.</td>
+<td>restore modes exactly, with setuid, setgid and sticky, and not less
+the umask. Also restore ACLs for any user, and privileged xattrs as root
+(§7.7). Extract only.</td>
 <td>M5</td>
 </tr>
 <tr class="even">
@@ -7952,7 +7985,8 @@ is changed or extracted.</td>
 <td>3</td>
 <td>the archive failed a check. Causes: corrupt data, an unsafe member
 path, a wrong passphrase or a failed tag. Also a plaintext archive when
-a passphrase source was given.</td>
+a passphrase source was given, and an archive path through a link that
+the program does not follow (§9).</td>
 </tr>
 <tr class="odd">
 <td>4</td>
@@ -8708,8 +8742,21 @@ stay, and each sealed member gets a new salt. A tombstone behind a
 hardlink, and the holes of a sparse file, survive (§9.3).</li>
 <li><strong>Progress meter</strong>: the status line, no drawing before
 the first byte, and no meter without a terminal (§10.10).</li>
-<li><strong>Man page</strong>: <code>doc/eictar.1</code> names every
-long option of the parser.</li>
+<li><strong>Security regressions</strong>: one test for each finding of
+<code>doc/Security_Audit.md</code>:
+<ul>
+<li>the decision for each class of xattr</li>
+<li>a member <code>.</code></li>
+<li>a file that becomes a link after the walk</li>
+<li>the rule for links in the archive path</li>
+<li>the umask</li>
+<li>the expansion of the index</li>
+<li>a passphrase file that other users can read</li>
+</ul></li>
+<li><strong>Man page and help</strong>: <code>doc/eictar.1</code> and
+<code>--help</code> name every long option of the parser, and the help
+gives each short form. No line of the help is wider than 80
+columns.</li>
 <li><strong>Platforms</strong>: each metadata test runs where
 <code>meta.Supports</code> says that its feature exists. An xattr from
 macOS and one from Linux, extracted on each platform, are applied or
@@ -8998,31 +9045,43 @@ shared content.</p>
 <h2 id="security-considerations">14. Security considerations</h2>
 <h3 id="what-an-observer-sees">14.1 What an observer sees</h3>
 <ul>
-<li><strong>The plain index (the default) shows</strong> every file
-name, size, mode, timestamp and xattr. This default is useful, but the
-man page must state it clearly. <code>--encrypt-index</code> hides it.
-Then an observer sees only that the archive exists, and its total
-size.</li>
-<li><strong>Content digests.</strong> The plain index also shows the
+<li><p><strong>The plain index (the default) shows</strong> every file
+name, size, mode, timestamp, link target and xattr, with its value. A
+value can say more than a name: macOS records in
+<code>com.apple.metadata:kMDItemWhereFroms</code> the address that a
+file came from. This default is useful, but the man page must state it
+clearly. <code>--encrypt-index</code> hides it. Then an observer sees
+only that the archive exists, and its total size.</p></li>
+<li><p><strong>Content digests.</strong> The plain index also shows the
 digest of each member. In an encrypted archive, the digest is keyed
 (§6.2), so it tells an observer nothing about the content. Before M9 it
 was not keyed, and it showed if the archive held a file that the
 observer had. Equal keyed digests still show that two members have the
-same content, and so does a reference (§4.3).</li>
-<li><strong>Dictionaries.</strong> A dictionary holds pieces of the
+same content, and so does a reference (§4.3).</p></li>
+<li><p><strong>Dictionaries.</strong> A dictionary holds pieces of the
 files, so in an encrypted archive it is sealed like content (§6.3). Its
-size and its place are in the index.</li>
-<li><strong>Sizes.</strong> With a plain index, the compressed length of
-every member and every chunk is visible. With
+size and its place are in the index.</p></li>
+<li><p><strong>Sizes.</strong> With a plain index, the compressed length
+of every member and every chunk is visible. With
 <code>--encrypt-index</code>, they are <strong>not</strong> visible. The
 body has no framing (§4), so the blob boundaries exist only in the
 index. Then only the total size of the archive is visible. v1 has no
-padding, so the total size is still information.</li>
-<li><strong>Compression before encryption</strong> permits an inference
-like CRIME or BREACH. It needs an attacker who can put chosen content
-into the same member as a secret. An archive is not such an adaptive
-setting, so the design accepts this risk. <code>--compress none</code>
-removes it.</li>
+padding, so the total size is still information.</p></li>
+<li><p><strong>Compression before encryption</strong> permits an
+inference like CRIME or BREACH. It needs an attacker who can put chosen
+content into the same member as a secret. An archive is not such an
+adaptive setting, so the design accepts this risk.
+<code>--compress none</code> removes it.</p></li>
+<li><p><strong>Dictionaries and shared content work across
+files</strong> (§4.2, §4.3). Thus the inference no longer needs the same
+member. Suppose that an attacker can put files into a tree that is
+archived again and again, and can see the size of the archive. A copy of
+a file that the archive holds adds almost nothing, so the attacker can
+test a guess of a whole file. With <code>train</code>, a file that looks
+like the secret files compresses better.</p>
+<p><code>--encrypt-index</code> hides the size of each member, but not
+the size of the archive. For such a tree, use <code>--no-dedup</code>
+and no <code>train</code>.</p></li>
 </ul>
 <h3 id="keys-and-passphrases">14.2 Keys and passphrases</h3>
 <ul>
@@ -9039,6 +9098,8 @@ the key schedule. The reader sets the data key to zero when it closes.
 The program does not set the derived subkeys to zero, and it does not
 lock memory. Go can copy memory without notice, so zeroing is only a
 partial protection. <code>--passphrase-env</code> prints a warning.</li>
+<li><strong>A passphrase file that other users can read gives a
+warning</strong>, as ssh gives for a key.</li>
 <li><strong>The configuration never supplies a secret</strong> (§11.4).
 The program reads no configuration file from the current directory,
 which can come from someone else’s archive. It refuses a configuration
@@ -9053,10 +9114,12 @@ checks them again. Both refuse absolute paths and <code>..</code>,
 because another program can write an archive. Extraction never follows a
 link and never goes through a linked directory.</li>
 <li><strong>Metadata.</strong> By default, extraction restores nothing
-that needs privilege or gives it. Setuid, setgid and sticky need
-<code>-p</code>. Owners need <code>--preserve-owner</code>, and device
-nodes need <code>--preserve-devices</code>, both as root. Privileged
-xattrs need root. §7.7 gives the full table.</li>
+that needs privilege or gives it. Setuid, setgid, privileged xattrs and
+exact modes need <code>-p</code>, and a user who is not root gets each
+mode less the umask. Owners need <code>--preserve-owner</code>, and
+device nodes need <code>--preserve-devices</code>, both as root. A
+member <code>.</code> never changes the destination. §7.7 gives the full
+table.</li>
 <li><strong>New node types.</strong> Pipes and device nodes are created
 with <code>*at</code> calls, on a directory descriptor from
 <code>os.Root</code> and a single name component. A planted link cannot
@@ -9068,7 +9131,8 @@ error.</li>
 reader uses a number to size a buffer, it applies a limit to that
 number:
 <ul>
-<li>the index length: <code>MaxIndexSize</code>, 1 GiB</li>
+<li>the index length: <code>MaxIndexSize</code>, 1 GiB, and at most 200
+times its compressed size, or 64 MiB, whichever is more</li>
 <li>array elements: the input length, and
 <code>MaxIndexMembers</code></li>
 <li>the chunk size: <code>MaxChunkSize</code>, 256 MiB (§5.2)</li>
@@ -9125,6 +9189,27 @@ not in the keyed digest, so a changed flag stops the archive from
 opening. That is a denial of service, not a forgery. The derived subkeys
 are not set to zero (§14.2). The downgrade gap above applies only
 without a passphrase source.</p>
+<h3 id="archiving-a-tree-that-other-users-can-write">14.5 Archiving a
+tree that other users can write</h3>
+<p>A backup often runs as root, over directories that other users can
+write. Such a user can change the tree while the program walks it, and
+can plant links where the program writes. Two rules apply:</p>
+<ul>
+<li><strong>The writer opens a walked file only as it was
+walked.</strong> Between the walk’s <code>lstat</code> and the open, a
+user can put a symbolic link to <code>/etc/shadow</code> in place of a
+file. The open does not follow a link, except with <code>-h</code>. The
+file that it opens must have the device and the inode that the walk saw.
+Otherwise the member fails, as for a read error. This rule also applies
+to the samples of a dictionary and to
+<code>-u   --update-mode=digest</code>.</li>
+<li><strong>The archive path follows only the links that the kernel
+follows</strong> (§9).</li>
+</ul>
+<h3 id="audit">14.6 Audit</h3>
+<p><code>doc/Security_Audit.md</code> records the review of v1.0.1:
+eight findings, the fixes of v1.0.2, and a test for each fix. It also
+lists what the review examined and found sound.</p>
 <h2 id="future-work-format-compatible">15. Future work
 (format-compatible)</h2>
 <ul>
@@ -9456,8 +9541,14 @@ v1.0.0, with a new golden archive.</p></li>
 <code>github.com/philmalin/eictar</code>. The interface also got the
 <code>.ect</code> extension (§10.12), and selection by regular
 expression, <code>-R</code> and <code>--exclude-regex</code> (§10.11).
-After M11, the release workflow made the first release, v1.0.0
-(§12.3).</p>
+After M11, the release workflow made the first release, v1.0.0 (§12.3).
+The next release, v1.0.1, made zstd level 12 the default, and bounded
+the memory of the encoders (§8.2).</p>
+<p><strong>v1.0.2 is a security release.</strong> A review of v1.0.1
+found eight problems (<code>doc/Security_Audit.md</code>). Two were
+serious for a root user with an archive from someone else: privileged
+xattrs, and a member <code>.</code>. The release fixes six, each with a
+test (§7.7, §9, §14), and documents the other two (§14.1).</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
 <p>This appendix supports §6.1. The question “how does this compare with

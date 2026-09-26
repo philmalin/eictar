@@ -1505,6 +1505,13 @@ reclaimed by an explicit compaction step, not automatically.</li>
 <li>The archive must record metadata faithfully: symlinks, hardlinks,
 device nodes, sparse files, extended attributes, ACLs, ownership and
 nanosecond-resolution timestamps.</li>
+<li>Extracting an archive from someone else must be safe by default,
+also as root. Extraction must not write outside its destination, change
+the destination itself, or restore anything that gives privilege (setuid
+bits, file capabilities, ownership) or opens files to other users,
+unless the user asks for it. Archiving a tree that other users can write
+must not let them put other files into the archive, or make the program
+write anywhere but the archive path.</li>
 <li>Integrity must be verifiable. Every member carries a digest of its
 content, and the archive can be checked without being extracted.</li>
 <li>A crash part way through writing must never damage what was already
@@ -1639,6 +1646,12 @@ short option has a long form</td>
 name that has no extension, and the other operations find that name</td>
 </tr>
 <tr class="even">
+<td>Extraction defaults</td>
+<td>Modes less the umask for a user who is not root. <code>-p</code>
+restores exact modes, special bits, ACLs, and privileged extended
+attributes as root. The destination itself is never changed</td>
+</tr>
+<tr class="odd">
 <td>License</td>
 <td>GPL-3.0. The name “eictar” is reserved: a modified version that is
 distributed must use another name (<code>TRADEMARKS.md</code>)</td>

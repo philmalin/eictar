@@ -1,6 +1,7 @@
 package format
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -188,6 +189,20 @@ func (m *Member) PayloadSize() uint64 {
 // an out-of-memory kill.
 const MaxIndexSize = 1 << 30 // 1 GiB
 
+// A compressed index may also expand only so far: to MaxIndexRatio times its
+// own size, or to MinIndexLimit, whichever is more. A real index compresses
+// perhaps 5 to 20 times. Without the ratio, a plain archive of a few KiB
+// made a listing allocate 1 GiB (doc/Security_Audit.md, finding 6).
+const (
+	MaxIndexRatio = 200
+	MinIndexLimit = 64 << 20
+)
+
+// indexLimit is the most that a compressed index of n bytes may decode to.
+func indexLimit(n int) uint64 {
+	return min(uint64(MaxIndexSize), max(uint64(MinIndexLimit), uint64(n)*MaxIndexRatio))
+}
+
 // Live returns the members that are not tombstoned.
 func (ix *Index) Live() []Member {
 	out := make([]Member, 0, len(ix.Members))
@@ -317,9 +332,10 @@ func DecodeIndex(b []byte, flags TrailerFlags, open Opener) (*Index, error) {
 	}
 
 	if flags&FlagIndexCompressed != 0 {
+		limit := indexLimit(len(b))
 		dec, err := zstd.NewReader(nil,
 			zstd.WithDecoderConcurrency(1),
-			zstd.WithDecoderMaxMemory(MaxIndexSize))
+			zstd.WithDecoderMaxMemory(limit))
 		if err != nil {
 			return nil, fmt.Errorf("format: index decompressor: %w", err)
 		}
@@ -329,8 +345,8 @@ func DecodeIndex(b []byte, flags TrailerFlags, open Opener) (*Index, error) {
 		if err != nil {
 			// zstd reports its own limit breach here; map it to our sentinel
 			// so callers need not know which layer complained.
-			if len(plain) >= MaxIndexSize {
-				return nil, fmt.Errorf("format: %w", ErrIndexTooLarge)
+			if errors.Is(err, zstd.ErrDecoderSizeExceeded) || uint64(len(plain)) >= limit {
+				return nil, fmt.Errorf("format: %w: it expands more than %d times", ErrIndexTooLarge, MaxIndexRatio)
 			}
 			return nil, fmt.Errorf("format: %w: decompressing: %v", ErrCorruptIndex, err)
 		}

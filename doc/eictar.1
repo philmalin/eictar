@@ -340,7 +340,19 @@ Replace an existing file only when the member is newer.
 Write the content to standard output.
 .TP
 .BR \-p ", " \-\-preserve\-permissions
-Also restore the setuid, setgid and sticky bits.
+Restore the modes exactly: with the setuid, setgid and sticky bits, and not
+less the umask. Also restore POSIX ACLs as any user, and, as root, the
+privileged extended attributes
+.RB ( security.* ,
+.BR trusted.* ,
+.BR system.* ).
+.B security.capability
+gives a program privilege, as setuid does, so give
+.B \-p
+only for an archive that you trust. Without
+.BR \-p ,
+a user who is not root gets each mode less the umask, and ACLs are
+restored only as root.
 .TP
 .B \-\-preserve\-owner
 Restore the owner. Only root can do this.
@@ -640,7 +652,8 @@ Nothing was changed.
 .B 3
 The archive failed a check: damaged data, a wrong passphrase, a failed
 authentication tag, an unsafe path, or a plain archive where a passphrase
-was given.
+was given. Also an archive path through a symbolic link that the program
+does not follow.
 .TP
 .B 4
 Any other error, for example an I/O error, or another eictar that is
@@ -683,6 +696,30 @@ fails. The exit status says so.
 .IP \(bu 2
 Two eictar processes cannot change one archive at the same time: the second
 stops with exit 4. The lock is advisory, and it is not reliable on NFS.
+.IP \(bu 2
+Extraction never changes the destination directory itself, even for an
+archive that holds an entry for its root
+.RB ( . ).
+.IP \(bu 2
+When root archives a tree that other users can write, a file that becomes a
+symbolic link after the walk is not followed. It fails, with a message. The
+archive path given with
+.B \-f
+follows a symbolic link in a directory such as
+.I /tmp
+only when the link belongs to the user or to the owner of the directory, as
+the Linux kernel does. Otherwise the program stops with exit 3.
+.IP \(bu 2
+Identical content and
+.B train
+work across files. Thus a person who can add files to a tree that is
+archived again and again, and who can see the size of the archive, can test
+if the archive holds a guessed file. For such a tree, use
+.B \-\-no\-dedup
+and no
+.BR train .
+.IP \(bu 2
+A passphrase file that other users can read gives a warning.
 .IP \(bu 2
 Every key comes from a random data key, which the passphrase seals.
 .B \-\-change\-passphrase

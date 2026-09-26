@@ -94,7 +94,7 @@ With no options, eictar uses these defaults:
 | memory for data in flight | a quarter of the RAM |
 | identical files | stored one time (`--no-dedup` turns this off) |
 | encryption | off |
-| extraction | replaces existing files, and restores permissions and times, not owners |
+| extraction | replaces existing files, and restores permissions (less the umask) and times, not owners |
 
 `eictar --show-config` shows each setting, and where its value came from.
 
@@ -234,6 +234,16 @@ available on each platform: the manual page gives the details.
   content.
 - An encrypted archive detects any change to its content or its index. A
   plain archive detects damage, but not a person who writes it again.
+- Extraction restores nothing that gives privilege: no setuid bits, no file
+  capabilities or other privileged attributes, and no owner. `-p` restores
+  exact modes and those attributes. Use it only for an archive that you
+  trust.
+- Suppose that other users can add files to a tree that you archive again
+  and again, and can see the size of the archive. Then use `--no-dedup` and
+  no `train`: shared content and dictionaries let them test for a guessed
+  file.
+- [`doc/Security_Audit.md`](doc/Security_Audit.md) records the security
+  review of v1.0.1 and the fixes of v1.0.2.
 - A change of passphrase does not remove old copies of the archive. Such a
   copy still opens with the old passphrase.
 

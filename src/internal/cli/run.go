@@ -228,7 +228,7 @@ func exitCodeFor(err error) int {
 	}
 	for _, untrusted := range []error{
 		// Too new for this build, or a member path that would escape.
-		format.ErrUnsupportedVersion, fsutil.ErrUnsafePath,
+		format.ErrUnsupportedVersion, fsutil.ErrUnsafePath, archive.ErrUnsafeLink,
 		// A wrong passphrase is "this archive did not authenticate", which
 		// exit code 3 exists to say, as a failed tag is (doc/design.md 10.7).
 		crypt.ErrWrongPassphrase,
@@ -301,7 +301,8 @@ Extraction:
       --overwrite           replace existing files (the default)
       --newer-only          replace only when the member is newer
   -O, --to-stdout           write the content to standard output
-  -p, --preserve-permissions  also restore setuid, setgid and sticky
+  -p, --preserve-permissions  modes exactly, with setuid and no umask; ACLs,
+                            and privileged xattrs as root (trusted archives)
       --preserve-owner      restore the owner (root only)
       --preserve-devices    create device nodes (root only)
       --no-xattrs, --no-acls, --no-owner

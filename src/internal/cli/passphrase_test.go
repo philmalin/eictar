@@ -138,3 +138,21 @@ func TestPassphraseWarnsAboutEnv(t *testing.T) {
 		t.Errorf("--passphrase-file warned %d times, want 0", len(warned))
 	}
 }
+
+// TestPassphraseFileThatOthersCanRead: a warning, as ssh gives for a key
+// (doc/Security_Audit.md, finding 8).
+func TestPassphraseFileThatOthersCanRead(t *testing.T) {
+	for _, tc := range []struct {
+		mode os.FileMode
+		warn bool
+	}{{0o600, false}, {0o400, false}, {0o640, true}, {0o644, true}} {
+		p := filepath.Join(t.TempDir(), "pass")
+		os.WriteFile(p, []byte("x\n"), tc.mode)
+		os.Chmod(p, tc.mode)
+		var warned []string
+		passphraseSource{file: p}.warnIfInsecureSource(func(f string, a ...any) { warned = append(warned, fmt.Sprintf(f, a...)) })
+		if got := len(warned) == 1 && strings.Contains(warned[0], "chmod 600"); got != tc.warn {
+			t.Errorf("mode %04o: warnings %q, want a warning: %v", tc.mode, warned, tc.warn)
+		}
+	}
+}

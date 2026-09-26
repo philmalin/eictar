@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 
 	"golang.org/x/term"
 )
@@ -146,9 +147,18 @@ func zeroBytes(b []byte) {
 }
 
 // warnIfInsecureSource reports the environment-variable route, which is
-// visible to anything that can read /proc.
+// visible to anything that can read /proc, and a passphrase file that other
+// users can read, as ssh does for a key (doc/Security_Audit.md, finding 8).
 func (p passphraseSource) warnIfInsecureSource(warn func(string, ...any)) {
-	if p.env != "" && warn != nil {
+	if warn == nil {
+		return
+	}
+	if p.env != "" {
 		warn("%s-env exposes the passphrase to anything that can read this process's environment", p.option())
+	}
+	if p.file != "" && runtime.GOOS != "windows" {
+		if fi, err := os.Stat(p.file); err == nil && fi.Mode().Perm()&0o044 != 0 {
+			warn("%s can be read by other users (mode %04o); chmod 600 it", p.file, fi.Mode().Perm())
+		}
 	}
 }

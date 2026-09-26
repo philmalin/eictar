@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"runtime"
@@ -51,7 +52,10 @@ type ExtractConfig struct {
 // safe ones: permission bits and times, user attributes and ACLs, nothing
 // that needs privilege and nothing that grants it (doc/design.md 7 and 14).
 type RestoreOptions struct {
-	Permissions bool // -p: also restore setuid, setgid and sticky
+	// Permissions is -p: restore modes exactly, with setuid, setgid and
+	// sticky, and not less the umask; restore POSIX ACLs as any user; and,
+	// as root, the privileged extended attributes (doc/design.md 7.7).
+	Permissions bool
 	Owner       bool // --preserve-owner: chown to the recorded owner; needs root
 	Devices     bool // --preserve-devices: create device nodes; needs root
 	NoXattrs    bool // --no-xattrs: apply no extended attributes but ACLs
@@ -82,6 +86,11 @@ type extraction struct {
 	// refused counts, by name, the extended attributes that the destination
 	// did not take. They are listed in one notice at the end of the run.
 	refused map[string]int
+	// withheld counts the ACLs and privileged attributes that were not
+	// restored because -p was not given, for one notice at the end.
+	withheld int
+	// umask is taken from each mode, unless -p or root (doc/design.md 7.7).
+	umask fs.FileMode
 }
 
 // Extract writes the matching members under cfg.Destination.
@@ -105,6 +114,7 @@ func Extract(cfg ExtractConfig) (Stats, error) {
 		return Stats{}, err
 	}
 	members = excludeMembers(members, cfg.Exclude, cfg.ExcludeRegex)
+	members = withoutRoot(members, cfg.Reporter)
 	sort.SliceStable(members, func(i, j int) bool { return members[i].Path < members[j].Path })
 
 	// Tombstones are included: a live hardlink can point to one (§9.2).
@@ -138,15 +148,54 @@ func Extract(cfg ExtractConfig) (Stats, error) {
 		r: r, root: root, cfg: cfg, names: meta.NewNames(),
 		extracted: map[uint64]string{}, refused: map[string]int{},
 	}
+	// Read before the workers start: reading the umask sets it for a moment.
+	if !cfg.Restore.Permissions && !meta.IsRoot() {
+		x.umask = fs.FileMode(meta.Umask())
+	}
 	stats, err := x.run(members, byID)
 	x.reportRefused()
 	return stats, err
 }
 
+// withoutRoot removes a member whose path is ".", the root of the archived
+// tree. Applied, it would change the destination itself: a crafted archive
+// made a destination of 0755 into 0777, and with --preserve-owner as root it
+// could give the directory to another user (doc/Security_Audit.md, finding
+// 2). The writer never stores such a member.
+func withoutRoot(members []format.Member, rep Reporter) []format.Member {
+	out := members[:0:0]
+	for _, m := range members {
+		if m.Path == "." {
+			if rep != nil {
+				rep.Warn("the archive's entry for the root of its tree (.) is not applied to the destination")
+			}
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// mode is the mode to give an extracted node: the recorded bits, less the
+// umask unless -p or root, as tar does. An archive must not make a file
+// that everyone can write only because it says so.
+func (x *extraction) mode(m *format.Member) fs.FileMode {
+	return meta.FileMode(m.Mode, x.cfg.Restore.Permissions) &^ x.umask
+}
+
 // reportRefused gives the one notice for the extended attributes that the
 // destination did not take (doc/design.md 7.7): a macOS name on Linux, a
 // Linux security.* name on FreeBSD, or any name on a filesystem without them.
+func (x *extraction) withhold() {
+	x.mu.Lock()
+	x.withheld++
+	x.mu.Unlock()
+}
+
 func (x *extraction) reportRefused() {
+	if x.withheld > 0 && x.cfg.Reporter != nil {
+		x.cfg.Reporter.Warn("%d ACLs or privileged extended attributes were not restored; -p restores them", x.withheld)
+	}
 	if len(x.refused) == 0 || x.cfg.Reporter == nil {
 		return
 	}
@@ -357,7 +406,7 @@ func (x *extraction) writeSpecial(m *format.Member, create func(dir *os.File, ba
 	if err := x.applyOwner(m, func(uid, gid int) error { return x.root.Lchown(m.Path, uid, gid) }); err != nil {
 		return false, err
 	}
-	if err := x.root.Chmod(m.Path, meta.FileMode(m.Mode, x.cfg.Restore.Permissions)); err != nil {
+	if err := x.root.Chmod(m.Path, x.mode(m)); err != nil {
 		return false, fmt.Errorf("setting mode of %s: %w", m.Path, err)
 	}
 	return false, x.applyTimes(m)
@@ -531,7 +580,7 @@ func (x *extraction) writeFile(m *format.Member, target string) error {
 	steps := []func() error{
 		func() error { return x.applyXattrs(m, f, target) },
 		func() error { return x.applyOwner(m, func(uid, gid int) error { return f.Chown(uid, gid) }) },
-		func() error { return f.Chmod(meta.FileMode(m.Mode, x.cfg.Restore.Permissions)) },
+		func() error { return f.Chmod(x.mode(m)) },
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
@@ -608,7 +657,7 @@ func (x *extraction) finishDirs(dirs []format.Member) error {
 			err = x.applyOwner(m, func(uid, gid int) error { return d.Chown(uid, gid) })
 		}
 		if err == nil {
-			err = d.Chmod(meta.FileMode(m.Mode, x.cfg.Restore.Permissions))
+			err = d.Chmod(x.mode(m))
 		}
 		d.Close()
 		if err != nil {
@@ -639,10 +688,12 @@ func (x *extraction) applyOwner(m *format.Member, chown func(uid, gid int) error
 
 // applyXattrs sets the recorded extended attributes the policy allows.
 //
-// User attributes, names with no namespace (every name from macOS) and ACLs
-// are restored by default. security.*, trusted.* and the rest of system.* need
-// privilege and are often specific to one machine or filesystem, so they are
-// restored only as root. A name that the destination does not take - a macOS
+// User attributes and names with no namespace (every name from macOS) are
+// restored by default. An ACL can give other users access, as a mode can, so
+// it is restored as root or with -p. security.*, trusted.* and the rest of
+// system.* are restored only as root and with -p: security.capability gives
+// a program privilege, as setuid does, and security.selinux chooses its
+// label (doc/Security_Audit.md, finding 1). A name that the destination does not take - a macOS
 // name on Linux, or any name on a filesystem without extended attributes -
 // is counted for the one notice at the end of the run, not failed member by
 // member (doc/design.md 7.7).
@@ -656,20 +707,14 @@ func (x *extraction) applyXattrs(m *format.Member, f *os.File, where string) err
 	}
 	sort.Strings(names) // a stable order, so failures are reproducible
 
+	root := meta.IsRoot()
 	for _, name := range names {
-		switch meta.ClassifyXattr(name) {
-		case meta.XattrUser, meta.XattrPlain:
-			if x.cfg.Restore.NoXattrs {
-				continue
-			}
-		case meta.XattrACL:
-			if x.cfg.Restore.NoACLs {
-				continue
-			}
-		case meta.XattrPrivileged:
-			if x.cfg.Restore.NoXattrs || !meta.IsRoot() {
-				continue
-			}
+		switch xattrPolicy(meta.ClassifyXattr(name), x.cfg.Restore, root) {
+		case xattrSkip:
+			continue
+		case xattrWithhold:
+			x.withhold()
+			continue
 		}
 		if err := meta.SetXattr(f, name, m.Xattrs[name]); err != nil {
 			if errors.Is(err, meta.ErrRefused) {
@@ -682,6 +727,40 @@ func (x *extraction) applyXattrs(m *format.Member, f *os.File, where string) err
 		}
 	}
 	return nil
+}
+
+// The decisions of xattrPolicy.
+const (
+	xattrRestore  = iota
+	xattrSkip     // an option says no, or the process cannot
+	xattrWithhold // -p would restore it; counted for the notice
+)
+
+// xattrPolicy decides what happens to one extended attribute on extraction
+// (doc/design.md 7.7). It is a function of its own so that the rule can be
+// tested for root without root.
+func xattrPolicy(class meta.XattrClass, o RestoreOptions, root bool) int {
+	switch class {
+	case meta.XattrACL:
+		switch {
+		case o.NoACLs:
+			return xattrSkip
+		case !o.Permissions && !root:
+			return xattrWithhold
+		}
+	case meta.XattrPrivileged:
+		switch {
+		case o.NoXattrs || !root:
+			return xattrSkip
+		case !o.Permissions:
+			return xattrWithhold
+		}
+	default:
+		if o.NoXattrs {
+			return xattrSkip
+		}
+	}
+	return xattrRestore
 }
 
 // atime returns the access time to restore: the recorded one, or the

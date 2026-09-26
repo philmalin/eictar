@@ -573,3 +573,25 @@ func TestIndexValidateRejectsSharing(t *testing.T) {
 		})
 	}
 }
+
+// TestIndexExpansionIsBounded: a small index may not decode to a large one.
+// A plain archive of a few KiB made a listing allocate 1 GiB before the
+// ratio (doc/Security_Audit.md, finding 6).
+func TestIndexExpansionIsBounded(t *testing.T) {
+	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderConcurrency(1))
+	bomb := enc.EncodeAll(make([]byte, 100<<20), nil) // 100 MiB of zeros
+	enc.Close()
+	if len(bomb)*MaxIndexRatio >= MinIndexLimit {
+		t.Fatalf("the bomb is %d bytes; the test needs it smaller", len(bomb))
+	}
+	_, err := DecodeIndex(bomb, FlagIndexCompressed, nil)
+	if !errors.Is(err, ErrIndexTooLarge) {
+		t.Errorf("a %d-byte index that expands to 100 MiB: %v, want ErrIndexTooLarge", len(bomb), err)
+	}
+	if got := indexLimit(1 << 20); got != 200<<20 {
+		t.Errorf("the limit of a 1 MiB index is %d", got)
+	}
+	if got := indexLimit(100 << 20); got != MaxIndexSize {
+		t.Errorf("the limit of a 100 MiB index is %d, want the 1 GiB cap", got)
+	}
+}

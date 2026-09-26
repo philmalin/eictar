@@ -32,3 +32,13 @@ func Mknod(*os.File, string, bool, uint32, uint32, uint32) error { return ErrUns
 func SetLinkTimes(*os.File, string, int64, int64) error { return ErrUnsupported }
 
 func Lchown(*os.File, string, uint32, uint32) error { return ErrUnsupported }
+
+// Umask is 0: these platforms have no mode creation mask.
+func Umask() uint32 { return 0 }
+
+// OpenNoFollow opens a file for reading. These platforms have no O_NOFOLLOW;
+// the caller still compares the file with the walked entry.
+func OpenNoFollow(path string) (*os.File, error) { return os.Open(path) }
+
+// MayFollow allows every link: these platforms have no sticky directories.
+func MayFollow(string, fs.FileInfo) bool { return true }

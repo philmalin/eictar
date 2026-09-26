@@ -42,6 +42,13 @@ individually encrypted.
 1. The archive must record metadata faithfully: symlinks, hardlinks, device
    nodes, sparse files, extended attributes, ACLs, ownership and
    nanosecond-resolution timestamps.
+1. Extracting an archive from someone else must be safe by default, also as
+   root.  Extraction must not write outside its destination, change the
+   destination itself, or restore anything that gives privilege (setuid
+   bits, file capabilities, ownership) or opens files to other users, unless
+   the user asks for it.  Archiving a tree that other users can write must
+   not let them put other files into the archive, or make the program write
+   anywhere but the archive path.
 1. Integrity must be verifiable.  Every member carries a digest of its
    content, and the archive can be checked without being extracted.
 1. A crash part way through writing must never damage what was already in the
@@ -108,6 +115,7 @@ gives the full reasoning and the exact formats.
 | Concurrency | Member order inside the archive is not significant, so a single writer appends whichever worker finishes first |
 | CLI style | Classical UNIX options, not subcommands.  The operation is chosen by an option letter (`-c`, `-r`, `-t`, `-x`), short options bundle (`-cvf`), and every short option has a long form |
 | Archive name | The conventional extension is `.ect`.  Create adds it to a name that has no extension, and the other operations find that name |
+| Extraction defaults | Modes less the umask for a user who is not root.  `-p` restores exact modes, special bits, ACLs, and privileged extended attributes as root.  The destination itself is never changed |
 | License | GPL-3.0.  The name "eictar" is reserved: a modified version that is distributed must use another name (`TRADEMARKS.md`) |
 
 
