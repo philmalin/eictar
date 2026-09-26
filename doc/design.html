@@ -6434,9 +6434,17 @@ authK        = HKDF(dataK, info = &quot;eictar/v1/index-auth&quot; || archive_uu
 no key. The uuid and the generation stop an index and a trailer from
 moving to a different archive. With a key, they also stop that move
 between two archives that use the same passphrase.</p>
-<p>A reader without the passphrase cannot check a keyed digest, and it
-reports that fact. A reader with the passphrase refuses any changed byte
-of metadata.</p>
+<p>A reader without the passphrase cannot check a keyed digest. Thus
+eictar asks for the passphrase for every operation on an encrypted
+archive, a listing and <code>--info</code> too, whether or not the index
+is sealed. It never shows metadata that it cannot authenticate. A reader
+with the passphrase refuses any changed byte of metadata.</p>
+<p>A plain index is still readable with a CBOR tool, without eictar.
+Thus only <code>--encrypt-index</code> keeps the names and the sizes
+secret. A user who encrypts an archive can expect every part of it to
+need the passphrase. This rule matches that expectation for eictar
+itself, and <code>--encrypt-index</code> matches it for every other
+tool.</p>
 <p>This protection does <strong>not</strong> cover three attacks. They
 are a rewrite of the whole file, a rollback to an older genuine archive,
 and a downgrade to plaintext. §14.4 describes them.</p>
@@ -8310,9 +8318,11 @@ depend on the configuration of the person who runs it.</p>
 <code>github.com/philmalin/eictar</code>, so the import paths are like
 <code>github.com/philmalin/eictar/src/internal/format</code>. Thus
 <code>go install github.com/philmalin/eictar/src/cmd/eictar@latest</code>
-builds the program. Such a binary gets its version from the module
-version that Go records in it. A <code>make</code> build gets it from
-<code>VERSION</code>.</p>
+builds the program.</p>
+<p>Such a binary gets its version from the module version that Go
+records in it. A <code>make</code> build gets it from
+<code>VERSION</code>, which is the output of <code>git describe</code>
+by default. The release workflow sets it from the tag.</p>
 <p>The module cache is in <code>.gocache/</code>, the build cache in
 <code>.gobuildcache/</code>, and temporary files in <code>.tmp/</code>.
 All three are inside the project. The <code>Makefile</code> sets
@@ -8336,9 +8346,10 @@ targets, not a bare <code>go</code> command:</p>
 <tr class="odd">
 <td><code>make build</code></td>
 <td>build <code>.build/eictar</code>, stripped and with no local paths
-(<code>-trimpath -ldflags=&quot;-s -w&quot;</code>).
-<code>make build VERSION=1.0.0</code> sets the version that
-<code>--version</code> prints. The default is <code>dev</code>.</td>
+(<code>-trimpath -ldflags=&quot;-s -w&quot;</code>). The version that
+<code>--version</code> prints comes from <code>git describe</code>, such
+as <code>1.0.1-2-g5ccd0ce</code>, or is <code>dev</code> outside a git
+checkout. <code>make build VERSION=1.0.0</code> sets it.</td>
 </tr>
 <tr class="even">
 <td><code>make release</code></td>

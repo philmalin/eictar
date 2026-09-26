@@ -801,8 +801,17 @@ The uuid and the generation stop an index and a trailer from moving to a
 different archive. With a key, they also stop that move between two archives
 that use the same passphrase.
 
-A reader without the passphrase cannot check a keyed digest, and it reports
-that fact. A reader with the passphrase refuses any changed byte of metadata.
+A reader without the passphrase cannot check a keyed digest. Thus eictar asks
+for the passphrase for every operation on an encrypted archive, a listing and
+`--info` too, whether or not the index is sealed. It never shows metadata that
+it cannot authenticate. A reader with the passphrase refuses any changed byte
+of metadata.
+
+A plain index is still readable with a CBOR tool, without eictar. Thus only
+`--encrypt-index` keeps the names and the sizes secret. A user who encrypts
+an archive can expect every part of it to need the passphrase. This rule
+matches that expectation for eictar itself, and `--encrypt-index` matches it
+for every other tool.
 
 This protection does **not** cover three attacks. They are a rewrite of the
 whole file, a rollback to an older genuine archive, and a downgrade to

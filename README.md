@@ -109,9 +109,10 @@ eictar --change-passphrase -f secret            # asks for the old one, then the
 ```
 
 You choose encryption when you create the archive. Every later operation
-uses the same passphrase. Without `--encrypt-index`, a person with the
-archive can read the names, sizes and times of the files, but not their
-content.
+uses the same passphrase, and eictar asks for it for every operation, a
+listing too. Without `--encrypt-index`, the names, sizes and times are still
+readable with other tools, but the content is not. Use `--encrypt-index` to
+keep them secret too.
 
 ### Compression
 
@@ -227,8 +228,10 @@ available on each platform: the manual page gives the details.
 
 ## Security notes
 
-- Without `--encrypt-index`, a person with the archive can read the names,
-  sizes, times and owners of the files, but not their content.
+- eictar asks for the passphrase for every operation on an encrypted
+  archive, a listing too. Without `--encrypt-index`, other tools can still
+  read the names, sizes, times and owners of the files, but not their
+  content.
 - An encrypted archive detects any change to its content or its index. A
   plain archive detects damage, but not a person who writes it again.
 - A change of passphrase does not remove old copies of the archive. Such a

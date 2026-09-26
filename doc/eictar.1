@@ -661,9 +661,10 @@ A setting; see
 Where the configuration file is.
 .SH SECURITY
 .IP \(bu 2
-Without
+eictar asks for the passphrase for every operation on an encrypted archive,
+a listing too. But without
 .BR \-\-encrypt\-index ,
-the index is readable: names, sizes, times and owners. In an encrypted
+the index is readable with other tools: names, sizes, times and owners. In an encrypted
 archive, the digest of each file is a keyed BLAKE3 hash. Thus a person who
 has a copy of a file cannot find out from the digests if the archive holds
 it. Equal digests, and files that share data, still show which files have
