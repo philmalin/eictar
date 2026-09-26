@@ -23,10 +23,13 @@ BIN      := .build/eictar
 PKGS     := ./src/...
 FUZZTIME ?= 30s
 
-# The version that --version prints. Override it for a release:
+# The version that --version prints. A local build takes it from git
+# describe: 1.0.1 at a tag, 1.0.1-2-g5ccd0ce two commits after it, with
+# -dirty for uncommitted changes. Outside a git checkout it is dev. Override
+# it for a release:
 #   make build VERSION=1.0.0
 # The release workflow (.github/workflows/release.yml) sets it from the tag.
-VERSION  ?= dev
+VERSION  ?= $(or $(shell git describe --tags --dirty 2>/dev/null | sed 's/^v//'),dev)
 
 # -trimpath keeps local paths out of the binary, which also makes the build
 # reproducible. -s -w drop the symbol table and the DWARF debug information:

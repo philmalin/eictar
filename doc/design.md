@@ -2136,8 +2136,11 @@ who runs it.
 path is `github.com/philmalin/eictar`, so the import paths are like
 `github.com/philmalin/eictar/src/internal/format`. Thus
 `go install github.com/philmalin/eictar/src/cmd/eictar@latest` builds the
-program. Such a binary gets its version from the module version that Go
-records in it. A `make` build gets it from `VERSION`.
+program.
+
+Such a binary gets its version from the module version that Go
+records in it. A `make` build gets it from `VERSION`, which is the output of
+`git describe` by default. The release workflow sets it from the tag.
 
 The module cache is in `.gocache/`, the build cache in `.gobuildcache/`, and
 temporary files in `.tmp/`. All three are inside the project. The `Makefile`
@@ -2148,7 +2151,7 @@ bare `go` command:
 
 | Target | Action |
 |--------|--------|
-| `make build` | build `.build/eictar`, stripped and with no local paths (`-trimpath -ldflags="-s -w"`). `make build VERSION=1.0.0` sets the version that `--version` prints. The default is `dev`. |
+| `make build` | build `.build/eictar`, stripped and with no local paths (`-trimpath -ldflags="-s -w"`). The version that `--version` prints comes from `git describe`, such as `1.0.1-2-g5ccd0ce`, or is `dev` outside a git checkout. `make build VERSION=1.0.0` sets it. |
 | `make release` | build the release binaries in `.build/release/`, one directory for each platform (§12.3) |
 | `make test` | run the unit tests |
 | `make test-race` | run the unit tests with the race detector |
