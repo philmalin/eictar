@@ -2498,7 +2498,9 @@ Every item in the lists below exists now, except the items marked "later".
   sparse file, survive (§9.3).
 - **Progress meter**: the status line, no drawing before the first byte, and
   no meter without a terminal (§10.10).
-- **Man page**: `doc/eictar.1` names every long option of the parser.
+- **Man page and help**: `doc/eictar.1` and `--help` name every long option
+  of the parser, and the help gives each short form. No line of the help is
+  wider than 80 columns.
 - **Platforms**: each metadata test runs where `meta.Supports` says that its
   feature exists. An xattr from macOS and one from Linux, extracted on each
   platform, are applied or listed in the one notice as §7.7 says. A pipe is

@@ -245,37 +245,89 @@ func exitCodeFor(err error) int {
 const usageText = `Usage: eictar OPERATION -f ARCHIVE [options] [PATH|PATTERN...]
 
 Operations (exactly one):
-  -c, --create        create a new archive
-  -r, --append        append to an existing archive
-  -t, --list          list the archive contents
-  -x, --extract       extract members
-  -u, --update        append only the paths that are out of date
-      --delete        tombstone matching members
-      --compact       reclaim the space of tombstoned members
-      --change-passphrase  seal the archive's key under a new passphrase
-      --verify        check integrity without extracting
-      --repair        recover from a damaged trailer
-      --info          print archive information
-      --list-codecs   list codecs and their parameters
-      --show-config   show each setting and where it came from
+  -c, --create              create a new archive
+  -r, --append              add paths; a path already there is replaced
+  -u, --update              add only the paths that are out of date
+  -t, --list                list the members (-v: long listing, -vv: more)
+  -x, --extract             extract members
+      --delete              mark matching members as deleted
+      --compact             write the archive again without dead space
+      --change-passphrase   seal the archive's key under a new passphrase
+      --verify              check every digest and tag, without extracting
+      --repair              cut the archive back after a crash
+      --info                show the settings, counts and dead space
+      --list-codecs         list the codecs and their parameters
 
-Common options:
-  -f, --file ARCHIVE  the archive to operate on (required)
-  -d, --destination DIR  unpack here, creating the directory if needed (-x)
-  -C, --directory DIR change to DIR first
-  -Z, --compress SPEC NAME[:k=v,...] or none   (-z gzip, -J xz, --zstd)
-  -e, --encrypt       encrypt the archive
-  -j, --workers N     worker count
-  -v, --verbose       list members as they are processed (-tv: long listing)
-      --progress      show a progress line on a terminal
-  -k, --keep-existing never overwrite an existing file on extract
-      --help          print this help
-      --version       print the version
+Archive and paths:
+  -f, --file ARCHIVE        the archive (required); .ect is added to a name
+                            with no extension
+  -C, --directory DIR       change to DIR first
+  -d, --destination DIR     extract into DIR, creating it if needed
+  -T, --files-from FILE     read the paths from FILE (- for stdin)
+      --exclude GLOB        leave out matching paths (repeatable)
+  -X, --exclude-from FILE   read exclude globs from FILE, one on each line
+  -R, --regex RE            keep only paths that RE matches in full
+      --exclude-regex RE    leave out paths that RE matches in full
+  -h, --dereference         store what a symbolic link points to
+      --one-file-system     do not enter other filesystems
+      --no-dedup            store each copy of the same content in full
+
+Compression:
+  -Z, --compress SPEC       NAME[:key[=value],...] or none; the default is
+                            zstd at level 12 (zstd:level=3 is faster)
+  -z, --gzip                the same as --compress gzip
+  -J, --xz                  the same as --compress xz
+      --zstd                the same as --compress zstd
+      --chunk-size SIZE     compress in chunks of SIZE (default 4MiB)
+
+Encryption:
+  -e, --encrypt             encrypt a new archive (asks for a passphrase)
+      --encrypt-index       also encrypt the index: names, sizes, times
+      --passphrase-file F   read the passphrase from the first line of F
+      --passphrase-env VAR  read the passphrase from the variable VAR
+      --new-passphrase-file F, --new-passphrase-env VAR
+                            the new passphrase, for --change-passphrase
+      --kdf-time N, --kdf-memory KIB, --kdf-threads N
+                            the Argon2id cost, for -c and --change-passphrase
+
+Changes:
+      --on-conflict MODE    with -r: replace (default), skip or error
+      --update-mode MODE    with -u: newer (default), different or digest
+      --recompress SPEC     with --compact: encode every member again
+      --quick               with --verify: check the structure only
+
+Extraction:
+  -k, --keep-existing       never replace an existing file
+      --overwrite           replace existing files (the default)
+      --newer-only          replace only when the member is newer
+  -O, --to-stdout           write the content to standard output
+  -p, --preserve-permissions  also restore setuid, setgid and sticky
+      --preserve-owner      restore the owner (root only)
+      --preserve-devices    create device nodes (root only)
+      --no-xattrs, --no-acls, --no-owner
+                            do not record, or do not restore, this metadata
+
+Output and work:
+  -v, --verbose             list members as they are processed
+  -q, --quiet               errors only
+      --long                with -t: the same as -v
+      --json                with -t: a listing for programs
+      --progress            a progress line on a terminal
+  -j, --workers N           the number of workers (default: the CPUs)
+      --memory-limit SIZE   the memory for data in flight
+      --spill-threshold SIZE  move a member to disk above SIZE (default 32MiB)
+      --keep-going          go on after an error on one member (exit 1)
+
+Configuration:
+      --config FILE         read the configuration from FILE
+      --no-config           read no configuration file and no EICTAR_* variable
+      --show-config         show each setting and where it came from, and exit
+      --help                print this help
+      --version             print the version
 
 Settings can also come from ~/.eictarrc and EICTAR_* variables; see
---show-config. The archive is a single seekable file: it cannot be read from
-or written to a pipe. Full documentation: man ./doc/eictar.1, doc/design.md
-and doc/format.md.
+--show-config. The archive is one seekable file: it cannot be read from or
+written to a pipe. Full documentation: man ./doc/eictar.1.
 `
 
 func writeUsage(w io.Writer) { fmt.Fprint(w, usageText) }
