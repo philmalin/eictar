@@ -213,3 +213,55 @@ func TestGoldenDictionary(t *testing.T) {
 		t.Errorf("verify: %v", err)
 	}
 }
+
+// TestGoldenSharedContent opens an archive with shared content, written by an
+// earlier build (doc/design.md 4.3): a copy that shares a live member's blob,
+// and a file that -u took again unchanged, which shares the blob of its own
+// tombstone.
+func TestGoldenSharedContent(t *testing.T) {
+	path := filepath.Join(goldenDir, "shared.ect")
+	pinned := time.Date(2026, 1, 2, 3, 4, 5, 6, time.UTC)
+	text := "shared by two files, and kept across an update\n"
+	tree := testutil.NewTree(t)
+	tree.Dir("s", 0o755)
+	tree.Text("s/a.txt", 0o644, text)
+	tree.Text("s/b.txt", 0o644, text)
+	for _, p := range []string{"s/a.txt", "s/b.txt", "s"} {
+		tree.SetTimes(p, pinned, pinned)
+	}
+	if *updateGolden {
+		os.Remove(path)
+		cfg := CreateConfig{
+			Archive:  path,
+			Paths:    []string{"s"},
+			BaseDir:  tree.Root,
+			Options:  Options{Codec: "zstd"},
+			Metadata: MetadataOptions{NoOwner: true, NoXattrs: true, NoACLs: true},
+			Workers:  1,
+		}
+		if _, err := CreateArchive(cfg); err != nil {
+			t.Fatal(err)
+		}
+		tree.SetTimes("s/a.txt", pinned, pinned.Add(time.Hour))
+		add := cfg
+		add.Paths = []string{"s/a.txt"}
+		if _, err := AppendArchive(AppendConfig{CreateConfig: add, UpdateMode: UpdateDifferent}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in, err := Info(path, OpenOptions{})
+	if err != nil {
+		t.Fatalf("the golden archive does not open: %v", err)
+	}
+	if in.Live != 3 || in.Dead != 1 || in.Shared != 2 {
+		t.Errorf("%d live, %d dead, %d shared; want 3, 1, 2", in.Live, in.Dead, in.Shared)
+	}
+	if _, err := VerifyArchive(VerifyConfig{Archive: path}); err != nil {
+		t.Errorf("verify: %v", err)
+	}
+	for _, p := range []string{"s/a.txt", "s/b.txt"} {
+		if got := extractOne(t, path, false, p); got != text {
+			t.Errorf("%s = %q", p, got)
+		}
+	}
+}

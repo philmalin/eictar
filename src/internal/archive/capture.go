@@ -219,18 +219,40 @@ func (c *capturer) submitFile(m format.Member, e entry) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", e.Src, err)
 	}
-	var src io.Reader = f
+	payload := uint64(e.Info.Size())
 	if sparse {
 		m.Size = uint64(e.Info.Size())
-		readers := make([]io.Reader, 0, len(segs))
+		payload = 0
 		for _, s := range segs {
 			m.Sparse = append(m.Sparse, format.SparseSegment{Offset: uint64(s.Offset), Length: uint64(s.Length)})
+			payload += uint64(s.Length)
+		}
+	}
+	reader := func() io.Reader {
+		if !sparse {
+			return io.NewSectionReader(f, 0, e.Info.Size())
+		}
+		readers := make([]io.Reader, 0, len(segs))
+		for _, s := range segs {
 			readers = append(readers, io.NewSectionReader(f, s.Offset, s.Length))
 		}
-		src = io.MultiReader(readers...)
+		return io.MultiReader(readers...)
 	}
 
-	if err := c.b.AddFile(m, countReader(src, c.progress), c.w.newDigest()); err != nil {
+	// A file with the size of stored content can be a copy of it: hash it
+	// first, and share that content instead of compressing it again
+	// (doc/design.md 4.3).
+	if c.w.dedup.hasSize(payload) {
+		shared, err := c.shareIfCopy(m, e, reader(), payload)
+		if err != nil || shared {
+			if err == nil && linked {
+				c.firstLink[key] = m.ID
+			}
+			return err
+		}
+	}
+
+	if err := c.b.AddFile(m, countReader(reader(), c.progress), c.w.newDigest()); err != nil {
 		return fmt.Errorf("%s: %w", e.Src, err)
 	}
 	// Only a member that was recorded can be a hardlink target. Set before a
@@ -239,6 +261,42 @@ func (c *capturer) submitFile(m format.Member, e entry) error {
 		c.firstLink[key] = m.ID
 	}
 	return nil
+}
+
+// shareIfCopy hashes a file's payload, and when the archive holds that
+// content, records the member as sharing it. An old owner whose blob fails its
+// check is reported, and the file is then stored in full.
+func (c *capturer) shareIfCopy(m format.Member, e entry, src io.Reader, payload uint64) (bool, error) {
+	h := c.w.newDigest()
+	n, err := io.Copy(h, src)
+	if err != nil {
+		return false, fmt.Errorf("reading %s: %w", e.Src, err)
+	}
+	if uint64(n) != payload {
+		return false, nil // it changed while it was read; the full read decides
+	}
+	m.Digest = h.Sum(nil)
+	if len(m.Sparse) == 0 {
+		m.Size = payload
+	}
+	owner, err := c.w.dedup.usable(&m)
+	if err != nil {
+		if c.warn != nil {
+			c.warn("%s: the archive's copy of this content is damaged (%v); storing the file in full", e.Src, err)
+		}
+		return false, nil
+	}
+	if owner == 0 {
+		return false, nil
+	}
+	share(&m, owner)
+	if err := c.b.AddMeta(m); err != nil {
+		return false, err
+	}
+	if c.progress != nil {
+		c.progress.Advance(n)
+	}
+	return true, nil
 }
 
 // recordOwner stores the owner by number and by name, unless --no-owner.

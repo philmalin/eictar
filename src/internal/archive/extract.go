@@ -409,7 +409,7 @@ func (x *extraction) extractFiles(files []format.Member) error {
 		workers = runtime.GOMAXPROCS(0)
 	}
 	workers = min(workers, len(files))
-	workers = boundByMemory(workers, files, x.cfg.MemoryLimit)
+	workers = boundByMemory(workers, files, x.cfg.MemoryLimit, x.r.Owner)
 	if workers < 1 {
 		return nil
 	}
@@ -839,10 +839,15 @@ func extractToStdout(r *Reader, members []format.Member, byID map[uint64]*format
 // of 256 MiB times 64 workers is still 16 GiB, so the archive's own figures
 // decide how many workers are affordable rather than the flag alone
 // (doc/design.md 8.3).
-func boundByMemory(workers int, members []format.Member, limit int64) int {
+func boundByMemory(workers int, members []format.Member, limit int64, owner func(*format.Member) *format.Member) int {
 	var largest int64
 	for i := range members {
-		if c := int64(members[i].ChunkSize); c > largest {
+		// A member that shares content decodes its owner's chunks.
+		m := &members[i]
+		if o := owner(m); o != nil {
+			m = o
+		}
+		if c := int64(m.ChunkSize); c > largest {
 			largest = c
 		}
 	}

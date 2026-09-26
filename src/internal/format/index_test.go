@@ -84,6 +84,13 @@ func sampleIndex() *Index {
 				Offset: 9100, Length: 26, Chunks: []uint32{26},
 			},
 			{
+				// A copy of src/main.go: it shares that member's blob
+				// (doc/design.md 4.3).
+				ID: 20, Generation: 3, Path: "copy/main.go", Type: TypeReg,
+				Mode: 0o644, Size: 4096, Codec: NoCodec, Data: 1,
+				Digest: bytes.Repeat([]byte{0xab}, DigestSize),
+			},
+			{
 				// A POSIX filename is a byte sequence, not text. This one is
 				// Latin-1 "caf\xe9.txt", which is not valid UTF-8 and must
 				// survive the index unchanged.
@@ -528,5 +535,41 @@ func TestIndexValidateRejectsDicts(t *testing.T) {
 	}
 	if s := (CodecSpec{Name: "zstd", Dict: 5}).String(); s != "zstd:dict" {
 		t.Errorf("String() = %q", s)
+	}
+}
+
+// TestIndexValidateRejectsSharing: a member that shares content must name an
+// owner with a blob and the same payload, and must have no blob itself.
+func TestIndexValidateRejectsSharing(t *testing.T) {
+	sharer := func(ix *Index) *Member {
+		for i := range ix.Members {
+			if ix.Members[i].Data != 0 {
+				return &ix.Members[i]
+			}
+		}
+		panic("no sharer in sampleIndex")
+	}
+	for _, tc := range []struct {
+		name string
+		mod  func(ix *Index)
+	}{
+		{"no owner", func(ix *Index) { sharer(ix).Data = 999 }},
+		{"owner without a blob", func(ix *Index) { sharer(ix).Data = 2 }}, // a directory
+		{"a chain", func(ix *Index) { ix.Members[0].Data = 8 }},           // the owner shares too
+		{"another size", func(ix *Index) { sharer(ix).Size = 4097 }},
+		{"another digest", func(ix *Index) { sharer(ix).Digest = bytes.Repeat([]byte{1}, DigestSize) }},
+		{"another sparse map", func(ix *Index) { sharer(ix).Sparse = []SparseSegment{{0, 10}} }},
+		{"a blob of its own", func(ix *Index) { sharer(ix).Offset, sharer(ix).Length, sharer(ix).Chunks = 64, 10, []uint32{10} }},
+		{"a codec", func(ix *Index) { sharer(ix).Codec = 0 }},
+		{"a key", func(ix *Index) { sharer(ix).Enc = &EncInfo{Salt: make([]byte, 16)} }},
+		{"on a directory", func(ix *Index) { ix.Members[1].Data = 1 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ix := sampleIndex()
+			tc.mod(ix)
+			if err := ix.Validate(); err == nil {
+				t.Error("accepted")
+			}
+		})
 	}
 }

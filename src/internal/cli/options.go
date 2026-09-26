@@ -143,6 +143,7 @@ type Options struct {
 
 	Dereference   bool
 	OneFileSystem bool
+	NoDedup       bool
 
 	PreservePermissions bool
 	PreserveOwner       bool
@@ -261,6 +262,7 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 
 	fs.BoolVarP(&o.Dereference, "dereference", "h", false, "follow symlinks instead of storing them")
 	fs.BoolVar(&o.OneFileSystem, "one-file-system", false, "do not cross mount points")
+	fs.BoolVar(&o.NoDedup, "no-dedup", false, "store each copy of the same content in full")
 
 	fs.BoolVarP(&o.PreservePermissions, "preserve-permissions", "p", false, "restore modes exactly")
 	fs.BoolVar(&o.PreserveOwner, "preserve-owner", false, "restore uid and gid (needs root)")
@@ -612,6 +614,7 @@ func (o *Options) validate() error {
 		ops  []Operation
 	}{
 		{"one-file-system", adding},
+		{"no-dedup", adding},
 		{"preserve-permissions", []Operation{OpExtract}},
 		{"preserve-owner", []Operation{OpExtract}},
 		{"preserve-devices", []Operation{OpExtract}},

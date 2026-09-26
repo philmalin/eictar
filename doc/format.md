@@ -300,6 +300,7 @@ A Dict map:
 | `size` | uint | always | the logical length of the content. 0 for a type without content. |
 | `link` | text | `symlink` only, and required there | the target of the link, as recorded |
 | `hardlink` | uint | `hardlink` only, and required there | the `id` of a `reg` member |
+| `data` | uint | `reg` only, optional | the `id` of the member whose blob holds this member's content (§8.5) |
 | `rdev` | array of 2 uint | `chardev` and `blockdev` only, and required there | major, minor |
 | `xattrs` | map, text to bytes | optional | extended attributes, POSIX ACLs included, with each name as the source platform gives it (`user.comment` on Linux and the BSDs, `com.apple.quarantine` on macOS). Names of 1 to 255 bytes, values of at most 65536 bytes, at most 1024 entries. |
 | `sparse` | array of maps | `reg` only, optional | data segments, each `{ "off": uint, "len": uint }` |
@@ -333,6 +334,7 @@ A reader refuses an index that breaks any of these rules:
   more than 1024 of them
 - a `hardlink` whose `id` is not a `reg` member of the index. The target can
   be a tombstone.
+- a `data` that breaks the rules of §8.5
 - `sparse` segments that are empty, out of order, overlapping, or that end
   after `size`
 - `chunks` whose total is not `len`
@@ -342,6 +344,22 @@ A reader refuses an index that breaks any of these rules:
   `[body start, index_offset)`
 - a count of members without `dead` that is not the trailer's
   live_member_count
+
+### 8.5 Shared content
+
+A `reg` member with `data` has the content of another member, its owner,
+and no blob of its own. It has no `off`, `len`, `chunks`, `chunk` or `enc`,
+and its `codec` is -1. A reader decodes the owner's blob, with the owner's
+codec, chunk size, key and `id` (§7.3), and checks the owner's digest.
+
+A reader refuses a member with `data` unless all of these are true:
+
+- the owner is a `reg` member of the index, with a blob, and without `data`
+- the owner has the same `size`, the same `sparse` and the same `digest`
+
+The owner can be a tombstone.
+
+### 8.6 Paths in the index
 
 The index checks do not require stored paths. A reader can list an archive
 with a bad path, so that a person can see what is in it. A reader that

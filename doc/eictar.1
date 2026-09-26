@@ -201,6 +201,12 @@ Store what a symbolic link points to, not the link.
 .TP
 .B \-\-one\-file\-system
 Do not enter other filesystems. A mount point is stored, empty.
+.TP
+.B \-\-no\-dedup
+Store each copy of the same content in full. By default, a file whose
+content the archive already holds shares that data, and stores nothing of
+its own. Damage to shared data affects each file that shares it. This
+option keeps damage inside one file, at the cost of space.
 .SS Compression
 .TP
 .BI \-Z " spec" "\fR, \fP\-\-compress " spec
@@ -403,7 +409,12 @@ percentage that compression saved, the codec, the modification time and the
 path. A member with no data of its own shows
 .B \-
 for the stored size, the percentage and the codec. A hardlink shares the
-data of its target. The percentage can be less than zero. For example, each
+data of its target. A file with the same content as another shares its data
+too, and the path ends with
+.BI "same as " path\fR,\fP
+.BR "same as its earlier version" ,
+or
+.BI "same as deleted " path\fR.\fP The percentage can be less than zero. For example, each
 chunk in an encrypted archive carries 16 bytes of authentication tag, which
 is more than a tiny file.
 .PP
@@ -411,7 +422,7 @@ is more than a tiny file.
 adds the chunk count,
 .B sealed
 for an encrypted member, and the start of the BLAKE3 digest. A last line
-gives the totals.
+gives the totals, and the files that share another's data.
 .SH PATTERNS
 The operations
 .BR \-t ,

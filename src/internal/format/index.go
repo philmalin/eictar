@@ -98,27 +98,30 @@ type Member struct {
 	// UID and GID are pointers so that "not recorded" (--no-owner) is
 	// distinct from uid 0. A stored zero would silently mean root to a reader
 	// run with --preserve-owner.
-	UID        *uint32           `cbor:"uid,omitempty"`
-	GID        *uint32           `cbor:"gid,omitempty"`
-	Uname      string            `cbor:"uname,omitempty"`
-	Gname      string            `cbor:"gname,omitempty"`
-	MTimeNanos int64             `cbor:"mtime"`
-	ATimeNanos int64             `cbor:"atime,omitempty"`
-	CTimeNanos int64             `cbor:"ctime,omitempty"`
-	Size       uint64            `cbor:"size"`
-	LinkTarget string            `cbor:"link,omitempty"`
-	HardlinkTo uint64            `cbor:"hardlink,omitempty"`
-	RDev       []uint32          `cbor:"rdev,omitempty"` // {major, minor}
-	Xattrs     map[string][]byte `cbor:"xattrs,omitempty"`
-	Sparse     []SparseSegment   `cbor:"sparse,omitempty"`
-	Digest     []byte            `cbor:"digest,omitempty"` // BLAKE3-256 of the plaintext
-	Codec      int               `cbor:"codec"`            // index into Index.Codecs, or NoCodec
-	ChunkSize  uint32            `cbor:"chunk,omitempty"`  // plaintext bytes per chunk
-	Enc        *EncInfo          `cbor:"enc,omitempty"`
-	Offset     uint64            `cbor:"off,omitempty"`
-	Length     uint64            `cbor:"len,omitempty"`
-	Chunks     []uint32          `cbor:"chunks,omitempty"` // on-disk length of each chunk
-	Dead       bool              `cbor:"dead,omitempty"`   // tombstone
+	UID        *uint32 `cbor:"uid,omitempty"`
+	GID        *uint32 `cbor:"gid,omitempty"`
+	Uname      string  `cbor:"uname,omitempty"`
+	Gname      string  `cbor:"gname,omitempty"`
+	MTimeNanos int64   `cbor:"mtime"`
+	ATimeNanos int64   `cbor:"atime,omitempty"`
+	CTimeNanos int64   `cbor:"ctime,omitempty"`
+	Size       uint64  `cbor:"size"`
+	LinkTarget string  `cbor:"link,omitempty"`
+	HardlinkTo uint64  `cbor:"hardlink,omitempty"`
+	// Data is the id of the member whose blob holds this member's content
+	// (doc/design.md 4.3). Such a member has no blob of its own.
+	Data      uint64            `cbor:"data,omitempty"`
+	RDev      []uint32          `cbor:"rdev,omitempty"` // {major, minor}
+	Xattrs    map[string][]byte `cbor:"xattrs,omitempty"`
+	Sparse    []SparseSegment   `cbor:"sparse,omitempty"`
+	Digest    []byte            `cbor:"digest,omitempty"` // BLAKE3-256 of the plaintext
+	Codec     int               `cbor:"codec"`            // index into Index.Codecs, or NoCodec
+	ChunkSize uint32            `cbor:"chunk,omitempty"`  // plaintext bytes per chunk
+	Enc       *EncInfo          `cbor:"enc,omitempty"`
+	Offset    uint64            `cbor:"off,omitempty"`
+	Length    uint64            `cbor:"len,omitempty"`
+	Chunks    []uint32          `cbor:"chunks,omitempty"` // on-disk length of each chunk
+	Dead      bool              `cbor:"dead,omitempty"`   // tombstone
 }
 
 // Index is the archive's catalog, stored once at the end of the file.
@@ -392,6 +395,10 @@ func (ix *Index) Validate() error {
 		}
 	}
 
+	if err := ix.validateData(); err != nil {
+		return err
+	}
+
 	// A hardlink names another member by id, so it can only be checked once
 	// every id is known. The target must be a regular file: that rules out
 	// chains and cycles, and a link to a directory, which POSIX forbids.
@@ -409,6 +416,45 @@ func (ix *Index) Validate() error {
 		}
 	}
 	return nil
+}
+
+// validateData checks each member that shares the content of another
+// (doc/design.md 4.3): the owner is a regular file with a blob of its own,
+// so that there are no chains, and it has the same payload - size, sparse map
+// and digest - so that the member reads what its own fields describe.
+func (ix *Index) validateData() error {
+	byID := make(map[uint64]*Member, len(ix.Members))
+	for i := range ix.Members {
+		byID[ix.Members[i].ID] = &ix.Members[i]
+	}
+	for i := range ix.Members {
+		m := &ix.Members[i]
+		if m.Data == 0 {
+			continue
+		}
+		o, ok := byID[m.Data]
+		switch {
+		case !ok:
+			return corrupt(m, fmt.Sprintf("shares the content of member %d, which does not exist", m.Data))
+		case o.Type != TypeReg || o.Data != 0 || o.Length == 0:
+			return corrupt(m, fmt.Sprintf("shares the content of member %d, which holds no blob of its own", m.Data))
+		case o.Size != m.Size || !sameSparse(o.Sparse, m.Sparse) || string(o.Digest) != string(m.Digest):
+			return corrupt(m, fmt.Sprintf("shares the content of member %d, whose content differs", m.Data))
+		}
+	}
+	return nil
+}
+
+func sameSparse(a, b []SparseSegment) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // validateDicts checks the dictionaries, and that each catalog entry names a
@@ -512,6 +558,8 @@ func validateTypeFields(m *Member) error {
 		return corrupt(m, "device number on a member that is not a device")
 	case m.Type != TypeReg && len(m.Sparse) != 0:
 		return corrupt(m, "sparse map on a member that is not a regular file")
+	case m.Type != TypeReg && m.Data != 0:
+		return corrupt(m, "shared content on a member that is not a regular file")
 	}
 	return nil
 }
@@ -534,6 +582,15 @@ func validatePayload(m *Member) error {
 
 	if err := validateSparse(m); err != nil {
 		return err
+	}
+
+	// A member that shares another's content has no blob, no chunks and no
+	// codec of its own; validateData checks it against its owner.
+	if m.Data != 0 {
+		if m.Offset != 0 || m.Length != 0 || len(m.Chunks) != 0 || m.ChunkSize != 0 || m.Enc != nil || m.Codec != NoCodec {
+			return corrupt(m, "shares the content of another member but has a blob of its own")
+		}
+		return nil
 	}
 
 	// The chunk table must account for the blob exactly. A mismatch means a

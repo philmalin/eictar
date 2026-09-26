@@ -404,3 +404,47 @@ func TestDictionaryThroughTheBinary(t *testing.T) {
 		t.Errorf("gzip:train: exit %d, want %d", bad.ExitCode, exitUsage)
 	}
 }
+
+// TestSharedContentThroughTheBinary: copies share one blob, and the listing,
+// --info and --json say so, also when the owner is an earlier version or a
+// deleted file (doc/design.md 4.3). --no-dedup stores each copy.
+func TestSharedContentThroughTheBinary(t *testing.T) {
+	text := strings.Repeat("one content, two places\n", 2000)
+	tree := testutil.NewTree(t)
+	tree.Dir("s", 0o755)
+	tree.Text("s/a.txt", 0o644, text)
+	tree.Text("s/b.txt", 0o644, text)
+	archive := filepath.Join(t.TempDir(), "s.ect")
+	runOK(t, tree.Root, "-cf", archive, "s")
+
+	long := runOK(t, tree.Root, "-tvvf", archive).Stdout
+	if !strings.Contains(long, "same as s/") || !strings.Contains(long, "1 same as another") {
+		t.Errorf("-tvv:\n%s", long)
+	}
+	if info := runOK(t, tree.Root, "--info", "-f", archive).Stdout; !strings.Contains(info, "shared content:  1 member") {
+		t.Errorf("--info:\n%s", info)
+	}
+	if js := runOK(t, tree.Root, "-tf", archive, "--json").Stdout; !strings.Contains(js, `"same_as": "s/`) {
+		t.Errorf("--json:\n%s", js)
+	}
+
+	// -u takes an unchanged, touched file again: it shares its own earlier
+	// version. Then the other copy goes, and a sharer names a deleted owner.
+	tree.SetTimes("s/a.txt", time.Unix(5, 0), time.Unix(6, 0))
+	tree.SetTimes("s/b.txt", time.Unix(5, 0), time.Unix(6, 0))
+	runOK(t, tree.Root, "-uf", archive, "--update-mode", "different", "s")
+	long = runOK(t, tree.Root, "-tvf", archive).Stdout
+	if !strings.Contains(long, "same as its earlier version") {
+		t.Errorf("after -u:\n%s", long)
+	}
+	runOK(t, tree.Root, "--verify", "-f", archive)
+	dest := t.TempDir()
+	runOK(t, tree.Root, "-xf", archive, "-d", dest)
+	testutil.CompareTrees(t, filepath.Join(tree.Root, "s"), filepath.Join(dest, "s"), testutil.CompareOptions{})
+
+	full := filepath.Join(t.TempDir(), "f.ect")
+	runOK(t, tree.Root, "-cf", full, "--no-dedup", "s")
+	if long := runOK(t, tree.Root, "-tvf", full).Stdout; strings.Contains(long, "same as") {
+		t.Errorf("--no-dedup:\n%s", long)
+	}
+}

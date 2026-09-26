@@ -32,6 +32,9 @@ $ eictar -xf home.ect -d /tmp/restore Documents/numbers.txt
 - **Selection** by path, glob or regular expression. `-R RE` keeps only
   the paths that the expression matches in full, when you add files and
   when you list, extract, check or delete them.
+- **Identical files stored once**: a file whose content the archive already
+  holds shares that data, in the same run or in a later append.
+  `--no-dedup` stores each copy in full.
 - **Changes in place**: `-r` appends, `-u` adds only what is out of date,
   and `--delete` removes. Each change writes a new generation after the old
   one, so a crash cannot damage what the archive held before. `--compact`

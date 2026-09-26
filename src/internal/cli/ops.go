@@ -116,6 +116,7 @@ func addConfig(o *Options, rep *reporter) (archive.CreateConfig, error) {
 		Regex:         o.regex,
 		ExcludeRegex:  o.excludeRegex,
 		OneFileSystem: o.OneFileSystem,
+		NoDedup:       o.NoDedup,
 		Metadata: archive.MetadataOptions{
 			NoOwner: o.NoOwner, NoXattrs: o.NoXattrs, NoACLs: o.NoACLs,
 		},
@@ -412,6 +413,19 @@ func longColumns(l *archive.Listing, m *format.Member, detail bool) []string {
 	case format.TypeHardlink:
 		name += " link to " + l.HardlinkTarget(m)
 	}
+	if m.Data != 0 {
+		// The owner can be the file's own earlier version, which -u
+		// replaced, or a file since deleted: say so, rather than name a
+		// path that the listing does not show, or the file itself.
+		switch path, deleted := l.SameAs(m); {
+		case deleted && path == m.Path:
+			name += " same as its earlier version"
+		case deleted:
+			name += " same as deleted " + path
+		default:
+			name += " same as " + path
+		}
+	}
 	size := strconv.FormatUint(m.Size, 10)
 	if m.Type == format.TypeCharDev || m.Type == format.TypeBlockDev {
 		size = fmt.Sprintf("%d,%d", m.RDev[0], m.RDev[1])
@@ -419,7 +433,11 @@ func longColumns(l *archive.Listing, m *format.Member, detail bool) []string {
 
 	stored, saved, codecCol := "-", "-", "-"
 	chunks, sealed, digest := "-", "-", "-"
-	if m.Type.HasPayload() {
+	if m.Data != 0 {
+		// It stores nothing: the blob is its owner's (doc/design.md 4.3).
+		// The digest stays, so that equal content shows as equal.
+		digest = hex.EncodeToString(m.Digest[:8])
+	} else if m.Type.HasPayload() {
 		stored = strconv.FormatUint(m.Length, 10)
 		saved = savedPercent(m.PayloadSize(), m.Length)
 		if spec, ok := l.Codec(m); ok {
@@ -493,8 +511,8 @@ func savedPercent(plain, stored uint64) string {
 // blob; a hardlink shares one and adds nothing. The percentage uses the data
 // that was stored, so the holes of a sparse file do not count as saved.
 func totalsLine(l *archive.Listing) string {
-	var files int
-	var size, payload, stored uint64
+	var files, shared int
+	var size, payload, stored, notStored uint64
 	for i := range l.Members {
 		m := &l.Members[i]
 		if !m.Type.HasPayload() {
@@ -504,9 +522,17 @@ func totalsLine(l *archive.Listing) string {
 		size += m.Size
 		payload += m.PayloadSize()
 		stored += m.Length
+		if m.Data != 0 {
+			shared++
+			notStored += l.NotStored(m)
+		}
 	}
-	return fmt.Sprintf("%d listed, %s, %d bytes stored in %d (%s saved); generation %d, %d tombstoned",
-		len(l.Members), plural(files, "file"), size, stored, savedPercent(payload, stored),
+	sharing := ""
+	if shared > 0 {
+		sharing = fmt.Sprintf(", %d same as another (%d bytes not stored)", shared, notStored)
+	}
+	return fmt.Sprintf("%d listed, %s, %d bytes stored in %d (%s saved)%s; generation %d, %d tombstoned",
+		len(l.Members), plural(files, "file"), size, stored, savedPercent(payload, stored), sharing,
 		l.Generation, l.Tombstoned)
 }
 
@@ -585,6 +611,8 @@ type jsonMember struct {
 	MTime      string   `json:"mtime"`
 	Target     string   `json:"target,omitempty"`
 	LinkTo     string   `json:"hardlink_to,omitempty"`
+	SameAs     string   `json:"same_as,omitempty"` // the member whose content it shares
+	SameAsDead bool     `json:"same_as_deleted,omitempty"`
 	UID        *uint32  `json:"uid,omitempty"`
 	GID        *uint32  `json:"gid,omitempty"`
 	Uname      string   `json:"uname,omitempty"`
@@ -627,7 +655,12 @@ func writeJSONList(w io.Writer, l *archive.Listing) error {
 		if m.Type == format.TypeHardlink {
 			rec.LinkTo = l.HardlinkTarget(m)
 		}
-		if m.Type.HasPayload() {
+		if m.Data != 0 {
+			var none uint64
+			rec.SameAs, rec.SameAsDead = l.SameAs(m)
+			rec.StoredSize = &none
+			rec.Digest = hex.EncodeToString(m.Digest)
+		} else if m.Type.HasPayload() {
 			if spec, ok := l.Codec(m); ok {
 				rec.Codec = &jsonCodec{Name: spec.Name, Params: spec.Params}
 			}

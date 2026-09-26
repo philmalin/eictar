@@ -1,6 +1,6 @@
 # eictar — Design Document
 
-Status: M1 to M10 are complete. The CI workflow passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
+Status: M1 to M11 are complete. The CI workflow passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
 Date: 2026-09-24
 Applies to: v1 (format version 1.0)
 
@@ -343,6 +343,76 @@ dictionary that a selected member uses. `--info` shows each dictionary, its
 size, and the number of live members that use it.
 
 
+### 4.3 Identical content (M11)
+
+A tree often holds files with the same content. Examples are copies of a
+library in two places, generated files, and files that a later version did
+not change. A member whose content is the same as that of a member already
+in the archive does not need a blob of its own. It **refers** to the blob of
+that member, the **owner**. A measurement on a library tree of 8514 files found 1023
+copies that took 26.8 MB of 245 MB.
+
+A reference is not a hardlink. A hardlink is one file with two names, and
+extraction makes it again as one file. A reference is two files, each with
+its own metadata, and extraction makes two files. The archive shares their
+bytes only.
+
+**Two members have the same content when their payloads are equal** (§5.2):
+the same size, the same sparse map, and the same digest. The digest is
+BLAKE3-256. Thus two different payloads with one digest are not a practical
+risk.
+
+**The emitter finds each duplicate.** It is the one goroutine that writes
+blobs (§8). It keeps a map of the owners of the archive, by digest, size and
+sparse map. When a member's payload is already in the map, the emitter
+does not write its blob, and the member records a reference to the owner.
+This rule catches every duplicate, two copies in one run too. But the
+workers compress the copy for nothing.
+
+**A file whose size is the size of an owner is hashed first.** A duplicate
+must have the size of its owner. Thus a file with a size that no owner has is
+compressed at once, with no extra read. A file with the size of an owner is
+read and hashed before it goes to the workers. If its payload is in the map,
+it becomes a reference, and nothing is compressed.
+
+BLAKE3 is much faster than any codec, so the extra read costs little. Two
+copies that one run adds at the same time fall back to the rule of the
+emitter.
+
+**The owner is always a member with a blob.** A reference never names
+another reference, so there are no chains. The owner can be a tombstone,
+as the target of a hardlink can (§9.2). Compact keeps a tombstone that a
+live reference names. In an encrypted archive, the chunk AAD binds the id of
+the owner (§6.3). Thus the reader unseals the blob with the owner's key and
+the owner's id.
+
+**References need no new secret.** Two members with the same content already
+have the same keyed digest (§6.2). Without `--encrypt-index`, a person with
+the archive can see that equality in the digests too.
+
+**The other operations follow the owner.** Extraction and `-O` decode the
+owner's blob. `--verify` decodes each blob one time, and checks that each
+reference has the digest of its owner. `-u --update-mode=digest` compares
+with the owner's content. `--recompress` encodes each owner again, and a
+reference stays a reference. A change of passphrase copies the blobs, so the
+references stay valid (§9.7).
+
+**One damaged blob now damages each member that refers to it.** This is the
+cost, as for hardlinks. The damage is always found: the digest check and the
+AEAD tag refuse the blob, and each member that uses it gives exit 3. But no
+member that uses the blob can be extracted. `--no-dedup` stores each copy in
+full, for a user who wants damage to stay inside one file.
+
+**A run checks an old owner before it first refers to it.** The match uses
+the digest that the index records, not the blob. Thus a blob that became
+damaged after it was written can still match a new file. Before a run refers
+to an owner of an earlier generation for the first time, it decodes that
+owner's blob and checks its digest. If the check fails, the program warns,
+stores the new file in full, and does not use that owner again in the run.
+
+A decode is much faster than a compression. An owner that the run wrote
+itself needs no check.
+
 ## 5. The index
 
 ### 5.1 Schema
@@ -390,6 +460,7 @@ Member := {
   "size":    <uint64>,       # logical plaintext size
   "link":    "../target",    # symlink target
   "hardlink":<uint64>,       # member id of the first link
+  "data":    <uint64>,       # member id of the owner of this content (§4.3)
   "rdev":    [major, minor],
   "xattrs":  { "user.foo": <bytes>, ... },   # POSIX ACLs are stored here
   "sparse":  [ { "off": <uint64>, "len": <uint64> }, ... ],  # data segments; absent = dense; the blob holds only these
@@ -417,6 +488,11 @@ new one if the archive has it already.
 different from uid 0. A stored zero means root to a reader that restores
 ownership. The writer records `atime` and `mtime`. It does not record `ctime`,
 because no program can restore it.
+
+A member with `data` is a regular file with no blob of its own (§4.3). It has
+no `off`, `len`, `chunks`, `chunk`, `enc` or `codec`, and its `size`,
+`sparse` and `digest` are those of its owner. The owner is a regular file
+with a blob, and without `data`.
 
 For a file with holes, `size` is the logical length, and `sparse` lists the
 data segments. The blob stores only the bytes of those segments, back to
@@ -1155,6 +1231,8 @@ content to `b`, because the chunk AAD binds the member id (§6.3). Thus a
 tombstone that a live hardlink points to stays readable. Extraction finds it,
 and compact keeps it.
 
+The same rule applies to a tombstone that a live reference names (§4.3).
+
 ### 9.3 Compact
 
 `--compact` writes a new archive to a temporary file beside the original. It
@@ -1499,6 +1577,7 @@ whose encryption was removed (§14).
 | `-R` | `--regex RE` | can be repeated. Keep only the paths that match a regular expression (§10.11). Create, append, update, list, extract, verify and delete. | after M9 |
 | | `--exclude-regex RE` | can be repeated. Leave out the paths that match. An excluded directory is not entered, and on a read it takes its contents (§10.11). | after M9 |
 | `-h` | `--dereference` | follow links and store what they point to | M2 |
+| | `--no-dedup` | store each copy of the same content in full (§4.3). Create, append and update. | M11 |
 | | `--one-file-system` | do not enter other filesystems. A mount point is recorded, empty. Create, append and update. | M5 |
 | `-p` | `--preserve-permissions` | also restore setuid, setgid and sticky (§7.7). Extract only. | M5 |
 | | `--preserve-owner` | restore the owner (§7.7). Extract only. Without root, exit 2. | M5 |
@@ -1652,11 +1731,12 @@ The columns of the long listing are:
    in an encrypted archive.
 6. The codec, in the form that `--compress` takes.
 7. The modification time.
-8. The path, with ` -> target` for a symbolic link and ` link to path` for a
-   hardlink.
+8. The path, with ` -> target` for a symbolic link, ` link to path` for a
+   hardlink, and ` same as path` for a reference to an owner (§4.3).
 
 A member that has no blob shows `-` in columns 4 to 6. A hardlink has no blob
-of its own, because it shares the blob of its target. For a sparse file, the
+of its own, because it shares the blob of its target. A reference shares the
+blob of its owner in the same way. For a sparse file, the
 stored size and the percentage use the data regions, not the holes. In an
 encrypted archive, the stored size includes the 16-byte tag of each chunk.
 
@@ -1669,6 +1749,10 @@ archive:
 ```
 3 listed, 2 files, 440001 bytes stored in 201432 (54.2% saved); generation 1, 0 tombstoned
 ```
+
+The line of totals also gives the references, and the bytes that they did
+not store: `12 files same as another, 26.8 MB not stored`. `--info` gives
+the same two numbers for the whole archive.
 
 `--json` always gives every field, including `stored_size`, `chunks`,
 `encrypted`, the full `digest`, and `codec` as an object with a name and the
@@ -2711,6 +2795,20 @@ content digest, were decided for M9 (§6.2, §9.7).
   cheaper. Measure this with a benchmark before a change. The decoder must
   be reset between members, so that no state goes from one member to the
   next.
+- **Delta storage between versions.** On the library tree of §4.3, 553
+  names of large files have more than one version, and the versions take
+  109.8 MB. `tar | zstd --long=27` compresses each later version against an
+  earlier one in its stream, and it is about 30 MB smaller than eictar for
+  that reason. Per-file compression cannot see across files, whatever the
+  chunk size or the dictionary.
+
+  zstd can compress a file with the content of another member as its
+  dictionary (`--patch-from`). Then the member is no longer independent of
+  other members. Its extraction needs that member first, and it can need a
+  chain of versions. Delete and compact must keep
+  each member that another depends on, and damage to one blob reaches each
+  version after it. The problem statement puts delta storage out of scope for
+  v1. It is a candidate for a later format version, after M11.
 
 
 ## 16. Implementation milestones
@@ -2797,7 +2895,7 @@ and pass, not that the feature ran once by hand.
    first release, with new test vectors and golden files.
 
 After M9, the module path is `github.com/philmalin/eictar`, and a release
-workflow makes the first release (§12.3). Before that release, two
+workflow makes the first release (§12.3) after M11. Before that release, two
 changes to the interface: the `.ect` extension (§10.12), and the selection
 by regular expression, `-R` and `--exclude-regex` (§10.11).
 
@@ -2807,6 +2905,11 @@ by regular expression, `-R` and `--exclude-regex` (§10.11).
     keys take the form `k[=v]`, so `long` and `train` can stand alone
     (§10.2). The dictionary adds index fields, so it comes before the first
     release, v1.0.0, with a new golden archive.
+11. **M11 — Identical content** *(complete)*: a member whose content is
+    already in the archive refers to the blob of that member, and stores
+    nothing (§4.3). A file with the size of a stored one is hashed before
+    it is compressed. `--no-dedup` turns the rule off. It adds the member
+    field `data`, so it comes before v1.0.0, with a new golden archive.
 
 
 ## Appendix A. Why these primitives, compared with AES

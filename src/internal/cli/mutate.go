@@ -229,6 +229,9 @@ func writeInfo(w io.Writer, path string, in *archive.ArchiveInfo) {
 	}
 	row("members", "%d live, %d tombstoned", in.Live, in.Dead)
 	row("content", "%d bytes, stored in %d bytes", in.Plain, in.Blobs)
+	if in.Shared > 0 {
+		row("shared content", "%s, %d bytes not stored", plural(in.Shared, "member"), in.NotStored)
+	}
 	row("dead space", "%d bytes (reclaimed by --compact)", in.DeadSpace)
 
 	var codecs []string

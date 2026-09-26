@@ -103,6 +103,7 @@ gives the full reasoning and the exact formats.
 | `ccrypt` | Dropped.  `golang.org/x/crypto` covers the requirement |
 | Dependencies | Pure-Go third-party modules allowed.  No CGO, no external binaries |
 | Default codec | zstd, alongside xz, gzip, flate, s2 and stored |
+| Identical content | A file whose content the archive already holds shares that data, and stores nothing of its own.  `--no-dedup` stores each copy in full |
 | Dictionaries | `-Z zstd:train` trains a zstd dictionary from the files and stores it in the archive, encrypted when the archive is.  Each member stays independent |
 | Concurrency | Member order inside the archive is not significant, so a single writer appends whichever worker finishes first |
 | CLI style | Classical UNIX options, not subcommands.  The operation is chosen by an option letter (`-c`, `-r`, `-t`, `-x`), short options bundle (`-cvf`), and every short option has a long form |

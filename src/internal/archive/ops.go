@@ -57,6 +57,9 @@ type CreateConfig struct {
 	ExcludeRegex fsutil.Regexps
 	// OneFileSystem is --one-file-system: a mount point is recorded, empty.
 	OneFileSystem bool
+	// NoDedup is --no-dedup: each copy of the same content is stored in full
+	// (doc/design.md 4.3).
+	NoDedup bool
 	// Metadata selects which metadata is recorded.
 	Metadata MetadataOptions
 
@@ -101,6 +104,9 @@ func CreateArchive(cfg CreateConfig) (Stats, error) {
 	w, err := Create(cfg.Archive, opts)
 	if err != nil {
 		return stats, err
+	}
+	if cfg.NoDedup {
+		w.dedup = nil
 	}
 	if err := w.useDictionary(func(size int) ([][]byte, error) { return sampleTree(w, cfg, size) }, warnOf(cfg.Reporter)); err != nil {
 		w.Abort()
@@ -402,6 +408,27 @@ func (l *Listing) Codec(m *format.Member) (format.CodecSpec, bool) {
 		return format.CodecSpec{Name: "none"}, true
 	}
 	return l.Codecs[m.Codec], true
+}
+
+// SameAs returns the path of the member whose content m shares
+// (doc/design.md 4.3), or its id when there is no listing to look it up in.
+// deleted reports that the owner is a tombstone, which holds the content for
+// its sharers until they go.
+func (l *Listing) SameAs(m *format.Member) (path string, deleted bool) {
+	if l == nil {
+		return fmt.Sprintf("member %d", m.Data), false
+	}
+	o := l.byID[m.Data]
+	return o.Path, o.Dead
+}
+
+// NotStored returns the bytes that m did not store because it shares the
+// content of another member: the length of that member's blob.
+func (l *Listing) NotStored(m *format.Member) uint64 {
+	if l == nil || m.Data == 0 {
+		return 0
+	}
+	return l.byID[m.Data].Length
 }
 
 // HardlinkTarget returns the path a hardlink member points at, or its id

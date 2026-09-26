@@ -201,9 +201,33 @@ func (g *gen) addEntry(rel string, dirs *[]string) error {
 			return os.Link(filepath.Join(g.src, files[g.rnd.IntN(len(files))]), filepath.Join(g.src, rel))
 		}
 		fallthrough
+	case r < 9:
+		// A copy: another inode with the same content, which the archive
+		// stores once (doc/design.md 4.3). A copy of a sparse file is dense,
+		// so its payload differs, and it is stored in full.
+		if files := g.files(); len(files) > 0 {
+			return g.copyFile(files[g.rnd.IntN(len(files))], rel)
+		}
+		fallthrough
 	default:
 		return g.writeFile(rel)
 	}
+}
+
+// copyFile writes a new file at rel with the content of src.
+func (g *gen) copyFile(src, rel string) error {
+	b, err := os.ReadFile(filepath.Join(g.src, src))
+	if err != nil {
+		return err
+	}
+	p := filepath.Join(g.src, rel)
+	if err := os.WriteFile(p, b, 0o600); err != nil {
+		return err
+	}
+	if err := os.Chmod(p, g.perm(false)); err != nil {
+		return err
+	}
+	return g.setTime(rel, g.tick())
 }
 
 // entries lists the source tree, relative, sorted: the order is part of what

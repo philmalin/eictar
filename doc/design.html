@@ -5199,6 +5199,8 @@ chunks and compression</a>
 compression makes larger</a></li>
 <li><a href="#dictionaries-m10" id="toc-dictionaries-m10">4.2
 Dictionaries (M10)</a></li>
+<li><a href="#identical-content-m11" id="toc-identical-content-m11">4.3
+Identical content (M11)</a></li>
 </ul></li>
 <li><a href="#the-index" id="toc-the-index">5. The index</a>
 <ul>
@@ -5963,6 +5965,59 @@ keeps a dictionary that a kept member uses, and drops the others (§9.3).
 <code>--verify</code> checks each dictionary that a selected member
 uses. <code>--info</code> shows each dictionary, its size, and the
 number of live members that use it.</p>
+<h3 id="identical-content-m11">4.3 Identical content (M11)</h3>
+<p>A tree often holds files with the same content. Examples are copies
+of a library in two places, generated files, and files that a later
+version did not change. A member whose content is the same as that of a
+member already in the archive does not need a blob of its own. It
+<strong>refers</strong> to the blob of that member, the
+<strong>owner</strong>. A measurement on a library tree of 8514 files
+found 1023 copies that took 26.8 MB of 245 MB.</p>
+<p>A reference is not a hardlink. A hardlink is one file with two names,
+and extraction makes it again as one file. A reference is two files,
+each with its own metadata, and extraction makes two files. The archive
+shares their bytes only.</p>
+<p><strong>Two members have the same content when their payloads are
+equal</strong> (§5.2): the same size, the same sparse map, and the same
+digest. The digest is BLAKE3-256. Thus two different payloads with one
+digest are not a practical risk.</p>
+<p><strong>The emitter finds each duplicate.</strong> It is the one
+goroutine that writes blobs (§8). It keeps a map of the owners of the
+archive, by digest, size and sparse map. When a member’s payload is
+already in the map, the emitter does not write its blob, and the member
+records a reference to the owner. This rule catches every duplicate, two
+copies in one run too. But the workers compress the copy for
+nothing.</p>
+<p><strong>A file whose size is the size of an owner is hashed
+first.</strong> A duplicate must have the size of its owner. Thus a file
+with a size that no owner has is compressed at once, with no extra read.
+A file with the size of an owner is read and hashed before it goes to
+the workers. If its payload is in the map, it becomes a reference, and
+nothing is compressed.</p>
+<p>BLAKE3 is much faster than any codec, so the extra read costs little.
+Two copies that one run adds at the same time fall back to the rule of
+the emitter.</p>
+<p><strong>The owner is always a member with a blob.</strong> A
+reference never names another reference, so there are no chains. The
+owner can be a tombstone, as the target of a hardlink can (§9.2).
+Compact keeps a tombstone that a live reference names. In an encrypted
+archive, the chunk AAD binds the id of the owner (§6.3). Thus the reader
+unseals the blob with the owner’s key and the owner’s id.</p>
+<p><strong>References need no new secret.</strong> Two members with the
+same content already have the same keyed digest (§6.2). Without
+<code>--encrypt-index</code>, a person with the archive can see that
+equality in the digests too.</p>
+<p><strong>The other operations follow the owner.</strong> Extraction
+and <code>-O</code> decode the owner’s blob. <code>--verify</code>
+decodes each blob one time, and checks that each reference has the
+digest of its owner. <code>-u --update-mode=digest</code> compares with
+the owner’s content. <code>--recompress</code> encodes each owner again,
+and a reference stays a reference. A change of passphrase copies the
+blobs, so the references stay valid (§9.7).</p>
+<p><strong>One damaged blob now damages each member that refers to
+it.</strong> This is the cost, as for hardlinks. <code>--no-dedup</code>
+stores each copy in full, for a user who wants damage to stay inside one
+file.</p>
 <h2 id="the-index">5. The index</h2>
 <h3 id="schema">5.1 Schema</h3>
 <p>The index uses CBOR (<code>github.com/fxamacker/cbor/v2</code>). CBOR
@@ -6005,6 +6060,7 @@ Member := {
   &quot;size&quot;:    &lt;uint64&gt;,       # logical plaintext size
   &quot;link&quot;:    &quot;../target&quot;,    # symlink target
   &quot;hardlink&quot;:&lt;uint64&gt;,       # member id of the first link
+  &quot;data&quot;:    &lt;uint64&gt;,       # member id of the owner of this content (§4.3)
   &quot;rdev&quot;:    [major, minor],
   &quot;xattrs&quot;:  { &quot;user.foo&quot;: &lt;bytes&gt;, ... },   # POSIX ACLs are stored here
   &quot;sparse&quot;:  [ { &quot;off&quot;: &lt;uint64&gt;, &quot;len&quot;: &lt;uint64&gt; }, ... ],  # data segments; absent = dense; the blob holds only these
@@ -6030,6 +6086,12 @@ number, and takes a new one if the archive has it already.</p>
 A stored zero means root to a reader that restores ownership. The writer
 records <code>atime</code> and <code>mtime</code>. It does not record
 <code>ctime</code>, because no program can restore it.</p>
+<p>A member with <code>data</code> is a regular file with no blob of its
+own (§4.3). It has no <code>off</code>, <code>len</code>,
+<code>chunks</code>, <code>chunk</code>, <code>enc</code> or
+<code>codec</code>, and its <code>size</code>, <code>sparse</code> and
+<code>digest</code> are those of its owner. The owner is a regular file
+with a blob, and without <code>data</code>.</p>
 <p>For a file with holes, <code>size</code> is the logical length, and
 <code>sparse</code> lists the data segments. The blob stores only the
 bytes of those segments, back to back. The digest covers those stored
@@ -6865,6 +6927,8 @@ old member, whose content is in the old blob. The old member cannot give
 its content to <code>b</code>, because the chunk AAD binds the member id
 (§6.3). Thus a tombstone that a live hardlink points to stays readable.
 Extraction finds it, and compact keeps it.</p>
+<p>The same rule applies to a tombstone that a live reference names
+(§4.3).</p>
 <h3 id="compact">9.3 Compact</h3>
 <p><code>--compact</code> writes a new archive to a temporary file
 beside the original. It copies the live blobs, and the blobs of the
@@ -7452,30 +7516,37 @@ directory is not entered, and on a read it takes its contents
 </tr>
 <tr class="odd">
 <td></td>
+<td><code>--no-dedup</code></td>
+<td>store each copy of the same content in full (§4.3). Create, append
+and update.</td>
+<td>M11</td>
+</tr>
+<tr class="even">
+<td></td>
 <td><code>--one-file-system</code></td>
 <td>do not enter other filesystems. A mount point is recorded, empty.
 Create, append and update.</td>
 <td>M5</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>-p</code></td>
 <td><code>--preserve-permissions</code></td>
 <td>also restore setuid, setgid and sticky (§7.7). Extract only.</td>
 <td>M5</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--preserve-owner</code></td>
 <td>restore the owner (§7.7). Extract only. Without root, exit 2.</td>
 <td>M5</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--preserve-devices</code></td>
 <td>create device nodes. Extract only. Without root, exit 2.</td>
 <td>M5</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--no-xattrs</code>, <code>--no-acls</code>,
 <code>--no-owner</code></td>
@@ -7483,43 +7554,43 @@ Create, append and update.</td>
 extract, do not apply it.</td>
 <td>M5</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>-k</code></td>
 <td><code>--keep-existing</code></td>
 <td>never overwrite an existing file on extract</td>
 <td>M2</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--overwrite</code></td>
 <td>overwrite (the default)</td>
 <td>M2</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--newer-only</code></td>
 <td>overwrite only when the member is newer</td>
 <td>M2</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>-O</code></td>
 <td><code>--to-stdout</code></td>
 <td>write the extracted content to stdout</td>
 <td>M2</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--keep-going</code></td>
 <td>continue after an error on one member</td>
 <td>M2</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--long</code></td>
 <td>the long listing, the same as <code>-tv</code> (§10.9)</td>
 <td>M2</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--json</code></td>
 <td>listing for programs, with every field of §10.9. A path that is not
@@ -7527,52 +7598,52 @@ valid UTF-8 also has <code>path_base64</code>, because a JSON string
 cannot hold its bytes.</td>
 <td>M2</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--quick</code></td>
 <td>with <code>--verify</code>, check only the structure and read no
 member data (§9.4)</td>
 <td>M6</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--on-conflict MODE</code></td>
 <td>with <code>-r</code>: <code>replace</code> (default),
 <code>skip</code> or <code>error</code> (§9.2)</td>
 <td>M6</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--update-mode MODE</code></td>
 <td>with <code>-u</code>: <code>newer</code> (default),
 <code>different</code> or <code>digest</code> (§10.5)</td>
 <td>M6</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--recompress SPEC</code></td>
 <td>with <code>--compact</code>, encode again with SPEC</td>
 <td>M7</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--config FILE</code></td>
 <td>use FILE as the configuration file (§11)</td>
 <td>M7</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--no-config</code></td>
 <td>read no configuration file</td>
 <td>M7</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--show-config</code></td>
 <td>show the settings in effect and where each came from, then exit</td>
 <td>M7</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--version</code>, <code>--help</code></td>
 <td></td>
@@ -7773,19 +7844,26 @@ owner (<code>--no-owner</code>).</li>
 than zero, for example for a small file in an encrypted archive.</li>
 <li>The codec, in the form that <code>--compress</code> takes.</li>
 <li>The modification time.</li>
-<li>The path, with <code>-&gt; target</code> for a symbolic link and
-<code>link to path</code> for a hardlink.</li>
+<li>The path, with <code>-&gt; target</code> for a symbolic link,
+<code>link to path</code> for a hardlink, and <code>same as path</code>
+for a reference to an owner (§4.3).</li>
 </ol>
 <p>A member that has no blob shows <code>-</code> in columns 4 to 6. A
 hardlink has no blob of its own, because it shares the blob of its
-target. For a sparse file, the stored size and the percentage use the
-data regions, not the holes. In an encrypted archive, the stored size
-includes the 16-byte tag of each chunk.</p>
+target. A reference shares the blob of its owner in the same way. For a
+sparse file, the stored size and the percentage use the data regions,
+not the holes. In an encrypted archive, the stored size includes the
+16-byte tag of each chunk.</p>
 <p><code>-tvv</code> adds three columns before the time. They are the
 number of chunks, <code>sealed</code> for an encrypted member, and the
 first 16 hex digits of the BLAKE3 digest. After the members, it prints
 one line of totals, for the listed members and for the archive:</p>
 <pre><code>3 listed, 2 files, 440001 bytes stored in 201432 (54.2% saved); generation 1, 0 tombstoned</code></pre>
+<p>The line of totals also gives the references, and the bytes that they
+did not store:
+<code>12 files same as another, 26.8 MB not stored</code>.
+<code>--info</code> gives the same two numbers for the whole
+archive.</p>
 <p><code>--json</code> always gives every field, including
 <code>stored_size</code>, <code>chunks</code>, <code>encrypted</code>,
 the full <code>digest</code>, and <code>codec</code> as an object with a
@@ -8947,16 +9025,30 @@ items. They are not faults. Each one needs a decision or a measurement
 before any work starts. Two items of this list, the wrapped data key and
 the keyed content digest, were decided for M9 (§6.2, §9.7).</p>
 <ul>
-<li><strong>Parallel <code>--verify</code>.</strong>
+<li><p><strong>Parallel <code>--verify</code>.</strong>
 <code>--verify</code> decodes the members one at a time. It can use the
 worker pool of extraction, with the same memory bound
 (<code>boundByMemory</code>). On a large archive, the speedup is near
-the number of cores. The design does not change. Measure first.</li>
-<li><strong>A decoder for each worker.</strong> The reader makes a new
-decoder for each member. With many small files, a decoder that each
+the number of cores. The design does not change. Measure first.</p></li>
+<li><p><strong>A decoder for each worker.</strong> The reader makes a
+new decoder for each member. With many small files, a decoder that each
 worker keeps can be much cheaper. Measure this with a benchmark before a
 change. The decoder must be reset between members, so that no state goes
-from one member to the next.</li>
+from one member to the next.</p></li>
+<li><p><strong>Delta storage between versions.</strong> On the library
+tree of §4.3, 553 names of large files have more than one version, and
+the versions take 109.8 MB. <code>tar | zstd --long=27</code> compresses
+each later version against an earlier one in its stream, and it is about
+30 MB smaller than eictar for that reason. Per-file compression cannot
+see across files, whatever the chunk size or the dictionary.</p>
+<p>zstd can compress a file with the content of another member as its
+dictionary (<code>--patch-from</code>). Then the member is no longer
+independent of other members. Its extraction needs that member first,
+and it can need a chain of versions. Delete and compact must keep each
+member that another depends on, and damage to one blob reaches each
+version after it. The problem statement puts delta storage out of scope
+for v1. It is a candidate for a later format version, after
+M11.</p></li>
 </ul>
 <h2 id="implementation-milestones">16. Implementation milestones</h2>
 <p>Each milestone includes its unit tests (§13.1). From M2, each
@@ -9066,10 +9158,10 @@ first release, with new test vectors and golden files.</p></li>
 </ol>
 <p>After M9, the module path is
 <code>github.com/philmalin/eictar</code>, and a release workflow makes
-the first release (§12.3). Before that release, two changes to the
-interface: the <code>.ect</code> extension (§10.12), and the selection
-by regular expression, <code>-R</code> and <code>--exclude-regex</code>
-(§10.11).</p>
+the first release (§12.3) after M11. Before that release, two changes to
+the interface: the <code>.ect</code> extension (§10.12), and the
+selection by regular expression, <code>-R</code> and
+<code>--exclude-regex</code> (§10.11).</p>
 <ol start="10" type="1">
 <li><strong>M10 — Dictionaries</strong> <em>(complete)</em>:
 <code>-Z zstd:train</code> trains a zstd dictionary in a pass before the
@@ -9077,6 +9169,12 @@ compression. The archive stores it, sealed when the archive is encrypted
 (§4.2, §5.1, §6.3). Codec keys take the form <code>k[=v]</code>, so
 <code>long</code> and <code>train</code> can stand alone (§10.2). The
 dictionary adds index fields, so it comes before the first release,
+v1.0.0, with a new golden archive.</li>
+<li><strong>M11 — Identical content</strong> <em>(designed)</em>: a
+member whose content is already in the archive refers to the blob of
+that member, and stores nothing (§4.3). A file with the size of a stored
+one is hashed before it is compressed. <code>--no-dedup</code> turns the
+rule off. It adds the member field <code>data</code>, so it comes before
 v1.0.0, with a new golden archive.</li>
 </ol>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.

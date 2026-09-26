@@ -176,8 +176,10 @@ func TestDictionaryCompact(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Replace the whole tree without a dictionary, then compact.
-	if _, err := appendTo(t, archive, tree, false, nil, "src"); err != nil {
+	// Replace the whole tree without a dictionary, then compact. The content
+	// is the same, so without --no-dedup the new members would share the old
+	// blobs (doc/design.md 4.3), and those blobs need the dictionary.
+	if _, err := appendTo(t, archive, tree, false, func(c *AppendConfig) { c.NoDedup = true }, "src"); err != nil {
 		t.Fatal(err)
 	}
 	before, err := Info(archive, OpenOptions{})

@@ -57,6 +57,7 @@ var configKeys = map[string][]Operation{
 	"exclude-regex":   append([]Operation{OpList, OpExtract}, adding...),
 	"dereference":     adding,
 	"one-file-system": adding,
+	"no-dedup":        adding,
 
 	"preserve-permissions": {OpExtract},
 	"preserve-owner":       {OpExtract},

@@ -193,6 +193,7 @@ func TestParseUsageErrors(t *testing.T) {
 		{"recompress without compact", []string{"-cf", "a", "--recompress", "zstd", "p"}},
 		{"bad recompress spec", []string{"--compact", "-f", "a", "--recompress", "zstd:"}},
 		{"config and no-config", []string{"-tf", "a", "--config", "c", "--no-config"}},
+		{"no-dedup on extract", []string{"-xf", "a", "--no-dedup"}},
 		{"bad regex", []string{"-tf", "a", "-R", "bad[("}},
 		{"bad exclude regex", []string{"-tf", "a", "--exclude-regex", "("}},
 		{"regex on compact", []string{"--compact", "-f", "a", "-R", "x"}},

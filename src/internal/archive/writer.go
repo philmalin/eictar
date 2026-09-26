@@ -98,6 +98,9 @@ type Writer struct {
 	params      codec.Params
 	concurrency int
 	addedCodec  bool
+	// dedup finds content that the archive holds already (doc/design.md
+	// 4.3). It is nil under --no-dedup, and for a compact.
+	dedup *dedup
 
 	off    int64 // where the next blob goes
 	nextID uint64
@@ -163,6 +166,7 @@ func Create(path string, opt Options) (*Writer, error) {
 		params:      opt.Params,
 		concurrency: max(1, opt.Concurrency),
 		nextID:      1,
+		dedup:       newDedup(nil, 1),
 	}
 
 	// Keys are derived against the archive id, so keys without the id they
@@ -326,7 +330,11 @@ func OpenAppend(path string, opt Options, open OpenOptions) (*Writer, error) {
 		appending:       true,
 		origSize:        r.size,
 		prevIndexOffset: r.tr.IndexOffset,
+		// The reader stays, to check an old owner before a member first
+		// shares its content. Its keys are the writer's now.
+		dedup: newDedup(r, maxID+1),
 	}
+	r.borrowedKeys = true
 
 	// Reuse the catalog entry when this codec, with these parameters, is
 	// already there; add one otherwise.
@@ -361,7 +369,20 @@ func (w *Writer) AppendMember(m *format.Member, payload io.WriterTo) error {
 		return err
 	}
 
+	// Content that the archive holds already is shared, not written again
+	// (doc/design.md 4.3). This catches two copies that one run adds; the
+	// capturer finds the others before they are compressed.
+	if payload != nil && w.dedup != nil && m.Type == format.TypeReg && m.Data == 0 && m.Length > 0 {
+		if owner, ok := w.dedup.atEmit(m); ok {
+			share(m, owner)
+			payload = nil
+		}
+	}
+
 	m.Offset = uint64(w.off)
+	if m.Data != 0 {
+		m.Offset = 0
+	}
 	if payload != nil {
 		n, err := payload.WriteTo(w.f)
 		if err != nil {

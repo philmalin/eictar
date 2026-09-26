@@ -81,6 +81,9 @@ func AppendArchive(cfg AppendConfig) (Stats, error) {
 	if err != nil {
 		return Stats{}, err
 	}
+	if cfg.NoDedup {
+		w.dedup = nil
+	}
 	if err := w.useDictionary(func(size int) ([][]byte, error) { return sampleTree(w, cfg.CreateConfig, size) }, warnOf(cfg.Reporter)); err != nil {
 		w.Abort()
 		return Stats{}, err
@@ -177,6 +180,14 @@ func kept(all []format.Member) []format.Member {
 	for _, m := range all {
 		if !m.Dead && m.Type == format.TypeHardlink {
 			needed[m.HardlinkTo] = true
+		}
+	}
+	// A tombstone that a kept member shares content with holds the blob, as
+	// the target of a hardlink does (doc/design.md 4.3). A kept hardlink can
+	// point to a tombstone that shares content, so the owners come after.
+	for _, m := range all {
+		if (!m.Dead || needed[m.ID]) && m.Data != 0 {
+			needed[m.Data] = true
 		}
 	}
 	var out []format.Member
@@ -516,8 +527,8 @@ func copyBlobs(r *Reader, w *Writer, keep []format.Member, progress Progress) er
 	sort.Slice(keep, func(i, j int) bool { return keep[i].Offset < keep[j].Offset })
 	for i := range keep {
 		m := &keep[i]
-		if !m.Type.HasPayload() {
-			continue
+		if !m.Type.HasPayload() || m.Data != 0 {
+			continue // no blob of its own
 		}
 		if m.Length > 0 {
 			src := io.NewSectionReader(r.f, int64(m.Offset), int64(m.Length))
@@ -600,7 +611,9 @@ func recompressBlobs(r *Reader, w *Writer, keep []format.Member, rc *RecompressC
 	var addErr error
 	for i := range keep {
 		m := keep[i]
-		if !m.Type.HasPayload() {
+		// A member that shares content stays a sharer: its owner keeps its
+		// id, and is encoded again below (doc/design.md 4.3).
+		if !m.Type.HasPayload() || m.Data != 0 {
 			if addErr = builder.AddMeta(m); addErr != nil {
 				break
 			}
@@ -699,18 +712,45 @@ func VerifyArchive(cfg VerifyConfig) (VerifyResult, error) {
 	}
 	seen := map[uint64]bool{}
 	var todo []*format.Member
+	// sharers counts, for each owner, the selected members that share its
+	// content. Each blob is decoded one time, and its result is theirs too
+	// (doc/design.md 4.3).
+	sharers := map[uint64][]*format.Member{}
+	sharing := map[uint64]bool{}
 	add := func(m *format.Member) {
+		if m.Data != 0 {
+			if o, ok := byID[m.Data]; ok {
+				if !sharing[m.ID] {
+					sharing[m.ID] = true
+					sharers[o.ID] = append(sharers[o.ID], m)
+				}
+				m = o
+			}
+		}
 		if !seen[m.ID] {
 			seen[m.ID] = true
 			todo = append(todo, m)
 		}
 	}
+	// picked are the members that the patterns selected. Only they count as
+	// checked: a tombstone that holds content for one of them is decoded,
+	// but it is not a member that the user asked about.
+	picked := map[uint64]bool{}
 	for i := range members {
 		m := &members[i]
+		picked[m.ID] = true
 		if m.Type == format.TypeHardlink {
+			// A hardlink's content is its target's: it passes or fails with
+			// the target, as a member that shares content does.
 			if t, ok := byID[m.HardlinkTo]; ok {
 				add(t)
+				t = byID[t.ID]
+				if t.Data != 0 {
+					t = byID[t.Data]
+				}
+				sharers[t.ID] = append(sharers[t.ID], m)
 			}
+			continue
 		}
 		add(m)
 	}
@@ -732,19 +772,39 @@ func VerifyArchive(cfg VerifyConfig) (VerifyResult, error) {
 			continue
 		}
 		if err := r.WriteMember(m, countWriter(io.Discard, progress)); err != nil {
-			res.Failed++
+			if picked[m.ID] {
+				res.Failed++
+			}
 			if first == nil {
 				first = err
 			}
 			if cfg.Reporter != nil {
 				cfg.Reporter.Warn("%s: %v", m.Path, err)
 			}
+			for _, s := range sharers[m.ID] {
+				if picked[s.ID] {
+					res.Failed++
+					if cfg.Reporter != nil {
+						cfg.Reporter.Warn("%s: has the content of %s, which failed", s.Path, m.Path)
+					}
+				}
+			}
 			continue
 		}
-		res.Checked++
 		res.Bytes += m.Size
-		if cfg.Reporter != nil {
-			cfg.Reporter.Member(m)
+		if picked[m.ID] {
+			res.Checked++
+			if cfg.Reporter != nil {
+				cfg.Reporter.Member(m)
+			}
+		}
+		for _, s := range sharers[m.ID] {
+			if picked[s.ID] {
+				res.Checked++
+				if cfg.Reporter != nil {
+					cfg.Reporter.Member(s)
+				}
+			}
 		}
 	}
 	if first != nil {
@@ -778,6 +838,8 @@ type ArchiveInfo struct {
 	Stored      int // live members with no codec
 	Codecs      []CodecUse
 	Dicts       []DictUse
+	Shared      int    // live members that share the content of another
+	NotStored   uint64 // the bytes that those members did not store
 	Plain       uint64 // plaintext bytes of the live members
 	Blobs       uint64 // on-disk bytes of the live members' blobs
 	IndexLength uint64
@@ -809,6 +871,12 @@ func Info(path string, open OpenOptions) (*ArchiveInfo, error) {
 			continue
 		}
 		in.Live++
+		if m.Data != 0 {
+			in.Shared++
+			if o := r.Owner(&m); o != nil {
+				in.NotStored += o.Length
+			}
+		}
 		if m.Type.HasPayload() {
 			in.Plain += m.Size
 			in.Blobs += m.Length

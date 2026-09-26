@@ -1525,7 +1525,7 @@ func TestExtractionWorkersAreBoundedByMemory(t *testing.T) {
 			if tc.name == "small chunks unaffected" {
 				ms = []format.Member{{ChunkSize: 64 << 10}}
 			}
-			if got := boundByMemory(tc.workers, ms, tc.limit); got != tc.want {
+			if got := boundByMemory(tc.workers, ms, tc.limit, func(m *format.Member) *format.Member { return m }); got != tc.want {
 				t.Errorf("boundByMemory(%d, limit=%d) = %d, want %d",
 					tc.workers, tc.limit, got, tc.want)
 			}

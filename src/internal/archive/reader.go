@@ -36,6 +36,11 @@ type Reader struct {
 	// decodes members in parallel, so dictMu guards it.
 	dictMu sync.Mutex
 	dicts  map[uint32][]byte
+
+	// byID finds the owner of shared content; extraction asks from several
+	// goroutines, so it is built once.
+	byIDOnce sync.Once
+	byID     map[uint64]*format.Member
 }
 
 // PassphraseFunc supplies the passphrase for an encrypted archive. It is
@@ -328,6 +333,18 @@ func (r *Reader) WriteMember(m *format.Member, dst io.Writer) error {
 	if !m.Type.HasPayload() {
 		return nil
 	}
+	// A member that shares another's content reads the owner's blob, with
+	// the owner's codec and keys: the chunk AAD binds the owner's id
+	// (doc/design.md 4.3). The index checks that the owner has the same
+	// payload and digest, and holds a blob of its own.
+	if m.Data != 0 {
+		o := r.Owner(m)
+		if o == nil {
+			return fmt.Errorf("%w: member %q shares the content of member %d, which does not exist",
+				format.ErrCorruptIndex, m.Path, m.Data)
+		}
+		m = o
+	}
 
 	codecName, err := r.CodecName(m)
 	if err != nil {
@@ -453,6 +470,22 @@ func (r *Reader) WriteMember(m *format.Member, dst io.Writer) error {
 		}
 	}
 	return nil
+}
+
+// Owner returns the member whose blob holds m's content: m itself, or the
+// member that m shares its content with (doc/design.md 4.3). It returns nil
+// for an owner that the index does not hold.
+func (r *Reader) Owner(m *format.Member) *format.Member {
+	if m.Data == 0 {
+		return m
+	}
+	r.byIDOnce.Do(func() {
+		r.byID = make(map[uint64]*format.Member, len(r.index.Members))
+		for i := range r.index.Members {
+			r.byID[r.index.Members[i].ID] = &r.index.Members[i]
+		}
+	})
+	return r.byID[m.Data]
 }
 
 // Close releases the archive file and wipes the key material the reader held.
