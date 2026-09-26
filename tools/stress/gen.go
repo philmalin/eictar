@@ -25,6 +25,49 @@ type gen struct {
 	src     string
 	clock   int64 // nanoseconds; moves forward with each change
 	nonUTF8 bool  // the filesystem takes names that are not UTF-8
+	profile string
+}
+
+// The profiles are the kinds of tree that a sequence works on (doc/design.md
+// 13.4). Each one takes eictar down other paths:
+//
+//	mixed     a few dozen entries of every kind and size: the default
+//	small     hundreds of small, similar source files: dictionaries that
+//	          train, and many members
+//	large     a few files of megabytes, and copies of them: many chunks,
+//	          large chunk sizes and windows, shared content
+//	versions  medium files with exact copies and with near-copies: shared
+//	          content must tell equal from almost equal
+var profiles = []string{"mixed", "small", "large", "versions"}
+
+// profileWeights is how often a sequence draws each profile.
+var profileWeights = map[string]int{"mixed": 4, "small": 2, "large": 1, "versions": 2}
+
+func pickProfile(rnd *rand.Rand) string {
+	total := 0
+	for _, p := range profiles {
+		total += profileWeights[p]
+	}
+	n := rnd.IntN(total)
+	for _, p := range profiles {
+		if n -= profileWeights[p]; n < 0 {
+			return p
+		}
+	}
+	return profiles[0]
+}
+
+// treeSize is how many entries a new tree of the profile has.
+func (g *gen) treeSize() int {
+	switch g.profile {
+	case "small":
+		return 150 + g.rnd.IntN(350)
+	case "large":
+		return 3 + g.rnd.IntN(4)
+	case "versions":
+		return 20 + g.rnd.IntN(40)
+	}
+	return 10 + g.rnd.IntN(60)
 }
 
 // Chunk sizes that the steps choose from. File sizes cluster around them,
@@ -34,8 +77,8 @@ var chunkSizes = []int{512, 4096, 65536, 1 << 20, 4 << 20}
 var words = strings.Fields("archive chunk index member codec trailer header sparse " +
 	"the of and to in is that for it with as was on be at by this")
 
-func newGen(rnd *rand.Rand, src string) *gen {
-	g := &gen{rnd: rnd, src: src, clock: 1_600_000_000 * 1e9}
+func newGen(rnd *rand.Rand, src, profile string) *gen {
+	g := &gen{rnd: rnd, src: src, clock: 1_600_000_000 * 1e9, profile: profile}
 	probe := filepath.Join(src, ".probe-\xe9")
 	if os.WriteFile(probe, nil, 0o600) == nil {
 		g.nonUTF8 = true
@@ -79,6 +122,17 @@ func (g *gen) name() string {
 // size picks a file size: mostly small, often at a chunk boundary, and now
 // and then large.
 func (g *gen) size() int {
+	switch g.profile {
+	case "small":
+		return 50 + g.rnd.IntN(6000)
+	case "large":
+		if g.rnd.IntN(4) == 0 {
+			return 4<<20 + g.rnd.IntN(3) - 1 // at the default chunk size
+		}
+		return (1+g.rnd.IntN(24))<<20 + g.rnd.IntN(4096)
+	case "versions":
+		return 16<<10 + g.rnd.IntN(1<<20)
+	}
 	switch g.rnd.IntN(10) {
 	case 0:
 		return 0
@@ -96,6 +150,9 @@ func (g *gen) size() int {
 // different path through the codecs: incompressible chunks are stored as
 // they are, zeros compress to almost nothing, and text is in between.
 func (g *gen) content(n int) []byte {
+	if g.profile == "small" {
+		return g.sourceText(n)
+	}
 	out := make([]byte, 0, n)
 	kind := g.rnd.IntN(5)
 	for len(out) < n {
@@ -118,6 +175,23 @@ func (g *gen) content(n int) []byte {
 		}
 	}
 	return out[:n]
+}
+
+// sourceText is a small source file: the header and the shape that the files
+// of a project share, and names and numbers of its own. A dictionary learns
+// the shared part.
+func (g *gen) sourceText(n int) []byte {
+	var b strings.Builder
+	b.WriteString("-- Copyright 2026 The Stress Authors. All rights reserved.\n")
+	b.WriteString("-- Use of this source code is governed by a license.\n\n")
+	fmt.Fprintf(&b, "class\n\t%s_%d\n\ninherit\n\tANY\n\nfeature -- Access\n\n",
+		strings.ToUpper(words[g.rnd.IntN(len(words))]), g.rnd.IntN(1000))
+	for b.Len() < n {
+		w := words[g.rnd.IntN(len(words))]
+		fmt.Fprintf(&b, "\t%s_%d (a_%s: INTEGER): STRING\n\t\tdo\n\t\t\tResult := \"%s %d\"\n\t\tend\n\n",
+			w, g.rnd.IntN(100), w, w, g.rnd.IntN(10000))
+	}
+	return []byte(b.String()[:n])
 }
 
 // perm picks a file mode that the owner can read, without special bits.
@@ -168,7 +242,8 @@ func (g *gen) setTime(rel string, nanos int64) error {
 }
 
 // populate fills an empty src with a tree of n entries.
-func (g *gen) populate(n int) error {
+func (g *gen) populate() error {
+	n := g.treeSize()
 	dirs := []string{"."}
 	for i := 0; i < n; i++ {
 		parent := dirs[g.rnd.IntN(len(dirs))]
@@ -201,12 +276,19 @@ func (g *gen) addEntry(rel string, dirs *[]string) error {
 			return os.Link(filepath.Join(g.src, files[g.rnd.IntN(len(files))]), filepath.Join(g.src, rel))
 		}
 		fallthrough
-	case r < 9:
+	case r < 9 || (g.profile != "mixed" && r < 12):
 		// A copy: another inode with the same content, which the archive
 		// stores once (doc/design.md 4.3). A copy of a sparse file is dense,
 		// so its payload differs, and it is stored in full.
 		if files := g.files(); len(files) > 0 {
-			return g.copyFile(files[g.rnd.IntN(len(files))], rel)
+			return g.copyFile(files[g.rnd.IntN(len(files))], rel, false)
+		}
+		fallthrough
+	case g.profile == "versions" && r < 15:
+		// A near-copy: the same content with a few bytes changed, which
+		// must not share the content of the file it came from.
+		if files := g.files(); len(files) > 0 {
+			return g.copyFile(files[g.rnd.IntN(len(files))], rel, true)
 		}
 		fallthrough
 	default:
@@ -214,11 +296,17 @@ func (g *gen) addEntry(rel string, dirs *[]string) error {
 	}
 }
 
-// copyFile writes a new file at rel with the content of src.
-func (g *gen) copyFile(src, rel string) error {
+// copyFile writes a new file at rel with the content of src, or with a few
+// bytes of it changed.
+func (g *gen) copyFile(src, rel string, change bool) error {
 	b, err := os.ReadFile(filepath.Join(g.src, src))
 	if err != nil {
 		return err
+	}
+	if change && len(b) > 0 {
+		for n := 1 + g.rnd.IntN(4); n > 0; n-- {
+			b[g.rnd.IntN(len(b))] ^= byte(1 + g.rnd.IntN(255))
+		}
 	}
 	p := filepath.Join(g.src, rel)
 	if err := os.WriteFile(p, b, 0o600); err != nil {

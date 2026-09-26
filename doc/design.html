@@ -5363,7 +5363,7 @@ the usual choices</a></li>
 </ul>
 </nav>
 <h1 id="eictar-design-document">eictar — Design Document</h1>
-<p>Status: M1 to M10 are complete. The CI workflow passes on Linux,
+<p>Status: M1 to M11 are complete. The CI workflow passes on Linux,
 macOS, FreeBSD, NetBSD and OpenBSD (§15.1). Date: 2026-09-24 Applies to:
 v1 (format version 1.0)</p>
 <p>This document specifies the on-disk format, the concurrency model,
@@ -6015,9 +6015,20 @@ the owner’s content. <code>--recompress</code> encodes each owner again,
 and a reference stays a reference. A change of passphrase copies the
 blobs, so the references stay valid (§9.7).</p>
 <p><strong>One damaged blob now damages each member that refers to
-it.</strong> This is the cost, as for hardlinks. <code>--no-dedup</code>
-stores each copy in full, for a user who wants damage to stay inside one
-file.</p>
+it.</strong> This is the cost, as for hardlinks. The damage is always
+found: the digest check and the AEAD tag refuse the blob, and each
+member that uses it gives exit 3. But no member that uses the blob can
+be extracted. <code>--no-dedup</code> stores each copy in full, for a
+user who wants damage to stay inside one file.</p>
+<p><strong>A run checks an old owner before it first refers to
+it.</strong> The match uses the digest that the index records, not the
+blob. Thus a blob that became damaged after it was written can still
+match a new file. Before a run refers to an owner of an earlier
+generation for the first time, it decodes that owner’s blob and checks
+its digest. If the check fails, the program warns, stores the new file
+in full, and does not use that owner again in the run.</p>
+<p>A decode is much faster than a compression. An owner that the run
+wrote itself needs no check.</p>
 <h2 id="the-index">5. The index</h2>
 <h3 id="schema">5.1 Schema</h3>
 <p>The index uses CBOR (<code>github.com/fxamacker/cbor/v2</code>). CBOR
@@ -8613,11 +8624,12 @@ coverage, because a fault there is silent and permanent. Benchmarks
 load time with <code>tar | zstd</code>.</li>
 </ul>
 <h3 id="stress-tester">13.4 Stress tester</h3>
-<p><code>make stress</code> runs <code>tools/stress</code>. It tests the
-built binary with random data and random operations, and it compares
-each result with a model. The unit and operational tests check the cases
-that someone thought of. The stress tester finds the combinations that
-nobody did.</p>
+<p><code>make stress</code> builds and runs <code>tools/stress</code>,
+and <code>make stress-build</code> builds it alone, as
+<code>.build/stress</code>. It tests the built binary with random data
+and random operations, and it compares each result with a model. The
+unit and operational tests check the cases that someone thought of. The
+stress tester finds the combinations that nobody did.</p>
 <p><strong>The model</strong> is a map from each stored path to what an
 extraction must give back. That is the type, the content, the size, the
 mode, the time, and the target of a link. It changes only as eictar’s
@@ -8633,6 +8645,57 @@ delete, compact, compact with <code>--recompress</code>, or extraction
 by pattern or by <code>-R</code>. Each operation uses a random codec and
 random settings: chunk size, workers, memory limit and spill
 threshold.</p>
+<p><strong>Each sequence has a profile,</strong> the kind of tree that
+it works on. The seed chooses it, and <code>-profile</code> forces
+one:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Profile</th>
+<th>Tree</th>
+<th>What it takes eictar through</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>mixed</code></td>
+<td>10 to 70 entries of every kind and size</td>
+<td>the general case</td>
+</tr>
+<tr class="even">
+<td><code>small</code></td>
+<td>150 to 500 small source files that share a header and a shape</td>
+<td>dictionaries that train, many members</td>
+</tr>
+<tr class="odd">
+<td><code>large</code></td>
+<td>3 to 6 files of 1 to 24 MiB, and copies of them</td>
+<td>many chunks, chunks of 16 and 32 MiB, windows, shared content</td>
+</tr>
+<tr class="even">
+<td><code>versions</code></td>
+<td>medium files with exact copies, and near-copies with a few bytes
+changed</td>
+<td>shared content that must tell equal from almost equal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The settings vary with the features.</strong> A zstd codec
+can have <code>train</code>: with a small size, alone, or at 1 MiB. It
+can have <code>long</code>: alone, or with a window that a large chunk
+holds. <code>-r</code> and <code>-u</code> can have <code>-R</code>,
+<code>--exclude-regex</code> and <code>--no-dedup</code>, and create can
+have <code>--no-dedup</code>. The model applies <code>-R</code> and
+<code>--exclude-regex</code> as eictar does. An <code>-R</code> that
+matches nothing must be refused like a conflict.</p>
+<p>At the end of each sequence, <code>--info</code> shows whether the
+archive holds a dictionary and shared content. The summary counts both,
+so that the coverage of these features is measured, not assumed.</p>
 <p>A third of the sequences are encrypted, some with a sealed index. In
 these, a step can also change the passphrase. After the change, the old
 passphrase must fail with exit 3.</p>
@@ -8644,14 +8707,14 @@ passphrase must fail with exit 3.</p>
 are the parent directories that extraction makes itself.</li>
 </ol>
 <p>Some operations must be refused: a conflict under
-<code>--on-conflict=error</code>, and a delete pattern that matches
-nothing. Each must exit with 2, and must leave the archive byte for byte
-as it was.</p>
+<code>--on-conflict=error</code>, an <code>-R</code> that matches
+nothing, and a delete pattern that matches nothing. Each must exit with
+2, and must leave the archive byte for byte as it was.</p>
 <p><strong>The data</strong> is random, text-like, repetitive or zeros,
 and it is often one byte on either side of a chunk boundary. The tree
-has deep directories, empty files, symbolic links, hardlinks and sparse
-files. Its names have spaces, other scripts, and bytes that are not
-UTF-8 where the filesystem takes them. A name never holds a glob
+has deep directories, empty files, symbolic links, hardlinks, copies and
+sparse files. Its names have spaces, other scripts, and bytes that are
+not UTF-8 where the filesystem takes them. A name never holds a glob
 character, so that a path is a literal pattern.</p>
 <p><strong>The fault mode</strong> is on by default. It adds two
 tests:</p>
@@ -9170,7 +9233,7 @@ compression. The archive stores it, sealed when the archive is encrypted
 <code>long</code> and <code>train</code> can stand alone (§10.2). The
 dictionary adds index fields, so it comes before the first release,
 v1.0.0, with a new golden archive.</li>
-<li><strong>M11 — Identical content</strong> <em>(designed)</em>: a
+<li><strong>M11 — Identical content</strong> <em>(complete)</em>: a
 member whose content is already in the archive refers to the blob of
 that member, and stores nothing (§4.3). A file with the size of a stored
 one is hashed before it is compressed. <code>--no-dedup</code> turns the

@@ -29,15 +29,20 @@ type sequence struct {
 	steps       []string // what each step did, for the failure report
 	faults      bool
 	stats       *stats
+	profile     string // the kind of tree (gen.go)
 }
 
 type stats struct {
 	sequences, steps, commands  int
 	crashes, flips, flipsCaught int
 	ops                         map[string]int
+	profiles                    map[string]int
+	// withDict and withShared count the sequences that ended with a
+	// dictionary, and with shared content: coverage, not assumed.
+	withDict, withShared int
 }
 
-func newSequence(seed uint64, dir, bin string, faults bool, st *stats) (*sequence, error) {
+func newSequence(seed uint64, dir, bin string, faults bool, st *stats, profile string) (*sequence, error) {
 	s := &sequence{
 		seed:   seed,
 		rnd:    rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
@@ -46,11 +51,18 @@ func newSequence(seed uint64, dir, bin string, faults bool, st *stats) (*sequenc
 		faults: faults,
 		stats:  st,
 	}
+	// The profile is the first draw, so that a seed gives the same one again;
+	// -profile forces it, and the draw still happens.
+	s.profile = pickProfile(s.rnd)
+	if profile != "" {
+		s.profile = profile
+	}
+	st.profiles[s.profile]++
 	s.archive = filepath.Join(dir, "archive.ect")
 	if err := os.MkdirAll(s.src, 0o755); err != nil {
 		return nil, err
 	}
-	s.g = newGen(s.rnd, s.src)
+	s.g = newGen(s.rnd, s.src, s.profile)
 	s.r = &runner{bin: bin, dir: dir}
 	s.encrypted = s.rnd.IntN(3) == 0
 	if s.encrypted {
@@ -66,16 +78,28 @@ func newSequence(seed uint64, dir, bin string, faults bool, st *stats) (*sequenc
 // codecSpec picks a codec and its settings. The strongest settings of zstd
 // and xz are left out: they are slow, and the codec tests cover them.
 func (s *sequence) codecSpec() string {
-	switch s.rnd.IntN(7) {
+	pick := s.rnd.IntN(7)
+	if s.profile == "small" && s.rnd.IntN(2) == 0 {
+		pick = 1 // zstd with a dictionary: what a tree of small files is for
+	}
+	switch pick {
 	case 0:
 		return "none"
 	case 1:
 		spec := "zstd:level=" + strconv.Itoa(1+s.rnd.IntN(15))
 		// A dictionary on create, append and recompress (doc/design.md 4.2).
-		// A small size, so that a generated tree can fill it; a tree that
-		// cannot gives a notice and no dictionary, which is a case too.
-		if s.rnd.IntN(2) == 0 {
-			spec += ",train=" + []string{"4K", "8K", "16K"}[s.rnd.IntN(3)]
+		// Small sizes, so that a generated tree can fill them, and the forms
+		// alone and at the limit; a tree that cannot fill one gives a
+		// notice and no dictionary, which is a case too.
+		if s.rnd.IntN(2) == 0 || s.profile == "small" {
+			spec += "," + []string{"train=4K", "train=8K", "train=16K", "train", "train=1M"}[s.rnd.IntN(5)]
+		}
+		// A window: alone (27), or one that a large chunk can hold.
+		switch s.rnd.IntN(6) {
+		case 0:
+			spec += ",long"
+		case 1:
+			spec += ",long=" + strconv.Itoa(20+s.rnd.IntN(5))
 		}
 		return spec
 	case 2:
@@ -95,8 +119,13 @@ func (s *sequence) codecSpec() string {
 // stored: chunk size, workers, and a memory budget and spill threshold that
 // are now and then small enough to force spilling and waiting.
 func (s *sequence) tuning() []string {
+	sizes := chunkSizes
+	if s.profile == "large" {
+		// Chunks as large as the files, which a window of long can use.
+		sizes = append(append([]int(nil), chunkSizes...), 16<<20, 32<<20)
+	}
 	args := []string{
-		"--chunk-size", strconv.Itoa(chunkSizes[s.rnd.IntN(len(chunkSizes))]),
+		"--chunk-size", strconv.Itoa(sizes[s.rnd.IntN(len(sizes))]),
 		"-j", strconv.Itoa(1 + s.rnd.IntN(8)),
 	}
 	if s.rnd.IntN(4) == 0 {
@@ -114,7 +143,7 @@ func (s *sequence) note(format string, args ...any) {
 
 // run creates the archive and takes n steps, checking after each.
 func (s *sequence) run(n int) error {
-	if err := s.g.populate(10 + s.rnd.IntN(60)); err != nil {
+	if err := s.g.populate(); err != nil {
 		return err
 	}
 	if err := s.create(); err != nil {
@@ -134,6 +163,22 @@ func (s *sequence) run(n int) error {
 			}
 		}
 	}
+	return s.coverage()
+}
+
+// coverage counts what the final archive holds that the features of M10 and
+// M11 make: a dictionary, and shared content.
+func (s *sequence) coverage() error {
+	res, err := s.r.expect(true, "--info", "-f", s.archive)
+	if err != nil {
+		return fmt.Errorf("info: %w", err)
+	}
+	if strings.Contains(res.stdout, "\ndictionary:") {
+		s.stats.withDict++
+	}
+	if strings.Contains(res.stdout, "\nshared content:") {
+		s.stats.withShared++
+	}
 	return nil
 }
 
@@ -146,13 +191,16 @@ func (s *sequence) create() error {
 			opts = append(opts, "--encrypt-index")
 		}
 	}
+	if s.rnd.IntN(5) == 0 {
+		opts = append(opts, "--no-dedup")
+	}
 	s.note("create %q encrypted=%v", args, s.encrypted)
 	s.stats.ops["create"]++
 	if _, err := s.r.expect(true, withPaths(opts, args)...); err != nil {
 		return fmt.Errorf("create: %w", err)
 	}
 	s.model = Model{}
-	if _, err := s.addToModel(args, "replace", ""); err != nil {
+	if _, _, err := s.addToModel(args, "replace", "", filter{}); err != nil {
 		return err
 	}
 	if err := s.checkArchive(); err != nil {
@@ -207,14 +255,33 @@ func (s *sequence) add(op string) error {
 		mode = []string{"newer", "different", "digest"}[s.rnd.IntN(3)]
 		opts = append(opts, "--update-mode", mode)
 	}
-	s.note("%s %q %s%s", op, args, policy, map[bool]string{true: " " + mode}[mode != ""])
+	// Selection by regular expression (doc/design.md 10.11), and now and
+	// then each copy stored in full (4.3).
+	var f filter
+	if s.rnd.IntN(6) == 0 {
+		re := includeRegexes[s.rnd.IntN(len(includeRegexes))]
+		f.include = regexp.MustCompile(`(?s)^(?:` + re + `)$`)
+		opts = append(opts, "-R", re)
+	}
+	if s.rnd.IntN(8) == 0 {
+		re := excludeRegexes[s.rnd.IntN(len(excludeRegexes))]
+		f.exclude = regexp.MustCompile(`(?s)^(?:` + re + `)$`)
+		opts = append(opts, "--exclude-regex", re)
+	}
+	if s.rnd.IntN(5) == 0 {
+		opts = append(opts, "--no-dedup")
+	}
+	s.note("%s %q %s%s%s", op, args, policy, map[bool]string{true: " " + mode}[mode != ""], f)
 	s.stats.ops[strings.TrimSpace(op+" "+policy+" "+mode)]++
+	if f.include != nil || f.exclude != nil {
+		s.stats.ops["-r/-u with a regex"]++
+	}
 
 	before, err := os.ReadFile(s.archive)
 	if err != nil {
 		return err
 	}
-	conflict, err := s.addToModel(args, policy, mode)
+	refused, why, err := s.addToModel(args, policy, mode, f)
 	if err != nil {
 		return err
 	}
@@ -222,10 +289,11 @@ func (s *sequence) add(op string) error {
 	if err != nil {
 		return err
 	}
-	if conflict {
-		// --on-conflict=error: exit 2, and the archive exactly as it was.
+	if refused {
+		// A conflict under --on-conflict=error, or an -R that matches
+		// nothing: exit 2, and the archive exactly as it was.
 		if res.code != 2 {
-			return fmt.Errorf("a conflict under --on-conflict=error: exit %d, want 2:\n%s", res.code, res)
+			return fmt.Errorf("%s: exit %d, want 2:\n%s", why, res.code, res)
 		}
 		return s.unchanged(before)
 	}
@@ -236,24 +304,27 @@ func (s *sequence) add(op string) error {
 }
 
 // addToModel applies an append, update or create to the model, from the
-// source tree as it is now. For --on-conflict=error it reports a conflict
-// and changes nothing.
-func (s *sequence) addToModel(args []string, policy, mode string) (conflict bool, err error) {
-	paths, err := walked(s.src, args)
+// source tree as it is now. For --on-conflict=error with a conflict, or an -R
+// that matches nothing, it reports a refusal and changes nothing.
+func (s *sequence) addToModel(args []string, policy, mode string, f filter) (refused bool, why string, err error) {
+	paths, err := walkedFiltered(s.src, args, f)
 	if err != nil {
-		return false, err
+		return false, "", err
+	}
+	if f.include != nil && len(paths) == 0 {
+		return true, "an -R that matches nothing", nil
 	}
 	if policy == "error" {
 		for _, p := range paths {
 			if _, ok := s.model[p]; ok {
-				return true, nil
+				return true, "a conflict under --on-conflict=error", nil
 			}
 		}
 	}
 	for _, p := range paths {
 		cur, err := readEntry(filepath.Join(s.src, p))
 		if err != nil {
-			return false, err
+			return false, "", err
 		}
 		old, exists := s.model[p]
 		switch {
@@ -263,7 +334,7 @@ func (s *sequence) addToModel(args []string, policy, mode string) (conflict bool
 			s.model[p] = cur
 		}
 	}
-	return false, nil
+	return false, "", nil
 }
 
 // delete removes the members that match one or two paths, and now and then
@@ -418,7 +489,7 @@ func (s *sequence) unchanged(before []byte) error {
 
 func (s *sequence) report(err error) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "seed %d, encrypted=%v\n\nsteps:\n", s.seed, s.encrypted)
+	fmt.Fprintf(&b, "seed %d, profile %s, encrypted=%v\n\nsteps:\n", s.seed, s.profile, s.encrypted)
 	for i, st := range s.steps {
 		fmt.Fprintf(&b, "  %2d. %s\n", i+1, st)
 	}

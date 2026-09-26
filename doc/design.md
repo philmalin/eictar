@@ -2455,7 +2455,8 @@ parts work.
 
 ### 13.4 Stress tester
 
-`make stress` runs `tools/stress`. It tests the built binary with random data
+`make stress` builds and runs `tools/stress`, and `make stress-build` builds
+it alone, as `.build/stress`. It tests the built binary with random data
 and random operations, and it compares each result with a model. The unit
 and operational tests check the cases that someone thought of. The stress
 tester finds the combinations that nobody did.
@@ -2471,8 +2472,29 @@ Before most steps, the tree changes. A file gets new content, a new time or
 a new mode, or it goes, or it becomes a link, or new entries come. Then one
 operation runs: append with each `--on-conflict`, update with each
 `--update-mode`, delete, compact, compact with `--recompress`, or extraction
-by pattern or by `-R`. Each operation uses a random codec and random settings: chunk
-size, workers, memory limit and spill threshold.
+by pattern or by `-R`. Each operation uses a random codec and random
+settings: chunk size, workers, memory limit and spill threshold.
+
+**Each sequence has a profile,** the kind of tree that it works on. The seed
+chooses it, and `-profile` forces one:
+
+| Profile | Tree | What it takes eictar through |
+|---|---|---|
+| `mixed` | 10 to 70 entries of every kind and size | the general case |
+| `small` | 150 to 500 small source files that share a header and a shape | dictionaries that train, many members |
+| `large` | 3 to 6 files of 1 to 24 MiB, and copies of them | many chunks, chunks of 16 and 32 MiB, windows, shared content |
+| `versions` | medium files with exact copies, and near-copies with a few bytes changed | shared content that must tell equal from almost equal |
+
+**The settings vary with the features.** A zstd codec can have `train`:
+with a small size, alone, or at 1 MiB. It can have `long`: alone, or with a
+window that a large chunk holds. `-r` and `-u` can have `-R`,
+`--exclude-regex` and `--no-dedup`, and create can have `--no-dedup`. The
+model applies `-R` and `--exclude-regex` as eictar does. An `-R` that matches
+nothing must be refused like a conflict.
+
+At the end of each sequence, `--info` shows whether the archive holds a
+dictionary and shared content. The summary counts both, so that the coverage
+of these features is measured, not assumed.
 
 A third of the sequences are encrypted, some with a sealed index. In these, a
 step can also change the passphrase. After the change, the old passphrase must fail with exit 3.
@@ -2484,13 +2506,13 @@ step can also change the passphrase. After the change, the old passphrase must f
 3. A full extraction gives back the model. The only extra paths allowed are
    the parent directories that extraction makes itself.
 
-Some operations must be refused: a conflict under `--on-conflict=error`, and
-a delete pattern that matches nothing. Each must exit with 2, and must leave
+Some operations must be refused: a conflict under `--on-conflict=error`, an
+`-R` that matches nothing, and a delete pattern that matches nothing. Each must exit with 2, and must leave
 the archive byte for byte as it was.
 
 **The data** is random, text-like, repetitive or zeros, and it is often one
 byte on either side of a chunk boundary. The tree has deep directories, empty
-files, symbolic links, hardlinks and sparse files. Its names have spaces,
+files, symbolic links, hardlinks, copies and sparse files. Its names have spaces,
 other scripts, and bytes that are not UTF-8 where the filesystem takes them. A name
 never holds a glob character, so that a path is a literal pattern.
 

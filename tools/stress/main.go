@@ -7,11 +7,19 @@
 //	make stress                                 # a few minutes
 //	make stress STRESS="-duration 30m"
 //	make stress STRESS="-seed 1234 -sequences 1" # replay one failure
+//	make stress STRESS="-profile large"          # one kind of tree only
 //
-// Each sequence creates an archive from a generated tree, then takes random
-// steps: changes to the tree, append with each --on-conflict, update with
-// each --update-mode, delete, compact, recompress, change of passphrase and
-// extraction by pattern.
+// make stress-build builds the tester alone, as .build/stress, to run it
+// without make. Its defaults, -eictar .build/eictar and -dir .tmp/stress,
+// are relative to the project root.
+//
+// Each sequence creates an archive from a generated tree of one profile
+// (mixed, small, large or versions; see gen.go), then takes random steps:
+// changes to the tree, append with each --on-conflict, update with each
+// --update-mode, both now and then with -R, --exclude-regex or --no-dedup,
+// delete, compact, recompress, change of passphrase and extraction by
+// pattern or by -R. The codecs vary their settings, dictionaries and windows
+// included.
 // After each step it lists, verifies and extracts the archive, and compares
 // the result with the model. In the fault mode it also cuts the archive as a
 // crash would, and flips bits in a copy.
@@ -28,6 +36,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -40,6 +49,7 @@ func main() {
 	seed := flag.Uint64("seed", 0, "the seed of the first sequence (0: from the clock)")
 	faults := flag.Bool("faults", true, "also simulate crashes and damage")
 	keep := flag.Bool("keep", false, "keep the directories of sequences that passed")
+	profile := flag.String("profile", "", "the kind of tree for every sequence: mixed, small, large or versions (default: each seed chooses)")
 	flag.Parse()
 
 	abs, err := filepath.Abs(*bin)
@@ -54,7 +64,10 @@ func main() {
 	}
 	fmt.Printf("stress: eictar %s, seed %d, faults %v\n", abs, *seed, *faults)
 
-	st := &stats{ops: map[string]int{}}
+	if *profile != "" && profileWeights[*profile] == 0 {
+		fatal(fmt.Errorf("unknown profile %q: want one of %v", *profile, profiles))
+	}
+	st := &stats{ops: map[string]int{}, profiles: map[string]int{}}
 	seeds := rand.New(rand.NewPCG(*seed, 0))
 	start := time.Now()
 	for n := 0; ; n++ {
@@ -73,7 +86,7 @@ func main() {
 			fatal(err)
 		}
 		removeAll(seqDir)
-		seq, err := newSequence(s, seqDir, abs, *faults, st)
+		seq, err := newSequence(s, seqDir, abs, *faults, st, *profile)
 		if err != nil {
 			fatal(err)
 		}
@@ -85,7 +98,7 @@ func main() {
 			os.WriteFile(filepath.Join(seqDir, "failure.txt"), []byte(report), 0o644)
 			seq.r.writeReplay()
 			fmt.Printf("\nFAIL in sequence %d\n%s\nkept in %s (failure.txt, replay.sh)\n", st.sequences, report, seqDir)
-			fmt.Printf("replay: make stress STRESS=\"-seed %d -sequences 1\"\n", s)
+			fmt.Printf("replay: make stress STRESS=\"-seed %d -sequences 1 -profile %s\"\n", s, seq.profile)
 			summary(st, start)
 			os.Exit(1)
 		}
@@ -104,6 +117,14 @@ func summary(st *stats, start time.Time) {
 		st.sequences, st.steps, st.commands, time.Since(start).Round(time.Second))
 	fmt.Printf("faults: %d crashes repaired, %d damaged copies (%d refused, %d damage only in dead space)\n",
 		st.crashes, st.flips, st.flipsCaught, st.flips-st.flipsCaught)
+	var kinds []string
+	for _, p := range profiles {
+		if st.profiles[p] > 0 {
+			kinds = append(kinds, fmt.Sprintf("%s %d", p, st.profiles[p]))
+		}
+	}
+	fmt.Printf("trees: %s; %d ended with a dictionary, %d with shared content\n",
+		strings.Join(kinds, ", "), st.withDict, st.withShared)
 	names := make([]string, 0, len(st.ops))
 	for k := range st.ops {
 		names = append(names, k)

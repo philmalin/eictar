@@ -1609,29 +1609,35 @@ binaries</td>
 <td>zstd, alongside xz, gzip, flate, s2 and stored</td>
 </tr>
 <tr class="odd">
+<td>Identical content</td>
+<td>A file whose content the archive already holds shares that data, and
+stores nothing of its own. <code>--no-dedup</code> stores each copy in
+full</td>
+</tr>
+<tr class="even">
 <td>Dictionaries</td>
 <td><code>-Z zstd:train</code> trains a zstd dictionary from the files
 and stores it in the archive, encrypted when the archive is. Each member
 stays independent</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Concurrency</td>
 <td>Member order inside the archive is not significant, so a single
 writer appends whichever worker finishes first</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>CLI style</td>
 <td>Classical UNIX options, not subcommands. The operation is chosen by
 an option letter (<code>-c</code>, <code>-r</code>, <code>-t</code>,
 <code>-x</code>), short options bundle (<code>-cvf</code>), and every
 short option has a long form</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Archive name</td>
 <td>The conventional extension is <code>.ect</code>. Create adds it to a
 name that has no extension, and the other operations find that name</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>License</td>
 <td>GPL-3.0. The name “eictar” is reserved: a modified version that is
 distributed must use another name (<code>TRADEMARKS.md</code>)</td>

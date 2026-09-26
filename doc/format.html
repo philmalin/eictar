@@ -1483,6 +1483,10 @@ dictionary</a></li>
 <li><a href="#index-map" id="toc-index-map">8.2 Index map</a></li>
 <li><a href="#member-map" id="toc-member-map">8.3 Member map</a></li>
 <li><a href="#checks" id="toc-checks">8.4 Checks</a></li>
+<li><a href="#shared-content" id="toc-shared-content">8.5 Shared
+content</a></li>
+<li><a href="#paths-in-the-index" id="toc-paths-in-the-index">8.6 Paths
+in the index</a></li>
 </ul></li>
 <li><a href="#members" id="toc-members">9. Members</a>
 <ul>
@@ -2040,13 +2044,20 @@ content.</td>
 <td>the <code>id</code> of a <code>reg</code> member</td>
 </tr>
 <tr class="odd">
+<td><code>data</code></td>
+<td>uint</td>
+<td><code>reg</code> only, optional</td>
+<td>the <code>id</code> of the member whose blob holds this member’s
+content (§8.5)</td>
+</tr>
+<tr class="even">
 <td><code>rdev</code></td>
 <td>array of 2 uint</td>
 <td><code>chardev</code> and <code>blockdev</code> only, and required
 there</td>
 <td>major, minor</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>xattrs</code></td>
 <td>map, text to bytes</td>
 <td>optional</td>
@@ -2055,56 +2066,56 @@ source platform gives it (<code>user.comment</code> on Linux and the
 BSDs, <code>com.apple.quarantine</code> on macOS). Names of 1 to 255
 bytes, values of at most 65536 bytes, at most 1024 entries.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>sparse</code></td>
 <td>array of maps</td>
 <td><code>reg</code> only, optional</td>
 <td>data segments, each <code>{ &quot;off&quot;: uint, &quot;len&quot;: uint }</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>digest</code></td>
 <td>bytes</td>
 <td>required for <code>reg</code></td>
 <td>BLAKE3-256 of the payload (§5): keyed with <code>contentK</code>
 (§7.1) in an encrypted archive, with no key in a plain one</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>codec</code></td>
 <td>int</td>
 <td>always</td>
 <td>a catalog position, or -1</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>chunk</code></td>
 <td>uint</td>
 <td>when there are chunks</td>
 <td>plaintext bytes in each chunk, at most 268435456</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>enc</code></td>
 <td>map</td>
 <td>in an encrypted archive, on a member with content</td>
 <td><code>{ &quot;salt&quot;: 16 bytes }</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>off</code></td>
 <td>uint</td>
 <td>when there is a blob</td>
 <td>the offset of the blob in the file</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>len</code></td>
 <td>uint</td>
 <td>when there is a blob</td>
 <td>the length of the blob</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>chunks</code></td>
 <td>array of uint</td>
 <td>when there are chunks</td>
 <td>the length on disk of each chunk</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>dead</code></td>
 <td>bool</td>
 <td>tombstones only</td>
@@ -2132,6 +2143,7 @@ codec other than <code>zstd</code></li>
 <li>a <code>hardlink</code> whose <code>id</code> is not a
 <code>reg</code> member of the index. The target can be a
 tombstone.</li>
+<li>a <code>data</code> that breaks the rules of §8.5</li>
 <li><code>sparse</code> segments that are empty, out of order,
 overlapping, or that end after <code>size</code></li>
 <li><code>chunks</code> whose total is not <code>len</code></li>
@@ -2143,6 +2155,23 @@ and at most <code>chunk × n</code></li>
 <li>a count of members without <code>dead</code> that is not the
 trailer’s live_member_count</li>
 </ul>
+<h3 id="shared-content">8.5 Shared content</h3>
+<p>A <code>reg</code> member with <code>data</code> has the content of
+another member, its owner, and no blob of its own. It has no
+<code>off</code>, <code>len</code>, <code>chunks</code>,
+<code>chunk</code> or <code>enc</code>, and its <code>codec</code> is
+-1. A reader decodes the owner’s blob, with the owner’s codec, chunk
+size, key and <code>id</code> (§7.3), and checks the owner’s digest.</p>
+<p>A reader refuses a member with <code>data</code> unless all of these
+are true:</p>
+<ul>
+<li>the owner is a <code>reg</code> member of the index, with a blob,
+and without <code>data</code></li>
+<li>the owner has the same <code>size</code>, the same
+<code>sparse</code> and the same <code>digest</code></li>
+</ul>
+<p>The owner can be a tombstone.</p>
+<h3 id="paths-in-the-index">8.6 Paths in the index</h3>
 <p>The index checks do not require stored paths. A reader can list an
 archive with a bad path, so that a person can see what is in it. A
 reader that extracts refuses the bad member (§9.1).</p>

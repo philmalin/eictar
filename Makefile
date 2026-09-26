@@ -35,7 +35,7 @@ VERSION  ?= dev
 LDFLAGS    := -s -w -X github.com/philmalin/eictar/src/internal/cli.Version=$(VERSION)
 BUILDFLAGS := -trimpath -ldflags="$(LDFLAGS)"
 
-.PHONY: all build release test test-race operational fuzz bench compare stress vet fmt check check-norace skips clean
+.PHONY: all build release test test-race operational fuzz bench compare stress stress-build vet fmt check check-norace skips clean
 
 all: build
 
@@ -101,8 +101,15 @@ skips: | $(TMPDIR)
 # 13.4). STRESS passes options, for example:
 #   make stress STRESS="-duration 30m"
 #   make stress STRESS="-seed 1234 -sequences 1"
-stress: build
-	$(GO) run ./tools/stress -eictar $(BIN) $(STRESS)
+# make stress-build builds the tester alone, to run it as .build/stress
+# (.build/stress -h lists its options).
+STRESS_BIN := .build/stress
+
+stress: build stress-build
+	$(STRESS_BIN) -eictar $(BIN) $(STRESS)
+
+stress-build: | $(TMPDIR)
+	$(GO) build -trimpath -o $(STRESS_BIN) ./tools/stress
 
 vet: | $(TMPDIR)
 	$(GO) vet $(PKGS) ./tools/...

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -98,6 +99,73 @@ func walked(src string, args []string) ([]string, error) {
 				return err
 			}
 			rel = filepath.ToSlash(rel)
+			if !seen[rel] {
+				seen[rel] = true
+				out = append(out, rel)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// filter is -R and --exclude-regex for the walk of -r and -u, as eictar
+// applies them (doc/design.md 10.11): each expression matches the whole
+// stored path; an excluded path is left out, and an excluded directory is not
+// entered; with -R, only the paths that match are kept, but every directory
+// is still entered, because a match can be deeper down.
+type filter struct {
+	include, exclude *regexp.Regexp
+}
+
+func (f filter) String() string {
+	var b strings.Builder
+	if f.include != nil {
+		fmt.Fprintf(&b, " -R %q", strings.TrimSuffix(strings.TrimPrefix(f.include.String(), "(?s)^(?:"), ")$"))
+	}
+	if f.exclude != nil {
+		fmt.Fprintf(&b, " --exclude-regex %q", strings.TrimSuffix(strings.TrimPrefix(f.exclude.String(), "(?s)^(?:"), ")$"))
+	}
+	return b.String()
+}
+
+// The expressions that the steps choose from. The generated names are a
+// word, digits and now and then an extension, so each one matches some
+// paths of most trees, and none of some: both cases are tested.
+var (
+	includeRegexes = []string{`.*\.(txt|go)`, `.*/[a-m][^/]*`, `[^/]*`, `.*[0-9]`}
+	excludeRegexes = []string{`.*/[n-z][^/]*`, `.*\.bin`, `[^/]*/[^/]*/.*`}
+)
+
+// walkedFiltered is walked with a filter.
+func walkedFiltered(src string, args []string, f filter) ([]string, error) {
+	if f.include == nil && f.exclude == nil {
+		return walked(src, args)
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, a := range args {
+		err := filepath.WalkDir(filepath.Join(src, a), func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, err := filepath.Rel(src, p)
+			if err != nil {
+				return err
+			}
+			rel = filepath.ToSlash(rel)
+			if f.exclude != nil && f.exclude.MatchString(rel) {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if f.include != nil && !f.include.MatchString(rel) {
+				return nil
+			}
 			if !seen[rel] {
 				seen[rel] = true
 				out = append(out, rel)
