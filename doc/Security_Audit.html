@@ -1674,8 +1674,16 @@ sure that the open file has the device and the inode that the walk saw.
 Otherwise the member fails, as for a read error. The capture, the
 samples of a dictionary and <code>-u --update-mode=digest</code> all use
 it.</p>
+<p><strong>Limit.</strong> A file that someone deletes and creates again
+can get the same inode number. Linux, NetBSD and OpenBSD give a freed
+number to the next file at once. Such a file passes the check. That is
+safe: it holds only content that the user can also write into the walked
+file. A link, or a hardlink to another file, always has another inode,
+and the check refuses it.</p>
 <p><strong>Tests.</strong> <code>TestOpenWalkedRefusesASwap</code> puts
-a link, and then another file, in place of a walked file.
+a symbolic link, a hardlink to another file, and another new file in
+place of a walked file. The first version of the test deleted the walked
+file, and CI found that the new file then often got its inode.
 <code>TestCreateSkipsAFileThatBecameALink</code> does the same through
 the capture of a member.</p>
 <h3 id="finding-4.-a-planted-link-in-the-archive-path-medium">Finding 4.

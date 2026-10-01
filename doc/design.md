@@ -91,7 +91,8 @@ result, a listing or a selective extraction does not read the member data.
   use. It changes the storage model: members become lists of shared chunks,
   not one continuous blob. That needs a chunk index, reference counts and a
   garbage collector. For these reasons it is not in v1. Whole-file
-  deduplication is in v1 (§4.3).
+  deduplication is in v1 (§4.3). §4.4 records the full analysis and why
+  the design leaves chunk deduplication out.
 - **Public-key recipients** (as in `age`). The format keeps space for them
   (§6.2).
 - **Pipes.** The program cannot read or write an archive through a pipe. The
@@ -430,6 +431,111 @@ stores the new file in full, and does not use that owner again in the run.
 
 A decode is much faster than a compression. An owner that the run wrote
 itself needs no check.
+
+### 4.4 Chunk-level deduplication (not adopted)
+
+This section records a design that was examined and not adopted. It
+explains how chunk deduplication works, what it costs, and why eictar does
+not use it.
+
+**How it works.** A rolling hash (for example FastCDC) moves over the
+content of a file. The writer cuts a chunk where the hash matches a pattern.
+The cut points depend on the content, not on the offset. Thus an insert near
+the start of a file moves one boundary, and the chunks after it do not
+change. The fixed chunks of §4 do not have this property: an insert moves
+every chunk after it. A typical chunker has an average chunk of about 1 MiB,
+with a minimum and a maximum.
+
+The writer hashes each chunk and keeps a map of the chunks that the archive
+holds. A chunk that is in the map is not written again. A member is then a
+list of chunk ids, not one blob. borg and restic work in this way.
+
+Some parts of eictar already agree with this model. Chunks are compressed
+and sealed separately (§4), so parallel work and range reads stay
+possible. Each generation writes a full index, so compact can find the
+chunks that live members use, and copy only those. No reference counts are
+necessary.
+
+**What it changes in the format.**
+
+- The index gets a chunk table: offset, length on disk, plaintext length,
+  codec and digest of each chunk. A member gets a list of chunk ids in place
+  of `off`, `len` and `chunks`.
+- The AEAD rules of §6.3 bind the member id and the chunk index. A shared
+  chunk has no single member. Each chunk needs its own salt or random nonce,
+  and an AAD that binds the chunk. The member's ordered list of chunks, in
+  the authenticated index, then protects the order and the length.
+- A reader of format 1.0 does not refuse an unknown header flag or an
+  unknown `format_minor` (§3.1). It refuses such an index as corrupt (§5.2),
+  with no message that a newer program made it. For a clear message, a
+  chunked archive needs `format_major` 2.
+
+An archive with chunk deduplication off can stay format 1.0, byte for byte.
+Thus the program can support both: the mode is set at create, append and
+update follow the mode of the archive, and `--compact --recompress` can
+convert. The design is possible. The question is whether it is useful.
+
+**Where it helps.** Large files that change in place or grow, and that the
+user adds again with `-u`: virtual machine disks, database files,
+mailboxes, logs, and uncompressed tarballs or images. A small change then
+stores a few chunks, not a new copy. This is most of the gain that delta
+storage (§15.2) wants, with no chain of patches.
+
+**Where it does not help.**
+
+- **Source code and text.** Most source files are smaller than one chunk.
+  Each file is then one chunk, and that is whole-file deduplication, which
+  §4.3 already gives. Text files share small pieces, such as license
+  headers, imports and boilerplate. These are far below any useful chunk
+  size. Compression finds them, and the trained dictionary (§4.2) is the
+  tool for them. Smaller chunks (8 to 16 KiB) make the index about 100 times
+  larger, and each chunk compresses less well.
+- **Compressed formats.** PDF streams, JPEG, video, zip, and office files
+  such as docx and xlsx are compressed inside. When an application saves
+  such a file again, the bytes change through the whole file, so few chunks
+  repeat. An incremental save of a PDF is the exception: it appends to the
+  end. An identical copy is already a reference (§4.3).
+
+**What it costs.**
+
+- **Index size.** Each chunk needs about 45 bytes in the index: a 32-byte
+  digest, an offset, a length and a codec. Digests do not compress. One TB of
+  content in chunks of 1 MiB gives about one million chunks and about 45 MB
+  of index. Each append writes a full index (§9.1), so each `-u` on a large
+  archive adds that much.
+- **Writer memory.** The writer keeps the map of all chunks. At 1 TB, that
+  is 50 to 100 MB, and it must fit in the memory budget of §8.1.
+- **Information to an observer.** §14.1 says that a person who can put files
+  into the tree, and see the size of the archive, can test a guess of a
+  whole file. With chunks, the person can test a guess of part of a file.
+  Chunk lengths are also a fingerprint of the content. borg and restic give
+  the chunker a secret seed for this reason. An encrypted archive needs the
+  same.
+- **Damage.** One damaged chunk damages each member and each version that
+  uses it. The damage is found, but more files are lost than with §4.3.
+- **Fragmentation.** The chunks of one member are spread over the body.
+  Extraction seeks more, which is slow on a disk with heads.
+- **Code.** The reader, verify, compact, `--recompress`, repair, change of
+  passphrase and the stress tester all change. The work is of the same order
+  as encryption (M4).
+
+**Decision.** eictar does not add chunk deduplication. The typical use of
+eictar is to archive a tree of source, documents and media. For that use,
+whole-file references (§4.3) and the dictionary (§4.2) already give most of
+the gain. The costs above apply to every archive. The gain applies only to
+large files that change and that are archived again and again, which is the
+work of a backup repository.
+
+**What can change the decision.** A measurement on real data. A tool can run
+a content-defined chunker over two snapshots of a tree and report, without a
+change to the format:
+
+- the bytes that whole-file deduplication saves
+- the extra bytes that chunks of 64 KiB, 256 KiB and 1 MiB save
+- the index size that each chunk size costs
+
+If the extra saving is large, compared with the index cost, the design can
+come back as format 2.
 
 ## 5. The index
 
@@ -3062,7 +3168,8 @@ content digest, were decided for M9 (§6.2, §9.7).
   chain of versions. Delete and compact must keep each member that another
   depends on, and damage to one blob reaches each version after it. The
   problem statement puts delta storage out of scope for v1. It is a candidate
-  for a later format version, after M11.
+  for a later format version, after M11. Chunk deduplication is the other way
+  to get this gain, and §4.4 records why it is not adopted.
 
 
 ## 16. Implementation milestones
