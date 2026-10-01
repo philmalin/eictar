@@ -113,6 +113,9 @@ option gives.
 .B \-\-verify
 Decode every member and check every digest and every authentication tag,
 without extraction. Data that several files share is decoded one time.
+The members are decoded in parallel, with
+.B \-j
+workers, and reported in archive order.
 Patterns and
 .B \-R
 select the members to check.
@@ -391,7 +394,8 @@ Show a progress line on standard error, when it is a terminal.
 .BI \-j " n" "\fR, \fP\-\-workers " n
 Use
 .I n
-workers, from 1 to 1024. The default is the number of CPUs.
+workers, from 1 to 1024. The default is three quarters of the CPUs,
+rounded down, and at least 1.
 .TP
 .BI \-\-memory\-limit " size"
 The memory for data in flight. The default comes from the size of the

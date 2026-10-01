@@ -3200,10 +3200,13 @@ the chunks to the workers. It holds each chunk back until it knows if
 another chunk follows, so that the last chunk can be sealed as final
 (§6.3). Reading is sequential, whatever the number of workers.</p></li>
 <li><p><strong>Workers.</strong> <code>-j</code> sets the number of
-workers. The default is <code>GOMAXPROCS</code>, and the limit is 1024.
-Each worker compresses a chunk, stores it as plaintext if it grew
-(§4.1), and seals it if the archive is encrypted. Then it adds the chunk
-to the spool of its member, in chunk order.</p></li>
+workers. The default is three quarters of <code>GOMAXPROCS</code>,
+rounded down, and at least 1: 1 and 2 CPUs give 1 worker, 3 give 2, 4
+give 3 and 8 give 6. The other quarter stays free for the reader, the
+emitter and the rest of the machine. The limit is 1024. Each worker
+compresses a chunk, stores it as plaintext if it grew (§4.1), and seals
+it if the archive is encrypted. Then it adds the chunk to the spool of
+its member, in chunk order.</p></li>
 <li><p><strong>Spools.</strong> A spool holds the encoded blob of one
 member until the emitter is ready. It keeps the bytes in memory up to
 <code>--spill-threshold</code> (default 32 MiB). After that, or when
@@ -3316,6 +3319,71 @@ chunk size comes from the index, so the reader limits the number of
 workers against the memory budget: <code>workers × 2 × chunk_size</code>
 must fit. Without <code>--memory-limit</code>, the budget is 25% of RAM,
 or 512 MiB when RAM is not known.</p>
+<p><strong>Decoders are used again.</strong> A new zstd decoder costs
+more than the decode of a small file. With a dictionary it costs much
+more, because each new decoder parses the dictionary. Thus the reader
+keeps the decoders that no member is using, by codec, chunk size and
+dictionary. A caller takes one for a member and gives it back after. A
+list never holds more decoders than there are callers at one time, and
+closing the reader closes them. The workers of <code>--verify</code> do
+not use this shared pool: its lock made them wait for each other. Each
+worker keeps its own set of decoders, one for each codec, chunk size and
+dictionary, with no lock. A decoder keeps no state from one chunk to the
+next, so no state goes from one member to the next. A decoder that
+returns an error is closed, not used again.</p>
+<p><code>BenchmarkDecoderSetup</code> (package <code>codec</code>)
+decodes one small file. A new zstd decoder takes about 5 µs, and a
+decoder used again takes 1.4 µs: 0.26 µs with a dictionary. gzip and xz
+gain nothing, because their <code>Decode</code> makes a new reader for
+each call. s2 has almost no setup. <code>BenchmarkSmallFiles</code>
+(package <code>archive</code>) uses 20000 source files of 0.5 to 6 KiB,
+on 32 CPUs:</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Operation, <code>-j 24</code></th>
+<th>New decoder for each member</th>
+<th>Shared pool</th>
+<th>Pool, batches and a set for each worker</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>--verify</code>, zstd</td>
+<td>85 ms</td>
+<td>61 ms</td>
+<td>44 ms</td>
+</tr>
+<tr class="even">
+<td><code>--verify</code>, zstd with <code>train</code></td>
+<td>177 ms</td>
+<td>59 ms</td>
+<td>46 ms</td>
+</tr>
+<tr class="odd">
+<td><code>--verify</code>, zstd, encrypted</td>
+<td>108 ms</td>
+<td>77 ms</td>
+<td>66 ms</td>
+</tr>
+<tr class="even">
+<td>extract, zstd</td>
+<td>477 ms</td>
+<td>457 ms</td>
+<td>457 ms</td>
+</tr>
+</tbody>
+</table>
+<p>The batches are in §9.4. Extraction of small files spends its time in
+the filesystem: it creates, writes and renames each file. Thus the gain
+is mostly in <code>--verify</code>, and extraction still uses the shared
+pool.</p>
 <h3 id="measured-performance">8.4 Measured performance</h3>
 <p><code>make compare</code> runs <code>bench/compare.sh</code>, which
 compares eictar with <code>tar</code> piped into a compressor. These
@@ -3563,6 +3631,21 @@ hardlink points to, or whose content a selected member shares, because
 extraction reads it. It decodes each blob one time. A hardlink or a
 reference passes or fails with the blob that it uses. Only the selected
 members count in the result.</p>
+<p><code>--verify</code> decodes the blobs in parallel, with
+<code>-j</code> workers. It uses the memory bound of extraction (§8.3).
+The workers finish in any order, but the program reports the results in
+the order of the index. Thus the output, the counts and the error that
+names the first damaged member do not change with <code>-j</code>. One
+member is decoded by one worker, so a single large member does not go
+faster. On 32 CPUs, an archive of 200 files of 10 MB (2 GB, in the page
+cache) took 3.2 s with one worker and 0.29 s with the default of 24.</p>
+<p>The workers take the members in batches of consecutive members: at
+most 64 members, or 1 MiB of content. With one channel operation for
+each member, the hand-over of a small member cost more than its decode.
+A profile of 20000 small files (§8.3) shows where the rest of the time
+goes. Of 44 ms with 24 workers, the decode of the index when the archive
+opens takes about 20 ms, and the list of members to check takes about 4
+ms. These parts use one goroutine. §15.2 records the index decode.</p>
 <p>Patterns and <code>-R</code> select members, as for <code>-t</code>.
 Each pattern and each <code>-R</code> must match at least one member. On
 success, <code>--verify</code> prints one summary line, unless
@@ -4104,7 +4187,8 @@ is refused (open question 2, §1.3).</td>
 <tr class="odd">
 <td><code>-j</code></td>
 <td><code>--workers N</code></td>
-<td>number of workers, 1..1024. Default <code>GOMAXPROCS</code>.</td>
+<td>number of workers, 1..1024. Default three quarters of
+<code>GOMAXPROCS</code>, at least 1 (§8).</td>
 <td>M3</td>
 </tr>
 <tr class="even">
@@ -5855,18 +5939,35 @@ each file, which is a separate model.</p>
 <p>The code review after M6, and the discussion after it, found these
 items. They are not faults. Each one needs a decision or a measurement
 before any work starts. Two items of this list, the wrapped data key and
-the keyed content digest, were decided for M9 (§6.2, §9.7).</p>
+the keyed content digest, were decided for M9 (§6.2, §9.7). Two more are
+done: parallel <code>--verify</code> (§9.4) and a decoder that the
+workers use again (§8.3).</p>
 <ul>
-<li><p><strong>Parallel <code>--verify</code>.</strong>
-<code>--verify</code> decodes the members one at a time. It can use the
-worker pool of extraction, with the same memory bound
-(<code>boundByMemory</code>). On a large archive, the speedup is near
-the number of cores. The design does not change. Measure first.</p></li>
-<li><p><strong>A decoder for each worker.</strong> The reader makes a
-new decoder for each member. With many small files, a decoder that each
-worker keeps can be much cheaper. Measure this with a benchmark before a
-change. The decoder must be reset between members, so that no state goes
-from one member to the next.</p></li>
+<li><p><strong>The decode of the index.</strong> Each operation decodes
+the whole index when it opens the archive.
+<code>BenchmarkDecodeIndex</code> (package <code>format</code>) decodes
+an index of 20000 members in about 19 ms: 16 ms of CBOR decode, 1.5 ms
+of zstd and 1 ms of <code>Validate</code>. The CBOR library decodes by
+reflection, with 9 allocations for each member, at about 240 MB/s. The
+check for duplicate keys costs nothing that can be measured. A test
+decoded the members in parallel, after a first pass that splits them as
+raw CBOR items. It saved only 6 ms with 16 goroutines, because the first
+pass costs 7 ms, and it added a second path through the parser. It is
+not adopted. A decoder written for the Member map can be much faster. It
+is a parser of hostile input, so it needs a differential fuzz test
+against the library.</p></li>
+<li><p><strong>Dictionaries at the best speed.</strong>
+<code>zstd:train</code> at level 10 to 22 makes create of many small
+files very slow: 20000 small source files took 15.3 s and 229 s of CPU,
+against 0.7 s without a dictionary. At this speed, the library
+(klauspost/compress v1.20.0, <code>bestFastEncoder.Reset</code>) copies
+the tables that it made from the dictionary, about 34 MiB, at the start
+of each chunk. A small file is one chunk, so the copy costs much more
+than the compression. At level 3 with <code>train</code>, the same tree
+took 1.1 s, and the archive was 2.7% larger (4.04 MB against 3.93 MB). A
+large chunk hides the copy. The fix can come from the library, or eictar
+can use a lower speed for small chunks when a dictionary is in
+use.</p></li>
 <li><p><strong>Delta storage between versions.</strong> On the library
 tree of §4.3, 553 names of large files have more than one version, and
 the versions take 109.8 MB. <code>tar | zstd --long=27</code> compresses

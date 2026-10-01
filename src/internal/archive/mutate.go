@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"sync"
+	"sync/atomic"
 
 	"github.com/philmalin/eictar/src/internal/codec"
 	"github.com/philmalin/eictar/src/internal/crypt"
@@ -656,6 +658,101 @@ func recompressOne(r *Reader, w *Writer, b *pipeline.Builder, m format.Member, p
 	return nil
 }
 
+// decodeInParallel decodes the content of each member of work with a pool of
+// workers, and discards it: the decode checks every AEAD tag and the digest.
+// It calls report for each member in the order of work, from the calling
+// goroutine only, so report needs no lock.
+//
+// The workers take members in batches of consecutive members. One channel
+// operation for each small member costs more than its decode, so a batch
+// holds up to decodeBatchMembers members, or decodeBatchBytes of content. A
+// batch that finishes early waits in pending until the batches before it are
+// reported. pending holds only an error for each member, not content.
+func decodeInParallel(r *Reader, work []*format.Member, workers int, memoryLimit int64,
+	progress Progress, report func(*format.Member, error)) {
+	if workers < 1 {
+		workers = runtime.GOMAXPROCS(0)
+	}
+	workers = min(workers, len(work))
+	if workers < 1 {
+		return
+	}
+	// The members of work hold their own blobs, so each is its own owner.
+	values := make([]format.Member, len(work))
+	for i, m := range work {
+		values[i] = *m
+	}
+	workers = boundByMemory(workers, values, memoryLimit, func(*format.Member) *format.Member { return nil })
+
+	// starts[b] is the first member of batch b; the last entry is len(work).
+	starts := []int{0}
+	var size uint64
+	for i, m := range work {
+		if i > starts[len(starts)-1] && (i-starts[len(starts)-1] == decodeBatchMembers || size >= decodeBatchBytes) {
+			starts = append(starts, i)
+			size = 0
+		}
+		size += m.PayloadSize()
+	}
+	starts = append(starts, len(work))
+	batches := len(starts) - 1
+
+	type outcome struct {
+		batch int
+		errs  []error
+	}
+	var next atomic.Int64
+	results := make(chan outcome, workers)
+	var wg sync.WaitGroup
+	for range min(workers, batches) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			set := r.newDecoderSet()
+			defer set.close()
+			for {
+				b := int(next.Add(1) - 1)
+				if b >= batches {
+					return
+				}
+				errs := make([]error, starts[b+1]-starts[b])
+				for k := range errs {
+					errs[k] = r.writeMember(work[starts[b]+k], countWriter(io.Discard, progress), set)
+				}
+				results <- outcome{b, errs}
+			}
+		}()
+	}
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	pending := map[int][]error{}
+	reported := 0
+	for o := range results {
+		pending[o.batch] = o.errs
+		for {
+			errs, ok := pending[reported]
+			if !ok {
+				break
+			}
+			delete(pending, reported)
+			for k, err := range errs {
+				report(work[starts[reported]+k], err)
+			}
+			reported++
+		}
+	}
+}
+
+// The size of a batch of decodeInParallel: enough members that the channel
+// costs little, and little enough content that the work stays balanced.
+const (
+	decodeBatchMembers = 64
+	decodeBatchBytes   = 1 << 20
+)
+
 // syncDir makes a rename in dir durable.
 func syncDir(dir string) error {
 	d, err := os.Open(dir)
@@ -676,8 +773,13 @@ type VerifyConfig struct {
 	Regex    fsutil.Regexps // -R
 	Open     OpenOptions
 	// Quick checks the structure only and reads no member data.
-	Quick    bool
-	Reporter Reporter
+	Quick bool
+	// Workers is the number of decoding goroutines; 0 means GOMAXPROCS.
+	Workers int
+	// MemoryLimit bounds what the decoders may allocate; 0 takes the
+	// default of extraction.
+	MemoryLimit int64
+	Reporter    Reporter
 }
 
 // VerifyResult says what a verify checked.
@@ -695,6 +797,10 @@ type VerifyResult struct {
 // tombstone that a selected hardlink points to is decoded too, because
 // extraction reads it. Each damaged member is reported, and the error names
 // the first.
+//
+// Workers decode the blobs in parallel, as extraction does. The results are
+// reported in the order of the index, whatever order the workers finish in,
+// so the output and the error do not depend on the number of workers.
 func VerifyArchive(cfg VerifyConfig) (VerifyResult, error) {
 	var res VerifyResult
 
@@ -771,12 +877,16 @@ func VerifyArchive(cfg VerifyConfig) (VerifyResult, error) {
 		progress.Total(total)
 	}
 
-	var first error
+	var work []*format.Member
 	for _, m := range todo {
-		if !m.Type.HasPayload() {
-			continue
+		if m.Type.HasPayload() {
+			work = append(work, m)
 		}
-		if err := r.WriteMember(m, countWriter(io.Discard, progress)); err != nil {
+	}
+
+	var first error
+	report := func(m *format.Member, err error) {
+		if err != nil {
 			if picked[m.ID] {
 				res.Failed++
 			}
@@ -794,7 +904,7 @@ func VerifyArchive(cfg VerifyConfig) (VerifyResult, error) {
 					}
 				}
 			}
-			continue
+			return
 		}
 		res.Bytes += m.Size
 		if picked[m.ID] {
@@ -812,6 +922,7 @@ func VerifyArchive(cfg VerifyConfig) (VerifyResult, error) {
 			}
 		}
 	}
+	decodeInParallel(r, work, cfg.Workers, cfg.MemoryLimit, progress, report)
 	if first != nil {
 		return res, fmt.Errorf("%d of %d members failed verification; the first: %w",
 			res.Failed, res.Failed+res.Checked, first)

@@ -92,7 +92,7 @@ With no options, eictar uses these defaults:
 |---|---|
 | compression | zstd at level 12 |
 | chunk size | 4 MiB |
-| workers (`-j`) | the number of CPUs |
+| workers (`-j`) | three quarters of the CPUs, rounded down, at least 1 |
 | memory for data in flight | a quarter of the RAM |
 | identical files | stored one time (`--no-dedup` turns this off) |
 | encryption | off |

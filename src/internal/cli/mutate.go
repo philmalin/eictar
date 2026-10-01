@@ -160,12 +160,14 @@ func runVerify(o *Options, stdout, stderr io.Writer) error {
 	rep := &reporter{out: stdout, errOut: stderr, verbose: o.Verbose}
 	progress, done := withProgress(o, rep, stderr)
 	res, err := archive.VerifyArchive(archive.VerifyConfig{
-		Archive:  o.Archive,
-		Patterns: o.Args,
-		Regex:    o.regex,
-		Open:     openFor(o, rep),
-		Quick:    o.Quick,
-		Reporter: progress,
+		Archive:     o.Archive,
+		Patterns:    o.Args,
+		Regex:       o.regex,
+		Open:        openFor(o, rep),
+		Quick:       o.Quick,
+		Workers:     o.Workers,
+		MemoryLimit: int64(o.MemoryLimit),
+		Reporter:    progress,
 	})
 	done()
 	if err != nil || o.Quiet {

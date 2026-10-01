@@ -321,7 +321,7 @@ Output and work:
       --long                with -t: the same as -v
       --json                with -t: a listing for programs
       --progress            a progress line on a terminal
-  -j, --workers N           the number of workers (default: the CPUs)
+  -j, --workers N           the number of workers (default: 3/4 of the CPUs)
       --memory-limit SIZE   the memory for data in flight
       --spill-threshold SIZE  move a member to disk above SIZE (default 32MiB)
       --keep-going          go on after an error on one member (exit 1)

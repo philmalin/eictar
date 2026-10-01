@@ -47,6 +47,10 @@ type Encoder interface {
 // Decoding takes the expected plaintext size, which the index knows for every
 // chunk. Without it a crafted chunk is a decompression bomb; with it, the
 // decoder refuses anything that does not decode to the size claimed.
+//
+// A Decoder keeps no state from one Decode to the next. The reader uses one
+// for every chunk of a member, and then for the next member with the same
+// codec, chunk size and dictionary. It is not safe for concurrent use.
 type Decoder interface {
 	Decode(dst, src []byte, plainSize int) ([]byte, error)
 	Close() error

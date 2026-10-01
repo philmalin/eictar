@@ -1,9 +1,11 @@
 package archive
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"path/filepath"
+	"runtime/pprof"
 	"strings"
 	"testing"
 
@@ -103,4 +105,94 @@ func splitSpec(spec string) (string, codec.Params) {
 	}
 	k, v, _ := strings.Cut(rest, "=")
 	return name, codec.Params{k: v}
+}
+
+// smallTree is 20000 source-like files of 0.5 to 6 KiB, which is the case
+// where the setup of a decoder for each member costs the most, compared with
+// the decode (doc/design.md 15.2).
+func smallTree(b *testing.B) (*testutil.Tree, int64) {
+	b.Helper()
+	tree := testutil.NewTree(b)
+	rnd := rand.New(rand.NewSource(11))
+	var total int64
+	for i := 0; i < 20000; i++ {
+		var sb strings.Builder
+		sb.WriteString("// Copyright 2026 The Example Authors. All rights reserved.\n\n")
+		fmt.Fprintf(&sb, "package pkg%d\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\n", i%40)
+		for j := 0; j < 2+rnd.Intn(30); j++ {
+			fmt.Fprintf(&sb, "func helper%d_%d(w io.Writer, s string) error {\n\t_, err := fmt.Fprintf(w, \"%%s %d\\n\", s)\n\treturn err\n}\n\n", i, j, rnd.Intn(1000))
+		}
+		tree.File(fmt.Sprintf("src/%03d/f%05d.go", i%200, i), 0o644, []byte(sb.String()))
+		total += int64(sb.Len())
+	}
+	return tree, total
+}
+
+// BenchmarkSmallFiles reports verify and extract throughput on many small
+// files, for one worker and for many.
+//
+//	go test -run - -bench SmallFiles ./src/internal/archive/
+func BenchmarkSmallFiles(b *testing.B) {
+	tree, total := smallTree(b)
+	for _, tc := range []struct {
+		spec      string
+		encrypted bool
+	}{
+		{"zstd", false}, {"zstd:train=on", false}, {"zstd", true}, {"s2", false},
+	} {
+		name, params := splitSpec(tc.spec)
+		cfg := CreateConfig{
+			Archive: filepath.Join(b.TempDir(), "s.ect"), Paths: []string{"src"}, BaseDir: tree.Root,
+			Options: Options{Codec: name, Params: params},
+		}
+		var open OpenOptions
+		label := tc.spec
+		if tc.encrypted {
+			cfg.Encryption = &EncryptionConfig{Passphrase: []byte("correct horse"), Params: testKDF}
+			open = OpenOptions{Passphrase: passphrase("correct horse")}
+			label += "+enc"
+		}
+		if _, err := CreateArchive(cfg); err != nil {
+			b.Fatal(err)
+		}
+		// Each timed loop carries a pprof label, which its workers inherit,
+		// so that -cpuprofile can leave out the creation of the archives:
+		//	go tool pprof -tagfocus bench=verify/zstd/j24 ...
+		loop := func(b *testing.B, bench string, body func() error) {
+			b.SetBytes(total)
+			pprof.Do(context.Background(), pprof.Labels("bench", bench), func(context.Context) {
+				for b.Loop() {
+					if err := body(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
+		bench := "open/" + label
+		b.Run(bench, func(b *testing.B) {
+			loop(b, bench, func() error {
+				r, err := OpenWith(cfg.Archive, open)
+				if err == nil {
+					r.Close()
+				}
+				return err
+			})
+		})
+		for _, workers := range []int{1, 24} {
+			bench := fmt.Sprintf("verify/%s/j%d", label, workers)
+			b.Run(bench, func(b *testing.B) {
+				loop(b, bench, func() error {
+					_, err := VerifyArchive(VerifyConfig{Archive: cfg.Archive, Open: open, Workers: workers})
+					return err
+				})
+			})
+		}
+		bench = "extract/" + label + "/j24"
+		b.Run(bench, func(b *testing.B) {
+			loop(b, bench, func() error {
+				_, err := Extract(ExtractConfig{Archive: cfg.Archive, Passphrase: open.Passphrase, Destination: b.TempDir(), Workers: 24})
+				return err
+			})
+		})
+	}
 }

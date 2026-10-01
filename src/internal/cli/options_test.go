@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -147,8 +148,18 @@ func TestParseSizesAndDefaults(t *testing.T) {
 	if d.UpdateMode != archive.UpdateNewer {
 		t.Errorf("default UpdateMode = %q, want %q", d.UpdateMode, archive.UpdateNewer)
 	}
-	if d.Workers < 1 {
-		t.Errorf("default Workers = %d, want at least 1", d.Workers)
+	if want := defaultWorkers(runtime.GOMAXPROCS(0)); d.Workers != want {
+		t.Errorf("default Workers = %d, want %d", d.Workers, want)
+	}
+}
+
+// TestDefaultWorkers: three quarters of the CPUs, rounded down, and never
+// less than one.
+func TestDefaultWorkers(t *testing.T) {
+	for cpus, want := range map[int]int{1: 1, 2: 1, 3: 2, 4: 3, 5: 3, 6: 4, 8: 6, 12: 9, 16: 12, 64: 48} {
+		if got := defaultWorkers(cpus); got != want {
+			t.Errorf("defaultWorkers(%d) = %d, want %d", cpus, got, want)
+		}
 	}
 }
 

@@ -41,6 +41,25 @@ type Reader struct {
 	// goroutines, so it is built once.
 	byIDOnce sync.Once
 	byID     map[uint64]*format.Member
+
+	// decoders holds the decoders that no member is using, by what they
+	// decode. Making a zstd decoder costs more than decoding a small file,
+	// and with a dictionary much more, so they are used again (doc/design.md
+	// 8.3). Each WriteMember takes one and gives it back, so a list never
+	// holds more decoders than there are callers at one time. A worker that
+	// decodes many members uses a decoderSet of its own instead, with no
+	// lock.
+	decMu    sync.Mutex
+	decoders map[decoderKey][]codec.Decoder
+	decClose bool
+}
+
+// decoderKey is what makes two decoders the same: the codec, the chunk size
+// that bounds each decode, and the dictionary.
+type decoderKey struct {
+	codec string
+	chunk int
+	dict  uint32
 }
 
 // PassphraseFunc supplies the passphrase for an encrypted archive. It is
@@ -330,6 +349,12 @@ func (r *Reader) CodecName(m *format.Member) (string, error) {
 // The digest check covers the whole member, so a truncated or altered blob is
 // caught even when every individual chunk decodes cleanly.
 func (r *Reader) WriteMember(m *format.Member, dst io.Writer) error {
+	return r.writeMember(m, dst, nil)
+}
+
+// writeMember is WriteMember with the decoders of one goroutine. With a nil
+// set, it takes a decoder from the shared pool of the Reader.
+func (r *Reader) writeMember(m *format.Member, dst io.Writer, set *decoderSet) error {
 	if !m.Type.HasPayload() {
 		return nil
 	}
@@ -364,15 +389,32 @@ func (r *Reader) WriteMember(m *format.Member, dst io.Writer) error {
 		chunkSize = DefaultChunkSize
 	}
 
-	dict, err := r.dictFor(m)
+	key := decoderKey{codec: codecName, chunk: chunkSize}
+	if m.Codec >= 0 && m.Codec < len(r.index.Codecs) {
+		key.dict = r.index.Codecs[m.Codec].Dict
+	}
+	var dec codec.Decoder
+	if set != nil {
+		dec, err = set.take(key, m)
+	} else {
+		dec, err = r.takeDecoder(key, m)
+	}
 	if err != nil {
 		return err
 	}
-	dec, err := codec.NewDecoderWithDict(codecName, chunkSize, dict)
-	if err != nil {
-		return err
-	}
-	defer dec.Close()
+	// A decoder that returned an error is closed, not used again: nothing
+	// says what state the error left it in.
+	decodeFailed := false
+	defer func() {
+		switch {
+		case decodeFailed && set != nil:
+			set.drop(key)
+		case decodeFailed:
+			dec.Close()
+		case set == nil:
+			r.giveDecoder(key, dec)
+		}
+	}()
 
 	var sealer *crypt.MemberSealer
 	if m.Enc != nil {
@@ -444,6 +486,7 @@ func (r *Reader) WriteMember(m *format.Member, dst io.Writer) error {
 		if uint64(len(encoded)) != plainSize {
 			plain, err = dec.Decode(plain[:0], encoded, int(plainSize))
 			if err != nil {
+				decodeFailed = true
 				// The codec's own error says what it found; the sentinel says
 				// that this is damage, not I/O (exit 3, doc/design.md 10.7).
 				return fmt.Errorf("%w: chunk %d of %q: %v", format.ErrCorruptData, i, m.Path, err)
@@ -490,6 +533,16 @@ func (r *Reader) Owner(m *format.Member) *format.Member {
 
 // Close releases the archive file and wipes the key material the reader held.
 func (r *Reader) Close() error {
+	r.decMu.Lock()
+	for _, list := range r.decoders {
+		for _, dec := range list {
+			dec.Close()
+		}
+	}
+	r.decoders = nil
+	r.decClose = true
+	r.decMu.Unlock()
+
 	if r.keys != nil && !r.borrowedKeys {
 		r.keys.Zero()
 	}
@@ -500,4 +553,81 @@ func (r *Reader) Close() error {
 	err := r.f.Close()
 	r.f = nil
 	return err
+}
+
+// takeDecoder returns a decoder for m's chunks: a free one when there is one,
+// or a new one. The caller gives it back with giveDecoder.
+func (r *Reader) takeDecoder(key decoderKey, m *format.Member) (codec.Decoder, error) {
+	r.decMu.Lock()
+	if list := r.decoders[key]; len(list) > 0 {
+		dec := list[len(list)-1]
+		r.decoders[key] = list[:len(list)-1]
+		r.decMu.Unlock()
+		return dec, nil
+	}
+	r.decMu.Unlock()
+	return r.newDecoder(key, m)
+}
+
+// newDecoder makes a decoder for key. m names the dictionary.
+func (r *Reader) newDecoder(key decoderKey, m *format.Member) (codec.Decoder, error) {
+	dict, err := r.dictFor(m)
+	if err != nil {
+		return nil, err
+	}
+	return codec.NewDecoderWithDict(key.codec, key.chunk, dict)
+}
+
+// giveDecoder returns a decoder that takeDecoder gave, for the next member.
+func (r *Reader) giveDecoder(key decoderKey, dec codec.Decoder) {
+	r.decMu.Lock()
+	defer r.decMu.Unlock()
+	if r.decClose {
+		dec.Close()
+		return
+	}
+	if r.decoders == nil {
+		r.decoders = map[decoderKey][]codec.Decoder{}
+	}
+	r.decoders[key] = append(r.decoders[key], dec)
+}
+
+// decoderSet holds the decoders of one goroutine, one for each key, with no
+// lock. A worker that decodes many members keeps one, so that the workers do
+// not wait for each other on the shared pool of the Reader.
+type decoderSet struct {
+	r   *Reader
+	dec map[decoderKey]codec.Decoder
+}
+
+func (r *Reader) newDecoderSet() *decoderSet {
+	return &decoderSet{r: r, dec: map[decoderKey]codec.Decoder{}}
+}
+
+// take returns the decoder for key, and makes it the first time.
+func (s *decoderSet) take(key decoderKey, m *format.Member) (codec.Decoder, error) {
+	if dec, ok := s.dec[key]; ok {
+		return dec, nil
+	}
+	dec, err := s.r.newDecoder(key, m)
+	if err != nil {
+		return nil, err
+	}
+	s.dec[key] = dec
+	return dec, nil
+}
+
+// drop closes the decoder for key, after an error.
+func (s *decoderSet) drop(key decoderKey) {
+	if dec, ok := s.dec[key]; ok {
+		dec.Close()
+		delete(s.dec, key)
+	}
+}
+
+// close closes every decoder of the set.
+func (s *decoderSet) close() {
+	for key := range s.dec {
+		s.drop(key)
+	}
 }

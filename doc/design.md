@@ -1167,8 +1167,10 @@ sockets too. This is the one type that is skipped, not refused.
   chunks to the workers. It holds each chunk back until it knows if
   another chunk follows, so that the last chunk can be sealed as final
   (§6.3). Reading is sequential, whatever the number of workers.
-- **Workers.** `-j` sets the number of workers. The default is `GOMAXPROCS`,
-  and the limit is 1024. Each worker compresses a chunk, stores it as
+- **Workers.** `-j` sets the number of workers. The default is three
+  quarters of `GOMAXPROCS`, rounded down, and at least 1: 1 and 2 CPUs give
+  1 worker, 3 give 2, 4 give 3 and 8 give 6. The other quarter stays free
+  for the reader, the emitter and the rest of the machine. The limit is 1024. Each worker compresses a chunk, stores it as
   plaintext if it grew (§4.1), and seals it if the archive is encrypted. Then
   it adds the chunk to the spool of its member, in chunk order.
 - **Spools.** A spool holds the encoded blob of one member until the emitter
@@ -1288,6 +1290,35 @@ Each worker decodes into a buffer of its member's chunk size. The chunk size
 comes from the index, so the reader limits the number of workers against the
 memory budget: `workers × 2 × chunk_size` must fit. Without `--memory-limit`,
 the budget is 25% of RAM, or 512 MiB when RAM is not known.
+
+**Decoders are used again.** A new zstd decoder costs more than the decode
+of a small file. With a dictionary it costs much more, because each new
+decoder parses the dictionary. Thus the reader keeps the decoders that no
+member is using, by codec, chunk size and dictionary. A caller takes one for
+a member and gives it back after. A list never holds more decoders than
+there are callers at one time, and closing the reader closes them. The
+workers of `--verify` do not use this shared pool: its lock made them wait
+for each other. Each worker keeps its own set of decoders, one for each
+codec, chunk size and dictionary, with no lock. A decoder keeps no state
+from one chunk to the next, so no state goes from one member to the next. A
+decoder that returns an error is closed, not used again.
+
+`BenchmarkDecoderSetup` (package `codec`) decodes one small file. A new
+zstd decoder takes about 5 µs, and a decoder used again takes 1.4 µs: 0.26
+µs with a dictionary. gzip and xz gain nothing, because their `Decode` makes
+a new reader for each call. s2 has almost no setup. `BenchmarkSmallFiles`
+(package `archive`) uses 20000 source files of 0.5 to 6 KiB, on 32 CPUs:
+
+| Operation, `-j 24` | New decoder for each member | Shared pool | Pool, batches and a set for each worker |
+|---|---|---|---|
+| `--verify`, zstd | 85 ms | 61 ms | 44 ms |
+| `--verify`, zstd with `train` | 177 ms | 59 ms | 46 ms |
+| `--verify`, zstd, encrypted | 108 ms | 77 ms | 66 ms |
+| extract, zstd | 477 ms | 457 ms | 457 ms |
+
+The batches are in §9.4. Extraction of small files spends its time in the
+filesystem: it creates, writes and renames each file. Thus the gain is
+mostly in `--verify`, and extraction still uses the shared pool.
 
 ### 8.4 Measured performance
 
@@ -1482,6 +1513,22 @@ data. A damaged member gives exit 3, and the output names each one.
 or whose content a selected member shares, because extraction reads it. It
 decodes each blob one time. A hardlink or a reference passes or fails with
 the blob that it uses. Only the selected members count in the result.
+
+`--verify` decodes the blobs in parallel, with `-j` workers. It uses the
+memory bound of extraction (§8.3). The workers finish in any order, but the
+program reports the results in the order of the index. Thus the output, the
+counts and the error that names the first damaged member do not change with
+`-j`. One member is decoded by one worker, so a single large member does not
+go faster. On 32 CPUs, an archive of 200 files of 10 MB (2 GB, in the page
+cache) took 3.2 s with one worker and 0.29 s with the default of 24.
+
+The workers take the members in batches of consecutive members: at most 64
+members, or 1 MiB of content. With one channel operation for each member,
+the hand-over of a small member cost more than its decode. A profile of
+20000 small files (§8.3) shows where the rest of the time goes. Of 44 ms
+with 24 workers, the decode of the index when the archive opens takes about
+20 ms, and the list of members to check takes about 4 ms. These parts use
+one goroutine. §15.2 records the index decode.
 
 Patterns and `-R` select members, as for `-t`. Each pattern and each `-R`
 must match at least one member. On success, `--verify` prints one summary
@@ -1801,7 +1848,7 @@ whose encryption was removed (§14).
 | `-v` | `--verbose` | list members during the operation. Repeat for more detail. With `-t`, `-v` gives the long listing and `-vv` adds more (§10.9). | M2 |
 | `-q` | `--quiet` | errors only | M2 |
 | | `--progress` | a progress meter on stderr when stderr is a terminal (§10.10) | M7 |
-| `-j` | `--workers N` | number of workers, 1..1024. Default `GOMAXPROCS`. | M3 |
+| `-j` | `--workers N` | number of workers, 1..1024. Default three quarters of `GOMAXPROCS`, at least 1 (§8). | M3 |
 | | `--chunk-size SIZE` | plaintext chunk size, 512 B..256 MiB. Default 4 MiB. | M2 |
 | | `--memory-limit SIZE` | the memory budget. Default in §8.1. | M3 |
 | | `--spill-threshold SIZE` | the size at which a member's spool moves to disk. Default 32 MiB. | M3 |
@@ -3144,17 +3191,31 @@ which is a separate model.
 The code review after M6, and the discussion after it, found these items.
 They are not faults. Each one needs a decision or a measurement before any
 work starts. Two items of this list, the wrapped data key and the keyed
-content digest, were decided for M9 (§6.2, §9.7).
+content digest, were decided for M9 (§6.2, §9.7). Two more are done:
+parallel `--verify` (§9.4) and a decoder that the workers use again (§8.3).
 
-- **Parallel `--verify`.** `--verify` decodes the members one at a time. It
-  can use the worker pool of extraction, with the same memory bound
-  (`boundByMemory`). On a large archive, the speedup is near the number of
-  cores. The design does not change. Measure first.
-- **A decoder for each worker.** The reader makes a new decoder for each
-  member. With many small files, a decoder that each worker keeps can be much
-  cheaper. Measure this with a benchmark before a change. The decoder must
-  be reset between members, so that no state goes from one member to the
-  next.
+- **The decode of the index.** Each operation decodes the whole index when
+  it opens the archive. `BenchmarkDecodeIndex` (package `format`) decodes
+  an index of 20000 members in about 19 ms: 16 ms of CBOR decode, 1.5 ms of
+  zstd and 1 ms of `Validate`. The CBOR library decodes by reflection, with
+  9 allocations for each member, at about 240 MB/s. The check for duplicate
+  keys costs nothing that can be measured. A test decoded the members in
+  parallel, after a first pass that splits them as raw CBOR items. It saved
+  only 6 ms with 16 goroutines, because the first pass costs 7 ms, and it
+  added a second path through the parser. It is not adopted. A decoder
+  written for the Member map can be much faster. It is a parser of hostile
+  input, so it needs a differential fuzz test against the library.
+- **Dictionaries at the best speed.** `zstd:train` at level 10 to 22 makes
+  create of many small files very slow: 20000 small source files took 15.3
+  s and 229 s of CPU, against 0.7 s without a dictionary. At this speed, the
+  library (klauspost/compress v1.20.0, `bestFastEncoder.Reset`) copies the
+  tables that it made from the dictionary, about 34 MiB, at the start of
+  each chunk. A small file is one chunk, so the copy costs much more than
+  the compression. At level 3 with `train`, the same tree took 1.1 s, and
+  the archive was 2.7% larger (4.04 MB against 3.93 MB). A large chunk
+  hides the copy. The fix can come from the library, or eictar can use a
+  lower speed for small chunks when a dictionary is in use.
+
 - **Delta storage between versions.** On the library tree of §4.3, 553
   names of large files have more than one version, and the versions take
   109.8 MB. `tar | zstd --long=27` compresses each later version against an

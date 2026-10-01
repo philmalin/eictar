@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -409,6 +410,77 @@ func TestCompact(t *testing.T) {
 			// The compacted archive takes appends as any other does.
 			if _, err := appendTo(t, archive, tree, enc, nil, "t/b.txt"); err != nil {
 				t.Fatalf("append after compact: %v", err)
+			}
+		})
+	}
+}
+
+// eventReporter records members and warnings in the order they come.
+type eventReporter struct {
+	events []string
+}
+
+func (r *eventReporter) Member(m *format.Member) { r.events = append(r.events, "ok "+m.Path) }
+func (r *eventReporter) Warn(f string, args ...any) {
+	r.events = append(r.events, "warn "+fmt.Sprintf(f, args...))
+}
+
+// TestVerifyInParallel: verify gives the same report, result and error with
+// any number of workers. The workers finish in any order, but the report
+// follows the index.
+func TestVerifyInParallel(t *testing.T) {
+	tree := testutil.NewTree(t)
+	tree.Dir("p", 0o755)
+	for i := range 60 {
+		// Sizes from one byte to several 4 KiB chunks, so the workers
+		// finish out of order.
+		body := strings.Repeat(fmt.Sprintf("file %d line\n", i*7919%1000), 1+i*i%3000/12)
+		tree.Text(fmt.Sprintf("p/f%02d.txt", i), 0o644, body)
+	}
+	// A copy of p/f07.txt shares its blob, so the report has a sharer too.
+	tree.Text("p/copy.txt", 0o644, strings.Repeat(fmt.Sprintf("file %d line\n", 7*7919%1000), 1+7*7%3000/12))
+	for _, enc := range []bool{false, true} {
+		t.Run(map[bool]string{false: "plain", true: "encrypted"}[enc], func(t *testing.T) {
+			archive := mkArchive(t, tree, enc, "p")
+			r, err := OpenWith(archive, openFor(enc))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var damaged int
+			for _, m := range r.Members() {
+				if m.Length > 0 && m.ID%7 == 0 {
+					flipByteAt(t, archive, int64(m.Offset)+int64(m.Length)/2)
+					damaged++
+				}
+			}
+			r.Close()
+			if damaged < 5 {
+				t.Fatalf("damaged %d blobs, want at least 5", damaged)
+			}
+
+			var want []string
+			var wantRes VerifyResult
+			var wantErr string
+			for _, workers := range []int{1, 2, 4, 16} {
+				rep := &eventReporter{}
+				res, err := VerifyArchive(VerifyConfig{Archive: archive, Open: openFor(enc),
+					Workers: workers, Reporter: rep})
+				if !IsDamage(err) {
+					t.Fatalf("workers=%d: %v, want damage", workers, err)
+				}
+				if workers == 1 {
+					want, wantRes, wantErr = rep.events, res, err.Error()
+					if res.Failed < damaged || res.Checked+res.Failed != 61 {
+						t.Errorf("result %+v with %d damaged blobs of 61 files", res, damaged)
+					}
+					continue
+				}
+				if !slices.Equal(rep.events, want) {
+					t.Errorf("workers=%d: report\n%q\nwant\n%q", workers, rep.events, want)
+				}
+				if res != wantRes || err.Error() != wantErr {
+					t.Errorf("workers=%d: %+v, %v; want %+v, %s", workers, res, err, wantRes, wantErr)
+				}
 			}
 		})
 	}

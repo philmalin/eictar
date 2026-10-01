@@ -194,7 +194,7 @@ type Options struct {
 func Defaults() Options {
 	return Options{
 		Compress:       CompressSpec{Name: "zstd"},
-		Workers:        runtime.GOMAXPROCS(0),
+		Workers:        defaultWorkers(runtime.GOMAXPROCS(0)),
 		ChunkSize:      4 << 20,
 		SpillThreshold: 32 << 20,
 		KDFTime:        crypt.DefaultKDFParams.Time,
@@ -204,6 +204,14 @@ func Defaults() Options {
 		UpdateMode:     archive.UpdateNewer,
 		OnConflict:     archive.ConflictReplace,
 	}
+}
+
+// defaultWorkers is the default -j for a machine with cpus CPUs: three
+// quarters of them, rounded down, and at least one. The other quarter stays
+// free for the reader, the emitter and the rest of the machine: 1 and 2 CPUs
+// give 1 worker, 3 give 2, 4 give 3 and 8 give 6.
+func defaultWorkers(cpus int) int {
+	return max(1, cpus*3/4)
 }
 
 // flagSet builds the parser. Every short option has a long form, and short
