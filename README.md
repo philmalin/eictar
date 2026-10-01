@@ -245,7 +245,8 @@ available on each platform: the manual page gives the details.
   no `train`: shared content and dictionaries let them test for a guessed
   file.
 - [`doc/Security_Audit.md`](doc/Security_Audit.md) records the security
-  review of v1.0.1 and the fixes of v1.0.2.
+  review of v1.0.1 and the fixes of v1.0.2, and a follow-up review with the
+  fix of v1.0.3.
 - A change of passphrase does not remove old copies of the archive. Such a
   copy still opens with the old passphrase.
 

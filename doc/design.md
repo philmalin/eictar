@@ -1,8 +1,8 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete, and v1.0.2 is the current release. The CI workflow passes
+Status: M1 to M11 are complete, and v1.0.3 is the current release. The CI workflow passes
 on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
-Date: 2026-09-26
+Date: 2026-10-01
 Applies to: v1 (format version 1.0)
 
 This document specifies the on-disk format, the concurrency model, the command
@@ -82,7 +82,7 @@ result, a listing or a selective extraction does not read the member data.
   A chain makes extraction slower as the history grows, and it breaks when a
   member in the middle is deleted. This decision has a cost. A file that you
   append N times occupies N full copies, until `--compact` removes the dead
-  copies. §15.2 records a measurement of the cost.
+  copies. §4.5 records the analysis, and why delta storage is not adopted.
 - **Incremental archives, as in `tar --listed-incremental`.** That feature
   keeps a snapshot of a tree so that the next run stores only the changes.
   It is a feature above the format. It can come later with no change to the
@@ -364,7 +364,7 @@ that member, the **owner**.
 
 A library tree of 8514 files had 1023 copies, which took 26.8 MB of 245 MB.
 With references and a dictionary, its archive is 214 MB.
-`tar | zstd --long=27` makes 180 MB of the same tree, and §15.2 explains
+`tar | zstd --long=27` makes 180 MB of the same tree, and §4.5 explains
 most of the difference.
 
 A reference is not a hardlink. A hardlink is one file with two names, and
@@ -479,7 +479,7 @@ convert. The design is possible. The question is whether it is useful.
 user adds again with `-u`: virtual machine disks, database files,
 mailboxes, logs, and uncompressed tarballs or images. A small change then
 stores a few chunks, not a new copy. This is most of the gain that delta
-storage (§15.2) wants, with no chain of patches.
+storage (§4.5) wants, with no chain of patches.
 
 **Where it does not help.**
 
@@ -536,6 +536,81 @@ change to the format:
 
 If the extra saving is large, compared with the index cost, the design can
 come back as format 2.
+
+### 4.5 Delta storage between versions (not adopted)
+
+This section records a design that was examined and not adopted, as §4.4
+does.
+
+**What it is.** A delta member is compressed against the content of another
+member, its base. zstd does this with the base as a raw dictionary
+(`zstd --patch-from`). The content that the two versions share costs almost
+nothing. A member records the id of its base, and extraction decodes the
+base first.
+
+**The measurement.** On the library tree of §4.3, 553 names of large files
+have more than one version, and the versions take 109.8 MB.
+`tar | zstd --long=27` compresses each later version against an earlier one
+in its stream, and it is about 30 MB smaller than eictar for that reason.
+Per-file compression cannot see across files, whatever the chunk size or the
+dictionary.
+
+**How to find a base.** There are three signals:
+
+1. **The same path in an earlier generation.** When append or `-u` replaces
+   a member, the old member is a tombstone (§9.2). Its content is the last
+   version of the file. The index names it, so the signal is exact and free.
+2. **Paths that are equal except for a version.** The library tree holds
+   `golang.org/x/sys@v0.47.0/unix/zerrors_linux.go` and the same path with
+   `v0.48.0`. The writer replaces each token that looks like a version with a
+   placeholder, and groups the paths that are then equal. This works inside
+   one create, with no extra read.
+3. **Similar content.** A sketch of each large file (for example MinHash of
+   its content-defined chunks) estimates how much two files share. This finds
+   a renamed version, but each file must be read and the sketches indexed.
+
+A signal only gives a candidate. The writer compresses the first chunk with
+and without the candidate, and keeps the delta only when it saves enough.
+
+**What it costs.**
+
+- A member is no longer independent: extraction needs its base first.
+  Without a limit, it needs a chain of versions. Each chunk must stay
+  independent too, so chunk *i* uses the region of the base near the same
+  offset, and a large insert near the start loses the gain.
+- Delete and compact must keep each base that a live delta uses. Damage to a
+  base reaches each delta that uses it.
+- `base` is a field that an old reader must not ignore. A reader of format
+  1.0 does not check `format_minor` (§4.4), so a new format version is
+  necessary.
+- A person who can put files into the tree, and see the size of the archive,
+  can test a guess against a similar file, not only an identical one (§14.1).
+
+**Why there is no gain for updates.** eictar cannot list or extract a
+tombstone. Thus an old version is only dead space until `--compact`. A delta
+against it (signal 1) makes the archive grow less between two compacts, and
+that is all. At the compact, the program must keep the tombstone because the
+delta needs it, which keeps the space that compact must remove, or encode the
+delta again in full, which loses the gain. For a user who compacts, the
+deltas are useless, and they make compact more complex.
+
+The gain lasts only when both versions are live: trees that hold versions
+side by side, such as module caches, vendored libraries, and release or
+dated directories (signal 2). Compact keeps both, and nothing else can
+remove the copy.
+
+**Decision.** eictar does not add delta storage. The typical use does not
+hold versions side by side, and for updates, `--compact` removes the old
+versions with no change to the format.
+
+**What can change the decision.**
+
+- A use with many versions side by side. A measurement can pair the files of
+  a tree by signal 2, and report the bytes with and without
+  `zstd --patch-from`, before any change to the format.
+- A history feature: list and extract a file as it was in an earlier
+  generation. Then the old versions have a use, and a delta against them
+  (signal 1) saves space that compact would otherwise have to keep.
 
 ## 5. The index
 
@@ -1302,6 +1377,14 @@ for each other. Each worker keeps its own set of decoders, one for each
 codec, chunk size and dictionary, with no lock. A decoder keeps no state
 from one chunk to the next, so no state goes from one member to the next. A
 decoder that returns an error is closed, not used again.
+
+The codec, the chunk size and the dictionary come from the index. Thus a
+hostile archive can give each member a kind of decoder of its own, for
+example a chunk size of its own. Each idle decoder keeps its tables, and its
+dictionary. The pool and each set keep at most 16 kinds. A decoder of a
+further kind is closed after its member, as each decoder was before the
+pool. A real archive has a few kinds: one for each catalog entry and chunk
+size that it uses (Security_Audit.md, finding 10).
 
 `BenchmarkDecoderSetup` (package `codec`) decodes one small file. A new
 zstd decoder takes about 5 µs, and a decoder used again takes 1.4 µs: 0.26
@@ -3074,7 +3157,8 @@ links where the program writes. Two rules apply:
 
 `doc/Security_Audit.md` records the review of v1.0.1: eight findings, the
 fixes of v1.0.2, and a test for each fix. It also lists what the review
-examined and found sound.
+examined and found sound. Its §6 records a follow-up review of the changes
+after v1.0.2, with one more finding and its fix in v1.0.3.
 
 ## 15. Future work (format-compatible)
 
@@ -3216,22 +3300,6 @@ parallel `--verify` (§9.4) and a decoder that the workers use again (§8.3).
   hides the copy. The fix can come from the library, or eictar can use a
   lower speed for small chunks when a dictionary is in use.
 
-- **Delta storage between versions.** On the library tree of §4.3, 553
-  names of large files have more than one version, and the versions take
-  109.8 MB. `tar | zstd --long=27` compresses each later version against an
-  earlier one in its stream, and it is about 30 MB smaller than eictar for
-  that reason. Per-file compression cannot see across files, whatever the
-  chunk size or the dictionary.
-
-  zstd can compress a file with the content of another member as its
-  dictionary (`--patch-from`). Then the member is no longer independent of
-  other members. Its extraction needs that member first, and it can need a
-  chain of versions. Delete and compact must keep each member that another
-  depends on, and damage to one blob reaches each version after it. The
-  problem statement puts delta storage out of scope for v1. It is a candidate
-  for a later format version, after M11. Chunk deduplication is the other way
-  to get this gain, and §4.4 records why it is not adopted.
-
 
 ## 16. Implementation milestones
 
@@ -3339,6 +3407,12 @@ encoders (§8.2).
 (`doc/Security_Audit.md`). Two were serious for a root user with an archive
 from someone else: privileged xattrs, and a member `.`. The release fixes six,
 each with a test (§7.7, §9, §14), and documents the other two (§14.1).
+
+**v1.0.3** makes `--verify` parallel (§9.4), and uses decoders again,
+within a bound that a hostile index cannot raise (§8.3; finding 10 of the
+audit). The default of `-j` is three quarters of the CPUs (§8). A name that
+is an existing directory gets `.ect` even when it has a dot (§10.12). A new
+fuzz target covers a zstd dictionary from an archive.
 
 
 ## Appendix A. Why these primitives, compared with AES

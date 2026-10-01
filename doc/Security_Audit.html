@@ -1478,11 +1478,25 @@ expansion of the index (low)</a></li>
 <li><a href="#what-the-review-found-sound" id="toc-what-the-review-found-sound">4. What the review found
 sound</a></li>
 <li><a href="#recommendations-for-later" id="toc-recommendations-for-later">5. Recommendations for later</a></li>
+<li><a href="#follow-up-review-for-v1.0.3" id="toc-follow-up-review-for-v1.0.3">6. Follow-up review for v1.0.3</a>
+<ul>
+<li><a href="#finding-10.-one-decoder-for-each-kind-in-the-index-low" id="toc-finding-10.-one-decoder-for-each-kind-in-the-index-low">Finding
+10. One decoder for each kind in the index (low)</a></li>
+<li><a href="#the-other-changes" id="toc-the-other-changes">The other
+changes</a></li>
+<li><a href="#recommendation-1-fuzzing" id="toc-recommendation-1-fuzzing">Recommendation 1: fuzzing</a></li>
+<li><a href="#status-of-the-recommendations" id="toc-status-of-the-recommendations">Status of the
+recommendations</a></li>
+</ul></li>
 </ul></li>
 </ul>
 </nav>
 <h1 id="eictar-security-audit">eictar security audit</h1>
 <table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <tbody>
 <tr class="odd">
 <td>Version reviewed</td>
@@ -1497,6 +1511,10 @@ sound</a></li>
 <td>2026-09-26</td>
 </tr>
 <tr class="even">
+<td>Follow-up review</td>
+<td>the changes after v1.0.2, with fixes in v1.0.3, 2026-10-01 (§6)</td>
+</tr>
+<tr class="odd">
 <td>Scope</td>
 <td>the source code, the archive format, and encrypted archives</td>
 </tr>
@@ -1596,6 +1614,13 @@ from the size of the archive</td>
 <td>An unsealed index shows link targets and xattr values; other known
 limits</td>
 <td>Documented</td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td>Low</td>
+<td>The pool of decoders kept one decoder for each kind that the index
+named (after v1.0.2, not released)</td>
+<td>Fixed in v1.0.3</td>
 </tr>
 </tbody>
 </table>
@@ -1856,5 +1881,75 @@ capabilities without exact modes.</li>
 <li>Review the code again when a feature adds a new place where the
 archive’s data decides what the program does.</li>
 </ul>
+<h2 id="follow-up-review-for-v1.0.3">6. Follow-up review for v1.0.3</h2>
+<p>This review applies recommendation 3 of §5 to the changes after
+v1.0.2:</p>
+<ul>
+<li>the name of the archive: a name that is an existing directory gets
+<code>.ect</code>, even when it has a dot</li>
+<li>parallel <code>--verify</code>, with members in batches</li>
+<li>the pool of decoders, and a set of decoders for each worker of
+<code>--verify</code></li>
+<li>the default of <code>-j</code>: three quarters of the CPUs</li>
+</ul>
+<p>It also does recommendation 1.</p>
+<h3 id="finding-10.-one-decoder-for-each-kind-in-the-index-low">Finding
+10. One decoder for each kind in the index (low)</h3>
+<p><strong>Where:</strong> <code>takeDecoder</code>,
+<code>giveDecoder</code> and <code>decoderSet</code> in
+<code>src/internal/archive/reader.go</code>. Commit 3f84d7f added them
+after v1.0.2. No release had them.</p>
+<p><strong>Problem.</strong> The pool, and the set of each worker, keep
+an idle decoder for each kind: each codec, chunk size and dictionary.
+These values come from the index, and so from the attacker. A chunk size
+is valid for a member of one chunk when it is at least the size of the
+content. Thus each member of a hostile archive can have a kind of its
+own. Each idle zstd decoder keeps about 17 KB of tables, and its
+dictionary. An index can hold 4194304 members. Thus
+<code>--verify</code> or extraction of a small archive could keep many
+GB of decoders. Before the pool, the reader closed each decoder after
+its member.</p>
+<p><strong>Fix.</strong> The pool and each set keep at most 16 kinds
+(<code>maxDecoderKinds</code>). A decoder of a further kind is closed
+after its member. A real archive has one kind for each catalog entry and
+chunk size that it uses.</p>
+<p><strong>Test.</strong> <code>TestDecoderKindsAreBounded</code>
+decodes one member with 40 chunk sizes, through the pool and through a
+set. Each keeps 16 kinds, and each decode is correct. With no bound, the
+test fails: each keeps 40.</p>
+<h3 id="the-other-changes">The other changes</h3>
+<ul>
+<li><strong>No state goes from one member to the next.</strong> A
+decoder is used again only for the same codec, chunk size and dictionary
+id. Thus a decoder made with one dictionary never decodes a member whose
+catalog names another. zstd resets its frame state at the start of each
+<code>DecodeAll</code>. The other codecs make a new reader for each
+chunk. A decoder that returns an error is closed, not used again
+(<code>TestDecoderPoolDropsFailedDecoder</code>).</li>
+<li><strong>Parallel <code>--verify</code></strong> bounds its workers
+by the chunk sizes in the index, as extraction does (design §8.3). A
+batch that waits holds only one error for each member, not content. The
+report keeps the order of the index, so the output does not depend on
+the workers (<code>TestVerifyInParallel</code>).</li>
+<li><strong>The name of the archive</strong> changes only which file
+name the program uses. The archive is then opened as before, with the
+protection of finding 4.</li>
+<li><strong>The default of <code>-j</code></strong> has no effect on
+security.</li>
+</ul>
+<h3 id="recommendation-1-fuzzing">Recommendation 1: fuzzing</h3>
+<p><code>FuzzZstdDictionary</code> (package <code>codec</code>) is new.
+It follows the reader with an arbitrary dictionary: the check of the id,
+the decoder made from the dictionary, and a decode with it.
+<code>make fuzz</code> runs it with the other targets.</p>
+<p>FUZZ_RESULTS</p>
+<h3 id="status-of-the-recommendations">Status of the
+recommendations</h3>
+<ol type="1">
+<li>Done: the new target, and the longer run above.</li>
+<li>Open. It is a decision about a feature, not a fault.</li>
+<li>Done for v1.0.3, in this section. It stays a rule for later
+changes.</li>
+</ol>
 </body>
 </html>

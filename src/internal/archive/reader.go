@@ -54,6 +54,16 @@ type Reader struct {
 	decClose bool
 }
 
+// maxDecoderKinds bounds the kinds of decoder that the pool and a decoderSet
+// keep. The codec, the chunk size and the dictionary come from the index, so a
+// hostile archive can give each member a kind of its own. Each idle decoder
+// holds its tables, and a dictionary when it has one. Without a bound, an
+// index of a million members with a million chunk sizes keeps a million
+// decoders. A real archive has one kind for each catalog entry and chunk size
+// that it uses: a few. A decoder of a kind beyond the bound is closed after
+// its member, as each decoder was before the pool.
+const maxDecoderKinds = 16
+
 // decoderKey is what makes two decoders the same: the codec, the chunk size
 // that bounds each decode, and the dictionary.
 type decoderKey struct {
@@ -407,6 +417,8 @@ func (r *Reader) writeMember(m *format.Member, dst io.Writer, set *decoderSet) e
 	decodeFailed := false
 	defer func() {
 		switch {
+		case set != nil && !set.holds(key, dec):
+			dec.Close()
 		case decodeFailed && set != nil:
 			set.drop(key)
 		case decodeFailed:
@@ -589,6 +601,10 @@ func (r *Reader) giveDecoder(key decoderKey, dec codec.Decoder) {
 	if r.decoders == nil {
 		r.decoders = map[decoderKey][]codec.Decoder{}
 	}
+	if _, known := r.decoders[key]; !known && len(r.decoders) >= maxDecoderKinds {
+		dec.Close()
+		return
+	}
 	r.decoders[key] = append(r.decoders[key], dec)
 }
 
@@ -604,7 +620,9 @@ func (r *Reader) newDecoderSet() *decoderSet {
 	return &decoderSet{r: r, dec: map[decoderKey]codec.Decoder{}}
 }
 
-// take returns the decoder for key, and makes it the first time.
+// take returns the decoder for key, and makes it the first time. The set
+// keeps the new decoder while it holds fewer than maxDecoderKinds kinds;
+// otherwise the caller closes it after use (holds says which).
 func (s *decoderSet) take(key decoderKey, m *format.Member) (codec.Decoder, error) {
 	if dec, ok := s.dec[key]; ok {
 		return dec, nil
@@ -613,8 +631,16 @@ func (s *decoderSet) take(key decoderKey, m *format.Member) (codec.Decoder, erro
 	if err != nil {
 		return nil, err
 	}
-	s.dec[key] = dec
+	if len(s.dec) < maxDecoderKinds {
+		s.dec[key] = dec
+	}
 	return dec, nil
+}
+
+// holds reports whether dec is the decoder that the set keeps for key.
+func (s *decoderSet) holds(key decoderKey, dec codec.Decoder) bool {
+	kept, ok := s.dec[key]
+	return ok && kept == dec
 }
 
 // drop closes the decoder for key, after an error.

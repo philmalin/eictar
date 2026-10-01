@@ -80,8 +80,10 @@ fuzz: | $(TMPDIR)
 		echo "=== $$t"; \
 		$(GO) test ./src/internal/format/ -run=XXX -fuzz=$$t -fuzztime=$(FUZZTIME) || exit 1; \
 	done
-	@echo "=== FuzzDecoders"
-	$(GO) test ./src/internal/codec/ -run=XXX -fuzz=FuzzDecoders -fuzztime=$(FUZZTIME)
+	@for t in FuzzDecoders FuzzZstdDictionary; do \
+		echo "=== $$t"; \
+		$(GO) test ./src/internal/codec/ -run=XXX -fuzz=$$t -fuzztime=$(FUZZTIME) || exit 1; \
+	done
 
 # Go benchmarks of eictar alone: create and extract throughput per codec.
 bench: | $(TMPDIR)

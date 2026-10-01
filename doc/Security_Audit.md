@@ -5,6 +5,7 @@
 | Version reviewed | v1.0.1 |
 | Fixes in | v1.0.2 |
 | Date | 2026-09-26 |
+| Follow-up review | the changes after v1.0.2, with fixes in v1.0.3, 2026-10-01 (§6) |
 | Scope | the source code, the archive format, and encrypted archives |
 
 ## 1. Scope and method
@@ -39,6 +40,7 @@ means that the review found it in the code, and gives the place.
 | 7 | Low | Dictionaries and shared content let an attacker test for a file, from the size of the archive | Documented |
 | 8 | Low | A passphrase file that other users can read gave no warning | Fixed |
 | 9 | Information | An unsealed index shows link targets and xattr values; other known limits | Documented |
+| 10 | Low | The pool of decoders kept one decoder for each kind that the index named (after v1.0.2, not released) | Fixed in v1.0.3 |
 
 Findings 1 to 4 matter most when root extracts an archive from someone else,
 or archives a tree that other users can write. Each fix has a test in
@@ -282,3 +284,71 @@ users, and `chmod 600` it. The program still reads it.
   capabilities without exact modes.
 - Review the code again when a feature adds a new place where the archive's
   data decides what the program does.
+
+## 6. Follow-up review for v1.0.3
+
+This review applies recommendation 3 of §5 to the changes after v1.0.2:
+
+- the name of the archive: a name that is an existing directory gets `.ect`,
+  even when it has a dot
+- parallel `--verify`, with members in batches
+- the pool of decoders, and a set of decoders for each worker of `--verify`
+- the default of `-j`: three quarters of the CPUs
+
+It also does recommendation 1.
+
+### Finding 10. One decoder for each kind in the index (low)
+
+**Where:** `takeDecoder`, `giveDecoder` and `decoderSet` in
+`src/internal/archive/reader.go`. Commit 3f84d7f added them after v1.0.2.
+No release had them.
+
+**Problem.** The pool, and the set of each worker, keep an idle decoder for
+each kind: each codec, chunk size and dictionary. These values come from the
+index, and so from the attacker. A chunk size is valid for a member of one
+chunk when it is at least the size of the content. Thus each member of a
+hostile archive can have a kind of its own. Each idle zstd decoder keeps
+about 17 KB of tables, and its dictionary. An index can hold 4194304
+members. Thus `--verify` or extraction of a small archive could keep many GB
+of decoders. Before the pool, the reader closed each decoder after its
+member.
+
+**Fix.** The pool and each set keep at most 16 kinds (`maxDecoderKinds`). A
+decoder of a further kind is closed after its member. A real archive has one
+kind for each catalog entry and chunk size that it uses.
+
+**Test.** `TestDecoderKindsAreBounded` decodes one member with 40 chunk
+sizes, through the pool and through a set. Each keeps 16 kinds, and each
+decode is correct. With no bound, the test fails: each keeps 40.
+
+### The other changes
+
+- **No state goes from one member to the next.** A decoder is used again
+  only for the same codec, chunk size and dictionary id. Thus a decoder made
+  with one dictionary never decodes a member whose catalog names another.
+  zstd resets its frame state at the start of each `DecodeAll`. The other
+  codecs make a new reader for each chunk. A decoder that returns an error
+  is closed, not used again (`TestDecoderPoolDropsFailedDecoder`).
+- **Parallel `--verify`** bounds its workers by the chunk sizes in the
+  index, as extraction does (design §8.3). A batch that waits holds only one
+  error for each member, not content. The report keeps the order of the
+  index, so the output does not depend on the workers
+  (`TestVerifyInParallel`).
+- **The name of the archive** changes only which file name the program uses.
+  The archive is then opened as before, with the protection of finding 4.
+- **The default of `-j`** has no effect on security.
+
+### Recommendation 1: fuzzing
+
+`FuzzZstdDictionary` (package `codec`) is new. It follows the reader with an
+arbitrary dictionary: the check of the id, the decoder made from the
+dictionary, and a decode with it. `make fuzz` runs it with the other
+targets.
+
+FUZZ_RESULTS
+
+### Status of the recommendations
+
+1. Done: the new target, and the longer run above.
+2. Open. It is a decision about a feature, not a fault.
+3. Done for v1.0.3, in this section. It stays a rule for later changes.
