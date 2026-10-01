@@ -345,7 +345,17 @@ arbitrary dictionary: the check of the id, the decoder made from the
 dictionary, and a decode with it. `make fuzz` runs it with the other
 targets.
 
-FUZZ_RESULTS
+Each of the six targets ran for 5 minutes, on 32 CPUs (`make fuzz
+FUZZTIME=5m`). None found a failure.
+
+| Target | Inputs | Corpus |
+|---|---:|---:|
+| `FuzzHeaderUnmarshal` | 215,835,789 | 12 |
+| `FuzzTrailerUnmarshal` | 220,831,787 | 11 |
+| `FuzzDecodeIndex` | 178,932,605 | 872 |
+| `FuzzUnmarshalCryptoHeader` | 200,141,852 | 621 |
+| `FuzzDecoders` | 106,053,599 | 1026 |
+| `FuzzZstdDictionary` | 121,155,063 | 600 |
 
 ### Status of the recommendations
 
