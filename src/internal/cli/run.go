@@ -124,11 +124,18 @@ const ArchiveExt = ".ect"
 // .ect when no file has the name as typed and that one exists, so that it
 // finds what create made. A file with the name as typed always wins. A
 // directory does not: `eictar -cf backup backup` makes backup.ect beside the
-// directory backup, and -tf backup must find it.
+// directory backup, and -tf backup must find it. A name that is a directory
+// counts as one with no extension even when it has a dot, since a directory
+// cannot be the archive: -cf v1.5 v1.5 makes v1.5.ect.
 func archiveName(op Operation, name string) string {
-	if name == "" || hasExtension(name) || strings.HasSuffix(name, "/") ||
+	if name == "" || strings.HasSuffix(name, "/") ||
 		strings.HasSuffix(name, string(filepath.Separator)) {
 		return name
+	}
+	if hasExtension(name) {
+		if fi, err := os.Stat(name); err != nil || !fi.IsDir() {
+			return name
+		}
 	}
 	if op == OpCreate {
 		return name + ArchiveExt

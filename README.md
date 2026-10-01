@@ -81,6 +81,8 @@ eictar -xf photos -d /tmp/restore      # extract into /tmp/restore
 
 The conventional extension is `.ect`. `-c` adds it to a name with no
 extension, and the other operations find `photos.ect` by the name `photos`.
+A name that is a directory gets `.ect` even when it has a dot, so
+`eictar -cf v1.5 v1.5` makes `v1.5.ect`.
 Paths are stored relative: `-C DIR` changes to DIR first, so that
 `eictar -cf home -C ~ Documents` stores `Documents/...`.
 

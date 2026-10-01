@@ -1984,7 +1984,10 @@ works, and the extension is only for people.
 under `-q`. It does so whatever exists with the name as typed. Thus
 `-cf backup backup` makes `backup.ect` from the directory `backup`. A name
 has an extension when its last element, without leading dots, has a dot. Thus `-cf backup.tar` and `-cf home.2026-09` keep the name
-as typed, and `-cf .backup` makes `.backup.ect`.
+as typed, and `-cf .backup` makes `.backup.ect`. A name that is an existing
+directory counts as a name with no extension, even when it has a dot. A
+directory cannot be the archive. Thus `-cf v1.5 v1.5` makes `v1.5.ect`
+from the directory `v1.5`, and `-tf v1.5` finds it.
 
 **The other operations find the name that create made.** If the name has no
 extension, no file has that name, and the same name with `.ect` exists, the

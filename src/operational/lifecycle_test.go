@@ -1033,6 +1033,21 @@ func TestArchiveExtension(t *testing.T) {
 	if list := runOK(t, tree.Root, "-tf", "work"); !strings.Contains(list.Stdout, "work/src/main.go") {
 		t.Errorf("-tf work:\n%s", list.Stdout)
 	}
+	// The same with a dot in the directory's name: the dot is not an
+	// extension, because a directory cannot be the archive.
+	if err := os.Rename(filepath.Join(tree.Root, "work"), filepath.Join(tree.Root, "v1.5_work")); err != nil {
+		t.Fatal(err)
+	}
+	runOK(t, tree.Root, "-cf", "v1.5_work", "v1.5_work")
+	if _, err := os.Stat(filepath.Join(tree.Root, "v1.5_work.ect")); err != nil {
+		t.Fatalf("no v1.5_work.ect: %v", err)
+	}
+	if list := runOK(t, tree.Root, "-tf", "v1.5_work"); !strings.Contains(list.Stdout, "v1.5_work/src/main.go") {
+		t.Errorf("-tf v1.5_work:\n%s", list.Stdout)
+	}
+	if err := os.Rename(filepath.Join(tree.Root, "v1.5_work"), filepath.Join(tree.Root, "work")); err != nil {
+		t.Fatal(err)
+	}
 	// -q keeps the notice out; a name with an extension is kept.
 	res = runOK(t, tree.Root, "-cqf", filepath.Join(dir, "other.tar"), "work")
 	if res.Stderr != "" {
