@@ -1,6 +1,6 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete, and v1.0.4 is the current release. The CI workflow passes
+Status: M1 to M11 are complete, and v1.0.5 is the current release. The CI workflow passes
 on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
 Date: 2026-10-02
 Applies to: v1 (format version 1.0)
@@ -3517,6 +3517,16 @@ earlier archive, and earlier versions read what it writes.
 
 The tag of v1.0.3 left out the tests of its pool of decoders and the
 results of its fuzz run (`doc/Security_Audit.md` §6). v1.0.4 has them.
+
+**v1.0.5** updates `klauspost/compress` to v1.20.1, `ulikunitz/xz` to
+v0.5.17 and `klauspost/cpuid` to v2.4.0. The updates change decoders that
+read untrusted archives. `make check` and a fuzz run of each target passed,
+the ratios did not change, and the speed did not change by more than the
+noise of the benchmarks (§12.3). The program now warns when an xz preset
+has a dictionary larger than the chunk size, as it does for a zstd window
+(§10.2). `THIRD_PARTY.md` lists the modules in the binary with their license
+texts, and a release includes it. Dependabot proposes updates of the modules
+and the actions each month (§12.3).
 
 
 ## Appendix A. Why these primitives, compared with AES
