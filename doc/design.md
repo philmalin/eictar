@@ -2498,6 +2498,7 @@ README.md, LICENSE         the introduction, and GPL-3.0
 TRADEMARKS.md              the reserved name, and the term of GPL-3.0 section 7(e)
 THIRD_PARTY.md             the modules in the binary, and their license texts
 .github/workflows/         ci.yml, the tests on each platform; release.yml (§12.3)
+.github/dependabot.yml     a monthly pull request for module and action updates (§12.3)
 doc/                       design.md; format.md, the format reference; eictar.1, the man page
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
 tools/testskips/           lists the skipped tests and their reasons, for make skips (§13.3)
@@ -2747,6 +2748,25 @@ the license. The man page is not in that list, because a test reads it. A
 tag always runs it. The draft is
 published by hand, after that run passes too. Windows builds, but it is not
 in the release, because no workflow tests it (§15.1).
+
+**Dependencies do not change by themselves.** `go.mod` gives the exact
+version of each module, and `go.sum` its checksum, so each build of one
+commit uses the same code. Dependabot (`.github/dependabot.yml`) opens a
+pull request each month: one for the Go modules, and one for the GitHub
+Actions of the workflows. An update of a module follows these steps:
+
+1. Read what changed in the packages that eictar uses. The decoders read
+   untrusted archives, so a change there can be a security fix.
+2. Run `make check`, and `make fuzz` for some minutes. The golden archives
+   show that the format did not change.
+3. Update `THIRD_PARTY.md`: the versions, and the license texts if they
+   changed. Until then, a test fails.
+
+The update of 2026-10-02 took `klauspost/compress` to v1.20.1 (changes to
+the zstd and huff0 decoders), `ulikunitz/xz` to v0.5.17 (a reader that
+returns no data and no error is no longer a failure), and `klauspost/cpuid`
+to v2.4.0. The ratios did not change, and the benchmarks of §8 did not
+change by more than their noise.
 
 ## 13. Testing plan
 
@@ -3349,7 +3369,7 @@ parallel `--verify` (§9.4) and a decoder that the workers use again (§8.3).
 - **Dictionaries at the best speed.** `zstd:train` at level 10 to 22 makes
   create of many small files very slow: 20000 small source files took 15.3
   s and 229 s of CPU, against 0.7 s without a dictionary. At this speed, the
-  library (klauspost/compress v1.20.0, `bestFastEncoder.Reset`) copies the
+  library (klauspost/compress v1.20.1, `bestFastEncoder.Reset`) copies the
   tables that it made from the dictionary, about 34 MiB, at the start of
   each chunk. A small file is one chunk, so the copy costs much more than
   the compression. At level 3 with `train`, the same tree took 1.1 s, and

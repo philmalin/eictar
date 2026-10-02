@@ -1,0 +1,27 @@
+# Dependabot opens a pull request when a dependency has a new release.
+#
+# Each month, one pull request for the Go modules and one for the GitHub
+# Actions of the workflows. A Go update fails the ci workflow until
+# THIRD_PARTY.md has the new versions and license texts: a test checks it,
+# because a release ships that file. Before a merge, read what changed in the
+# packages that eictar uses: the decoders read untrusted archives.
+#
+# The security alerts and security updates of Dependabot are separate. They
+# are turned on in the settings of the repository, not here.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      go-modules:
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']

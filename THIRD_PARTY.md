@@ -16,10 +16,10 @@ at the version in the table.
 | Module | Version | Used for | License |
 |---|---|---|---|
 | [`github.com/fxamacker/cbor/v2`](https://pkg.go.dev/github.com/fxamacker/cbor/v2@v2.9.4) | v2.9.4 | The index and the crypto header, in CBOR | MIT |
-| [`github.com/klauspost/compress`](https://pkg.go.dev/github.com/klauspost/compress@v1.20.0) | v1.20.0 | The zstd, s2, gzip and flate codecs | BSD-3-Clause; MIT for zstd/internal/xxhash |
-| [`github.com/klauspost/cpuid/v2`](https://pkg.go.dev/github.com/klauspost/cpuid/v2@v2.0.9) | v2.0.9 | CPU feature detection, for klauspost/compress | MIT |
+| [`github.com/klauspost/compress`](https://pkg.go.dev/github.com/klauspost/compress@v1.20.1) | v1.20.1 | The zstd, s2, gzip and flate codecs | BSD-3-Clause; MIT for zstd/internal/xxhash |
+| [`github.com/klauspost/cpuid/v2`](https://pkg.go.dev/github.com/klauspost/cpuid/v2@v2.4.0) | v2.4.0 | CPU feature detection, for klauspost/compress | MIT |
 | [`github.com/spf13/pflag`](https://pkg.go.dev/github.com/spf13/pflag@v1.0.10) | v1.0.10 | Command-line parsing | BSD-3-Clause |
-| [`github.com/ulikunitz/xz`](https://pkg.go.dev/github.com/ulikunitz/xz@v0.5.15) | v0.5.15 | The xz (LZMA2) codec | BSD-3-Clause |
+| [`github.com/ulikunitz/xz`](https://pkg.go.dev/github.com/ulikunitz/xz@v0.5.17) | v0.5.17 | The xz (LZMA2) codec | BSD-3-Clause |
 | [`github.com/x448/float16`](https://pkg.go.dev/github.com/x448/float16@v0.8.4) | v0.8.4 | Half-precision floats, for fxamacker/cbor | MIT |
 | [`golang.org/x/crypto`](https://pkg.go.dev/golang.org/x/crypto@v0.57.0) | v0.57.0 | Argon2id, XChaCha20-Poly1305 and HKDF | BSD-3-Clause |
 | [`golang.org/x/sys`](https://pkg.go.dev/golang.org/x/sys@v0.48.0) | v0.48.0 | System calls: extended attributes, file locks, holes, device nodes | BSD-3-Clause |
@@ -55,7 +55,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### github.com/klauspost/compress v1.20.0
+### github.com/klauspost/compress v1.20.1
 
 The module (the part of its LICENSE that covers the packages that eictar uses; the gzhttp and s2/cmd packages are not in the binary):
 
@@ -182,7 +182,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### github.com/klauspost/cpuid/v2 v2.0.9
+### github.com/klauspost/cpuid/v2 v2.4.0
 
 ```text
 The MIT License (MIT)
@@ -241,7 +241,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### github.com/ulikunitz/xz v0.5.15
+### github.com/ulikunitz/xz v0.5.17
 
 ```text
 Copyright (c) 2014-2022  Ulrich Kunitz

@@ -5165,6 +5165,7 @@ README.md, LICENSE         the introduction, and GPL-3.0
 TRADEMARKS.md              the reserved name, and the term of GPL-3.0 section 7(e)
 THIRD_PARTY.md             the modules in the binary, and their license texts
 .github/workflows/         ci.yml, the tests on each platform; release.yml (§12.3)
+.github/dependabot.yml     a monthly pull request for module and action updates (§12.3)
 doc/                       design.md; format.md, the format reference; eictar.1, the man page
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
 tools/testskips/           lists the skipped tests and their reasons, for make skips (§13.3)
@@ -5379,6 +5380,26 @@ Markdown, HTML or the license. The man page is not in that list, because
 a test reads it. A tag always runs it. The draft is published by hand,
 after that run passes too. Windows builds, but it is not in the release,
 because no workflow tests it (§15.1).</p>
+<p><strong>Dependencies do not change by themselves.</strong>
+<code>go.mod</code> gives the exact version of each module, and
+<code>go.sum</code> its checksum, so each build of one commit uses the
+same code. Dependabot (<code>.github/dependabot.yml</code>) opens a pull
+request each month: one for the Go modules, and one for the GitHub
+Actions of the workflows. An update of a module follows these steps:</p>
+<ol type="1">
+<li>Read what changed in the packages that eictar uses. The decoders
+read untrusted archives, so a change there can be a security fix.</li>
+<li>Run <code>make check</code>, and <code>make fuzz</code> for some
+minutes. The golden archives show that the format did not change.</li>
+<li>Update <code>THIRD_PARTY.md</code>: the versions, and the license
+texts if they changed. Until then, a test fails.</li>
+</ol>
+<p>The update of 2026-10-02 took <code>klauspost/compress</code> to
+v1.20.1 (changes to the zstd and huff0 decoders),
+<code>ulikunitz/xz</code> to v0.5.17 (a reader that returns no data and
+no error is no longer a failure), and <code>klauspost/cpuid</code> to
+v2.4.0. The ratios did not change, and the benchmarks of §8 did not
+change by more than their noise.</p>
 <h2 id="testing-plan">13. Testing plan</h2>
 <p>Tests are part of each deliverable. There are two levels: unit tests
 next to the code, and operational tests that run the built binary as a
@@ -6137,7 +6158,7 @@ library.</li>
 <code>zstd:train</code> at level 10 to 22 makes create of many small
 files very slow: 20000 small source files took 15.3 s and 229 s of CPU,
 against 0.7 s without a dictionary. At this speed, the library
-(klauspost/compress v1.20.0, <code>bestFastEncoder.Reset</code>) copies
+(klauspost/compress v1.20.1, <code>bestFastEncoder.Reset</code>) copies
 the tables that it made from the dictionary, about 34 MiB, at the start
 of each chunk. A small file is one chunk, so the copy costs much more
 than the compression. At level 3 with <code>train</code>, the same tree
