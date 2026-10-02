@@ -85,6 +85,14 @@ func (h *Header) UnmarshalBinary(b []byte) error {
 	}
 
 	h.Flags = HeaderFlags(binary.LittleEndian.Uint32(b[12:16]))
+	if unknown := h.Flags &^ knownHeaderFlags; unknown != 0 {
+		return fmt.Errorf("format: header: %w: flags %#x that this build does not know; %s",
+			ErrUnsupportedVersion, uint32(unknown), newerVersion)
+	}
+	if !allZero(b[44:60]) {
+		return fmt.Errorf("format: header: %w: the reserved bytes are not zero; %s",
+			ErrUnsupportedVersion, newerVersion)
+	}
 	h.CreatedUnixNanos = int64(binary.LittleEndian.Uint64(b[16:24]))
 	copy(h.ArchiveUUID[:], b[24:40])
 	h.CryptoHeaderLen = binary.LittleEndian.Uint32(b[40:44])

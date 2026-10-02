@@ -86,6 +86,14 @@ func (t *Trailer) UnmarshalBinary(b []byte) error {
 	}
 
 	t.Flags = TrailerFlags(binary.LittleEndian.Uint32(b[12:16]))
+	if unknown := t.Flags &^ knownTrailerFlags; unknown != 0 {
+		return fmt.Errorf("format: trailer: %w: flags %#x that this build does not know; %s",
+			ErrUnsupportedVersion, uint32(unknown), newerVersion)
+	}
+	if !allZero(b[88:92]) {
+		return fmt.Errorf("format: trailer: %w: the reserved bytes are not zero; %s",
+			ErrUnsupportedVersion, newerVersion)
+	}
 	t.Generation = binary.LittleEndian.Uint64(b[16:24])
 	t.IndexOffset = binary.LittleEndian.Uint64(b[24:32])
 	t.IndexLength = binary.LittleEndian.Uint64(b[32:40])

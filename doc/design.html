@@ -1717,9 +1717,9 @@ the usual choices</a></li>
 </ul>
 </nav>
 <h1 id="eictar-design-document">eictar — Design Document</h1>
-<p>Status: M1 to M11 are complete, and v1.0.3 is the current release.
+<p>Status: M1 to M11 are complete, and v1.0.4 is the current release.
 The CI workflow passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD
-(§15.1). Date: 2026-10-01 Applies to: v1 (format version 1.0)</p>
+(§15.1). Date: 2026-10-02 Applies to: v1 (format version 1.0)</p>
 <p>This document specifies the on-disk format, the concurrency model,
 the command line and the internal package layout of <code>eictar</code>.
 It is the reference for all implementation work. When the code changes,
@@ -2125,6 +2125,16 @@ header (64 bytes, at offset 0, never encrypted)</h3>
 </tr>
 </tbody>
 </table>
+<p><strong>Flags and reserved bytes are for later versions.</strong> A
+reader refuses a bit of <code>header_flags</code> that it does not know,
+and a <code>reserved</code> byte that is not zero. The error is a
+version that it does not know, with the message that the archive needs a
+newer eictar. Thus a later version can mark a change that an older
+reader must not ignore, such as a new kind of member, with a flag. A
+change that an older reader can ignore raises <code>format_minor</code>,
+which a reader accepts above its own. Readers before v1.0.4 do not make
+the check: they accept any flag and any reserved byte, and an archive
+that needs the check fails in them later, as a corrupt index.</p>
 <p>The magic follows the idea of the PNG signature. The
 <code>\x1a</code> stops the display of the file by the <code>type</code>
 command of DOS and Windows. The <code>\n</code> shows a transfer in text
@@ -2224,6 +2234,10 @@ the index bytes on disk. Keyed when the archive is encrypted
 </tr>
 </tbody>
 </table>
+<p>The reader checks <code>trailer_flags</code> and
+<code>reserved</code> as it checks the header (§3.1). A trailer from a
+newer version is not damage, so <code>--repair</code> does not cut the
+archive back to a generation that this version can read (§9.5).</p>
 <p>The writer writes the trailer with one <code>write</code> call. That
 write is the commit point for the whole archive (§9).</p>
 <p>The two flag words are different Go types, <code>HeaderFlags</code>
@@ -2458,10 +2472,12 @@ shared chunk has no single member. Each chunk needs its own salt or
 random nonce, and an AAD that binds the chunk. The member’s ordered list
 of chunks, in the authenticated index, then protects the order and the
 length.</li>
-<li>A reader of format 1.0 does not refuse an unknown header flag or an
-unknown <code>format_minor</code> (§3.1). It refuses such an index as
-corrupt (§5.2), with no message that a newer program made it. For a
-clear message, a chunked archive needs <code>format_major</code> 2.</li>
+<li>From v1.0.4, a reader refuses a header flag that it does not know
+(§3.1). Thus a chunked archive can set a flag, and such a reader says
+that the archive needs a newer eictar. A reader before v1.0.4 ignores
+the flag, and refuses the index as corrupt (§5.2), with no message that
+a newer program made it. For a clear message in those readers too, a
+chunked archive needs <code>format_major</code> 2.</li>
 </ul>
 <p>An archive with chunk deduplication off can stay format 1.0, byte for
 byte. Thus the program can support both: the mode is set at create,
@@ -2577,9 +2593,9 @@ independent too, so chunk <em>i</em> uses the region of the base near
 the same offset, and a large insert near the start loses the gain.</li>
 <li>Delete and compact must keep each base that a live delta uses.
 Damage to a base reaches each delta that uses it.</li>
-<li><code>base</code> is a field that an old reader must not ignore. A
-reader of format 1.0 does not check <code>format_minor</code> (§4.4), so
-a new format version is necessary.</li>
+<li><code>base</code> is a field that an old reader must not ignore. An
+archive with deltas sets a header flag, or uses
+<code>format_major</code> 2, as §4.4 describes.</li>
 <li>A person who can put files into the tree, and see the size of the
 archive, can test a guess against a similar file, not only an identical
 one (§14.1).</li>
@@ -6247,6 +6263,34 @@ raise (§8.3; finding 10 of the audit). The default of <code>-j</code> is
 three quarters of the CPUs (§8). A name that is an existing directory
 gets <code>.ect</code> even when it has a dot (§10.12). A new fuzz
 target covers a zstd dictionary from an archive.</p>
+<p><strong>v1.0.4</strong> comes from a review of the code after v1.0.3,
+and fixes these faults:</p>
+<ul>
+<li><strong>Compact can lose an append.</strong> Compact read the index
+before it took the lock. An append that committed between the two was
+not in the compacted archive, which replaced the file. Compact now takes
+the lock first, as §9.6 requires.</li>
+<li><strong><code>--keep-going</code> does not cover the walk.</strong>
+A directory that could not be read, or a file that went away during the
+walk, stopped a create or an append with no archive. Under
+<code>--keep-going</code> it is now one failed member: the directory is
+archived empty, and the run ends with exit 1 (§10.4).</li>
+<li><strong><code>--keep-going</code> does not cover the final pass of
+extraction.</strong> The first directory whose metadata failed stopped
+the run, and the directories after it kept their private mode of 0700.
+The pass now goes on (§8.3).</li>
+</ul>
+<p>It also makes extraction of small files about 3 times faster, with a
+root for each directory and batches of files, and it copies the list of
+members less often (§8.3). Parallel <code>--verify</code> no longer
+copies every member. A reader now refuses a flag or a reserved byte that
+it does not know, as a newer version of the format (§3.1). Thus a later
+version can mark a change that this one must not ignore. The format is
+still 1.0: v1.0.4 reads every earlier archive, and earlier versions read
+what it writes.</p>
+<p>The tag of v1.0.3 left out the tests of its pool of decoders and the
+results of its fuzz run (<code>doc/Security_Audit.md</code> §6). v1.0.4
+has them.</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
 <p>This appendix supports §6.1. The question “how does this compare with

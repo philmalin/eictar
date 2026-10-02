@@ -2,8 +2,10 @@ package archive
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"os"
 	"path/filepath"
 	"slices"
@@ -624,6 +626,34 @@ func TestRepairTornTrailer(t *testing.T) {
 	}
 	if res.Generation != 1 || !bytes.Equal(readAll(t, archive), before) {
 		t.Errorf("repair = %+v; the file is not the first generation", res)
+	}
+}
+
+// TestRepairLeavesANewerArchiveAlone: a trailer with a flag that this build
+// does not know is from a newer eictar, not damage. Opening says so, and
+// repair must not cut the file back to a generation it can read.
+func TestRepairLeavesANewerArchiveAlone(t *testing.T) {
+	tree := mutTree(t)
+	archive := mkArchive(t, tree, false, "t/a.txt")
+	if _, err := appendTo(t, archive, tree, false, nil, "t/b.txt"); err != nil {
+		t.Fatal(err)
+	}
+	raw := readAll(t, archive)
+	tr := raw[len(raw)-format.TrailerSize:]
+	binary.LittleEndian.PutUint32(tr[12:16], binary.LittleEndian.Uint32(tr[12:16])|1<<9)
+	binary.LittleEndian.PutUint32(tr[92:96], crc32.Checksum(tr[:92], crc32.MakeTable(crc32.Castagnoli)))
+	if err := os.WriteFile(archive, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := OpenWith(archive, OpenOptions{}); !errors.Is(err, format.ErrUnsupportedVersion) {
+		t.Errorf("open: %v, want ErrUnsupportedVersion", err)
+	}
+	if _, err := RepairArchive(archive, OpenOptions{}); !errors.Is(err, format.ErrUnsupportedVersion) {
+		t.Errorf("repair: %v, want ErrUnsupportedVersion", err)
+	}
+	if !bytes.Equal(readAll(t, archive), raw) {
+		t.Error("repair changed an archive from a newer version")
 	}
 }
 

@@ -107,6 +107,16 @@ func TestHeaderRejects(t *testing.T) {
 			binary.LittleEndian.PutUint16(b[8:10], VersionMajor+1)
 			binary.LittleEndian.PutUint32(b[60:64], crc32c(b[0:60])) // re-checksum
 		}), ErrUnsupportedVersion},
+		// A flag or a reserved byte that this build does not know is a
+		// change it must not ignore: the archive is too new, not damaged.
+		{"unknown flag", corrupt(func(b []byte) {
+			binary.LittleEndian.PutUint32(b[12:16], 1<<5)
+			binary.LittleEndian.PutUint32(b[60:64], crc32c(b[0:60]))
+		}), ErrUnsupportedVersion},
+		{"reserved byte with a valid crc", corrupt(func(b []byte) {
+			b[59] = 1
+			binary.LittleEndian.PutUint32(b[60:64], crc32c(b[0:60]))
+		}), ErrUnsupportedVersion},
 		{"encrypted flag without crypto header", corrupt(func(b []byte) {
 			binary.LittleEndian.PutUint32(b[12:16], uint32(FlagEncrypted))
 			binary.LittleEndian.PutUint32(b[60:64], crc32c(b[0:60]))

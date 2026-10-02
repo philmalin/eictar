@@ -57,6 +57,29 @@ const (
 	FlagIndexCompressed TrailerFlags = 1 << 1
 )
 
+// The flags this build knows. A reader refuses any other bit, and any
+// reserved byte that is not zero: they are how a later version marks a change
+// that this one must not ignore (doc/format.md 3). A change that an old
+// reader can safely ignore needs neither; it raises VersionMinor.
+const (
+	knownHeaderFlags  = FlagEncrypted
+	knownTrailerFlags = FlagIndexEncrypted | FlagIndexCompressed
+)
+
+// newerVersion explains a flag or a reserved byte that this build does not
+// know.
+const newerVersion = "the archive needs a newer version of eictar"
+
+// allZero reports whether b holds only zero bytes.
+func allZero(b []byte) bool {
+	for _, c := range b {
+		if c != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // crc32cTable is the Castagnoli polynomial used by both fixed structures.
 var crc32cTable = crc32.MakeTable(crc32.Castagnoli)
 

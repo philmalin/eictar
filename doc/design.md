@@ -1,8 +1,8 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete, and v1.0.3 is the current release. The CI workflow passes
+Status: M1 to M11 are complete, and v1.0.4 is the current release. The CI workflow passes
 on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
-Date: 2026-10-01
+Date: 2026-10-02
 Applies to: v1 (format version 1.0)
 
 This document specifies the on-disk format, the concurrency model, the command
@@ -206,6 +206,16 @@ AEAD stream constructions.
 | 44 | 16 | `reserved` | must be zero |
 | 60 | 4 | `crc32c` | of bytes 0..59 |
 
+**Flags and reserved bytes are for later versions.** A reader refuses a bit of
+`header_flags` that it does not know, and a `reserved` byte that is not zero.
+The error is a version that it does not know, with the message that the
+archive needs a newer eictar. Thus a later version can mark a change that an
+older reader must not ignore, such as a new kind of member, with a flag. A
+change that an older reader can ignore raises `format_minor`, which a reader
+accepts above its own. Readers before v1.0.4 do not make the check: they
+accept any flag and any reserved byte, and an archive that needs the check
+fails in them later, as a corrupt index.
+
 The magic follows the idea of the PNG signature. The `\x1a` stops the display
 of the file by the `type` command of DOS and Windows. The `\n` shows a
 transfer in text mode, which changes line endings, because the magic is then
@@ -227,6 +237,10 @@ wrong.
 | 56 | 32 | `index_digest` | BLAKE3-256 of `archive_uuid`, `generation` and the index bytes on disk. Keyed when the archive is encrypted (§6.4). |
 | 88 | 4 | `reserved` | zero |
 | 92 | 4 | `crc32c` | of bytes 0..91 |
+
+The reader checks `trailer_flags` and `reserved` as it checks the header
+(§3.1). A trailer from a newer version is not damage, so `--repair` does not
+cut the archive back to a generation that this version can read (§9.5).
 
 The writer writes the trailer with one `write` call. That write is the
 commit point for the whole archive (§9).
@@ -465,10 +479,12 @@ necessary.
   chunk has no single member. Each chunk needs its own salt or random nonce,
   and an AAD that binds the chunk. The member's ordered list of chunks, in
   the authenticated index, then protects the order and the length.
-- A reader of format 1.0 does not refuse an unknown header flag or an
-  unknown `format_minor` (§3.1). It refuses such an index as corrupt (§5.2),
-  with no message that a newer program made it. For a clear message, a
-  chunked archive needs `format_major` 2.
+- From v1.0.4, a reader refuses a header flag that it does not know (§3.1).
+  Thus a chunked archive can set a flag, and such a reader says that the
+  archive needs a newer eictar. A reader before v1.0.4 ignores the flag,
+  and refuses the index as corrupt (§5.2), with no message that a newer
+  program made it. For a clear message in those readers too, a chunked
+  archive needs `format_major` 2.
 
 An archive with chunk deduplication off can stay format 1.0, byte for byte.
 Thus the program can support both: the mode is set at create, append and
@@ -580,9 +596,8 @@ and without the candidate, and keeps the delta only when it saves enough.
   offset, and a large insert near the start loses the gain.
 - Delete and compact must keep each base that a live delta uses. Damage to a
   base reaches each delta that uses it.
-- `base` is a field that an old reader must not ignore. A reader of format
-  1.0 does not check `format_minor` (§4.4), so a new format version is
-  necessary.
+- `base` is a field that an old reader must not ignore. An archive with
+  deltas sets a header flag, or uses `format_major` 2, as §4.4 describes.
 - A person who can put files into the tree, and see the size of the archive,
   can test a guess against a similar file, not only an identical one (§14.1).
 
@@ -3439,6 +3454,32 @@ within a bound that a hostile index cannot raise (§8.3; finding 10 of the
 audit). The default of `-j` is three quarters of the CPUs (§8). A name that
 is an existing directory gets `.ect` even when it has a dot (§10.12). A new
 fuzz target covers a zstd dictionary from an archive.
+
+**v1.0.4** comes from a review of the code after v1.0.3, and fixes these
+faults:
+
+- **Compact can lose an append.** Compact read the index before it took the
+  lock. An append that committed between the two was not in the compacted
+  archive, which replaced the file. Compact now takes the lock first, as
+  §9.6 requires.
+- **`--keep-going` does not cover the walk.** A directory that could not be
+  read, or a file that went away during the walk, stopped a create or an
+  append with no archive. Under `--keep-going` it is now one failed member:
+  the directory is archived empty, and the run ends with exit 1 (§10.4).
+- **`--keep-going` does not cover the final pass of extraction.** The first
+  directory whose metadata failed stopped the run, and the directories after
+  it kept their private mode of 0700. The pass now goes on (§8.3).
+
+It also makes extraction of small files about 3 times faster, with a root
+for each directory and batches of files, and it copies the list of members
+less often (§8.3). Parallel `--verify` no longer copies every member. A
+reader now refuses a flag or a reserved byte that it does not know, as a
+newer version of the format (§3.1). Thus a later version can mark a change
+that this one must not ignore. The format is still 1.0: v1.0.4 reads every
+earlier archive, and earlier versions read what it writes.
+
+The tag of v1.0.3 left out the tests of its pool of decoders and the
+results of its fuzz run (`doc/Security_Audit.md` §6). v1.0.4 has them.
 
 
 ## Appendix A. Why these primitives, compared with AES

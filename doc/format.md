@@ -65,6 +65,13 @@ A reader refuses a header with a wrong magic or a wrong CRC. It also refuses
 a format_major that it does not know, and a flag and a length that do not
 agree.
 
+A reader refuses a bit of header_flags that it does not know, and a reserved
+byte that is not zero, as a version that it does not know. A later version
+of the format uses them for a change that an older reader must not ignore. A
+change that an older reader can ignore raises format_minor instead, and a
+reader accepts a format_minor above its own. Readers before eictar v1.0.4 do
+not make these checks.
+
 ## 4. Crypto header
 
 The crypto header exists only when the archive is encrypted. It is
@@ -415,6 +422,9 @@ file is zero.
 | 56 | 32 | index_digest | §7.5 |
 | 88 | 4 | reserved | zero |
 | 92 | 4 | crc32c | CRC-32C of bytes 0 to 91 |
+
+A reader refuses a bit of trailer_flags that it does not know, and a
+reserved byte that is not zero, as for the header (§3).
 
 The last 96 bytes of the file are the trailer, and they are the commit
 record. A reader uses only that trailer. It does not go back to an earlier

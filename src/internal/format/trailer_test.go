@@ -118,6 +118,14 @@ func TestTrailerRejects(t *testing.T) {
 			binary.LittleEndian.PutUint16(b[8:10], VersionMajor+3)
 			binary.LittleEndian.PutUint32(b[92:96], crc32c(b[0:92]))
 		}), ErrUnsupportedVersion},
+		{"unknown flag", corrupt(func(b []byte) {
+			binary.LittleEndian.PutUint32(b[12:16], uint32(FlagIndexCompressed|1<<7))
+			binary.LittleEndian.PutUint32(b[92:96], crc32c(b[0:92]))
+		}), ErrUnsupportedVersion},
+		{"reserved byte with a valid crc", corrupt(func(b []byte) {
+			b[88] = 1
+			binary.LittleEndian.PutUint32(b[92:96], crc32c(b[0:92]))
+		}), ErrUnsupportedVersion},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var tr Trailer

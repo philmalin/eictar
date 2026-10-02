@@ -1626,6 +1626,12 @@ when it is 1.</td>
 <p>A reader refuses a header with a wrong magic or a wrong CRC. It also
 refuses a format_major that it does not know, and a flag and a length
 that do not agree.</p>
+<p>A reader refuses a bit of header_flags that it does not know, and a
+reserved byte that is not zero, as a version that it does not know. A
+later version of the format uses them for a change that an older reader
+must not ignore. A change that an older reader can ignore raises
+format_minor instead, and a reader accepts a format_minor above its own.
+Readers before eictar v1.0.4 do not make these checks.</p>
 <h2 id="crypto-header">4. Crypto header</h2>
 <p>The crypto header exists only when the archive is encrypted. It is
 <code>crypto_header_len</code> bytes: a <code>u32le</code> length
@@ -2309,6 +2315,8 @@ only in an encrypted archive.</td>
 </tr>
 </tbody>
 </table>
+<p>A reader refuses a bit of trailer_flags that it does not know, and a
+reserved byte that is not zero, as for the header (§3).</p>
 <p>The last 96 bytes of the file are the trailer, and they are the
 commit record. A reader uses only that trailer. It does not go back to
 an earlier generation by itself.</p>
