@@ -2728,7 +2728,10 @@ and on arm64, with the man page, `README.md`, `LICENSE` and `TRADEMARKS.md`.
 The workflow packs each one in a `.tar.gz` file, writes `SHA256SUMS`, and
 makes a draft release with these files.
 
-The ci workflow runs on the same tag, on all five platforms. The draft is
+The ci workflow runs on the same tag, on all five platforms. On a branch, it
+does not run for a push or a pull request that changes only Markdown, HTML or
+the license. The man page is not in that list, because a test reads it. A
+tag always runs it. The draft is
 published by hand, after that run passes too. Windows builds, but it is not
 in the release, because no workflow tests it (§15.1).
 

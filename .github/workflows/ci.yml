@@ -6,9 +6,21 @@
 # passes on it, and not before.
 name: ci
 
+# A change to the documentation alone does not run the tests. The man page,
+# doc/eictar.1, is not ignored: a test checks that it documents every
+# option. GitHub does not apply path filters to a tag, so a release tag
+# always runs the tests.
 on:
   push:
+    paths-ignore:
+      - '**.md'
+      - '**.html'
+      - 'LICENSE'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - '**.html'
+      - 'LICENSE'
   workflow_dispatch:
 
 env:
