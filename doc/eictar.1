@@ -561,7 +561,13 @@ stored without the .xz container. Parameter:
 .B preset
 0 to 9 (default 6). It is slower than the C
 .BR xz ,
-and every preset uses the faster match finder.
+and every preset uses the faster match finder. A preset changes only the
+dictionary size, and a dictionary larger than
+.B \-\-chunk\-size
+has no effect. Thus at the default chunk size of 4 MiB, presets 3 to 9
+compress the same, and the program warns when a preset that is given has a
+larger dictionary. On source code, zstd at its default level makes a smaller
+archive, faster.
 .TP
 .B s2
 S2, of the Snappy family: very fast, with a lower ratio. Parameter:

@@ -253,6 +253,18 @@ func (zstdFactory) encodeMemory(p Params, maxChunk int) (int64, error) {
 	return base + 2*int64(zstdWindow(window, level, maxChunk)), nil
 }
 
+// window is the long window that p asks for, or 0 when p does not set long.
+func (zstdFactory) window(p Params) (int, string, error) {
+	if _, ok := p["long"]; !ok {
+		return 0, "", nil
+	}
+	long, err := intParam(p, "long", 0, zstdLongMin, zstdLongMax)
+	if err != nil {
+		return 0, "", err
+	}
+	return 1 << long, "window", nil
+}
+
 // trainSize reads the train key: 0 when it is absent.
 func (zstdFactory) trainSize(p Params) (int, error) {
 	raw, ok := p["train"]

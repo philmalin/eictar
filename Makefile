@@ -62,7 +62,7 @@ release: | $(TMPDIR)
 		echo "$$os/$$arch"; \
 		mkdir -p $$dir && \
 		GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 $(GO) build $(BUILDFLAGS) -o $$dir/eictar ./src/cmd/eictar && \
-		cp doc/eictar.1 README.md LICENSE TRADEMARKS.md $$dir/ || exit 1; \
+		cp doc/eictar.1 README.md LICENSE TRADEMARKS.md THIRD_PARTY.md $$dir/ || exit 1; \
 	done
 
 test: | $(TMPDIR)

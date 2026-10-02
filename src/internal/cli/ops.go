@@ -69,18 +69,24 @@ func checkCompress(o *Options, stderr io.Writer) error {
 	return checkSpec(o, o.Compress, "--compress", stderr)
 }
 
-// checkSpec builds an encoder for spec to check it, and warns when its window
-// is larger than a chunk: the chunks are independent, so no match reaches
-// back past the start of its chunk (doc/design.md 10.2).
+// checkSpec builds an encoder for spec to check it, and warns when it asks for
+// a window or a dictionary larger than a chunk: the chunks are independent,
+// so no match reaches back past the start of its chunk, and xz presets that
+// differ only above the chunk size compress the same (doc/design.md 10.2).
 func checkSpec(o *Options, spec CompressSpec, option string, stderr io.Writer) error {
 	enc, err := codec.NewEncoder(spec.Name, codec.Params(spec.Params), 1)
 	if err != nil {
 		return &UsageError{fmt.Errorf("%s %s: %w", option, spec, err)}
 	}
-	defer enc.Close()
-	if long, ok := enc.Resolved()["long"].(int); ok && !o.Quiet && Size(1)<<long > o.ChunkSize {
-		fmt.Fprintf(stderr, "eictar: %s: a window of %s is larger than the chunk size %s, "+
-			"so it has no effect; raise --chunk-size to use it\n", option, Size(1)<<long, o.ChunkSize)
+	enc.Close()
+	size, what, err := codec.WindowBeyondChunk(spec.Name, codec.Params(spec.Params), int(o.ChunkSize))
+	if err != nil {
+		return &UsageError{fmt.Errorf("%s %s: %w", option, spec, err)}
+	}
+	if size > 0 && !o.Quiet {
+		fmt.Fprintf(stderr, "eictar: %s %s: a %s of %s is larger than the chunk size %s, "+
+			"so the part beyond a chunk has no effect; raise --chunk-size to use it\n",
+			option, spec, what, Size(size), o.ChunkSize)
 	}
 	return nil
 }

@@ -262,3 +262,6 @@ available on each platform: the manual page gives the details.
 eictar is free software under the GNU General Public License, version 3
 ([`LICENSE`](LICENSE)). The license does not grant the right to use the
 name "eictar" for a modified version: see [`TRADEMARKS.md`](TRADEMARKS.md).
+
+eictar is built with third-party Go modules under the MIT and BSD licenses.
+[`THIRD_PARTY.md`](THIRD_PARTY.md) lists them, with their license texts.

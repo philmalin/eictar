@@ -51,6 +51,20 @@ func (xzFactory) Describe() Spec {
 	}
 }
 
+// window is the dictionary of the preset that p sets, or 0 when p does not
+// set preset. Presets 3 to 9 differ only in it (xzPresetDict), so above the
+// chunk size they compress the same.
+func (xzFactory) window(p Params) (int, string, error) {
+	if _, ok := p["preset"]; !ok {
+		return 0, "", nil
+	}
+	preset, err := intParam(p, "preset", xzPresetDefault, xzPresetMin, xzPresetMax)
+	if err != nil {
+		return 0, "", err
+	}
+	return xzPresetDict[preset], "dictionary", nil
+}
+
 func (f xzFactory) NewEncoder(p Params, _ int) (Encoder, error) {
 	if err := checkParams(p, f.Describe()); err != nil {
 		return nil, err

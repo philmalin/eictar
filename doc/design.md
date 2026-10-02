@@ -1877,8 +1877,17 @@ library gets finer levels.
 
 **A window larger than the chunk has no effect.** The chunks are
 independent (§4), so no match reaches back past the start of its chunk.
-`long=27` needs `--chunk-size 128MiB` to have any use. When the window is
-larger than the chunk, the program prints a warning, and continues.
+`long=27` needs `--chunk-size 128MiB` to have any use. The xz dictionary is
+the same: a preset changes only the dictionary size (below), so at the
+default chunk size of 4 MiB, presets 3 to 9 compress the same. When a given
+`long` or `preset` asks for more than a chunk, the program prints a warning,
+and continues. A codec's default is not a choice of the user, so plain `xz`
+does not warn.
+
+On 78 MB of Go module sources, `zstd:level=12` made 43.85 MB in 0.57 s, and
+`xz:preset=6` and `xz:preset=9` both made 43.98 MB in 1.95 s. The library of
+xz is pure Go, without the binary-tree match finder and the slow search
+for the best matches that make the C `xz` strong at high presets.
 
 A registry checks the name and the keys of each codec. A bad spec is a usage
 error (exit 2), and the program reports it before it touches the archive
@@ -2487,6 +2496,7 @@ bare `go` command:
 go.mod
 README.md, LICENSE         the introduction, and GPL-3.0
 TRADEMARKS.md              the reserved name, and the term of GPL-3.0 section 7(e)
+THIRD_PARTY.md             the modules in the binary, and their license texts
 .github/workflows/         ci.yml, the tests on each platform; release.yml (§12.3)
 doc/                       design.md; format.md, the format reference; eictar.1, the man page
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
@@ -2724,7 +2734,10 @@ new major version (§3).
 A push of the tag starts the release workflow
 (`.github/workflows/release.yml`). The workflow runs `make check` on Linux.
 Then `make release` builds one binary for each platform of §15.1, on amd64
-and on arm64, with the man page, `README.md`, `LICENSE` and `TRADEMARKS.md`.
+and on arm64, with the man page, `README.md`, `LICENSE`, `TRADEMARKS.md` and
+`THIRD_PARTY.md`. The licenses of the modules in the binary require their
+texts in a binary distribution, and `THIRD_PARTY.md` holds them. It must be
+updated when `go.mod` changes.
 The workflow packs each one in a `.tar.gz` file, writes `SHA256SUMS`, and
 makes a draft release with these files.
 

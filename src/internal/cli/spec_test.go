@@ -130,10 +130,11 @@ func TestSizeStringRoundTrip(t *testing.T) {
 	}
 }
 
-// TestLongWiderThanTheChunkWarns: the chunks are independent, so a window
-// larger than a chunk does nothing, and the program says so (doc/design.md
-// 10.2).
-func TestLongWiderThanTheChunkWarns(t *testing.T) {
+// TestWindowWiderThanTheChunkWarns: the chunks are independent, so a zstd
+// window or an xz dictionary larger than a chunk does nothing beyond it, and
+// the program says so (doc/design.md 10.2). Only a parameter that was given
+// counts: plain xz uses preset 6, but nobody asked for its dictionary.
+func TestWindowWiderThanTheChunkWarns(t *testing.T) {
 	for _, tc := range []struct {
 		argv []string
 		warn bool
@@ -142,6 +143,11 @@ func TestLongWiderThanTheChunkWarns(t *testing.T) {
 		{[]string{"-cf", "a", "-Z", "zstd:long", "--chunk-size", "128MiB", "p"}, false},
 		{[]string{"-cf", "a", "-Z", "zstd:long=20", "p"}, false},
 		{[]string{"-cqf", "a", "-Z", "zstd:long", "p"}, false},
+		{[]string{"-cf", "a", "-Z", "xz:preset=9", "p"}, true},
+		{[]string{"-cf", "a", "-Z", "xz:preset=9", "--chunk-size", "64MiB", "p"}, false},
+		{[]string{"-cf", "a", "-Z", "xz:preset=3", "p"}, false}, // 4 MiB, the chunk size
+		{[]string{"-cf", "a", "-Z", "xz:preset=2", "p"}, false},
+		{[]string{"-cf", "a", "-Z", "xz", "p"}, false},
 	} {
 		o := mustParse(t, tc.argv...)
 		var stderr bytes.Buffer

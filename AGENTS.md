@@ -18,6 +18,8 @@ written in Go.  The design and the archive format are specified in doc/.
    Makefile: `GOMODCACHE=$PWD/.gocache GOCACHE=$PWD/.gobuildcache
    TMPDIR=$PWD/.tmp`.  Put scratch files in .tmp/.
 -  Each bug fix comes with a test that fails without the fix.
+-  When go.mod changes, update THIRD_PARTY.md: the table, and the license
+   texts copied from each module's LICENSE file.  A test checks it.
 -  Any documentation should be kept in the directory doc/: design.md,
    format.md, the man page eictar.1 and Security_Audit.md, with README.md at
    the top.  Documents here should always be considered when performing code

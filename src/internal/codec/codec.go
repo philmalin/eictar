@@ -184,6 +184,40 @@ func (l *limited) Encode(dst, src []byte) ([]byte, error) {
 	return l.Encoder.Encode(dst, src)
 }
 
+// windowFactory is a codec with a parameter that sets how much history a
+// match can reach back to: the window of zstd, the dictionary of xz.
+type windowFactory interface {
+	// window returns that history, in bytes, and what the codec calls it,
+	// when p sets the parameter; 0 when p does not.
+	window(p Params) (int, string, error)
+}
+
+// WindowBeyondChunk reports the history that the parameters p of the codec
+// name ask for, when it is larger than chunkSize: a zstd long window, or the
+// dictionary of an xz preset. The chunks are independent, so no match reaches
+// back past the start of its chunk, and the history beyond a chunk has no
+// effect (doc/design.md 10.2). It returns 0 when p asks for no more than a
+// chunk, or does not set the parameter: a codec's default is not the user's
+// choice. what is "window" or "dictionary".
+func WindowBeyondChunk(name string, p Params, chunkSize int) (size int, what string, err error) {
+	f, err := Lookup(name)
+	if err != nil {
+		return 0, "", err
+	}
+	wf, ok := f.(windowFactory)
+	if !ok {
+		return 0, "", nil
+	}
+	if p, err = normalize(p, f.Describe()); err != nil {
+		return 0, "", err
+	}
+	size, what, err = wf.window(p)
+	if err != nil || size <= chunkSize {
+		return 0, "", err
+	}
+	return size, what, nil
+}
+
 // optionsFactory is a codec that uses EncoderOptions beyond Concurrency: a
 // dictionary, or the chunk size. Only zstd is one.
 type optionsFactory interface {
