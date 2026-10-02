@@ -782,6 +782,33 @@ func TestUpdateLeavesAnUnchangedHardlinkAlone(t *testing.T) {
 	}
 }
 
+// TestCompactKeepsAnAppendBeforeItsLock: an append that commits after compact
+// opens the archive and before it takes the lock is in the compacted archive.
+// Compact read the index before it locked, and so wrote the archive again
+// from the older index, without the append (doc/design.md 9.6).
+func TestCompactKeepsAnAppendBeforeItsLock(t *testing.T) {
+	tree := mutTree(t)
+	archive := mkArchive(t, tree, false, "t")
+	if _, err := DeleteMembers(DeleteConfig{Archive: archive, Patterns: []string{"t/b.txt"}}); err != nil {
+		t.Fatal(err)
+	}
+	tree.Text("t/late.txt", 0o644, "appended meanwhile")
+	testBeforeCompactLock = func() {
+		testBeforeCompactLock = nil
+		if _, err := appendTo(t, archive, tree, false, nil, "t/late.txt"); err != nil {
+			t.Errorf("the append beside compact: %v", err)
+		}
+	}
+	defer func() { testBeforeCompactLock = nil }()
+
+	if _, err := CompactArchive(CompactConfig{Archive: archive}); err != nil {
+		t.Fatalf("compact: %v", err)
+	}
+	if got := extractOne(t, archive, false, "t/late.txt"); got != "appended meanwhile" {
+		t.Errorf("t/late.txt after compact = %q; the append was lost", got)
+	}
+}
+
 func TestCompactThroughASymlink(t *testing.T) {
 	tree := mutTree(t)
 	archive := mkArchive(t, tree, false, "t")

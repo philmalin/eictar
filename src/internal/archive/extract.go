@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/philmalin/eictar/src/internal/format"
@@ -163,7 +164,7 @@ func Extract(cfg ExtractConfig) (Stats, error) {
 // could give the directory to another user (doc/Security_Audit.md, finding
 // 2). The writer never stores such a member.
 func withoutRoot(members []format.Member, rep Reporter) []format.Member {
-	out := members[:0:0]
+	out := members[:0] // in place, as selectMembers
 	for _, m := range members {
 		if m.Path == "." {
 			if rep != nil {
@@ -225,16 +226,18 @@ func (x *extraction) reportRefused() {
 //     child changes its parent's mtime, and a default ACL set early would be
 //     inherited by the files written into the directory.
 func (x *extraction) run(members []format.Member, byID map[uint64]*format.Member) (Stats, error) {
-	var dirs, files, links []format.Member
+	// The phases keep pointers into members, not copies: a member is about
+	// 330 bytes, and the index can hold four million.
+	var dirs, files, links []*format.Member
 
 	for i := range members {
 		m := &members[i]
 		switch m.Type {
 		case format.TypeReg:
-			files = append(files, *m)
+			files = append(files, m)
 			continue
 		case format.TypeHardlink:
-			links = append(links, *m)
+			links = append(links, m)
 			continue
 		}
 
@@ -243,7 +246,7 @@ func (x *extraction) run(members []format.Member, byID map[uint64]*format.Member
 			return x.stats, err
 		}
 		if m.Type == format.TypeDir && err == nil {
-			dirs = append(dirs, *m)
+			dirs = append(dirs, m)
 		}
 	}
 
@@ -251,9 +254,10 @@ func (x *extraction) run(members []format.Member, byID map[uint64]*format.Member
 		return x.stats, err
 	}
 
-	for i := range links {
-		m := &links[i]
-		skipped, err := x.extractHardlink(m, byID)
+	w := x.newFileWorker()
+	defer w.close()
+	for _, m := range links {
+		skipped, err := x.extractHardlink(w, m, byID)
 		if !x.record(m, skipped, err) {
 			return x.stats, err
 		}
@@ -290,6 +294,21 @@ func (x *extraction) record(m *format.Member, skipped bool, err error) bool {
 			x.cfg.Reporter.Member(m)
 		}
 	}
+	return true
+}
+
+// recordLateFailure counts a directory whose metadata failed in the final
+// pass. Phase 1 counted it as extracted, so it moves from extracted to
+// failed. It reports false when the run must stop.
+func (x *extraction) recordLateFailure(err error) bool {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	x.stats.Members--
+	x.stats.Failed++
+	if !x.cfg.KeepGoing {
+		return false
+	}
+	x.warnLocked("%v", err)
 	return true
 }
 
@@ -371,9 +390,12 @@ func (x *extraction) parent(m *format.Member) (*os.File, string, error) {
 // written over in place (a link, a pipe, a device): it reports a skip, or
 // removes what is there.
 func (x *extraction) clearForReplace(m *format.Member) (bool, error) {
-	skip, err := shouldSkip(x.root, m, x.cfg.Overwrite)
-	if err != nil || skip {
-		return skip, err
+	skip, err := shouldSkip(x.root, m.Path, m.MTimeNanos, x.cfg.Overwrite)
+	if err != nil {
+		return false, unsafeOrRaw(x.root, m, err)
+	}
+	if skip {
+		return true, nil
 	}
 	if _, err := x.root.Lstat(m.Path); err == nil {
 		if err := x.root.Remove(m.Path); err != nil {
@@ -449,16 +471,19 @@ func (x *extraction) writeSymlink(m *format.Member) (bool, error) {
 
 // extractFiles writes regular files in parallel.
 //
-// Every worker reads its own byte ranges with ReadAt and writes through the
-// shared os.Root, both of which are safe for concurrent use, so there is no
-// shared file offset and no lock on the hot path.
-func (x *extraction) extractFiles(files []format.Member) error {
+// The workers take the files in batches of consecutive files, in path order,
+// so that the files of one directory mostly go to one worker, and one
+// channel operation serves many small files. Every worker reads its own byte
+// ranges with ReadAt, and writes through a directory that it opened from the
+// shared os.Root; both are safe for concurrent use, so there is no shared
+// file offset and no lock on the hot path.
+func (x *extraction) extractFiles(files []*format.Member) error {
 	workers := x.cfg.Workers
 	if workers < 1 {
 		workers = runtime.GOMAXPROCS(0)
 	}
 	workers = min(workers, len(files))
-	workers = boundByMemory(workers, files, x.cfg.MemoryLimit, x.r.Owner)
+	workers = boundByMemory(workers, largestChunk(files, x.r.Owner), x.cfg.MemoryLimit)
 	if workers < 1 {
 		return nil
 	}
@@ -467,59 +492,131 @@ func (x *extraction) extractFiles(files []format.Member) error {
 		wg       sync.WaitGroup
 		firstErr error
 		errMu    sync.Mutex
+		stop     atomic.Bool
 	)
-	jobs := make(chan *format.Member)
+	jobs := make(chan []*format.Member, workers)
 
 	for range workers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for m := range jobs {
-				skipped, err := x.extractFile(m, m.Path)
-				if !x.record(m, skipped, err) {
-					errMu.Lock()
-					if firstErr == nil {
-						firstErr = err
+			w := x.newFileWorker()
+			defer w.close()
+			for batch := range jobs {
+				for _, m := range batch {
+					if stop.Load() {
+						break
 					}
-					errMu.Unlock()
+					skipped, err := w.extractFile(m, m.Path)
+					if !x.record(m, skipped, err) {
+						stop.Store(true)
+						errMu.Lock()
+						if firstErr == nil {
+							firstErr = err
+						}
+						errMu.Unlock()
+					}
 				}
 			}
 		}()
 	}
 
-	for i := range files {
-		errMu.Lock()
-		stop := firstErr != nil
-		errMu.Unlock()
-		if stop {
-			break
+	for start := 0; start < len(files) && !stop.Load(); {
+		end, size := start, uint64(0)
+		for end < len(files) && end-start < extractBatchFiles && size < extractBatchBytes {
+			size += files[end].Size
+			end++
 		}
-		jobs <- &files[i]
+		jobs <- files[start:end]
+		start = end
 	}
 	close(jobs)
 	wg.Wait()
 	return firstErr
 }
 
+// The size of a batch of extractFiles: enough files that the channel costs
+// little and a worker stays in one directory, and little enough content that
+// the work stays balanced.
+const (
+	extractBatchFiles = 32
+	extractBatchBytes = 1 << 20
+)
+
+// fileWorker is what one goroutine keeps while it writes regular files: the
+// directory it writes into, open as an os.Root of its own, and its decoders.
+//
+// An operation through the destination's os.Root resolves the whole path, one
+// component at a time, and each file took five of them: a MkdirAll of its
+// directory, an lstat, the open, the times and the rename. For 20000 small
+// files, those lookups were most of the time. A root opened on the directory
+// takes each of them with one name. It is opened through the destination's
+// root, so it is inside the destination as well.
+type fileWorker struct {
+	x    *extraction
+	name string   // the directory held, relative to the destination
+	dir  *os.Root // that directory, or nil
+	set  *decoderSet
+}
+
+func (x *extraction) newFileWorker() *fileWorker {
+	return &fileWorker{x: x, set: x.r.newDecoderSet()}
+}
+
+func (w *fileWorker) close() {
+	if w.dir != nil {
+		w.dir.Close()
+		w.dir = nil
+	}
+	w.set.close()
+}
+
+// in returns the directory name, opened through the destination's root, and
+// creates it first when it does not exist. m is the member, for the error.
+func (w *fileWorker) in(m *format.Member, name string) (*os.Root, error) {
+	if w.dir != nil && w.name == name {
+		return w.dir, nil
+	}
+	if w.dir != nil {
+		w.dir.Close()
+		w.dir = nil
+	}
+	dir, err := w.x.root.OpenRoot(name)
+	if errors.Is(err, fs.ErrNotExist) {
+		if err = w.x.root.MkdirAll(name, 0o700); err == nil {
+			dir, err = w.x.root.OpenRoot(name)
+		}
+	}
+	if err != nil {
+		return nil, unsafeOrRaw(w.x.root, m, err)
+	}
+	w.dir, w.name = dir, name
+	return dir, nil
+}
+
 // extractFile writes one regular member's content under target, which is its
 // own path, or a hardlink's path when the target member was not extracted.
-func (x *extraction) extractFile(m *format.Member, target string) (bool, error) {
+func (w *fileWorker) extractFile(m *format.Member, target string) (bool, error) {
+	x := w.x
 	placed := *m
 	placed.Path = target
 	if err := checkPath(&placed); err != nil {
 		return false, err
 	}
 
-	skip, err := shouldSkip(x.root, &placed, x.cfg.Overwrite)
-	if err != nil || skip {
-		return skip, err
+	name, base := path.Split(target)
+	dir, err := w.in(&placed, path.Clean(name))
+	if err != nil {
+		return false, err
 	}
-	if dir := path.Dir(target); dir != "." {
-		if err := x.root.MkdirAll(dir, 0o700); err != nil {
-			return false, unsafeOrRaw(x.root, &placed, err)
-		}
+	skip, err := shouldSkip(dir, base, m.MTimeNanos, x.cfg.Overwrite)
+	if err != nil {
+		return false, unsafeOrRaw(x.root, &placed, err)
 	}
-	if err := x.writeFile(m, target); err != nil {
+	if skip {
+		return true, nil
+	}
+	if err := w.writeFile(dir, m, base, target); err != nil {
 		return false, err
 	}
 
@@ -544,25 +641,28 @@ func (x *extraction) extractFile(m *format.Member, target string) (bool, error) 
 // so the file never exists under its real name with the wrong ones - in
 // particular never briefly readable by someone its final mode excludes. The
 // owner goes first: chown clears setuid, so the mode has to follow it.
-func (x *extraction) writeFile(m *format.Member, target string) error {
-	tmp, err := tempName(target)
+//
+// dir is the directory that holds target, and base is target's name in it.
+func (w *fileWorker) writeFile(dir *os.Root, m *format.Member, base, target string) error {
+	x := w.x
+	tmp, err := tempName(base)
 	if err != nil {
 		return err
 	}
 	placed := *m
 	placed.Path = target
 
-	f, err := x.root.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
+	f, err := dir.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
 	if err != nil {
 		return unsafeOrRaw(x.root, &placed, err)
 	}
-	cleanup := func() { x.root.Remove(tmp) }
+	cleanup := func() { dir.Remove(tmp) }
 
 	var dst io.Writer = f
 	if len(m.Sparse) > 0 {
 		dst = &sparseWriter{f: f, segs: m.Sparse}
 	}
-	if err := x.r.WriteMember(m, countWriter(dst, progressOf(x.cfg.Reporter))); err != nil {
+	if err := x.r.writeMember(m, countWriter(dst, progressOf(x.cfg.Reporter)), w.set); err != nil {
 		f.Close()
 		cleanup()
 		return err
@@ -595,11 +695,11 @@ func (x *extraction) writeFile(m *format.Member, target string) error {
 	}
 
 	mtime := time.Unix(0, m.MTimeNanos)
-	if err := x.root.Chtimes(tmp, time.Unix(0, x.atime(m)), mtime); err != nil {
+	if err := dir.Chtimes(tmp, time.Unix(0, x.atime(m)), mtime); err != nil {
 		cleanup()
 		return fmt.Errorf("setting times of %s: %w", target, err)
 	}
-	if err := x.root.Rename(tmp, target); err != nil {
+	if err := dir.Rename(tmp, base); err != nil {
 		cleanup()
 		return fmt.Errorf("renaming %s into place: %w", tmp, err)
 	}
@@ -610,7 +710,7 @@ func (x *extraction) writeFile(m *format.Member, target string) error {
 // extracted in this run - excluded by a pattern, say - the first such link
 // gets the target's content instead, so that asking for one name of a file
 // always produces the file. Later links to the same target link to it.
-func (x *extraction) extractHardlink(m *format.Member, byID map[uint64]*format.Member) (bool, error) {
+func (x *extraction) extractHardlink(w *fileWorker, m *format.Member, byID map[uint64]*format.Member) (bool, error) {
 	if err := checkPath(m); err != nil {
 		return false, err
 	}
@@ -625,7 +725,7 @@ func (x *extraction) extractHardlink(m *format.Member, byID map[uint64]*format.M
 	x.mu.Unlock()
 
 	if !linked {
-		return x.extractFile(target, m.Path)
+		return w.extractFile(target, m.Path)
 	}
 
 	if skip, err := x.clearForReplace(m); err != nil || skip {
@@ -642,30 +742,39 @@ func (x *extraction) extractHardlink(m *format.Member, byID map[uint64]*format.M
 	return false, nil
 }
 
-// finishDirs applies directory metadata, deepest first.
-func (x *extraction) finishDirs(dirs []format.Member) error {
+// finishDirs applies directory metadata, deepest first. A directory whose
+// metadata fails is one failed member: under --keep-going the pass goes on
+// to the others, which would otherwise keep their private mode of 0700.
+func (x *extraction) finishDirs(dirs []*format.Member) error {
 	sort.Slice(dirs, func(i, j int) bool { return dirs[i].Path > dirs[j].Path })
 
-	for i := range dirs {
-		m := &dirs[i]
-		d, err := x.root.Open(m.Path)
-		if err != nil {
-			return fmt.Errorf("opening %s: %w", m.Path, err)
+	for _, m := range dirs {
+		if err := x.finishDir(m); err != nil && !x.recordLateFailure(err) {
+			return err
 		}
-		err = x.applyXattrs(m, d, m.Path)
-		if err == nil {
-			err = x.applyOwner(m, func(uid, gid int) error { return d.Chown(uid, gid) })
-		}
-		if err == nil {
-			err = d.Chmod(x.mode(m))
-		}
-		d.Close()
-		if err != nil {
-			return fmt.Errorf("%s: %w", m.Path, err)
-		}
-		if err := x.root.Chtimes(m.Path, time.Unix(0, x.atime(m)), time.Unix(0, m.MTimeNanos)); err != nil {
-			return fmt.Errorf("setting times of %s: %w", m.Path, err)
-		}
+	}
+	return nil
+}
+
+// finishDir applies one directory's xattrs, owner, mode and times.
+func (x *extraction) finishDir(m *format.Member) error {
+	d, err := x.root.Open(m.Path)
+	if err != nil {
+		return fmt.Errorf("opening %s: %w", m.Path, err)
+	}
+	err = x.applyXattrs(m, d, m.Path)
+	if err == nil {
+		err = x.applyOwner(m, func(uid, gid int) error { return d.Chown(uid, gid) })
+	}
+	if err == nil {
+		err = d.Chmod(x.mode(m))
+	}
+	d.Close()
+	if err != nil {
+		return fmt.Errorf("%s: %w", m.Path, err)
+	}
+	if err := x.root.Chtimes(m.Path, time.Unix(0, x.atime(m)), time.Unix(0, m.MTimeNanos)); err != nil {
+		return fmt.Errorf("setting times of %s: %w", m.Path, err)
 	}
 	return nil
 }
@@ -910,26 +1019,28 @@ func extractToStdout(r *Reader, members []format.Member, byID map[uint64]*format
 	return stats, nil
 }
 
-// boundByMemory limits the worker count by what the members will make each
-// worker allocate.
+// largestChunk is the largest chunk size that decoding members reads. A
+// member that shares content decodes its owner's chunks.
+func largestChunk(members []*format.Member, owner func(*format.Member) *format.Member) int64 {
+	var largest int64
+	for _, m := range members {
+		if o := owner(m); o != nil {
+			m = o
+		}
+		largest = max(largest, int64(m.ChunkSize))
+	}
+	return largest
+}
+
+// boundByMemory limits the worker count by what the largest chunk will make
+// each worker allocate.
 //
 // Every worker decodes into a buffer of its member's chunk size, and that
 // number comes from the index. It is capped at format.MaxChunkSize, but a cap
 // of 256 MiB times 64 workers is still 16 GiB, so the archive's own figures
 // decide how many workers are affordable rather than the flag alone
 // (doc/design.md 8.3).
-func boundByMemory(workers int, members []format.Member, limit int64, owner func(*format.Member) *format.Member) int {
-	var largest int64
-	for i := range members {
-		// A member that shares content decodes its owner's chunks.
-		m := &members[i]
-		if o := owner(m); o != nil {
-			m = o
-		}
-		if c := int64(m.ChunkSize); c > largest {
-			largest = c
-		}
-	}
+func boundByMemory(workers int, largest, limit int64) int {
 	if largest <= 0 {
 		return workers
 	}
@@ -969,19 +1080,22 @@ func tempName(memberPath string) (string, error) {
 	return path.Join(dir, name), nil
 }
 
-func shouldSkip(root *os.Root, m *format.Member, policy OverwritePolicy) (bool, error) {
-	fi, err := root.Lstat(m.Path)
+// shouldSkip applies the overwrite policy to name in root, for a member with
+// the modification time mtime. The caller reports an error with the member's
+// path.
+func shouldSkip(root *os.Root, name string, mtime int64, policy OverwritePolicy) (bool, error) {
+	fi, err := root.Lstat(name)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
-		return false, unsafeOrRaw(root, m, err)
+		return false, err
 	}
 	switch policy {
 	case OverwriteNever:
 		return true, nil
 	case OverwriteNewer:
-		return !time.Unix(0, m.MTimeNanos).After(fi.ModTime()), nil
+		return !time.Unix(0, mtime).After(fi.ModTime()), nil
 	default:
 		return false, nil
 	}

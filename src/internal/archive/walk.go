@@ -44,6 +44,12 @@ type walkOptions struct {
 	regex         fsutil.Regexps // -R: store only the paths that match
 	excludeRegex  fsutil.Regexps // --exclude-regex
 	oneFileSystem bool           // --one-file-system
+	// onError decides what an error of the walk itself does: one lstat,
+	// readdir or readlink that fails below a requested path. It returns nil
+	// to skip the entry and go on (--keep-going), or the error to stop. nil
+	// stops at the first error. A requested path that cannot be read always
+	// stops: it is a mistake in what was asked for.
+	onError func(src string, err error) error
 }
 
 // walker turns the requested paths into entries.
@@ -92,12 +98,21 @@ func (w *walker) Walk(requested string) error {
 	if fi, err := os.Stat(src); err == nil {
 		w.rootDev = meta.Stat(fi).Dev
 	}
-	return w.walk(src, requested)
+	return w.walk(src, requested, true)
+}
+
+// fail applies onError to an error of the walk at src. top is the requested
+// path itself.
+func (w *walker) fail(src string, top bool, err error) error {
+	if top || w.opt.onError == nil {
+		return err
+	}
+	return w.opt.onError(src, err)
 }
 
 // walk handles one filesystem object. rel is the name as the user gave it, so
 // that -C does not leak into the stored path.
-func (w *walker) walk(src, rel string) error {
+func (w *walker) walk(src, rel string, top bool) error {
 	stored, stripped, err := fsutil.StorePath(rel)
 	if err != nil {
 		return err
@@ -110,7 +125,7 @@ func (w *walker) walk(src, rel string) error {
 
 	fi, err := os.Lstat(src)
 	if err != nil {
-		return err
+		return w.fail(src, top, err)
 	}
 
 	e := entry{Src: src, Stored: stored, Info: fi, Stripped: stripped}
@@ -119,7 +134,7 @@ func (w *walker) walk(src, rel string) error {
 		if !w.opt.dereference {
 			target, err := os.Readlink(src)
 			if err != nil {
-				return fmt.Errorf("reading link %s: %w", src, err)
+				return w.fail(src, top, fmt.Errorf("reading link %s: %w", src, err))
 			}
 			e.Kind, e.LinkTarget, e.Sys = kindSymlink, target, meta.Stat(fi)
 			return w.emit(e)
@@ -127,7 +142,7 @@ func (w *walker) walk(src, rel string) error {
 		// -h: archive what the link points at, under the link's own name.
 		followed, err := os.Stat(src)
 		if err != nil {
-			return fmt.Errorf("following link %s: %w", src, err)
+			return w.fail(src, top, fmt.Errorf("following link %s: %w", src, err))
 		}
 		e.Info, e.Followed = followed, true
 		fi = followed
@@ -156,10 +171,10 @@ func (w *walker) walk(src, rel string) error {
 		// a directory already on the current path.
 		real, err := filepath.EvalSymlinks(src)
 		if err != nil {
-			return fmt.Errorf("resolving %s: %w", src, err)
+			return w.fail(src, top, fmt.Errorf("resolving %s: %w", src, err))
 		}
 		if w.entered[real] {
-			return fmt.Errorf("symlink loop: %s leads back to %s", src, real)
+			return w.fail(src, top, fmt.Errorf("symlink loop: %s leads back to %s", src, real))
 		}
 		w.entered[real] = true
 		defer delete(w.entered, real)
@@ -212,13 +227,17 @@ func classify(mode fs.FileMode) entryKind {
 
 // walkChildren visits a directory's entries in name order, so that an archive
 // of the same tree always comes out in the same order.
+//
+// The directory itself is archived by now, so a directory that cannot be read
+// is an error of one member even when it was requested: under --keep-going
+// it is archived empty, and the walk goes on.
 func (w *walker) walkChildren(src, rel string) error {
 	names, err := os.ReadDir(src)
 	if err != nil {
-		return err
+		return w.fail(src, false, err)
 	}
 	for _, de := range names {
-		if err := w.walk(filepath.Join(src, de.Name()), filepath.Join(rel, de.Name())); err != nil {
+		if err := w.walk(filepath.Join(src, de.Name()), filepath.Join(rel, de.Name()), false); err != nil {
 			return err
 		}
 	}

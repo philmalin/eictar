@@ -407,6 +407,8 @@ Above this size, a member waits on disk, not in memory. The default is
 .TP
 .B \-\-keep\-going
 Continue after an error on one member, and exit with 1 at the end.
+When an archive is written, a directory that cannot be read is archived
+empty, and a file that went away during the walk is left out.
 .SS Configuration
 .TP
 .BI \-\-config " file"

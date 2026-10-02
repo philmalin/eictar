@@ -1352,14 +1352,27 @@ Extraction has four phases:
    in parallel, the result depends on a race. A member can go into a real
    directory, or a link with the same name can refuse it. The outcome depends
    on which worker wins.
-2. **Files**, across N workers. Each worker reads its own byte ranges with
-   `pread`, through the shared `os.Root`. Both are safe for concurrent use.
-   There is no shared file offset and no lock.
+2. **Files**, across N workers. The workers take the files in batches of
+   consecutive files in path order: at most 32 files, or 1 MiB of content.
+   Thus the files of one directory mostly go to one worker. Each worker reads
+   its own byte ranges with `pread`, and has its own decoders (below). There
+   is no shared file offset and no lock.
+
+   Each worker keeps open the directory that it writes into, as an
+   `os.Root` of its own, opened through the destination's root. An operation
+   through the destination's root resolves the whole path, one component at
+   a time, and each file needed five: a `MkdirAll` of its directory, an
+   `lstat`, the open, the times and the rename. For 20000 small files, these
+   lookups were most of the time. Through the directory's root, each takes
+   one name. That root is inside the destination too, so the protection of
+   §7.1 stays. A directory that does not exist yet is made first.
 3. **Hardlinks**, after their targets exist.
 4. **Directory metadata** (xattrs, owner, mode, times), deepest first, in a
    final pass. Writing a child changes the mtime of its parent. Also, a
    default ACL set early passes to the files that extraction writes into the
-   directory.
+   directory. A directory whose metadata fails here is a failed member.
+   Under `--keep-going` the pass goes on, so that the other directories do
+   not keep their private mode of 0700.
 
 Each worker decodes into a buffer of its member's chunk size. The chunk size
 comes from the index, so the reader limits the number of workers against the
@@ -1399,9 +1412,22 @@ a new reader for each call. s2 has almost no setup. `BenchmarkSmallFiles`
 | `--verify`, zstd, encrypted | 108 ms | 77 ms | 66 ms |
 | extract, zstd | 477 ms | 457 ms | 457 ms |
 
-The batches are in §9.4. Extraction of small files spends its time in the
-filesystem: it creates, writes and renames each file. Thus the gain is
-mostly in `--verify`, and extraction still uses the shared pool.
+The batches of `--verify` are in §9.4. Extraction of small files spent its
+time in the lookups of paths, so the decoders gained it little. With the
+directory roots and the batches above, and a set of decoders for each
+worker, it changed as follows (the same benchmark, `-j 24`):
+
+| Extract | Before | After |
+|---|---|---|
+| zstd | 472 ms | 169 ms |
+| zstd with `train` | 507 ms | 166 ms |
+| zstd, encrypted | 542 ms | 181 ms |
+| s2 | 515 ms | 162 ms |
+
+`BenchmarkExtract`, a mixed tree of 64 MiB, went from about 60 ms to about
+25 ms. The phases of extraction also keep pointers to the members, not
+copies, and the selection of members filters in place. With 20000 members,
+extraction allocates 146 MB in place of 233 MB.
 
 ### 8.4 Measured performance
 
@@ -1951,7 +1977,7 @@ whose encryption was removed (§14).
 | | `--overwrite` | overwrite (the default) | M2 |
 | | `--newer-only` | overwrite only when the member is newer | M2 |
 | `-O` | `--to-stdout` | write the extracted content to stdout | M2 |
-| | `--keep-going` | continue after an error on one member | M2 |
+| | `--keep-going` | continue after an error on one member, and exit with 1. On create, append and update, an entry that the walk cannot read is such an error: a directory that cannot be read is archived empty, and a file that went away is left out. A path given on the command line that cannot be read still stops the run. | M2 |
 | | `--long` | the long listing, the same as `-tv` (§10.9) | M2 |
 | | `--json` | listing for programs, with every field of §10.9. A path that is not valid UTF-8 also has `path_base64`, because a JSON string cannot hold its bytes. | M2 |
 | | `--quick` | with `--verify`, check only the structure and read no member data (§9.4) | M6 |

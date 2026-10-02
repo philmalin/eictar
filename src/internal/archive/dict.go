@@ -281,6 +281,9 @@ func sampleTree(w *Writer, cfg CreateConfig, size int) ([][]byte, error) {
 		regex:         cfg.Regex,
 		excludeRegex:  cfg.ExcludeRegex,
 		oneFileSystem: cfg.OneFileSystem,
+		// The walk that archives reports what cannot be read; the sample
+		// goes on without it.
+		onError: func(string, error) error { return nil },
 	}, func(e entry) error {
 		if e.Kind != kindFile || e.Info.Size() == 0 || w.SameFile(e.Info) ||
 			(oldErr == nil && os.SameFile(e.Info, oldArchive)) {

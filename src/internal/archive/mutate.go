@@ -340,16 +340,11 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	if err != nil {
 		return res, fmt.Errorf("resolving %s: %w", cfg.Archive, err)
 	}
-	r, err := OpenWith(path, cfg.Open)
+	r, err := openLocked(path, cfg.Open)
 	if err != nil {
 		return res, err
 	}
 	defer r.Close()
-	// Held until the rename: an append that ran meanwhile would write to the
-	// file that the rename then throws away.
-	if err := lockArchive(r.f, path); err != nil {
-		return res, err
-	}
 
 	res.OldSize = r.size
 	keep := kept(r.index.Members)
@@ -470,6 +465,40 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	}
 	res.NewSize = w.off
 	return res, nil
+}
+
+// testBeforeCompactLock, when set by a test, runs after compact opens the
+// archive and before it takes the lock.
+var testBeforeCompactLock func()
+
+// openLocked opens the archive at path, takes the writer's lock, and only
+// then reads the trailer and the index (doc/design.md 9.6). The lock is held
+// until the reader is closed: for compact, after the rename. Reading first
+// and locking after let an append commit in between, and compact then wrote
+// the archive again from the older index and renamed it over the append.
+func openLocked(path string, opt OpenOptions) (*Reader, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("opening %s: %w", path, err)
+	}
+	if testBeforeCompactLock != nil {
+		testBeforeCompactLock()
+	}
+	if err := lockArchive(f, path); err != nil {
+		f.Close()
+		return nil, err
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, fmt.Errorf("stat %s: %w", path, err)
+	}
+	r := &Reader{f: f, path: path, size: fi.Size()}
+	if err := r.load(opt); err != nil {
+		r.Close()
+		return nil, err
+	}
+	return r, nil
 }
 
 // rewrapHeaders builds the file header and the crypto header of a change of
@@ -678,11 +707,7 @@ func decodeInParallel(r *Reader, work []*format.Member, workers int, memoryLimit
 		return
 	}
 	// The members of work hold their own blobs, so each is its own owner.
-	values := make([]format.Member, len(work))
-	for i, m := range work {
-		values[i] = *m
-	}
-	workers = boundByMemory(workers, values, memoryLimit, func(*format.Member) *format.Member { return nil })
+	workers = boundByMemory(workers, largestChunk(work, func(*format.Member) *format.Member { return nil }), memoryLimit)
 
 	// starts[b] is the first member of batch b; the last entry is len(work).
 	starts := []int{0}

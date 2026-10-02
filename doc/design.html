@@ -3376,20 +3376,35 @@ very large file) is not in v1. For this reason it is not in §10.4.</p>
 <h3 id="parallel-extraction">8.3 Parallel extraction</h3>
 <p>Extraction has four phases:</p>
 <ol type="1">
-<li><strong>Directories, links, pipes and devices</strong>, in path
+<li><p><strong>Directories, links, pipes and devices</strong>, in path
 order, on one goroutine. They have no payload, and the files need them
 to exist first. If workers create them in parallel, the result depends
 on a race. A member can go into a real directory, or a link with the
-same name can refuse it. The outcome depends on which worker wins.</li>
-<li><strong>Files</strong>, across N workers. Each worker reads its own
-byte ranges with <code>pread</code>, through the shared
-<code>os.Root</code>. Both are safe for concurrent use. There is no
-shared file offset and no lock.</li>
-<li><strong>Hardlinks</strong>, after their targets exist.</li>
-<li><strong>Directory metadata</strong> (xattrs, owner, mode, times),
+same name can refuse it. The outcome depends on which worker
+wins.</p></li>
+<li><p><strong>Files</strong>, across N workers. The workers take the
+files in batches of consecutive files in path order: at most 32 files,
+or 1 MiB of content. Thus the files of one directory mostly go to one
+worker. Each worker reads its own byte ranges with <code>pread</code>,
+and has its own decoders (below). There is no shared file offset and no
+lock.</p>
+<p>Each worker keeps open the directory that it writes into, as an
+<code>os.Root</code> of its own, opened through the destination’s root.
+An operation through the destination’s root resolves the whole path, one
+component at a time, and each file needed five: a <code>MkdirAll</code>
+of its directory, an <code>lstat</code>, the open, the times and the
+rename. For 20000 small files, these lookups were most of the time.
+Through the directory’s root, each takes one name. That root is inside
+the destination too, so the protection of §7.1 stays. A directory that
+does not exist yet is made first.</p></li>
+<li><p><strong>Hardlinks</strong>, after their targets exist.</p></li>
+<li><p><strong>Directory metadata</strong> (xattrs, owner, mode, times),
 deepest first, in a final pass. Writing a child changes the mtime of its
 parent. Also, a default ACL set early passes to the files that
-extraction writes into the directory.</li>
+extraction writes into the directory. A directory whose metadata fails
+here is a failed member. Under <code>--keep-going</code> the pass goes
+on, so that the other directories do not keep their private mode of
+0700.</p></li>
 </ol>
 <p>Each worker decodes into a buffer of its member’s chunk size. The
 chunk size comes from the index, so the reader limits the number of
@@ -3465,10 +3480,47 @@ on 32 CPUs:</p>
 </tr>
 </tbody>
 </table>
-<p>The batches are in §9.4. Extraction of small files spends its time in
-the filesystem: it creates, writes and renames each file. Thus the gain
-is mostly in <code>--verify</code>, and extraction still uses the shared
-pool.</p>
+<p>The batches of <code>--verify</code> are in §9.4. Extraction of small
+files spent its time in the lookups of paths, so the decoders gained it
+little. With the directory roots and the batches above, and a set of
+decoders for each worker, it changed as follows (the same benchmark,
+<code>-j 24</code>):</p>
+<table>
+<thead>
+<tr class="header">
+<th>Extract</th>
+<th>Before</th>
+<th>After</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>zstd</td>
+<td>472 ms</td>
+<td>169 ms</td>
+</tr>
+<tr class="even">
+<td>zstd with <code>train</code></td>
+<td>507 ms</td>
+<td>166 ms</td>
+</tr>
+<tr class="odd">
+<td>zstd, encrypted</td>
+<td>542 ms</td>
+<td>181 ms</td>
+</tr>
+<tr class="even">
+<td>s2</td>
+<td>515 ms</td>
+<td>162 ms</td>
+</tr>
+</tbody>
+</table>
+<p><code>BenchmarkExtract</code>, a mixed tree of 64 MiB, went from
+about 60 ms to about 25 ms. The phases of extraction also keep pointers
+to the members, not copies, and the selection of members filters in
+place. With 20000 members, extraction allocates 146 MB in place of 233
+MB.</p>
 <h3 id="measured-performance">8.4 Measured performance</h3>
 <p><code>make compare</code> runs <code>bench/compare.sh</code>, which
 compares eictar with <code>tar</code> piped into a compressor. These
@@ -4406,7 +4458,11 @@ extract, do not apply it.</td>
 <tr class="odd">
 <td></td>
 <td><code>--keep-going</code></td>
-<td>continue after an error on one member</td>
+<td>continue after an error on one member, and exit with 1. On create,
+append and update, an entry that the walk cannot read is such an error:
+a directory that cannot be read is archived empty, and a file that went
+away is left out. A path given on the command line that cannot be read
+still stops the run.</td>
 <td>M2</td>
 </tr>
 <tr class="even">

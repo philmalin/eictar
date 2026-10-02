@@ -243,6 +243,18 @@ func addPaths(w *Writer, cfg CreateConfig, workers int, prepare func(*capturer))
 		regex:         cfg.Regex,
 		excludeRegex:  cfg.ExcludeRegex,
 		oneFileSystem: cfg.OneFileSystem,
+		// An entry that the walk cannot read fails as one member, as a file
+		// that cannot be opened does (doc/design.md 10.4).
+		onError: func(src string, err error) error {
+			stats.Failed++
+			if !cfg.KeepGoing {
+				return err
+			}
+			if rep != nil {
+				rep.Warn("%v", err)
+			}
+			return nil
+		},
 	}, visit)
 	var walkErr error
 	for _, p := range cfg.Paths {
@@ -425,7 +437,7 @@ type ListConfig struct {
 type Listing struct {
 	Members []format.Member
 	Codecs  []format.CodecSpec
-	byID    map[uint64]format.Member
+	byID    map[uint64]*format.Member
 
 	// Generation and Tombstoned describe the whole archive, whatever the
 	// patterns selected.
@@ -455,6 +467,9 @@ func (l *Listing) SameAs(m *format.Member) (path string, deleted bool) {
 		return fmt.Sprintf("member %d", m.Data), false
 	}
 	o := l.byID[m.Data]
+	if o == nil {
+		return fmt.Sprintf("member %d", m.Data), false
+	}
 	return o.Path, o.Dead
 }
 
@@ -464,7 +479,10 @@ func (l *Listing) NotStored(m *format.Member) uint64 {
 	if l == nil || m.Data == 0 {
 		return 0
 	}
-	return l.byID[m.Data].Length
+	if o := l.byID[m.Data]; o != nil {
+		return o.Length
+	}
+	return 0
 }
 
 // HardlinkTarget returns the path a hardlink member points at, or its id
@@ -473,7 +491,10 @@ func (l *Listing) HardlinkTarget(m *format.Member) string {
 	if l == nil {
 		return fmt.Sprintf("member %d", m.HardlinkTo)
 	}
-	return l.byID[m.HardlinkTo].Path
+	if t := l.byID[m.HardlinkTo]; t != nil {
+		return t.Path
+	}
+	return fmt.Sprintf("member %d", m.HardlinkTo)
 }
 
 // ListArchive reads the index and returns the members matching the patterns,
@@ -487,20 +508,21 @@ func ListArchive(cfg ListConfig) (*Listing, error) {
 	}
 	defer r.Close()
 
-	all := r.Members()
 	l := &Listing{
 		Codecs:     r.index.Codecs,
-		byID:       map[uint64]format.Member{},
+		byID:       map[uint64]*format.Member{},
 		Generation: r.tr.Generation,
 	}
-	for _, m := range r.AllMembers() { // tombstones too: a hardlink can point to one
+	all := r.AllMembers()
+	for i := range all { // tombstones too: a hardlink can point to one
+		m := &all[i]
 		l.byID[m.ID] = m
 		if m.Dead {
 			l.Tombstoned++
 		}
 	}
 
-	members, err := selectMembers(all, cfg.Patterns, cfg.Regex)
+	members, err := selectMembers(r.Members(), cfg.Patterns, cfg.Regex)
 	if err != nil {
 		return nil, err
 	}
@@ -520,12 +542,13 @@ func List(cfg ListConfig) ([]format.Member, error) {
 }
 
 // excludeMembers drops the members that match an exclude pattern, and
-// everything under a directory that matches one.
+// everything under a directory that matches one. It filters in place, as
+// selectMembers does.
 func excludeMembers(members []format.Member, exclude []string, excludeRegex fsutil.Regexps) []format.Member {
 	if len(exclude) == 0 && len(excludeRegex) == 0 {
 		return members
 	}
-	out := members[:0:0]
+	out := members[:0] // in place: the caller's slice is its own copy
 	for _, m := range members {
 		if !fsutil.MatchAny(exclude, m.Path) && !excludeRegex.MatchAnyOrParent(m.Path) {
 			out = append(out, m)
@@ -536,6 +559,10 @@ func excludeMembers(members []format.Member, exclude []string, excludeRegex fsut
 
 // selectMembers keeps the members that match any pattern, and then, with -R,
 // those that match any expression. No patterns means every member.
+//
+// It filters in place, so members must be the caller's own copy, as
+// Reader.Members gives. At the limit of the index, a new slice for each
+// filter was a copy of a GB.
 //
 // Each pattern and each expression must match at least one member, or the
 // result is ErrNoMatch:
@@ -549,7 +576,7 @@ func selectMembers(members []format.Member, patterns []string, regex fsutil.Rege
 		return members, err
 	}
 	matched := make([]bool, len(regex))
-	out := make([]format.Member, 0, len(members))
+	out := members[:0] // in place, as excludeMembers
 	for _, m := range members {
 		hit := false
 		for i, re := range regex {
@@ -574,7 +601,7 @@ func selectByPattern(members []format.Member, patterns []string) ([]format.Membe
 		return members, nil
 	}
 	matched := make([]bool, len(patterns))
-	out := make([]format.Member, 0, len(members))
+	out := members[:0] // in place, as excludeMembers
 	for _, m := range members {
 		hit := false
 		for i, p := range patterns {

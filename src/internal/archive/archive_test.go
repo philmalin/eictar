@@ -21,6 +21,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/crypt"
 	"github.com/philmalin/eictar/src/internal/format"
 	"github.com/philmalin/eictar/src/internal/fsutil"
+	"github.com/philmalin/eictar/src/internal/meta"
 	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
@@ -805,6 +806,102 @@ func TestKeepGoingSkipsBadMembers(t *testing.T) {
 	}
 }
 
+// TestKeepGoingPastAnUnreadableDirectory: an error of the walk itself - here
+// a directory that cannot be read - fails one member under --keep-going, and
+// the rest of the tree is archived. It stopped the whole run, with no archive
+// (doc/design.md 10.4).
+func TestKeepGoingPastAnUnreadableDirectory(t *testing.T) {
+	if meta.IsRoot() {
+		t.Skip("root reads a directory of mode 0")
+	}
+	tree := testutil.NewTree(t)
+	tree.Dir("t", 0o755).Text("t/good.txt", 0o644, "fine").
+		Dir("t/locked", 0o755).Text("t/locked/inside.txt", 0o644, "unreachable").
+		Text("t/zz.txt", 0o644, "after the locked directory")
+	locked := tree.Path("t/locked")
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(locked, 0o755) })
+
+	create := func(keepGoing bool) (string, Stats, error) {
+		archivePath := filepath.Join(t.TempDir(), "a.ect")
+		stats, err := CreateArchive(CreateConfig{
+			Archive: archivePath, Paths: []string{"t"}, BaseDir: tree.Root,
+			Options: Options{Codec: "none"}, KeepGoing: keepGoing,
+		})
+		return archivePath, stats, err
+	}
+	if _, _, err := create(false); err == nil {
+		t.Error("without --keep-going, an unreadable directory did not stop the run")
+	}
+	archivePath, stats, err := create(true)
+	if err != nil {
+		t.Fatalf("with --keep-going: %v", err)
+	}
+	if stats.Failed != 1 {
+		t.Errorf("stats = %+v, want 1 failure", stats)
+	}
+	members, err := List(ListConfig{Archive: archivePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, m := range members {
+		paths = append(paths, m.Path)
+	}
+	if got := strings.Join(paths, ","); got != "t,t/good.txt,t/locked,t/zz.txt" {
+		t.Errorf("archive holds %s; want the directory empty and the rest of the tree", got)
+	}
+}
+
+// TestKeepGoingPastADirectoryWhoseMetadataFails: a directory whose metadata
+// fails in the final pass is one failed member under --keep-going, and the
+// other directories still get their own modes. The first such failure ended
+// the run, and every later directory kept its private 0700.
+func TestKeepGoingPastADirectoryWhoseMetadataFails(t *testing.T) {
+	// A crafted archive: the directory b, then a link named b that leaves
+	// the destination. Phase 1 replaces the directory with the link, and the
+	// final pass cannot open b through the root.
+	archivePath := filepath.Join(t.TempDir(), "dirs.ect")
+	w, err := Create(archivePath, Options{Codec: "none"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []format.Member{
+		{ID: 1, Path: "a", Type: format.TypeDir, Mode: 0o750},
+		{ID: 2, Path: "b", Type: format.TypeDir, Mode: 0o750},
+		{ID: 3, Path: "b", Type: format.TypeSymlink, Mode: 0o777, LinkTarget: t.TempDir()},
+		{ID: 4, Path: "c", Type: format.TypeDir, Mode: 0o750},
+	} {
+		m.Generation, m.Codec = 1, format.NoCodec
+		if err := w.AppendMember(&m, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	restore := RestoreOptions{Permissions: true}
+	if _, err := Extract(ExtractConfig{Archive: archivePath, Destination: t.TempDir(), Restore: restore}); err == nil {
+		t.Error("without --keep-going, the failed directory did not stop the run")
+	}
+	dest := t.TempDir()
+	stats, err := Extract(ExtractConfig{Archive: archivePath, Destination: dest, Restore: restore, KeepGoing: true})
+	if err != nil {
+		t.Fatalf("with --keep-going: %v", err)
+	}
+	if stats.Failed != 1 || stats.Members != 3 {
+		t.Errorf("stats = %+v, want 3 members and 1 failure", stats)
+	}
+	for _, dir := range []string{"a", "c"} {
+		if fi, err := os.Stat(filepath.Join(dest, dir)); err != nil || fi.Mode().Perm() != 0o750 {
+			t.Errorf("%s: %v, %v; want mode 0750", dir, fi.Mode().Perm(), err)
+		}
+	}
+}
+
 // bytesWriterTo adapts a byte slice to the payload interface the writer takes.
 type bytesWriterTo []byte
 
@@ -1525,7 +1622,11 @@ func TestExtractionWorkersAreBoundedByMemory(t *testing.T) {
 			if tc.name == "small chunks unaffected" {
 				ms = []format.Member{{ChunkSize: 64 << 10}}
 			}
-			if got := boundByMemory(tc.workers, ms, tc.limit, func(m *format.Member) *format.Member { return m }); got != tc.want {
+			ptrs := make([]*format.Member, len(ms))
+			for i := range ms {
+				ptrs[i] = &ms[i]
+			}
+			if got := boundByMemory(tc.workers, largestChunk(ptrs, func(m *format.Member) *format.Member { return m }), tc.limit); got != tc.want {
 				t.Errorf("boundByMemory(%d, limit=%d) = %d, want %d",
 					tc.workers, tc.limit, got, tc.want)
 			}
