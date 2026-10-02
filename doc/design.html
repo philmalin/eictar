@@ -4477,8 +4477,10 @@ extract, do not apply it.</td>
 <td>continue after an error on one member, and exit with 1. On create,
 append and update, an entry that the walk cannot read is such an error:
 a directory that cannot be read is archived empty, and a file that went
-away is left out. A path given on the command line that cannot be read
-still stops the run.</td>
+away is left out. macOS needs read permission to list the extended
+attributes of a directory, so there such a directory is left out too,
+and counts as a second failure. A path given on the command line that
+cannot be read still stops the run.</td>
 <td>M2</td>
 </tr>
 <tr class="even">
@@ -6273,8 +6275,9 @@ the lock first, as §9.6 requires.</li>
 <li><strong><code>--keep-going</code> does not cover the walk.</strong>
 A directory that could not be read, or a file that went away during the
 walk, stopped a create or an append with no archive. Under
-<code>--keep-going</code> it is now one failed member: the directory is
-archived empty, and the run ends with exit 1 (§10.4).</li>
+<code>--keep-going</code> it is now a failed member: the directory is
+archived empty (left out on macOS, which cannot read its extended
+attributes), and the run ends with exit 1 (§10.4).</li>
 <li><strong><code>--keep-going</code> does not cover the final pass of
 extraction.</strong> The first directory whose metadata failed stopped
 the run, and the directories after it kept their private mode of 0700.

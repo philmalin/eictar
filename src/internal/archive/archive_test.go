@@ -810,6 +810,11 @@ func TestKeepGoingSkipsBadMembers(t *testing.T) {
 // a directory that cannot be read - fails one member under --keep-going, and
 // the rest of the tree is archived. It stopped the whole run, with no archive
 // (doc/design.md 10.4).
+//
+// Linux lists the extended attributes of a directory of mode 0, so the
+// directory is archived, empty, and only the listing of its entries fails.
+// macOS needs read permission to list them, so the directory itself fails as
+// well, and is left out. The test asks the platform which applies.
 func TestKeepGoingPastAnUnreadableDirectory(t *testing.T) {
 	if meta.IsRoot() {
 		t.Skip("root reads a directory of mode 0")
@@ -839,8 +844,12 @@ func TestKeepGoingPastAnUnreadableDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("with --keep-going: %v", err)
 	}
-	if stats.Failed != 1 {
-		t.Errorf("stats = %+v, want 1 failure", stats)
+	want, failures := "t,t/good.txt,t/locked,t/zz.txt", 1
+	if _, err := meta.ReadXattrs(locked, false); err != nil {
+		want, failures = "t,t/good.txt,t/zz.txt", 2
+	}
+	if stats.Failed != failures {
+		t.Errorf("stats = %+v, want %d failures", stats, failures)
 	}
 	members, err := List(ListConfig{Archive: archivePath})
 	if err != nil {
@@ -850,8 +859,8 @@ func TestKeepGoingPastAnUnreadableDirectory(t *testing.T) {
 	for _, m := range members {
 		paths = append(paths, m.Path)
 	}
-	if got := strings.Join(paths, ","); got != "t,t/good.txt,t/locked,t/zz.txt" {
-		t.Errorf("archive holds %s; want the directory empty and the rest of the tree", got)
+	if got := strings.Join(paths, ","); got != want {
+		t.Errorf("archive holds %s, want %s: the rest of the tree, and not the locked directory's content", got, want)
 	}
 }
 

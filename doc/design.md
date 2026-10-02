@@ -1992,7 +1992,7 @@ whose encryption was removed (§14).
 | | `--overwrite` | overwrite (the default) | M2 |
 | | `--newer-only` | overwrite only when the member is newer | M2 |
 | `-O` | `--to-stdout` | write the extracted content to stdout | M2 |
-| | `--keep-going` | continue after an error on one member, and exit with 1. On create, append and update, an entry that the walk cannot read is such an error: a directory that cannot be read is archived empty, and a file that went away is left out. A path given on the command line that cannot be read still stops the run. | M2 |
+| | `--keep-going` | continue after an error on one member, and exit with 1. On create, append and update, an entry that the walk cannot read is such an error: a directory that cannot be read is archived empty, and a file that went away is left out. macOS needs read permission to list the extended attributes of a directory, so there such a directory is left out too, and counts as a second failure. A path given on the command line that cannot be read still stops the run. | M2 |
 | | `--long` | the long listing, the same as `-tv` (§10.9) | M2 |
 | | `--json` | listing for programs, with every field of §10.9. A path that is not valid UTF-8 also has `path_base64`, because a JSON string cannot hold its bytes. | M2 |
 | | `--quick` | with `--verify`, check only the structure and read no member data (§9.4) | M6 |
@@ -3464,8 +3464,9 @@ faults:
   §9.6 requires.
 - **`--keep-going` does not cover the walk.** A directory that could not be
   read, or a file that went away during the walk, stopped a create or an
-  append with no archive. Under `--keep-going` it is now one failed member:
-  the directory is archived empty, and the run ends with exit 1 (§10.4).
+  append with no archive. Under `--keep-going` it is now a failed member:
+  the directory is archived empty (left out on macOS, which cannot read its
+  extended attributes), and the run ends with exit 1 (§10.4).
 - **`--keep-going` does not cover the final pass of extraction.** The first
   directory whose metadata failed stopped the run, and the directories after
   it kept their private mode of 0700. The pass now goes on (§8.3).
