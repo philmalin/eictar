@@ -1086,3 +1086,37 @@ func TestRegexThroughTheBinary(t *testing.T) {
 		}
 	}
 }
+
+// TestDiffThroughTheBinary: a tree extracted with -p is what the archive
+// holds, so --diff finds nothing there, and in the tree that it came from.
+// A change to either is a difference, with exit 1.
+func TestDiffThroughTheBinary(t *testing.T) {
+	tree := metadataFixture(t)
+	archive := filepath.Join(t.TempDir(), "meta.ect")
+	runOK(t, tree.Root, "-cf", archive, "work")
+	dest := t.TempDir()
+	runOK(t, tree.Root, "-xpf", archive, "-d", dest)
+
+	for _, dir := range []string{tree.Root, dest} {
+		res := testutil.Run(t, dir, "--diff", "-f", archive)
+		if res.ExitCode != exitOK || !strings.Contains(res.Stdout, "no differences") {
+			t.Errorf("--diff in %s: exit %d\nstdout: %s\nstderr: %s", dir, res.ExitCode, res.Stdout, res.Stderr)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(dest, "work/attrs.txt"), []byte("Attributes"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dest, "work/link")); err != nil {
+		t.Fatal(err)
+	}
+	res := testutil.Run(t, dest, "--diff", "-f", archive)
+	if res.ExitCode != exitPartial {
+		t.Errorf("--diff after changes: exit %d, want %d (stderr: %s)", res.ExitCode, exitPartial, res.Stderr)
+	}
+	for _, want := range []string{"work/attrs.txt: content differs", "work/link: not on disk"} {
+		if !strings.Contains(res.Stdout, want) {
+			t.Errorf("--diff after changes does not say %q:\n%s", want, res.Stdout)
+		}
+	}
+}

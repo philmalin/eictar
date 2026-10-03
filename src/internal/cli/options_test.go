@@ -79,6 +79,7 @@ func TestParseOperations(t *testing.T) {
 		{[]string{"--delete", "-f", "a", "p"}, OpDelete},
 		{[]string{"--compact", "-f", "a"}, OpCompact},
 		{[]string{"--verify", "-f", "a"}, OpVerify},
+		{[]string{"--diff", "-f", "a"}, OpDiff},
 		{[]string{"--repair", "-f", "a"}, OpRepair},
 		{[]string{"--info", "-f", "a"}, OpInfo},
 		{[]string{"--list-codecs"}, OpListCodecs},
@@ -209,6 +210,10 @@ func TestParseUsageErrors(t *testing.T) {
 		{"bad exclude regex", []string{"-tf", "a", "--exclude-regex", "("}},
 		{"regex on compact", []string{"--compact", "-f", "a", "-R", "x"}},
 		{"exclude-regex on verify", []string{"--verify", "-f", "a", "--exclude-regex", "x"}},
+		{"destination on diff", []string{"--diff", "-f", "a", "-d", "out"}},
+		{"quick on diff", []string{"--diff", "-f", "a", "--quick"}},
+		{"no-dedup on diff", []string{"--diff", "-f", "a", "--no-dedup"}},
+		{"diff and verify", []string{"--diff", "--verify", "-f", "a"}},
 		{"change-passphrase with arguments", []string{"--change-passphrase", "-f", "a", "extra"}},
 		{"two new passphrase sources", []string{"--change-passphrase", "-f", "a",
 			"--new-passphrase-file", "f", "--new-passphrase-env", "V"}},
@@ -687,6 +692,16 @@ func TestMutationOptionsAreBuilt(t *testing.T) {
 
 // TestMetadataOptionScope: each option means something on some operations
 // only, and elsewhere it would be ignored in silence.
+// TestDiffTakesTheOptionsOfTheWalk: --diff must walk the tree as create did,
+// so it takes the options that change the walk and what create records.
+func TestDiffTakesTheOptionsOfTheWalk(t *testing.T) {
+	o := mustParse(t, "--diff", "-f", "a", "-C", "dir", "--exclude", "x", "--exclude-regex", "y",
+		"-R", "z", "-h", "--one-file-system", "--no-owner", "--no-xattrs", "--no-acls", "--keep-going", "p")
+	if o.Op != OpDiff || !o.NoOwner || !o.NoXattrs || !o.NoACLs || !o.OneFileSystem || !o.Dereference {
+		t.Errorf("parsed %+v", o)
+	}
+}
+
 func TestMetadataOptionScope(t *testing.T) {
 	for _, argv := range [][]string{
 		{"-xf", "a", "--one-file-system"},

@@ -33,6 +33,7 @@ const (
 	OpInfo
 	OpListCodecs
 	OpChangePassphrase
+	OpDiff
 )
 
 var operationNames = map[Operation]string{
@@ -50,6 +51,7 @@ var operationNames = map[Operation]string{
 	OpListCodecs: "--list-codecs",
 
 	OpChangePassphrase: "--change-passphrase",
+	OpDiff:             "--diff",
 }
 
 func (o Operation) String() string {
@@ -230,6 +232,7 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs.BoolVar(&ops.delete_, "delete", false, "tombstone matching members")
 	fs.BoolVar(&ops.compact, "compact", false, "reclaim space from tombstoned members")
 	fs.BoolVar(&ops.verify, "verify", false, "check integrity without extracting")
+	fs.BoolVar(&ops.diff, "diff", false, "compare the archive with the files on disk")
 	fs.BoolVar(&ops.repair, "repair", false, "recover from a damaged trailer")
 	fs.BoolVar(&ops.info, "info", false, "print archive information")
 	fs.BoolVar(&ops.listCodecs, "list-codecs", false, "list compression codecs and their parameters")
@@ -318,7 +321,7 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 type operationFlags struct {
 	create, append_, list, extract, update bool
 	delete_, compact, verify, repair, info bool
-	listCodecs, changePassphrase           bool
+	listCodecs, changePassphrase, diff     bool
 	gzip, xz, zstd                         bool
 	keepExisting, overwrite, newerOnly     bool
 	compress                               *string
@@ -442,7 +445,7 @@ func Parse(argv []string) (*Options, error) {
 func noOperation(ops *operationFlags) bool {
 	return !(ops.create || ops.append_ || ops.list || ops.extract || ops.update ||
 		ops.delete_ || ops.compact || ops.verify || ops.repair || ops.info || ops.listCodecs ||
-		ops.changePassphrase)
+		ops.changePassphrase || ops.diff)
 }
 
 func resolveOperation(ops *operationFlags) (Operation, error) {
@@ -458,6 +461,7 @@ func resolveOperation(ops *operationFlags) (Operation, error) {
 		{ops.delete_, OpDelete},
 		{ops.compact, OpCompact},
 		{ops.verify, OpVerify},
+		{ops.diff, OpDiff},
 		{ops.repair, OpRepair},
 		{ops.info, OpInfo},
 		{ops.listCodecs, OpListCodecs},
@@ -472,7 +476,7 @@ func resolveOperation(ops *operationFlags) (Operation, error) {
 	}
 	switch len(found) {
 	case 0:
-		return OpNone, &UsageError{fmt.Errorf("no operation selected: one of -c, -r, -t, -x, -u, --delete, --compact, --change-passphrase, --verify, --repair, --info or --list-codecs is required")}
+		return OpNone, &UsageError{fmt.Errorf("no operation selected: one of -c, -r, -t, -x, -u, --delete, --compact, --change-passphrase, --verify, --diff, --repair, --info or --list-codecs is required")}
 	case 1:
 		return found[0], nil
 	default:
@@ -616,23 +620,22 @@ func (o *Options) validate() error {
 	// Metadata options have one meaning each, on the operations where they
 	// mean anything. Elsewhere they would be silently ignored, which this
 	// program does not do (doc/design.md 10.6).
-	adding := []Operation{OpCreate, OpAppend, OpUpdate} // the operations that walk the filesystem
 	scoped := []struct {
 		name string
 		ops  []Operation
 	}{
-		{"one-file-system", adding},
+		{"one-file-system", walking},
 		{"no-dedup", adding},
 		{"preserve-permissions", []Operation{OpExtract}},
 		{"preserve-owner", []Operation{OpExtract}},
 		{"preserve-devices", []Operation{OpExtract}},
-		{"no-owner", append([]Operation{OpExtract}, adding...)},
-		{"no-xattrs", append([]Operation{OpExtract}, adding...)},
-		{"no-acls", append([]Operation{OpExtract}, adding...)},
-		{"exclude", append([]Operation{OpList, OpExtract}, adding...)},
-		{"exclude-from", append([]Operation{OpList, OpExtract}, adding...)},
-		{"exclude-regex", append([]Operation{OpList, OpExtract}, adding...)},
-		{"regex", append([]Operation{OpList, OpExtract, OpVerify, OpDelete}, adding...)},
+		{"no-owner", append([]Operation{OpExtract}, walking...)},
+		{"no-xattrs", append([]Operation{OpExtract}, walking...)},
+		{"no-acls", append([]Operation{OpExtract}, walking...)},
+		{"exclude", append([]Operation{OpList, OpExtract}, walking...)},
+		{"exclude-from", append([]Operation{OpList, OpExtract}, walking...)},
+		{"exclude-regex", append([]Operation{OpList, OpExtract}, walking...)},
+		{"regex", append([]Operation{OpList, OpExtract, OpVerify, OpDelete}, walking...)},
 	}
 	for _, sc := range scoped {
 		if o.explicit[sc.name] && !containsOp(sc.ops, o.Op) {

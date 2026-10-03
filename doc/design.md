@@ -1181,9 +1181,10 @@ choose. `-d` together with `-O`/`--to-stdout` is also a usage error, because
 content on standard output has no destination directory.
 
 In `tar`, `-d` means `--compare`. In `zip`, it deletes entries. Neither
-meaning causes a problem here. This tool has no compare operation, and `-d`
-does not select an operation. Thus `eictar -d out -f a.ect` fails the
-one-operation rule, and it deletes nothing.
+meaning causes a problem here. The compare operation of this tool is
+`--diff`, with no short letter (§9.8). `-d` does not select an operation.
+Thus `eictar -d out -f a.ect` fails the one-operation rule, and it deletes
+nothing.
 
 ### 7.2 The archive never contains itself
 
@@ -1893,6 +1894,112 @@ disk are enough too. A change of passphrase cannot take back what someone
 already has. Only a new archive, with a new
 data key, can protect new content from a leaked key.
 
+### 9.8 Compare with the disk (`--diff`)
+
+`--diff` compares the live members of an archive with the tree on disk. It
+changes nothing. It is `tar -d` (`--compare`), with two differences. It also
+finds the paths on disk that the archive does not hold. It compares content
+by digest. It has no short letter, because `-d` is `--destination` (§7.1).
+
+**What it compares.** For each member that is on disk, the program compares
+these items:
+
+- The type. A hardlink member must be a regular file. When the types are
+  different, the program compares nothing more for that path.
+- The size and the content of a file. When the sizes are equal, the program
+  reads the file. It compares the digest with the member's digest, as
+  `-u --update-mode=digest` does (§10.5).
+- The target of a symbolic link, and the numbers of a device node.
+- For a hardlink, that the file is the same file as its target. The program
+  checks this when the target is live and on disk.
+- The mode, except for a symbolic link (§7.6).
+- The owner, by number. An archive made with `--no-owner` has no owner to
+  compare.
+- The modification time, to the nanosecond.
+- The extended attributes and the ACLs of files and directories, as create
+  records them.
+
+`--no-owner`, `--no-xattrs` and `--no-acls` leave out what they name. The
+access time and the change time are not compared, because extraction does
+not restore them.
+
+The content check reads no member data. Thus `--diff` does not check the
+archive itself. `--verify` does that (§9.4).
+
+**Which paths it compares.** The archive does not record the paths that
+create was given. Thus `--diff` gets the start of each walk from the
+members. A walk starts at the highest directory of the archive above a
+member. When no directory of the archive is above the member, the walk
+starts at the member. Examples:
+
+- `eictar -cf a.ect src` stores `src`, so `--diff` walks all of `src`. It
+  reports a new file in `src`.
+- `eictar -cf a.ect src/main.go` stores no `src`. Thus `--diff` compares
+  `src/main.go` alone, and does not report the other files in `src`.
+- `eictar -cf a.ect -C dir .` stores no `.` (§7.3). Thus `--diff` does not
+  report a new path directly in `dir`. It reports a new path in a directory
+  of the archive.
+
+The program reports each path that the walk finds and the archive does not
+hold. For such a directory, it reports the directory only, not its
+contents. In the same way, for a member directory that is not on disk, it
+reports the directory only. Create skips sockets (§7.7), so a socket on disk
+is not reported. The walk skips the archive file, as create does (§7.2).
+
+The walk is the walk of create, with the same options: `--exclude`,
+`--exclude-regex`, `-R`, `-h` and `--one-file-system`. Give the options
+that create had. Otherwise, the paths that create left out show as
+differences. A configuration that sets these options for create also sets
+them for `--diff` (§11.1).
+
+Patterns and `-R` select the members, as for `-t`. Each must match at least
+one member (§10.7). They also select the paths on disk. Thus
+`--diff -f a.ect '*.go'` reports a new `.go` file anywhere in the archived
+tree, and no other new file. A pattern cannot name a path that is only on
+disk, because it must match a member.
+
+**The output.** The program writes one line for each difference to stdout,
+in the order of the paths:
+
+```
+src/main.go: content differs
+src/util.go: mode differs: archive 0644, disk 0600
+src/new.go: not in the archive
+src/old: not on disk
+```
+
+`-q` does not hide the differences, because they are the result. When there
+is no difference, the program writes one summary line, unless `-q` is given.
+The exit status is 0 when there is no difference, and 1 when there is one,
+as for `diff` and `tar -d` (§10.7). A file that cannot be read is an error
+of one member. It stops the run with exit 4. Under `--keep-going`, it gives
+a warning and exit 1.
+
+**Results that are correct, but that can surprise:**
+
+- A tree extracted without `-p` has each mode less the umask. A user who is
+  not root does not get the owners of the archive. Both are differences. An
+  operational test checks that a tree extracted with `-p` has none.
+- A create writes the archive into its directory. If that directory is in
+  the tree, its modification time changes, and that is a difference.
+- An archive made with `--no-xattrs` holds no attributes. Thus each
+  attribute on disk is a difference, unless `--diff` has `--no-xattrs` too.
+
+**Speed.** `-j` workers read the files in parallel. One goroutine walks the
+tree and compares the metadata. The program sorts the differences, so the
+output does not change with `-j`. On 32 CPUs, a tree of 2.0 GB in 21270
+files, in the page cache, took 1.25 s with one worker and 0.27 s with the
+default of 24. `--verify` of the same archive took 0.32 s.
+
+**A hostile archive.** The member paths decide where each walk starts on
+disk. The program checks each path as extraction does (§7.5). It finds the
+start of each walk through `os.Root`, so a symbolic link on disk cannot take
+the walk out of the directory. Without this rule, an archive can make
+`--diff` read any file of the system. The output then tells if that file
+has a given digest. Below its start, the walk follows no link, except with
+`-h`. It opens each file as create does (§9, `doc/Security_Audit.md`
+finding 3).
+
 ---
 
 # Part III — Interface
@@ -1932,6 +2039,7 @@ a missing or doubled operation gets a short error on stderr and exit 2.
 | | `--delete` | Tombstone the matching members | patterns | M6 |
 | | `--compact` | Write the archive again without the tombstoned blobs | none | M6 |
 | | `--verify` | Check integrity without extraction | patterns (default: all) | M6 |
+| | `--diff` | Compare the members with the tree on disk, and change nothing (§9.8) | patterns (default: all) | after v1.0.5 |
 | | `--repair` | Restore the last complete generation after an interrupted write (§9.5) | none | M6 |
 | | `--info` | Show the archive header, the codecs, the dictionaries, the counts, the shared content and the dead space | none | M6 |
 | | `--change-passphrase` | Seal the data key under a new passphrase, and write the archive again without its dead space (§9.7) | none | M9 |
@@ -2123,17 +2231,17 @@ whose encryption was removed (§14).
 | | `--memory-limit SIZE` | the memory budget. Default in §8.1. | M3 |
 | | `--spill-threshold SIZE` | the size at which a member's spool moves to disk. Default 32 MiB. | M3 |
 | `-T` | `--files-from FILE` | read the paths from FILE, or from stdin if FILE is `-` | M2 |
-| | `--exclude GLOB` | can be repeated. Applies to create, append, update, list and extract. An excluded directory is not entered. | M5 |
+| | `--exclude GLOB` | can be repeated. Applies to create, append, update, list, extract and diff. An excluded directory is not entered. | M5 |
 | `-X` | `--exclude-from FILE` | one glob on each line. Blank lines are ignored. There is no comment syntax, because a file name can start with `#`. | M5 |
-| `-R` | `--regex RE` | can be repeated. Keep only the paths that match a regular expression (§10.11). Create, append, update, list, extract, verify and delete. | after M9 |
-| | `--exclude-regex RE` | can be repeated. Leave out the paths that match. An excluded directory is not entered, and on a read it takes its contents (§10.11). Create, append, update, list and extract. | after M9 |
-| `-h` | `--dereference` | follow links and store what they point to | M2 |
+| `-R` | `--regex RE` | can be repeated. Keep only the paths that match a regular expression (§10.11). Create, append, update, list, extract, verify, delete and diff. | after M9 |
+| | `--exclude-regex RE` | can be repeated. Leave out the paths that match. An excluded directory is not entered, and on a read it takes its contents (§10.11). Create, append, update, list, extract and diff. | after M9 |
+| `-h` | `--dereference` | follow links and store what they point to. With `--diff`, compare what they point to. | M2 |
 | | `--no-dedup` | store each copy of the same content in full (§4.3). Create, append and update. | M11 |
-| | `--one-file-system` | do not enter other filesystems. A mount point is recorded, empty. Create, append and update. | M5 |
+| | `--one-file-system` | do not enter other filesystems. A mount point is recorded, empty. Create, append, update and diff. | M5 |
 | `-p` | `--preserve-permissions` | restore modes exactly, with setuid, setgid and sticky, and not less the umask. Also restore ACLs for any user, and privileged xattrs as root (§7.7). Extract only. | M5 |
 | | `--preserve-owner` | restore the owner (§7.7). Extract only. Without root, exit 2. | M5 |
 | | `--preserve-devices` | create device nodes. Extract only. Without root, exit 2. | M5 |
-| | `--no-xattrs`, `--no-acls`, `--no-owner` | on create, append and update, do not record that metadata. On extract, do not apply it. | M5 |
+| | `--no-xattrs`, `--no-acls`, `--no-owner` | on create, append and update, do not record that metadata. On extract, do not apply it. On diff, do not compare it. | M5 |
 | `-k` | `--keep-existing` | never overwrite an existing file on extract | M2 |
 | | `--overwrite` | overwrite (the default) | M2 |
 | | `--newer-only` | overwrite only when the member is newer | M2 |
@@ -2231,8 +2339,8 @@ value never causes this error.
 | Code | Meaning |
 |------|---------|
 | 0 | success |
-| 1 | the operation completed, but one or more members failed under `--keep-going` |
-| 2 | usage error: an unknown option, no operation, two operations, no `-f`, a bad compression spec. Also a pattern that matches no member, for `-t`, `-x`, `--verify` and `--delete`, an `-R` that matches no path or member, a regular expression that does not compile, and a path that is already in the archive under `--on-conflict=error`. Nothing is changed or extracted. |
+| 1 | the operation completed, but one or more members failed under `--keep-going`. Also, `--diff` found a difference between the archive and the disk (§9.8). |
+| 2 | usage error: an unknown option, no operation, two operations, no `-f`, a bad compression spec. Also a pattern that matches no member, for `-t`, `-x`, `--verify`, `--diff` and `--delete`, an `-R` that matches no path or member, a regular expression that does not compile, and a path that is already in the archive under `--on-conflict=error`. Nothing is changed or extracted. |
 | 3 | the archive failed a check. Causes: corrupt data, an unsafe member path, a wrong passphrase or a failed tag. Also a plaintext archive when a passphrase source was given, and an archive path through a link that the program does not follow (§9). |
 | 4 | any other failure, usually an I/O error on the archive or the filesystem |
 | 70 | an option that is not built yet (`EX_SOFTWARE`). The message names the milestone. Since M7, no option gives it. |
@@ -2341,8 +2449,8 @@ time to type the passphrase does not lower the rate.
 
 ### 10.11 Patterns
 
-`-t`, `-x`, `--verify`, `--delete` and `--exclude` take patterns. A pattern
-matches a member path in any of these cases:
+`-t`, `-x`, `--verify`, `--diff`, `--delete` and `--exclude` take patterns. A
+pattern matches a member path in any of these cases:
 
 - It is the path.
 - It names a directory that the path is under. Thus `src` takes
@@ -2379,7 +2487,8 @@ The walk enters every directory, because a match can be deeper down. A
 directory is stored only if it matches, and extraction creates the parent
 directories that the archive does not hold. On `-t`, `-x`, `--verify` and
 `--delete`, it filters the members that the patterns select, or all the
-members when there are no patterns. `--delete` needs a pattern or an `-R`.
+members when there are no patterns. On `--diff`, it filters the members and
+the walk (§9.8). `--delete` needs a pattern or an `-R`.
 
 Unlike a pattern, a match of a directory does not take its contents.
 `-R 'build'` keeps the directory `build` only, and `-R 'build(/.*)?'` keeps
@@ -2644,6 +2753,7 @@ src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
                            mutate.go: append, update, delete, compact, verify, info, repair.
+                           diff.go: compare with the disk (§9.8).
                            dict.go: dictionaries (§4.2). dedup.go: identical content (§4.3).
 src/internal/codec/        registry and factories: zstd, gzip, flate, xz, s2 and none; dictionaries
 src/internal/crypt/        Argon2id, the wrapped data key, the HKDF key schedule, the sealing of
@@ -2978,6 +3088,9 @@ Every item in the lists below exists now, except the items marked "later".
   sparse file, survive (§9.3).
 - **Progress meter**: the status line, no drawing before the first byte, and
   no meter without a terminal (§10.10).
+- **Compare with the disk**: each kind of difference, patterns and excludes,
+  a file archived alone, an encrypted archive, the same result for each
+  `-j`, and a link on disk that leads out of the directory (§9.8).
 - **Security regressions**: one test for each finding of
   `doc/Security_Audit.md`:
   - the decision for each class of xattr
@@ -3305,6 +3418,9 @@ copies. 51 sequences ended with a dictionary, and 124 with shared content.
   256 MiB chunk size with 64 workers needs 32 GiB.
 - **Cost from a crafted archive.** The KDF limits of §6.2 apply before the
   passphrase prompt.
+- **Compare.** `--diff` reads the disk at paths from the archive. It finds
+  the start of each walk through `os.Root`, so a link on disk cannot take it
+  out of the directory (§9.8).
 
 ### 14.4 Integrity and its limits
 
@@ -3664,6 +3780,10 @@ has a dictionary larger than the chunk size, as it does for a zstd window
 (§10.2). `THIRD_PARTY.md` lists the modules in the binary with their license
 texts, and a release includes it. Dependabot proposes updates of the modules
 and the actions each month (§12.3).
+
+**After v1.0.5**, `--diff` compares an archive with the tree on disk
+(§9.8). It reports the members that are not on disk, the paths on disk that
+are not in the archive, and each difference of type, content or metadata.
 
 
 ## Appendix A. Why these primitives, compared with AES

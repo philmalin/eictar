@@ -21,7 +21,7 @@ import (
 // backup script can tell "this archive is damaged" from "the disk filled up".
 const (
 	ExitOK       = 0
-	ExitPartial  = 1 // finished, but some members failed under --keep-going
+	ExitPartial  = 1 // finished, but some members failed under --keep-going, or --diff found differences
 	ExitUsage    = 2
 	ExitCorrupt  = 3 // damaged archive, or authentication failure
 	ExitIO       = 4
@@ -184,6 +184,8 @@ func dispatch(o *Options, stdout, stderr io.Writer) error {
 		return runChangePassphrase(o, stdout, stderr)
 	case OpVerify:
 		return runVerify(o, stdout, stderr)
+	case OpDiff:
+		return runDiff(o, stdout, stderr)
 	case OpRepair:
 		return runRepair(o, stdout, stderr)
 	case OpInfo:
@@ -218,7 +220,8 @@ func exitCodeFor(err error) int {
 		return ExitInternal
 	}
 	var partial *partialError
-	if errors.As(err, &partial) {
+	var differ *differError
+	if errors.As(err, &partial) || errors.As(err, &differ) {
 		return ExitPartial
 	}
 	// A pattern that matches nothing, and a path that is already in the
@@ -261,6 +264,7 @@ Operations (exactly one):
       --compact             write the archive again without dead space
       --change-passphrase   seal the archive's key under a new passphrase
       --verify              check every digest and tag, without extracting
+      --diff                compare the members with the files on disk
       --repair              cut the archive back after a crash
       --info                show the settings, counts and dead space
       --list-codecs         list the codecs and their parameters

@@ -341,38 +341,60 @@ func (c *capturer) recordOwner(m *format.Member, sys meta.Info) {
 	m.Gname = c.names.GroupName(sys.GID)
 }
 
-// recordXattrs stores the extended attributes that the options allow. ACLs
-// are extended attributes on Linux, so --no-acls and --no-xattrs are two
-// filters over one list.
+// recordXattrs stores the extended attributes that the options allow.
 func (c *capturer) recordXattrs(m *format.Member, e entry) error {
-	if c.opt.NoXattrs && c.opt.NoACLs {
-		return nil
+	xattrs, err := readXattrs(e, c.opt, func(name string, size int) {
+		// Linux never makes one this large, but macOS can: a resource
+		// fork is an xattr with no size limit. The file is still
+		// archived; the attribute is not (doc/design.md 15.1).
+		if c.warn != nil {
+			c.warn("%s: extended attribute %q is larger than the format allows (%d bytes); not archived",
+				e.Src, name, size)
+		}
+	})
+	m.Xattrs = xattrs
+	return err
+}
+
+// readXattrs reads the extended attributes of e that opt records: what create
+// stores, and what --diff compares with. An attribute larger than the format
+// allows is left out, and tooLarge is told of it. The result is nil when
+// there is none.
+func readXattrs(e entry, opt MetadataOptions, tooLarge func(name string, size int)) (map[string][]byte, error) {
+	if opt.NoXattrs && opt.NoACLs {
+		return nil, nil
 	}
 	all, err := meta.ReadXattrs(e.Src, e.Followed)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	var out map[string][]byte
 	for name, value := range all {
-		isACL := meta.ClassifyXattr(name) == meta.XattrACL
-		if (isACL && c.opt.NoACLs) || (!isACL && c.opt.NoXattrs) {
+		if !opt.records(name) {
 			continue
 		}
 		if len(name) > format.MaxXattrName || len(value) > format.MaxXattrValue {
-			// Linux never makes one this large, but macOS can: a resource
-			// fork is an xattr with no size limit. The file is still
-			// archived; the attribute is not (doc/design.md 15.1).
-			if c.warn != nil {
-				c.warn("%s: extended attribute %q is larger than the format allows (%d bytes); not archived",
-					e.Src, name, len(value))
+			if tooLarge != nil {
+				tooLarge(name, len(value))
 			}
 			continue
 		}
-		if m.Xattrs == nil {
-			m.Xattrs = map[string][]byte{}
+		if out == nil {
+			out = map[string][]byte{}
 		}
-		m.Xattrs[name] = value
+		out[name] = value
 	}
-	return nil
+	return out, nil
+}
+
+// records reports whether opt keeps the extended attribute name. ACLs are
+// extended attributes on Linux, so --no-acls and --no-xattrs are two filters
+// over one list.
+func (opt MetadataOptions) records(name string) bool {
+	if meta.ClassifyXattr(name) == meta.XattrACL {
+		return !opt.NoACLs
+	}
+	return !opt.NoXattrs
 }
 
 // contentOf returns the member that holds a path's content and times: the

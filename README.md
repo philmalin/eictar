@@ -40,8 +40,9 @@ $ eictar -xf home.ect -d /tmp/restore Documents/numbers.txt
   one, so a crash cannot damage what the archive held before. `--compact`
   removes the old generations.
 - **Checks**: each file has a BLAKE3 digest. `--verify` checks every digest
-  and every authentication tag without an extraction. `--repair` recovers
-  an archive after a crash in the middle of a change.
+  and every authentication tag without an extraction. `--diff` compares the
+  archive with the files on disk. `--repair` recovers an archive after a
+  crash in the middle of a change.
 - **Metadata**: permissions, owners, times, hardlinks, symbolic links, sparse
   files, extended attributes and POSIX ACLs (on Linux), pipes and device nodes.
 - **Parallel work**: `-j` workers compress and encrypt, inside a memory
@@ -190,6 +191,7 @@ A regular expression must match the whole stored path, such as
 
 ```
 eictar --verify -f home       # decode everything, and check every digest
+eictar --diff -f home -C ~    # what changed on disk since the archive
 eictar --info -f home         # size, codecs, dictionaries, shared content, dead space
 eictar -tvvf home             # the long listing, with digests and totals
 ```

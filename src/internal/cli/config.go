@@ -32,6 +32,10 @@ var allOps []Operation
 // adding are the operations that walk the filesystem into an archive.
 var adding = []Operation{OpCreate, OpAppend, OpUpdate}
 
+// walking are the operations that walk the filesystem: adding, and --diff,
+// which must walk it as create did.
+var walking = append([]Operation{OpDiff}, adding...)
+
 // configKeys are the options a configuration can set, and the operations
 // each one applies to. On any other operation a value from the configuration
 // is ignored: compress = xz must not stop a listing, and preserve-owner in a
@@ -52,19 +56,19 @@ var configKeys = map[string][]Operation{
 	"kdf-memory":    {OpCreate},
 	"kdf-threads":   {OpCreate},
 
-	"exclude":         append([]Operation{OpList, OpExtract}, adding...),
-	"exclude-from":    append([]Operation{OpList, OpExtract}, adding...),
-	"exclude-regex":   append([]Operation{OpList, OpExtract}, adding...),
-	"dereference":     adding,
-	"one-file-system": adding,
+	"exclude":         append([]Operation{OpList, OpExtract}, walking...),
+	"exclude-from":    append([]Operation{OpList, OpExtract}, walking...),
+	"exclude-regex":   append([]Operation{OpList, OpExtract}, walking...),
+	"dereference":     walking,
+	"one-file-system": walking,
 	"no-dedup":        adding,
 
 	"preserve-permissions": {OpExtract},
 	"preserve-owner":       {OpExtract},
 	"preserve-devices":     {OpExtract},
-	"no-xattrs":            append([]Operation{OpExtract}, adding...),
-	"no-acls":              append([]Operation{OpExtract}, adding...),
-	"no-owner":             append([]Operation{OpExtract}, adding...),
+	"no-xattrs":            append([]Operation{OpExtract}, walking...),
+	"no-acls":              append([]Operation{OpExtract}, walking...),
+	"no-owner":             append([]Operation{OpExtract}, walking...),
 
 	"keep-existing": {OpExtract},
 	"overwrite":     {OpExtract},

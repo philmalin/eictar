@@ -19,7 +19,7 @@ eictar \- archive files, each compressed and optionally encrypted on its own
 .IR path ...
 .br
 .B eictar
-.BR \-t | \-x | \-\-verify
+.BR \-t | \-x | \-\-verify | \-\-diff
 .B \-f
 .I archive
 .RI [ options ]
@@ -120,6 +120,36 @@ Patterns and
 .B \-R
 select the members to check.
 .TP
+.B \-\-diff
+Compare the members with the files on disk, in the current directory or in
+.BR \-C .
+Show each path that is not on disk, each path on disk that is not in the
+archive, and each difference of type, size, content, link target, mode,
+owner, modification time, device numbers, extended attributes and ACLs.
+Under a directory that is only on one side, only the directory is shown.
+The content check reads each file of the same size, with
+.B \-j
+workers, and compares its digest with the member's digest. It reads no
+member data, so it does not check the archive itself; use
+.B \-\-verify
+for that. Nothing is changed. The exit status is 1 if there is a
+difference.
+.IP
+Paths on disk that are not in the archive are found in the directories that
+the archive holds. Give the same
+.BR \-\-exclude ,
+.BR \-h ,
+.B \-\-one\-file\-system
+and
+.B \-\-no\-xattrs
+options as for the create, or what they changed shows as differences.
+Patterns and
+.B \-R
+select the members, and the paths on disk, to compare. A file extracted
+without
+.B \-p
+has its mode less the umask, and that is a difference.
+.TP
 .B \-\-repair
 After a crash during a change, cut the file back to the last complete
 generation. An archive that opens correctly is not changed.
@@ -195,7 +225,9 @@ it filters what the walk finds. With
 .B \-\-verify
 and
 .BR \-\-delete ,
-it filters the members. It can be given more than once.
+it filters the members. With
+.BR \-\-diff ,
+it filters both. It can be given more than once.
 .TP
 .BI \-\-exclude\-regex " re"
 Leave out the paths that
@@ -204,7 +236,9 @@ matches in full. An excluded directory is not entered, and it takes its
 contents. It can be given more than once.
 .TP
 .BR \-h ", " \-\-dereference
-Store what a symbolic link points to, not the link.
+Store what a symbolic link points to, not the link. With
+.BR \-\-diff ,
+compare what it points to.
 .TP
 .B \-\-one\-file\-system
 Do not enter other filesystems. A mount point is stored, empty.
@@ -365,7 +399,9 @@ Create device nodes. Only root can do this.
 .TP
 .BR \-\-no\-xattrs ", " \-\-no\-acls ", " \-\-no\-owner
 When adding, do not record this metadata. When extracting, do not restore
-it.
+it. With
+.BR \-\-diff ,
+do not compare it.
 .SS Output and work
 .TP
 .BR \-v ", " \-\-verbose
@@ -457,6 +493,7 @@ gives the totals, and the files that share another's data.
 .BR \-t ,
 .BR \-x ,
 .BR \-\-verify ,
+.BR \-\-diff ,
 .B \-\-delete
 and
 .B \-\-exclude
@@ -681,6 +718,9 @@ Success.
 .B 1
 The operation completed, but some members failed under
 .BR \-\-keep\-going .
+Also, for
+.BR \-\-diff ,
+the archive and the disk are different.
 .TP
 .B 2
 A usage error: a bad option, a bad configuration, a pattern or an
@@ -809,6 +849,14 @@ Add what changed since then, and check the result:
 .RS
 eictar \-uf home.ect \-C ~ \-\-update\-mode different Documents
 eictar \-\-verify \-f home.ect
+.RE
+.fi
+.PP
+Show what changed in Documents since the last update:
+.PP
+.nf
+.RS
+eictar \-\-diff \-f home.ect \-C ~
 .RE
 .fi
 .PP
