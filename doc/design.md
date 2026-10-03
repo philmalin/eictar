@@ -2000,6 +2000,80 @@ has a given digest. Below its start, the walk follows no link, except with
 `-h`. It opens each file as create does (§9, `doc/Security_Audit.md`
 finding 3).
 
+### 9.9 Dry run (`-n`)
+
+`-n` (`--dry-run`) shows the paths that an operation would write or delete,
+and changes nothing. It applies to `-c`, `-r`, `-u`, `-x` and `--delete`.
+On another operation, it is a usage error (§10.7). The main use is to see
+what a pattern, an `--exclude` or an `-R` selects before a real run. `rsync`
+and `make` have the same letter. `tar` uses `-n` for `--seek`, which this
+program does not have.
+
+**The same selection as the real run.** A dry run does not have its own
+copy of the rules. It calls the code of the real run:
+
+- Create, append and update walk the paths with the walk of create, with
+  `--exclude`, `--exclude-regex`, `-R`, `-h` and `--one-file-system`. The
+  walk skips the archive file (§7.2). A path given twice, a socket and an entry
+  that no member can hold are skipped or fail as in create.
+- Append applies `--on-conflict` to each path that the archive holds (§9.2).
+  Update applies `--update-mode` (§10.5). Thus `-u -n` does not show the
+  paths that are up to date.
+- Extract selects the members as extract does, with the patterns,
+  `--exclude` and `-R`. It checks each path (§7.5). It applies `-k` and
+  `--newer-only` to the files that are already under the destination. It
+  skips a device node without `--preserve-devices`, and a socket. With `-O`,
+  it shows the members whose content goes to stdout.
+- Delete selects the live members as delete does.
+
+**The output.** Each path is on its own line on stdout, so that a pipe can
+use the list. `-q` does not hide the paths, because they are the result, as
+for `--diff` (§9.8). With `-v`, a word before each path tells what happens
+to it: `add`, `replace`, `extract` or `delete`. `replace` is a path that
+replaces a live member (`-r`, `-u`), or a file on disk (`-x`). A summary
+line on stderr gives the number of paths and the size of their content.
+The size counts the content of a hardlinked file once, as create stores it
+once. It does not subtract identical content (§4.3). Unless `-q` is given,
+the summary also gives the number of paths that are replaced, unchanged,
+skipped and failed. The notices of the real run, for example for a socket,
+go to stderr as usual.
+
+```
+$ eictar -unvf home.ect -C ~ Documents
+replace  Documents/notes.txt
+add      Documents/new.pdf
+eictar: dry run, nothing written: 2 paths, 1.2 MiB of file content; 1 replace a member; 340 unchanged
+```
+
+The paths come in the order of the walk for create, append and update, in
+the order of the paths for extract, and in the order of the index for
+delete.
+
+**What a dry run does not do:**
+
+- It makes no archive and no temporary file. It locks no archive. It makes
+  no destination directory. A destination that does not exist holds no
+  files, so no file is replaced.
+- It reads no file content, except for `-u --update-mode=digest`, which
+  compares digests. Thus a file that cannot be read, or an extended
+  attribute that cannot be read, fails only in the real run. A walk error,
+  for example a directory that cannot be read, fails in the dry run too.
+- It does not train a dictionary, and it does not compress.
+- For an encrypted archive, append, update, extract and delete ask for the
+  passphrase, because they read the index. With `--encrypt-index`, the
+  paths are in the encrypted index. The digests of an encrypted archive are
+  keyed, so `-u --update-mode=digest` needs the key (§6.2). Create asks for
+  no passphrase.
+
+`--progress` with `-n` on the command line is a usage error, because a dry
+run reads almost nothing. A `progress` value from a configuration is
+ignored for a dry run (§11.1). A configuration cannot set `dry-run`.
+
+The exit status is that of the real run: 0, or 1 when a path failed under
+`--keep-going`. A conflict under `--on-conflict=error` exits with 2, a
+pattern or an `-R` that matches nothing exits with 2, and an unsafe member
+path exits with 3 (§10.7).
+
 ---
 
 # Part III — Interface
@@ -2225,6 +2299,7 @@ whose encryption was removed (§14).
 | `-C` | `--directory DIR` | change to DIR first. DIR must exist. More than one `-C` is refused (open question 2, §1.3). | M2 |
 | `-v` | `--verbose` | list members during the operation. Repeat for more detail. With `-t`, `-v` gives the long listing and `-vv` adds more (§10.9). | M2 |
 | `-q` | `--quiet` | errors only | M2 |
+| `-n` | `--dry-run` | show the paths that the operation would write or delete, and change nothing (§9.9). Create, append, update, extract and delete. | after v1.0.5 |
 | | `--progress` | a progress meter on stderr when stderr is a terminal (§10.10) | M7 |
 | `-j` | `--workers N` | number of workers, 1..1024. Default three quarters of `GOMAXPROCS`, at least 1 (§8). | M3 |
 | | `--chunk-size SIZE` | plaintext chunk size, 512 B..256 MiB. Default 4 MiB. | M2 |
@@ -2488,7 +2563,8 @@ directory is stored only if it matches, and extraction creates the parent
 directories that the archive does not hold. On `-t`, `-x`, `--verify` and
 `--delete`, it filters the members that the patterns select, or all the
 members when there are no patterns. On `--diff`, it filters the members and
-the walk (§9.8). `--delete` needs a pattern or an `-R`.
+the walk (§9.8). `--delete` needs a pattern or an `-R`. `-n` shows what
+the patterns and `-R` select, and changes nothing (§9.9).
 
 Unlike a pattern, a match of a directory does not take its contents.
 `-R 'build'` keeps the directory `build` only, and `-R 'build(/.*)?'` keeps
@@ -2573,8 +2649,9 @@ A configuration sets only *tuning* options. These come only from the command
 line, and a configuration that sets one is an error:
 
 - **The operation** (`-c`, `-x`, `-t`, `-r`, `-u`, `--delete` and the others),
-  and `--recompress`, which is part of compact. A configuration file must
-  never change a create into an extract.
+  `--recompress`, which is part of compact, and `-n`, which decides if the
+  operation changes anything. A configuration file must never change a
+  create into an extract, or make each run a dry run.
 - **What the operation works on:** `-f`, `-C`, `-d`, `-T`, `-O`, `-R`, and
   all positional paths and patterns. `--exclude-regex` can come from a
   configuration, as `exclude` can.
@@ -2598,7 +2675,8 @@ second codec.
 
 **`encrypt-index` in a configuration is a preference.** It applies when the
 archive is encrypted. On the command line without `--encrypt`, it is an
-error.
+error. `progress` is a preference in the same way: a dry run ignores it,
+and on the command line with `-n` it is an error (§9.9).
 
 ### 11.2 Environment variables
 
@@ -2753,7 +2831,7 @@ src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
                            mutate.go: append, update, delete, compact, verify, info, repair.
-                           diff.go: compare with the disk (§9.8).
+                           diff.go: compare with the disk (§9.8). plan.go: dry runs (§9.9).
                            dict.go: dictionaries (§4.2). dedup.go: identical content (§4.3).
 src/internal/codec/        registry and factories: zstd, gzip, flate, xz, s2 and none; dictionaries
 src/internal/crypt/        Argon2id, the wrapped data key, the HKDF key schedule, the sealing of
@@ -3091,6 +3169,11 @@ Every item in the lists below exists now, except the items marked "later".
 - **Compare with the disk**: each kind of difference, patterns and excludes,
   a file archived alone, an encrypted archive, the same result for each
   `-j`, and a link on disk that leads out of the directory (§9.8).
+- **Dry run**: for create, update with each mode, extract with each
+  overwrite policy, and delete, the paths of the dry run are the paths that
+  the real run writes, and the archive does not change. Also the conflict
+  policies, the key for the digests of an encrypted archive, an unsafe
+  member path, and no destination made (§9.9).
 - **Security regressions**: one test for each finding of
   `doc/Security_Audit.md`:
   - the decision for each class of xattr
@@ -3784,6 +3867,8 @@ and the actions each month (§12.3).
 **After v1.0.5**, `--diff` compares an archive with the tree on disk
 (§9.8). It reports the members that are not on disk, the paths on disk that
 are not in the archive, and each difference of type, content or metadata.
+`-n` (`--dry-run`) shows the paths that create, append, update, extract or
+delete would write or delete, and changes nothing (§9.9).
 
 
 ## Appendix A. Why these primitives, compared with AES

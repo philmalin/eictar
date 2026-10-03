@@ -133,17 +133,8 @@ func CreateArchive(cfg CreateConfig) (Stats, error) {
 func addPaths(w *Writer, cfg CreateConfig, workers int, prepare func(*capturer)) (Stats, *capturer, error) {
 	var stats Stats
 
-	warnedStrip := false
 	rep := cfg.Reporter
-
-	// The file being written exists before the walk, so a walk that reaches
-	// it would archive the file into itself - reading bytes it is still
-	// writing, and growing without bound. tar has the same guard. The
-	// comparison is by inode, so it holds through a symlink or a different
-	// spelling of the same path. For a create, the old archive at the path is
-	// a different inode, and it is skipped as well.
-	oldArchive, oldErr := os.Stat(cfg.Archive)
-	warnedSelf := false
+	guard := newWalkGuard(cfg, w.SameFile)
 
 	spill := cfg.SpillThreshold
 	if spill <= 0 {
@@ -190,81 +181,14 @@ func addPaths(w *Writer, cfg CreateConfig, workers int, prepare func(*capturer))
 	}
 
 	visit := func(e entry) error {
-		// Both the file being written and the one it replaces: a create
-		// writes to a temporary file, and the old archive at the path would
-		// otherwise go into the new one.
-		if w.SameFile(e.Info) || (oldErr == nil && os.SameFile(e.Info, oldArchive)) {
-			if !warnedSelf {
-				warnedSelf = true
-				if rep != nil {
-					rep.Warn("%s is the archive being written; not archiving it", e.Src)
-				}
-			}
+		if guard.skip(e) {
 			return nil
-		}
-		if e.Stripped && !warnedStrip {
-			warnedStrip = true
-			if rep != nil {
-				rep.Warn("removing leading '/' or '..' from member names")
-			}
 		}
 
-		addErr := capture.submit(e)
-		if errors.Is(addErr, errUnchanged) {
-			stats.Unchanged++
-			return nil
-		}
-		var skipped *errSkipped
-		if errors.As(addErr, &skipped) {
-			stats.Skipped++
-			if rep != nil {
-				rep.Warn("%v", skipped)
-			}
-			return nil
-		}
-		// A conflict under --on-conflict=error stops the run whatever
-		// --keep-going says: the user asked for the archive to stay as it was.
-		if addErr != nil && !errors.Is(addErr, ErrConflict) {
-			stats.Failed++
-			if cfg.KeepGoing {
-				if rep != nil {
-					rep.Warn("%v", addErr)
-				}
-				return nil
-			}
-		}
-		return addErr
+		return countOutcome(cfg, &stats, capture.submit(e))
 	}
 
-	wk := newWalker(walkOptions{
-		baseDir:       cfg.BaseDir,
-		dereference:   cfg.Dereference,
-		exclude:       cfg.Exclude,
-		regex:         cfg.Regex,
-		excludeRegex:  cfg.ExcludeRegex,
-		oneFileSystem: cfg.OneFileSystem,
-		// An entry that the walk cannot read fails as one member, as a file
-		// that cannot be opened does (doc/design.md 10.4).
-		onError: func(src string, err error) error {
-			stats.Failed++
-			if !cfg.KeepGoing {
-				return err
-			}
-			if rep != nil {
-				rep.Warn("%v", err)
-			}
-			return nil
-		},
-	}, visit)
-	var walkErr error
-	for _, p := range cfg.Paths {
-		if walkErr = wk.Walk(p); walkErr != nil {
-			break
-		}
-	}
-	if walkErr == nil {
-		walkErr = wk.unmatched()
-	}
+	walkErr := walkPaths(cfg, &stats, visit)
 
 	// Finish drains the pool whatever happened, so that no goroutine is left
 	// running and no spill file is left open.
@@ -276,6 +200,114 @@ func addPaths(w *Writer, cfg CreateConfig, workers int, prepare func(*capturer))
 	stats.Members = emitted.Members
 	stats.Bytes = emitted.Bytes
 	return stats, capture, walkErr
+}
+
+// countOutcome counts what happened to one entry, and returns the error that
+// stops the walk, or nil to go on.
+func countOutcome(cfg CreateConfig, stats *Stats, err error) error {
+	if errors.Is(err, errUnchanged) {
+		stats.Unchanged++
+		return nil
+	}
+	var skipped *errSkipped
+	if errors.As(err, &skipped) {
+		stats.Skipped++
+		if cfg.Reporter != nil {
+			cfg.Reporter.Warn("%v", skipped)
+		}
+		return nil
+	}
+	// A conflict under --on-conflict=error stops the run whatever
+	// --keep-going says: the user asked for the archive to stay as it was.
+	if err != nil && !errors.Is(err, ErrConflict) {
+		stats.Failed++
+		if cfg.KeepGoing {
+			if cfg.Reporter != nil {
+				cfg.Reporter.Warn("%v", err)
+			}
+			return nil
+		}
+	}
+	return err
+}
+
+// walkGuard leaves the archive itself out of a walk, and warns once when a
+// leading "/" or ".." is removed from a member name.
+//
+// The file being written exists before the walk, so a walk that reaches it
+// would archive the file into itself - reading bytes it is still writing,
+// and growing without bound. tar has the same guard. The comparison is by
+// inode, so it holds through a symlink or a different spelling of the same
+// path. For a create, the old archive at the path is a different inode, and
+// it is skipped as well.
+type walkGuard struct {
+	rep         Reporter
+	isOutput    func(os.FileInfo) bool // the file being written, or nil
+	old         os.FileInfo            // the archive at the path, or nil
+	warnedSelf  bool
+	warnedStrip bool
+}
+
+func newWalkGuard(cfg CreateConfig, isOutput func(os.FileInfo) bool) *walkGuard {
+	g := &walkGuard{rep: cfg.Reporter, isOutput: isOutput}
+	if fi, err := os.Stat(cfg.Archive); err == nil {
+		g.old = fi
+	}
+	return g
+}
+
+// skip reports whether e is the archive, and so is left out.
+func (g *walkGuard) skip(e entry) bool {
+	// Both the file being written and the one it replaces: a create writes
+	// to a temporary file, and the old archive at the path would otherwise
+	// go into the new one.
+	if (g.isOutput != nil && g.isOutput(e.Info)) || (g.old != nil && os.SameFile(e.Info, g.old)) {
+		if !g.warnedSelf {
+			g.warnedSelf = true
+			if g.rep != nil {
+				g.rep.Warn("%s is the archive being written; not archiving it", e.Src)
+			}
+		}
+		return true
+	}
+	if e.Stripped && !g.warnedStrip {
+		g.warnedStrip = true
+		if g.rep != nil {
+			g.rep.Warn("removing leading '/' or '..' from member names")
+		}
+	}
+	return false
+}
+
+// walkPaths walks cfg.Paths with the walk options of cfg, and calls visit
+// for each entry. An entry that the walk cannot read fails as one member, as
+// a file that cannot be opened does (doc/design.md 10.4): it counts in
+// stats.Failed, and stops the walk unless cfg.KeepGoing.
+func walkPaths(cfg CreateConfig, stats *Stats, visit func(entry) error) error {
+	wk := newWalker(walkOptions{
+		baseDir:       cfg.BaseDir,
+		dereference:   cfg.Dereference,
+		exclude:       cfg.Exclude,
+		regex:         cfg.Regex,
+		excludeRegex:  cfg.ExcludeRegex,
+		oneFileSystem: cfg.OneFileSystem,
+		onError: func(src string, err error) error {
+			stats.Failed++
+			if !cfg.KeepGoing {
+				return err
+			}
+			if cfg.Reporter != nil {
+				cfg.Reporter.Warn("%v", err)
+			}
+			return nil
+		},
+	}, visit)
+	for _, p := range cfg.Paths {
+		if err := wk.Walk(p); err != nil {
+			return err
+		}
+	}
+	return wk.unmatched()
 }
 
 // EncryptionConfig is what a caller supplies to encrypt a new archive.

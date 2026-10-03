@@ -730,14 +730,6 @@ func (w *Writer) releaseGuard() {
 	}
 }
 
-// releaseID returns the most recent id when the entry it was taken for is not
-// archived after all, so that skipping a socket leaves no gap in the ids.
-func (w *Writer) releaseID(id uint64) {
-	if id == w.nextID-1 {
-		w.nextID--
-	}
-}
-
 func (w *Writer) takeID() uint64 {
 	id := w.nextID
 	w.nextID++

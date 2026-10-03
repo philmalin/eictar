@@ -413,6 +413,52 @@ see
 .BR \-q ", " \-\-quiet
 Show errors only.
 .TP
+.BR \-n ", " \-\-dry\-run
+With
+.BR \-c ,
+.BR \-r ,
+.BR \-u ,
+.B \-x
+or
+.BR \-\-delete :
+show the paths that the operation would write or delete, and change
+nothing. The operation selects the paths with the same code and the same
+options as a real run:
+.BR \-R ,
+.BR \-\-exclude ,
+.BR \-h ,
+.BR \-\-on\-conflict ,
+.BR \-\-update\-mode ,
+.B \-k
+and
+.B \-\-newer\-only
+all apply. Each path is on its own line on standard output, also with
+.BR \-q .
+With
+.BR \-v ,
+a word before each path tells what happens to it:
+.BR add ,
+.BR replace ,
+.B extract
+or
+.BR delete .
+A line on standard error gives the number of paths and the size of their
+content.
+.IP
+A dry run makes no archive, locks no archive, and makes no destination
+directory. It does not read the content of files, except for
+.BR "\-u \-\-update\-mode digest" ,
+which compares digests. Thus a file that cannot be read fails only in the
+real run. A dry run of an encrypted archive asks for the passphrase when
+it reads the archive: for
+.BR \-r ,
+.BR \-u ,
+.B \-x
+and
+.BR \-\-delete ,
+but not for
+.BR \-c .
+.TP
 .B \-\-long
 With
 .BR \-t :
@@ -538,6 +584,12 @@ write
 for that. Each
 .B \-R
 must match at least one path or member.
+.PP
+To see what a pattern or an expression selects before anything changes,
+add
+.B \-n
+(see
+.BR \-\-dry\-run ).
 .PP
 Put paths and patterns that start with
 .B \-
@@ -889,6 +941,14 @@ Extract only the PDF files below Documents, at any depth:
 .nf
 .RS
 eictar \-xf home.ect \-R 'Documents/.*\e.pdf'
+.RE
+.fi
+.PP
+See which files an expression picks up, before the archive is made:
+.PP
+.nf
+.RS
+eictar \-cnf src.ect \-R '.*\e.go' project
 .RE
 .fi
 .PP

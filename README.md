@@ -31,7 +31,8 @@ $ eictar -xf home.ect -d /tmp/restore Documents/numbers.txt
   `--encrypt-index` also hides the names, sizes and times.
 - **Selection** by path, glob or regular expression. `-R RE` keeps only
   the paths that the expression matches in full, when you add files and
-  when you list, extract, check or delete them.
+  when you list, extract, check or delete them. `-n` shows what a command
+  would write or delete, and changes nothing.
 - **Identical files stored once**: a file whose content the archive already
   holds shares that data, in the same run or in a later append.
   `--no-dedup` stores each copy in full.
@@ -181,11 +182,17 @@ eictar -tf home '*.pdf'                         # a name at any depth
 eictar -cf src --exclude '*.o' project          # leave files out
 eictar -xf home -R 'Documents/.*\.pdf'          # a regular expression, on the whole path
 eictar -cf src --exclude-regex '.*/build' project
+eictar -cnf src -R '.*\.go' project            # -n: show the paths, write nothing
 ```
 
 A regular expression must match the whole stored path, such as
 `Documents/2026/tax.pdf`. In an expression, `.` is any character, so write
 `\.` for a dot, and put the expression in single quotes.
+
+`-n` (`--dry-run`) works with `-c`, `-r`, `-u`, `-x` and `--delete`. It
+shows each path that the command would write or delete, with the same
+selection as a real run, and changes nothing. With `-v`, a word before each
+path tells what happens to it: `add`, `replace`, `extract` or `delete`.
 
 ### Check an archive
 

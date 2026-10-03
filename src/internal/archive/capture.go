@@ -45,6 +45,10 @@ type capturer struct {
 	updateMode string                    // newer, different or digest (-u)
 	tombstones map[uint64]bool           // members this generation replaces
 
+	// newHash makes the digest of -u --update-mode=digest: keyed with the
+	// archive's keys when it is encrypted.
+	newHash func() hash.Hash
+
 	progress Progress // --progress, or nil
 	// warn reports a notice that does not fail the member.
 	warn func(format string, args ...any)
@@ -77,14 +81,35 @@ func newCapturer(w *Writer, b *pipeline.Builder, opt MetadataOptions) *capturer 
 	return &capturer{
 		w: w, b: b, opt: opt, names: meta.NewNames(),
 		firstLink: map[inodeKey]uint64{}, seen: map[string]bool{},
-		tombstones: map[uint64]bool{},
+		tombstones: map[uint64]bool{}, newHash: w.newDigest,
 	}
 }
 
 // submit records one walked entry.
 func (c *capturer) submit(e entry) error {
+	old, err := c.decide(e)
+	if err != nil {
+		return err
+	}
+
+	// The old member dies only when the new one is recorded. Under
+	// --keep-going a path that fails to read would otherwise lose both
+	// copies, and a socket where a file was would delete the file.
+	err = c.record(e)
+	if err == nil && old != nil {
+		c.tombstones[old.ID] = true
+	}
+	return err
+}
+
+// decide applies the rules that come before a member is built: a path named
+// twice, -u, and --on-conflict. It returns the live member that e replaces,
+// or nil. errUnchanged, an errSkipped or ErrConflict means that e is not
+// recorded. A dry run (-n) calls it as submit does, so that it shows what
+// the run would do.
+func (c *capturer) decide(e entry) (*format.Member, error) {
 	if c.seen[e.Stored] {
-		return &errSkipped{reason: fmt.Sprintf("%s: named more than once, archived once", e.Stored)}
+		return nil, &errSkipped{reason: fmt.Sprintf("%s: named more than once, archived once", e.Stored)}
 	}
 
 	// A path already live in the archive: -u replaces it only when it is out
@@ -92,38 +117,58 @@ func (c *capturer) submit(e entry) error {
 	old, replacing := c.live[e.Stored]
 	if replacing {
 		if c.updateMode != "" {
-			stale, err := outOfDate(c.contentOf(old), e, c.updateMode, c.w.newDigest)
+			stale, err := outOfDate(c.contentOf(old), e, c.updateMode, c.newHash)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if !stale {
 				c.seen[e.Stored] = true
-				return errUnchanged
+				return nil, errUnchanged
 			}
 		} else {
 			switch c.onConflict {
 			case ConflictSkip:
 				c.seen[e.Stored] = true
-				return &errSkipped{reason: fmt.Sprintf("%s: already in the archive, skipped", e.Stored)}
+				return nil, &errSkipped{reason: fmt.Sprintf("%s: already in the archive, skipped", e.Stored)}
 			case ConflictError:
-				return fmt.Errorf("%s: %w", e.Stored, ErrConflict)
+				return nil, fmt.Errorf("%s: %w", e.Stored, ErrConflict)
 			}
 		}
 	}
 	c.seen[e.Stored] = true
-
-	// The old member dies only when the new one is recorded. Under
-	// --keep-going a path that fails to read would otherwise lose both
-	// copies, and a socket where a file was would delete the file.
-	err := c.record(e)
-	if err == nil && replacing {
-		c.tombstones[old.ID] = true
+	if !replacing {
+		return nil, nil
 	}
-	return err
+	return old, nil
+}
+
+// storable reports an entry that no member can hold: a socket, which is
+// skipped with a notice, an empty symlink target, and a type with no member
+// type. record and a dry run (-n) both check it.
+func storable(e entry) error {
+	switch e.Kind {
+	case kindDir, kindFile, kindFIFO, kindCharDev, kindBlockDev:
+		return nil
+	case kindSymlink:
+		if e.LinkTarget == "" {
+			return fmt.Errorf("symlink %q has an empty target", e.Stored)
+		}
+		return nil
+	case kindSocket:
+		// A socket has no content and cannot be recreated in any useful
+		// way: its meaning is the process listening on it. tar skips them
+		// with a notice, and so does this.
+		return &errSkipped{reason: fmt.Sprintf("%s: socket ignored", e.Src)}
+	default:
+		return fmt.Errorf("%s: %s cannot be stored", e.Src, describeMode(e.Info.Mode()))
+	}
 }
 
 // record builds the member for one entry and hands it to the pipeline.
 func (c *capturer) record(e entry) error {
+	if err := storable(e); err != nil {
+		return err
+	}
 	m := format.Member{
 		ID:         c.w.NextID(),
 		Generation: c.w.Generation(),
@@ -149,9 +194,6 @@ func (c *capturer) record(e entry) error {
 		m.Type = format.TypeSymlink
 		m.Mode = 0o777 // a symlink's own mode is meaningless on Linux
 		m.LinkTarget = e.LinkTarget
-		if m.LinkTarget == "" {
-			return fmt.Errorf("symlink %q has an empty target", e.Stored)
-		}
 		// Linux refuses user.* attributes on a symlink, and the rest are
 		// privileged, so a link's attributes are not recorded.
 		return c.b.AddMeta(m)
@@ -168,18 +210,8 @@ func (c *capturer) record(e entry) error {
 		m.RDev = []uint32{e.Sys.Major, e.Sys.Minor}
 		return c.b.AddMeta(m)
 
-	case kindSocket:
-		// A socket has no content and cannot be recreated in any useful
-		// way: its meaning is the process listening on it. tar skips them
-		// with a notice, and so does this.
-		c.w.releaseID(m.ID)
-		return &errSkipped{reason: fmt.Sprintf("%s: socket ignored", e.Src)}
-
-	case kindFile:
+	default: // kindFile; storable refuses the rest
 		return c.submitFile(m, e)
-
-	default:
-		return fmt.Errorf("%s: %s cannot be stored", e.Src, describeMode(e.Info.Mode()))
 	}
 }
 

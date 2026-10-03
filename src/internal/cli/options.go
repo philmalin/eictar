@@ -159,7 +159,10 @@ type Options struct {
 	UpdateMode string
 	OnConflict string
 
-	KeepGoing  bool
+	KeepGoing bool
+	// DryRun is -n: show what the operation would write, and write nothing
+	// (doc/design.md 9.9).
+	DryRun     bool
 	Long       bool
 	JSON       bool
 	Quick      bool
@@ -290,6 +293,7 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs.StringVar(&o.UpdateMode, "update-mode", o.UpdateMode, "with -u: newer, different or digest")
 	fs.StringVar(&o.OnConflict, "on-conflict", o.OnConflict, "with -r: replace, skip or error")
 	fs.BoolVar(&o.KeepGoing, "keep-going", false, "continue past a per-member error")
+	fs.BoolVarP(&o.DryRun, "dry-run", "n", false, "show what the operation would write, and write nothing")
 	fs.BoolVar(&o.Long, "long", false, "long-format listing")
 	fs.BoolVar(&o.JSON, "json", false, "machine-readable listing")
 	fs.BoolVar(&o.Quick, "quick", false, "with --verify, check the structure only")
@@ -607,6 +611,20 @@ func (o *Options) validate() error {
 	}
 	if o.Quick && o.Op != OpVerify {
 		return &UsageError{fmt.Errorf("--quick applies to --verify only")}
+	}
+	if o.DryRun {
+		if !containsOp(dryRunOps, o.Op) {
+			return &UsageError{fmt.Errorf("-n/--dry-run applies to -c, -r, -u, -x and --delete only")}
+		}
+		// A dry run reads almost nothing, so a meter has nothing to show.
+		// Typed, asking for both is a mistake; from a configuration, it is
+		// a preference for the runs that do work.
+		if o.Progress {
+			if o.explicit["progress"] {
+				return &UsageError{fmt.Errorf("--progress has nothing to show in a dry run (-n)")}
+			}
+			o.Progress = false
+		}
 	}
 	if o.EncryptIdx && !o.Encrypt {
 		// Typed, it is a mistake. From a configuration, it is a preference

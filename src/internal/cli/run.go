@@ -103,7 +103,11 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 
 	if name := archiveName(opts.Op, opts.Archive); name != opts.Archive {
 		if opts.Op == OpCreate && !opts.Quiet {
-			fmt.Fprintf(stderr, "eictar: creating %s\n", name)
+			verb := "creating"
+			if opts.DryRun {
+				verb = "would create"
+			}
+			fmt.Fprintf(stderr, "eictar: %s %s\n", verb, name)
 		}
 		opts.Archive = name
 	}
@@ -165,6 +169,9 @@ func hasExtension(name string) bool {
 // Every operation is built. notImplemented stays for the options that are
 // not (doc/design.md 10.6).
 func dispatch(o *Options, stdout, stderr io.Writer) error {
+	if o.DryRun {
+		return runDryRun(o, stdout, stderr)
+	}
 	switch o.Op {
 	case OpCreate:
 		return runCreate(o, stdout, stderr)
@@ -324,6 +331,9 @@ Extraction:
 
 Output and work:
   -v, --verbose             list members as they are processed
+  -n, --dry-run             with -c, -r, -u, -x or --delete: show the paths
+                            the operation would write or delete, and change
+                            nothing
   -q, --quiet               errors only
       --long                with -t: the same as -v
       --json                with -t: a listing for programs

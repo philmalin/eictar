@@ -110,19 +110,9 @@ func Extract(cfg ExtractConfig) (Stats, error) {
 	}
 	defer r.Close()
 
-	members, err := selectMembers(r.Members(), cfg.Patterns, cfg.Regex)
+	members, byID, err := cfg.selection(r)
 	if err != nil {
 		return Stats{}, err
-	}
-	members = excludeMembers(members, cfg.Exclude, cfg.ExcludeRegex)
-	members = withoutRoot(members, cfg.Reporter)
-	sort.SliceStable(members, func(i, j int) bool { return members[i].Path < members[j].Path })
-
-	// Tombstones are included: a live hardlink can point to one (§9.2).
-	everything := r.AllMembers()
-	byID := make(map[uint64]*format.Member, len(everything))
-	for i := range everything {
-		byID[everything[i].ID] = &everything[i]
 	}
 
 	if p := progressOf(cfg.Reporter); p != nil {
@@ -156,6 +146,26 @@ func Extract(cfg ExtractConfig) (Stats, error) {
 	stats, err := x.run(members, byID)
 	x.reportRefused()
 	return stats, err
+}
+
+// selection returns the members that cfg extracts, in path order, and every
+// member of the archive by id. Tombstones are in the map: a live hardlink
+// can point to one (§9.2).
+func (cfg ExtractConfig) selection(r *Reader) ([]format.Member, map[uint64]*format.Member, error) {
+	members, err := selectMembers(r.Members(), cfg.Patterns, cfg.Regex)
+	if err != nil {
+		return nil, nil, err
+	}
+	members = excludeMembers(members, cfg.Exclude, cfg.ExcludeRegex)
+	members = withoutRoot(members, cfg.Reporter)
+	sort.SliceStable(members, func(i, j int) bool { return members[i].Path < members[j].Path })
+
+	everything := r.AllMembers()
+	byID := make(map[uint64]*format.Member, len(everything))
+	for i := range everything {
+		byID[everything[i].ID] = &everything[i]
+	}
+	return members, byID, nil
 }
 
 // withoutRoot removes a member whose path is ".", the root of the archived

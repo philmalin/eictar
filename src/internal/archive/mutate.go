@@ -59,17 +59,8 @@ func AppendArchive(cfg AppendConfig) (Stats, error) {
 	if cfg.Encryption != nil {
 		return Stats{}, errors.New("internal: append takes its encryption from the archive")
 	}
-	switch cfg.OnConflict {
-	case "":
-		cfg.OnConflict = ConflictReplace
-	case ConflictReplace, ConflictSkip, ConflictError:
-	default:
-		return Stats{}, fmt.Errorf("unknown conflict policy %q", cfg.OnConflict)
-	}
-	switch cfg.UpdateMode {
-	case "", UpdateNewer, UpdateDifferent, UpdateDigest:
-	default:
-		return Stats{}, fmt.Errorf("unknown update mode %q", cfg.UpdateMode)
+	if err := cfg.checkPolicies(); err != nil {
+		return Stats{}, err
 	}
 
 	workers := cfg.Workers
@@ -122,6 +113,24 @@ func AppendArchive(cfg AppendConfig) (Stats, error) {
 	w.Tombstone(capture.tombstones)
 	stats.Replaced = len(capture.tombstones)
 	return stats, w.Close()
+}
+
+// checkPolicies checks --on-conflict and --update-mode, and fills in the
+// default conflict policy.
+func (cfg *AppendConfig) checkPolicies() error {
+	switch cfg.OnConflict {
+	case "":
+		cfg.OnConflict = ConflictReplace
+	case ConflictReplace, ConflictSkip, ConflictError:
+	default:
+		return fmt.Errorf("unknown conflict policy %q", cfg.OnConflict)
+	}
+	switch cfg.UpdateMode {
+	case "", UpdateNewer, UpdateDifferent, UpdateDigest:
+	default:
+		return fmt.Errorf("unknown update mode %q", cfg.UpdateMode)
+	}
+	return nil
 }
 
 // DeleteConfig drives --delete.

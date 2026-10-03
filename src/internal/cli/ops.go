@@ -222,9 +222,34 @@ func runList(o *Options, stdout, stderr io.Writer) error {
 }
 
 func runExtract(o *Options, stdout, stderr io.Writer) error {
-	exclude, err := gatherExcludes(o)
+	rep := &reporter{
+		out:    stderrIfStdoutBusy(stdout, stderr, o.ToStdout),
+		errOut: stderr, verbose: o.Verbose, quiet: o.Quiet, long: o.Long,
+	}
+	cfg, err := extractConfig(o, stdout, rep)
 	if err != nil {
 		return err
+	}
+	var done func()
+	cfg.Reporter, done = withProgress(o, rep, stderr)
+	defer done()
+
+	stats, err := archive.Extract(cfg)
+	if err != nil {
+		return err
+	}
+	if stats.Failed > 0 {
+		return &partialError{failed: stats.Failed}
+	}
+	return nil
+}
+
+// extractConfig builds what extract and its dry run share: where to unpack,
+// what to select, and what to restore.
+func extractConfig(o *Options, stdout io.Writer, rep *reporter) (archive.ExtractConfig, error) {
+	exclude, err := gatherExcludes(o)
+	if err != nil {
+		return archive.ExtractConfig{}, err
 	}
 	dest := o.Destination
 
@@ -233,14 +258,14 @@ func runExtract(o *Options, stdout, stderr io.Writer) error {
 	// a new directory next to the one that was meant.
 	if dest == "" && len(o.Chdir) > 0 {
 		if len(o.Chdir) > 1 {
-			return &UsageError{fmt.Errorf("more than one -C is not supported yet: it needs the interleaved semantics tar has")}
+			return archive.ExtractConfig{}, &UsageError{fmt.Errorf("more than one -C is not supported yet: it needs the interleaved semantics tar has")}
 		}
 		fi, err := os.Stat(o.Chdir[0])
 		if err != nil {
-			return fmt.Errorf("-C %s: %w", o.Chdir[0], err)
+			return archive.ExtractConfig{}, fmt.Errorf("-C %s: %w", o.Chdir[0], err)
 		}
 		if !fi.IsDir() {
-			return fmt.Errorf("-C %s: not a directory", o.Chdir[0])
+			return archive.ExtractConfig{}, fmt.Errorf("-C %s: not a directory", o.Chdir[0])
 		}
 		dest = o.Chdir[0]
 	}
@@ -258,14 +283,7 @@ func runExtract(o *Options, stdout, stderr io.Writer) error {
 		policy = archive.OverwriteNewer
 	}
 
-	rep := &reporter{
-		out:    stderrIfStdoutBusy(stdout, stderr, o.ToStdout),
-		errOut: stderr, verbose: o.Verbose, quiet: o.Quiet, long: o.Long,
-	}
-	progress, done := withProgress(o, rep, stderr)
-	defer done()
-
-	stats, err := archive.Extract(archive.ExtractConfig{
+	return archive.ExtractConfig{
 		Archive:           o.Archive,
 		Exclude:           exclude,
 		Regex:             o.regex,
@@ -286,15 +304,8 @@ func runExtract(o *Options, stdout, stderr io.Writer) error {
 		KeepGoing:   o.KeepGoing,
 		Workers:     o.Workers,
 		MemoryLimit: int64(o.MemoryLimit),
-		Reporter:    progress,
-	})
-	if err != nil {
-		return err
-	}
-	if stats.Failed > 0 {
-		return &partialError{failed: stats.Failed}
-	}
-	return nil
+		Reporter:    rep,
+	}, nil
 }
 
 // stderrIfStdoutBusy keeps -v output from corrupting -O content: when member
