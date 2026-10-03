@@ -281,7 +281,10 @@ Archive and paths:
 
 Compression:
   -Z, --compress SPEC       NAME[:key[=value],...] or none; the default is
-                            zstd at level 12 (zstd:level=3 is faster)
+                            zstd at level 12 (zstd:level=3 is faster);
+                            zstd:train adds a dictionary of the best size:
+                            smaller archives of many small, similar files,
+                            but slower to create
   -z, --gzip                the same as --compress gzip
   -J, --xz                  the same as --compress xz
       --zstd                the same as --compress zstd

@@ -27,9 +27,10 @@ const (
 	// zstdLongBare is the window of zstd --long given alone.
 	zstdLongBare = 27
 
-	// Dictionary sizes (doc/design.md 4.2). The default is the one of the
-	// zstd trainer.
-	zstdTrainMin, zstdTrainMax, zstdTrainBare = 4 << 10, 1 << 20, 112 << 10
+	// Dictionary sizes (doc/design.md 4.2). Alone, train lets the writer
+	// choose the size from the files.
+	zstdTrainMin, zstdTrainMax = 4 << 10, 1 << 20
+	zstdTrainAuto              = "auto"
 	// zstdDictMagic starts every dictionary in the zstd format, and the
 	// dictionary id follows it.
 	zstdDictMagic = 0xEC30A437
@@ -59,10 +60,10 @@ func (zstdFactory) Describe() Spec {
 			},
 			{
 				Name:        "train",
-				Description: "train a dictionary of this many bytes from the files first, and store it in the archive: many small, similar files compress better",
+				Description: "train a dictionary of this many bytes from the files first, and store it in the archive: many small, similar files compress better; auto measures the best size on the files",
 				Default:     Off,
 				Min:         zstdTrainMin, Max: zstdTrainMax,
-				Bare: fmt.Sprint(zstdTrainBare),
+				Bare: zstdTrainAuto,
 			},
 		},
 	}
@@ -265,11 +266,15 @@ func (zstdFactory) window(p Params) (int, string, error) {
 	return 1 << long, "window", nil
 }
 
-// trainSize reads the train key: 0 when it is absent.
+// trainSize reads the train key: 0 when it is absent, and TrainAuto when it
+// is auto.
 func (zstdFactory) trainSize(p Params) (int, error) {
 	raw, ok := p["train"]
 	if !ok {
 		return 0, nil
+	}
+	if raw == zstdTrainAuto {
+		return TrainAuto, nil
 	}
 	n, err := parseSize(raw)
 	if err != nil {

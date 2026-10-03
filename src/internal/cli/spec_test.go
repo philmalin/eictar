@@ -171,7 +171,7 @@ func TestListCodecsShowsTheFormAlone(t *testing.T) {
 	if err := runListCodecs(&out); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"alone 27", "train", "alone 114688"} {
+	for _, want := range []string{"alone 27", "train", "alone auto"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("--list-codecs lacks %q:\n%s", want, out.String())
 		}

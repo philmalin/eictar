@@ -86,7 +86,7 @@ func AppendArchive(cfg AppendConfig) (Stats, error) {
 	if cfg.NoDedup {
 		w.dedup = nil
 	}
-	if err := w.useDictionary(func(size int) ([][]byte, error) { return sampleTree(w, cfg.CreateConfig, size) }, warnOf(cfg.Reporter)); err != nil {
+	if err := w.useDictionary(func(budget int) ([][]byte, int, error) { return sampleTree(w, cfg.CreateConfig, budget) }, warnOf(cfg.Reporter)); err != nil {
 		w.Abort()
 		return Stats{}, err
 	}
@@ -622,7 +622,7 @@ func recompressBlobs(r *Reader, w *Writer, keep []format.Member, rc *RecompressC
 	// --recompress zstd:train trains a new dictionary from the members; the
 	// old dictionaries go, with the catalog that used them (doc/design.md
 	// 4.2). The members are already in the archive, so there is none to reuse.
-	if err := w.useDictionary(func(size int) ([][]byte, error) { return sampleMembers(r, keep, size) }, warn); err != nil {
+	if err := w.useDictionary(func(budget int) ([][]byte, int, error) { return sampleMembers(r, keep, budget) }, warn); err != nil {
 		return 0, err
 	}
 	enc = w.enc

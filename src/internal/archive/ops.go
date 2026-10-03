@@ -109,7 +109,7 @@ func CreateArchive(cfg CreateConfig) (Stats, error) {
 	if cfg.NoDedup {
 		w.dedup = nil
 	}
-	if err := w.useDictionary(func(size int) ([][]byte, error) { return sampleTree(w, cfg, size) }, warnOf(cfg.Reporter)); err != nil {
+	if err := w.useDictionary(func(budget int) ([][]byte, int, error) { return sampleTree(w, cfg, budget) }, warnOf(cfg.Reporter)); err != nil {
 		w.Abort()
 		return stats, err
 	}

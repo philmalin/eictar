@@ -25,7 +25,7 @@ $ eictar -xf home.ect -d /tmp/restore Documents/numbers.txt
 - **Dictionaries**: `-Z zstd:train` learns the text that the files share,
   such as license headers and imports, and stores it once in the archive.
   Many small, similar files then compress better, and each file can still be
-  extracted alone.
+  extracted alone. eictar measures the dictionary size on the files.
 - **Encryption** (`-e`): XChaCha20-Poly1305 over chunks, with a key that
   Argon2id derives from a passphrase. Each file has its own subkey.
   `--encrypt-index` also hides the names, sizes and times.
@@ -137,15 +137,17 @@ create. Extraction is as fast at every level.
 ### Many small, similar files: a dictionary
 
 ```
-eictar -cf src -Z zstd:train project           # a dictionary of 112 KiB
-eictar -cf src -Z zstd:train=1M project        # a larger one, for a large tree
+eictar -cf src -Z zstd:train project           # a dictionary of the best size
+eictar -cf src -Z zstd:train=64K project       # a dictionary of 64 KiB
 ```
 
 `train` learns the text that the files share, such as license headers and
 imports, and stores it one time in the archive. Each file can still be
 extracted alone. The gain is largest for many small text files, and near
-zero for large or compressed files. A later `-r` or `-u` with `train` uses
-the same dictionary.
+zero for large or compressed files. `train` alone measures the dictionary
+size that makes the smallest archive. When no dictionary saves more than
+its own size, eictar uses none, and says so. A later `-r` or `-u` with
+`train` uses the same dictionary.
 
 For large files, `long` gives zstd a larger window. The window works only
 inside one chunk, so give a chunk size to match:

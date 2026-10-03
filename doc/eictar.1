@@ -536,9 +536,37 @@ sixteenth of the RAM, or in half of
 .IP
 .B train
 makes a dictionary from the start of each file before the compression, and
-stores it in the archive. Many small, similar files, such as a source tree,
-then compress better, and each file can still be extracted alone. The
-value is the dictionary size, 4 KiB to 1 MiB; alone, it is 112 KiB. With
+stores it in the archive. Many small, similar files, such as a source tree
+or JSON and YAML files, then compress better, and each file can still be
+extracted alone.
+.B train
+alone, or
+.BR train=auto ,
+measures the best dictionary size on the files. The program trains
+dictionaries of 4 KiB, 8 KiB, and so on up to 1 MiB, on three quarters of
+the files. It compresses the other files with each dictionary, and it uses
+the size that makes the smallest archive. When no dictionary saves more than
+its own size, the program compresses without one, and says so. Two sizes
+train at the same time, and no more than
+.BR \-j .
+.B train=SIZE
+sets the size, 4 KiB to 1 MiB, and does not measure.
+.B \-\-info
+shows the size of the dictionary.
+.IP
+Use
+.B train
+for many small, similar files, such as JSON, YAML, Markdown or source code.
+On such trees, it made the archive 5% to 40% smaller. For large files, or
+for files that are already compressed, it saves almost nothing. Training
+costs time: 120 source files took 2 s instead of 0.2 s, and a tree of
+232 MB took 14 s instead of 1 s, for a gain of 0.4%. The measurement takes
+1 to 2 times as long as a fixed size. With
+.B train
+alone, the program uses a dictionary only when the measurement shows a gain.
+A fixed size can make the archive of a small tree larger.
+.IP
+With
 .B \-r
 and
 .BR \-u ,

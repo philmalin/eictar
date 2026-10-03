@@ -252,14 +252,18 @@ func EncodeMemory(name string, p Params, maxChunk int) (int64, error) {
 // dictFactory is a codec with dictionaries. Only zstd has them.
 type dictFactory interface {
 	newDictDecoder(maxPlain int, dict []byte) (Decoder, error)
-	// trainSize is the dictionary size that p asks for, or 0.
+	// trainSize is the dictionary size that p asks for, TrainAuto, or 0.
 	trainSize(p Params) (int, error)
 	train(p Params, samples [][]byte, size int, id uint32) ([]byte, error)
 	dictID(dict []byte) (uint32, error)
 }
 
+// TrainAuto is the size that TrainSize returns when the parameters ask the
+// writer to choose the size from the files (doc/design.md 4.2).
+const TrainAuto = -1
+
 // TrainSize returns the size of the dictionary that the parameters ask for,
-// or 0 when they ask for none.
+// TrainAuto when the writer is to choose it, or 0 when they ask for none.
 func TrainSize(name string, p Params) (int, error) {
 	f, err := Lookup(name)
 	if err != nil {

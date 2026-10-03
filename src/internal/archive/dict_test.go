@@ -3,6 +3,7 @@ package archive
 import (
 	"bytes"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strings"
@@ -270,16 +271,151 @@ func TestDictionaryTrainingFails(t *testing.T) {
 
 // TestPickSamples: every file within the budget, and every k-th file over it.
 func TestPickSamples(t *testing.T) {
-	if got := pickSamples([]int{10, 10, 10}, 1); len(got) != 3 {
+	if got := pickSamples([]int{10, 10, 10}, 100); len(got) != 3 {
 		t.Errorf("within the budget: %v", got)
 	}
 	sizes := make([]int, 1000)
 	for i := range sizes {
 		sizes[i] = 1000
 	}
-	// 1,000,000 bytes, and a budget of 100 × 2000: every 5th file.
-	got := pickSamples(sizes, 2000)
+	// 1,000,000 bytes, and a budget of 200,000: every 5th file.
+	got := pickSamples(sizes, 200000)
 	if len(got) != 200 || got[1] != 5 {
 		t.Errorf("over the budget: %d files, the second is %d", len(got), got[1])
+	}
+}
+
+// proseTree is a small tree where a large dictionary does not pay: each file
+// has the same header, then text from a large vocabulary, which the files
+// share little of.
+func proseTree(t *testing.T, dir string, n int) *testutil.Tree {
+	t.Helper()
+	rnd := rand.New(rand.NewPCG(3, 4))
+	vocab := make([]string, 3000)
+	for i := range vocab {
+		b := make([]byte, 3+rnd.IntN(6))
+		for j := range b {
+			b[j] = byte('a' + rnd.IntN(26))
+		}
+		vocab[i] = string(b)
+	}
+	tree := testutil.NewTree(t)
+	tree.Dir(dir, 0o755)
+	for i := range n {
+		var b strings.Builder
+		b.WriteString("// Copyright 2026 The Example Authors. All rights reserved.\n")
+		b.WriteString("// Use of this source code is governed by a BSD-style license.\n\n")
+		for b.Len() < 2000 {
+			b.WriteString(vocab[rnd.IntN(len(vocab))] + " ")
+		}
+		tree.Text(fmt.Sprintf("%s/f%03d.txt", dir, i), 0o644, b.String())
+	}
+	return tree
+}
+
+// TestDictionaryAutoSize: train alone measures the size. On a small tree, it
+// takes a small dictionary, and the archive is smaller than with the fixed
+// 112 KiB that train alone meant before.
+func TestDictionaryAutoSize(t *testing.T) {
+	tree := proseTree(t, "src", 150)
+	auto := dictCreate(t, tree, false, codec.Params{"level": "19", "train": "on"}, nil, "src")
+	fixed := dictCreate(t, tree, false, codec.Params{"level": "19", "train": "112K"}, nil, "src")
+
+	r := openDict(t, auto, false)
+	if len(r.index.Dicts) != 1 {
+		t.Fatalf("dicts %+v", r.index.Dicts)
+	}
+	if size := r.index.Dicts[0].Size; size > 64<<10 {
+		t.Errorf("the dictionary is %d bytes", size)
+	}
+	a, b := mustStat(t, auto).Size(), mustStat(t, fixed).Size()
+	t.Logf("auto %d bytes (dictionary %d), train=112K %d", a, r.index.Dicts[0].Size, b)
+	if a >= b*9/10 {
+		t.Errorf("auto %d bytes, train=112K %d: want 10%% smaller", a, b)
+	}
+	checkRoundTrip(t, auto, false, tree, "src")
+}
+
+// TestDictionaryAutoNone: on data that a dictionary cannot help, train alone
+// makes no dictionary, and the reporter says why.
+func TestDictionaryAutoNone(t *testing.T) {
+	tree := testutil.NewTree(t)
+	tree.Dir("bin", 0o755)
+	rnd := rand.New(rand.NewPCG(1, 2))
+	for i := range 40 {
+		b := make([]byte, 8<<10)
+		for j := range b {
+			b[j] = byte(rnd.Uint32())
+		}
+		tree.File(fmt.Sprintf("bin/f%02d", i), 0o644, b)
+	}
+	rep := &recordingReporter{}
+	archive := dictCreate(t, tree, false, codec.Params{"train": "on"}, rep, "bin")
+	r := openDict(t, archive, false)
+	if len(r.index.Dicts) != 0 || r.index.Codecs[0].Dict != 0 {
+		t.Errorf("dicts %+v, codecs %+v", r.index.Dicts, r.index.Codecs)
+	}
+	if len(rep.warnings) != 1 || !strings.Contains(rep.warnings[0], "saves less than its own size") {
+		t.Errorf("warnings %q", rep.warnings)
+	}
+	checkRoundTrip(t, archive, false, tree, "bin")
+}
+
+// TestChooseDictSizeScales: the samples may be every k-th file of a large
+// tree. The saving is for the whole tree, so the same samples standing for
+// more files ask for a dictionary at least as large. With one worker or
+// many, the measurement gives a size.
+func TestChooseDictSizeScales(t *testing.T) {
+	var samples [][]byte
+	for i := range 400 {
+		samples = append(samples, []byte(fmt.Sprintf(
+			"{\"id\": %d, \"type\": \"order\", \"status\": \"%s\", \"items\": [{\"sku\": \"SKU-%06d\", \"quantity\": %d}], \"shipping\": {\"method\": \"ground\", \"country\": \"AU\"}}\n",
+			i, []string{"pending", "paid", "shipped"}[i%3], i*7919%1000000, i%9)))
+	}
+	total := 0
+	for _, s := range samples {
+		total += len(s)
+	}
+	size := func(concurrency, total int) int {
+		w := &Writer{codecName: "zstd", params: codec.Params{"train": "on"}, concurrency: concurrency}
+		n, err := w.chooseDictSize(samples, total)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	small := size(1, total)
+	if small == 0 {
+		t.Fatalf("no dictionary for %d similar samples", len(samples))
+	}
+	if large := size(8, 1000*total); large < small {
+		t.Errorf("for %d bytes %d, for 1000 times as many %d", total, small, large)
+	}
+}
+
+// TestBestTrial: the largest net gain wins, a larger size must win by the
+// margin, and two misses in a row stop the measurement.
+func TestBestTrial(t *testing.T) {
+	tr := func(size int, net float64) dictTrial { return dictTrial{size: size, net: net, ok: true} }
+	failed := dictTrial{size: 64, ok: false}
+	for _, tc := range []struct {
+		name   string
+		trials []dictTrial
+		best   int
+		stop   bool
+	}{
+		{"none", nil, 0, false},
+		{"no gain", []dictTrial{tr(4, -10), tr(8, -20)}, 0, true},
+		{"rises", []dictTrial{tr(4, 100), tr(8, 200), tr(16, 300)}, 16, false},
+		{"peak", []dictTrial{tr(4, 100), tr(8, 300), tr(16, 200), tr(32, 100), tr(64, 1000)}, 8, true},
+		{"within the margin", []dictTrial{tr(4, 1000), tr(8, 1010), tr(16, 1015)}, 4, true},
+		{"over the margin", []dictTrial{tr(4, 1000), tr(8, 1030)}, 8, false},
+		{"a miss, then a gain", []dictTrial{tr(4, 100), tr(8, 90), tr(16, 200)}, 16, false},
+		{"a failure is a miss", []dictTrial{tr(4, 100), failed, tr(16, 50)}, 4, true},
+	} {
+		best, stop := bestTrial(tc.trials)
+		if best != tc.best || stop != tc.stop {
+			t.Errorf("%s: %d, %v; want %d, %v", tc.name, best, stop, tc.best, tc.stop)
+		}
 	}
 }

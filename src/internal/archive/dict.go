@@ -25,6 +25,25 @@ const (
 	// sampleFactor bounds the samples: at most this many times the
 	// dictionary size, which is what zstd's own trainer asks for.
 	sampleFactor = 100
+
+	// The measurement of train=auto (doc/design.md 4.2). Each candidate
+	// size trains on trialFactor times its size of samples, from all files
+	// but every heldOut-th one. The held-out files, at most trialBudget
+	// bytes of them, are compressed with and without the dictionary.
+	trialFactor = 20
+	heldOut     = 4
+	trialBudget = 1 << 20
+	// trialMargin is the share of the best net gain that a larger candidate
+	// must add to win.
+	trialMargin = 0.02
+	// trialLookahead is how many candidates may run at once from the first
+	// one that is not done. Two lets each candidate run beside the next.
+	trialLookahead = 2
+	// trialMin is the smallest candidate, and the smallest train=SIZE.
+	trialMin = 4 << 10
+	// trialID is the id of the candidate dictionaries, which the archive
+	// does not store. It is the lowest id outside the reserved range.
+	trialID = 1 << 15
 )
 
 // errEnoughSample stops a decode once a sample is full.
@@ -32,10 +51,12 @@ var errEnoughSample = errors.New("the sample is full")
 
 // useDictionary gives the writer a dictionary, before any member is added,
 // when the codec parameters ask for one (-Z zstd:train). An append reuses the
-// archive's newest dictionary; otherwise sample supplies the samples and a
-// new dictionary is trained. When no dictionary can be trained, the writer
-// goes on without one, and warn says so.
-func (w *Writer) useDictionary(sample func(size int) ([][]byte, error), warn func(string, ...any)) error {
+// archive's newest dictionary; otherwise sample supplies the samples within a
+// budget of bytes, and the size of all the samples there are, and a new
+// dictionary is trained. With train=auto, a measurement on the samples
+// chooses the size first. When no dictionary can be trained, or none pays
+// for its size, the writer goes on without one, and warn says so.
+func (w *Writer) useDictionary(sample func(budget int) ([][]byte, int, error), warn func(string, ...any)) error {
 	size, err := codec.TrainSize(w.codecName, w.params)
 	if err != nil || size == 0 {
 		return err
@@ -49,9 +70,25 @@ func (w *Writer) useDictionary(sample func(size int) ([][]byte, error), warn fun
 			return w.switchEncoder(d.ID, content)
 		}
 	}
-	samples, err := sample(size)
+	budget := sampleFactor * size
+	if size == codec.TrainAuto {
+		budget = sampleFactor * format.MaxDictSize
+	}
+	samples, total, err := sample(budget)
 	if err != nil {
 		return err
+	}
+	if size == codec.TrainAuto {
+		if size, err = w.chooseDictSize(samples, total); err != nil {
+			return err
+		}
+		if size == 0 {
+			if warn != nil {
+				warn("compressing without a dictionary: on these files, a dictionary saves less than its own size")
+			}
+			return nil
+		}
+		samples = pick(samples, sampleFactor*size)
 	}
 	content, id, err := w.train(samples, size)
 	if err != nil {
@@ -83,6 +120,170 @@ func (w *Writer) train(samples [][]byte, size int) ([]byte, uint32, error) {
 		err = fmt.Errorf("the dictionary is %d bytes, above the %d limit", len(content), format.MaxDictSize)
 	}
 	return content, id, err
+}
+
+// dictTrial is the result of one candidate size of train=auto: the bytes
+// that the dictionary saves on the whole tree, less its own size. ok is
+// false when the trainer could not make the dictionary.
+type dictTrial struct {
+	size int
+	net  float64
+	ok   bool
+}
+
+// chooseDictSize measures which dictionary size makes the smallest archive
+// (doc/design.md 4.2), or returns 0 when no size saves more than it costs.
+// total is the size of the samples of all the files, of which samples may be
+// every k-th one.
+//
+// The candidates are 4 KiB, 8 KiB, and so on up to the 1 MiB limit, and at
+// most half of total. Each trains on the files but every heldOut-th one, and
+// the held-out files are compressed with and without the dictionary. The
+// saving, scaled from the held-out files to total, less the dictionary
+// size, is the net gain. Files that the trainer saw would flatter large
+// dictionaries.
+//
+// bestTrial walks the results in order of size, and the measurement stops at
+// two candidates in a row with no gain. The candidates run in parallel, but
+// a candidate past the stop point is not used, so the choice does not depend
+// on -j.
+func (w *Writer) chooseDictSize(samples [][]byte, total int) (int, error) {
+	var training, held [][]byte
+	for i, s := range samples {
+		if i%heldOut == heldOut-1 {
+			held = append(held, s)
+		} else {
+			training = append(training, s)
+		}
+	}
+	held = pick(held, trialBudget)
+	heldBytes := 0
+	for _, s := range held {
+		heldBytes += len(s)
+	}
+	var sizes []int
+	for size := trialMin; size <= format.MaxDictSize && 2*size <= total; size *= 2 {
+		sizes = append(sizes, size)
+	}
+	if heldBytes == 0 || len(sizes) == 0 {
+		return 0, nil
+	}
+	scale := float64(total) / float64(heldBytes)
+
+	// compressed is the size of the held-out files with dict, or without a
+	// dictionary when dict is nil. Each call has its own encoder, at the
+	// archive's level. A window of one sample gives the same result as a
+	// window of a chunk, in less memory.
+	compressed := func(dict []byte) (int, error) {
+		enc, err := codec.NewEncoderWith(w.codecName, w.params, codec.EncoderOptions{Concurrency: 1, Dict: dict, MaxChunk: sampleSize})
+		if err != nil {
+			return 0, err
+		}
+		defer enc.Close()
+		n := 0
+		var buf []byte
+		for _, s := range held {
+			if buf, err = enc.Encode(buf[:0], s); err != nil {
+				return 0, err
+			}
+			n += len(buf)
+		}
+		return n, nil
+	}
+	base, err := compressed(nil)
+	if err != nil {
+		return 0, err
+	}
+
+	// The candidates start in order of size. At most w.concurrency run at
+	// once: that is -j, bounded by memory, as for the compression. A
+	// candidate starts only when all those trialLookahead places before it
+	// are done, and have not stopped the measurement. The training time
+	// doubles with each size, so a candidate past the stop point costs as
+	// much as all the smaller ones together: no more than one runs.
+	trials := make([]dictTrial, len(sizes))
+	type result struct {
+		i   int
+		err error
+	}
+	results := make(chan result)
+	run := func(i int) {
+		size := sizes[i]
+		trials[i].size = size
+		dict, err := codec.TrainDict(w.codecName, w.params, pick(training, trialFactor*size), size, trialID)
+		if err != nil {
+			results <- result{i, nil} // a candidate that cannot be trained has no gain
+			return
+		}
+		n, err := compressed(dict)
+		if err == nil {
+			trials[i].net = float64(base-n)*scale - float64(len(dict))
+			trials[i].ok = true
+		}
+		results <- result{i, err}
+	}
+	slots := max(1, w.concurrency)
+	done := make([]bool, len(sizes))
+	next, running, prefix := 0, 0, 0
+	var firstErr error
+	best, stop := 0, false
+	for {
+		for !stop && firstErr == nil && next < len(sizes) && next < prefix+trialLookahead && running < slots {
+			go run(next)
+			next, running = next+1, running+1
+		}
+		if running == 0 {
+			break
+		}
+		r := <-results
+		running--
+		done[r.i] = true
+		if r.err != nil && firstErr == nil {
+			firstErr = r.err
+		}
+		for prefix < len(sizes) && done[prefix] {
+			prefix++
+		}
+		best, stop = bestTrial(trials[:prefix])
+	}
+	if firstErr != nil {
+		return 0, firstErr
+	}
+	return best, nil
+}
+
+// bestTrial walks the trials in order of size, and returns the size with the
+// largest net gain, or 0 when none gains. A larger size must add more than
+// trialMargin to the best gain: the measurement varies by about 1% from run
+// to run, and below that, the smaller dictionary is as good and is cheaper.
+// It stops at the second trial in a row that does not improve on the best,
+// and says so.
+func bestTrial(trials []dictTrial) (best int, stop bool) {
+	bestNet, misses := 0.0, 0
+	for _, t := range trials {
+		if t.ok && t.net > 0 && t.net > bestNet*(1+trialMargin) {
+			best, bestNet, misses = t.size, t.net, 0
+			continue
+		}
+		if misses++; misses == 2 {
+			return best, true
+		}
+	}
+	return best, false
+}
+
+// pick keeps every k-th sample, with the smallest k that keeps the samples
+// within the budget of bytes.
+func pick(samples [][]byte, budget int) [][]byte {
+	sizes := make([]int, len(samples))
+	for i, s := range samples {
+		sizes[i] = len(s)
+	}
+	var out [][]byte
+	for _, i := range pickSamples(sizes, budget) {
+		out = append(out, samples[i])
+	}
+	return out
 }
 
 // newDictID takes a random id that the archive does not use. Ids below
@@ -267,7 +468,7 @@ func (r *Reader) dictFor(m *format.Member) ([]byte, error) {
 // start of each regular file. Over the budget, it takes every k-th file, so
 // that the choice depends only on the tree. An error here is not reported:
 // the real walk meets the same file and reports it there.
-func sampleTree(w *Writer, cfg CreateConfig, size int) ([][]byte, error) {
+func sampleTree(w *Writer, cfg CreateConfig, budget int) ([][]byte, int, error) {
 	type file struct {
 		e entry
 		n int
@@ -297,11 +498,13 @@ func sampleTree(w *Writer, cfg CreateConfig, size int) ([][]byte, error) {
 	}
 
 	sizes := make([]int, len(files))
+	total := 0
 	for i, f := range files {
 		sizes[i] = f.n
+		total += f.n
 	}
 	var samples [][]byte
-	for _, i := range pickSamples(sizes, size) {
+	for _, i := range pickSamples(sizes, budget) {
 		// As the capture does: a link put there after the walk is not
 		// followed, or its target would go into the dictionary.
 		f, err := openWalked(files[i].e)
@@ -315,35 +518,37 @@ func sampleTree(w *Writer, cfg CreateConfig, size int) ([][]byte, error) {
 			samples = append(samples, buf[:n])
 		}
 	}
-	return samples, nil
+	return samples, total, nil
 }
 
 // sampleMembers is the pass before --recompress with a dictionary: the start
 // of each kept member's content, decoded.
-func sampleMembers(r *Reader, keep []format.Member, size int) ([][]byte, error) {
+func sampleMembers(r *Reader, keep []format.Member, budget int) ([][]byte, int, error) {
 	var members []format.Member
 	var sizes []int
+	total := 0
 	for _, m := range keep {
 		if m.Type.HasPayload() && m.PayloadSize() > 0 {
 			members = append(members, m)
 			sizes = append(sizes, int(min(m.PayloadSize(), sampleSize)))
+			total += sizes[len(sizes)-1]
 		}
 	}
 	var samples [][]byte
-	for _, i := range pickSamples(sizes, size) {
+	for _, i := range pickSamples(sizes, budget) {
 		s := &sampleWriter{buf: make([]byte, 0, sizes[i])}
 		if err := r.WriteMember(&members[i], s); err != nil && !errors.Is(err, errEnoughSample) {
-			return nil, err
+			return nil, 0, err
 		}
 		samples = append(samples, s.buf)
 	}
-	return samples, nil
+	return samples, total, nil
 }
 
 // pickSamples chooses which of the files to sample: all of them, or every
-// k-th one, with the smallest k that keeps the samples within the budget.
-func pickSamples(sizes []int, dictSize int) []int {
-	budget := sampleFactor * dictSize
+// k-th one, with the smallest k that keeps the samples within the budget of
+// bytes.
+func pickSamples(sizes []int, budget int) []int {
 	total := 0
 	for _, n := range sizes {
 		total += n

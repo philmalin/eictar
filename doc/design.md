@@ -305,9 +305,9 @@ A codec that compresses each file alone cannot use what the files have in
 common: license headers, imports, and other text that many files repeat.
 `tar | zstd` compresses one stream, so it stores such text one time. A
 dictionary gives most of that result, and the members stay independent. The
-writer trains a dictionary of about 112 KiB from samples of the files. Then
-each chunk is compressed as if the dictionary came before it, and text that
-the dictionary holds costs a few bytes.
+writer trains a dictionary from samples of the files. Then each chunk is
+compressed as if the dictionary came before it, and text that the
+dictionary holds costs a few bytes.
 
 A measurement on 441 Go source files of 15 KiB on average, at the strongest
 zstd level, gave these sizes:
@@ -320,9 +320,9 @@ zstd level, gave these sizes:
 
 The dictionary has a fixed cost. Thus the gain grows with the number of
 files. For large files and for data that is already compressed, the gain is
-almost zero. On the library tree of §4.3, the small files take only 20.5 MB
-of 245 MB, and a dictionary saved about 1 MB. At 1 MiB, it saved 1.5 MB
-more.
+almost zero. On the module cache of this project, 232 MB in 2607 files, the
+best dictionary saved 0.4%. A dictionary of 1 MiB made that archive 0.4 MB
+larger than one of 112 KiB: the dictionary bytes cost more than they saved.
 
 **`-Z zstd:train` makes a dictionary** (§10.2). Only zstd has dictionaries. The
 library `klauspost/compress/dict` trains it. The library calls its trainer
@@ -339,12 +339,149 @@ check then refused the archive at the end of the run.
 with the same filters, and makes a list of the regular files and their
 sizes. It takes the first 32 KiB of each file as a sample. When the samples
 are more than 100 times the dictionary size, it takes every k-th file, with
-the smallest k that fits. Thus the choice depends only on the tree.
+the smallest k that fits. For `train=auto`, the budget is 100 times 1 MiB,
+the largest size. Thus the choice of samples depends only on the tree. The
+trainer is not deterministic: the same samples can give a different
+dictionary, and the archive size changed by up to 0.1% from run to run.
 
 Then the writer trains the dictionary, and the normal walk compresses the
 files with it. A file that changes between the two walks costs ratio only.
 If the trainer cannot make a dictionary, for example from too little data,
 the writer compresses without one, and prints a notice.
+
+**The best size depends on the files.** A larger dictionary holds more of
+the text that the files share, but the archive stores each byte of it.
+Above the best size, a byte of dictionary saves less than one byte of
+payload. A sweep of sizes from 4 KiB to 1 MiB on 29 trees found the best
+size of each tree. The table gives how much larger each choice made the
+archive than the best size, for the dictionary and the payload together:
+
+| Choice | Mean | Worst |
+|---|---|---|
+| no dictionary | +10.7% | +69% (YAML) |
+| 112 KiB for each tree | +7.3% | +35% (Go, 17 files) |
+| sample bytes / 64, a rule from the file sizes | +0.55% | +6.4% (JSON) |
+| `train=auto` | +0.25% | +1.2% (Go, 554 files) |
+
+Fourteen trees were Go source, from 50 KB to 232 MB, and the documents of
+this project. Fifteen were generated: JSON, YAML, HTML, Markdown, CSV, logs,
+random data, and mixtures of small and large files. The results:
+
+- **A small tree needs a small dictionary, or none.** 112 KiB is more than
+  all the text that 100 small files share. On such a tree, the archive was
+  larger than with no dictionary.
+- **Structured files share little text.** JSON and YAML gained 30% to 41%
+  from a dictionary of 16 KiB to 32 KiB. A larger one cost more than it
+  saved, for 3000 files and for 20000.
+- **A rule from the file sizes cannot see how much text the files share.**
+  Sample bytes / 64 was good on source code, but it chose 640 KiB for JSON.
+  Thus the writer measures.
+- **A mixture of small and large files needs no special case.** Each file
+  gives at most 32 KiB of samples. Thus a few large files do not hide many
+  small ones, and the small files are where the dictionary helps. Random
+  data gives a gain of zero, and the measurement then chooses a small
+  dictionary or none.
+
+**`train=auto` measures the size.** `train` alone is `train=auto`, the
+default form (§10.2). The writer:
+
+1. Holds out every fourth sample. The trainer does not see these. A sample
+   that the trainer saw makes a large dictionary look better than it is.
+2. Makes the candidates: 4 KiB, 8 KiB, and each power of 2 up to 1 MiB, but
+   not above half of the sample bytes of the tree.
+3. For each candidate, trains a dictionary from 20 times its size of the
+   other samples. Then it compresses up to 1 MiB of the held-out samples, at
+   the level of the archive, with and without the dictionary.
+4. Calculates the net gain of the candidate: the bytes saved, times the
+   sample bytes of the tree divided by the held-out bytes, less the size of
+   the dictionary.
+5. Walks the candidates in order of size. A larger candidate wins only when
+   its net gain is more than 2% above the best. The measurement changes by
+   about 1% from run to run, and a smaller dictionary costs less time. The
+   walk stops at the second candidate in a row that does not win.
+6. Uses no dictionary when no candidate has a positive net gain, and prints
+   a notice.
+7. Trains the final dictionary at the chosen size, from 100 times its size
+   of samples, as for `train=SIZE`.
+
+**The candidates train in parallel,** at most `-j` at once, with the bound
+for memory of the encoder (§8.2). A candidate starts only when the
+candidate two places before it is done, and has not stopped the walk. The
+training time doubles with each size. Thus a candidate after the stop point
+costs as much as all the smaller ones together, and the rule lets only one
+run. More parallel candidates made the measurement slower, not faster.
+Results after the stop point are not used, so the choice does not depend on
+`-j`.
+
+**Other settings were worse.** Candidates trained on 10 times their size
+chose worse sizes. Trial compression at level 3 chose worse sizes, +4.6% at
+worst. The final dictionary needs 100 times its size: a dictionary from 20
+times saved 3% to 10% less, which was 1.8% of a JSON archive.
+
+**The measurement costs time.** The table compares `train=auto` with a fixed
+112 KiB, one run after the other, at the default `-j`:
+
+| Tree | 112 KiB | `train=auto` | Size chosen |
+|---|---|---|---|
+| Go, 120 files, 0.9 MB | 0.9 s | 2.1 s | 16 KiB |
+| Go, 2607 files, 232 MB | 8.0 s | 14.3 s | 64 KiB |
+| JSON, 3000 files | 8.7 s | 7.6 s | 16 KiB |
+| JSON, 20000 files | 21.4 s | 21.5 s | 32 KiB |
+| YAML, 1500 files | 2.0 s | 8.8 s | 12 KiB |
+| random data | 2.9 s | 0.2 s | none |
+| all 29 trees | 106 s | 140 s | |
+
+Most trees took 1 to 2 times as long. The worst was the YAML tree, at 4.4
+times: its gain is flat from 16 KiB up, and the walk trains up to 256 KiB
+before it stops. A tree with a small best size can be faster than 112 KiB,
+because the final training is smaller.
+
+**The gain over no dictionary depends on the files.** The table gives the
+size that `train=auto` saved against no dictionary, for the dictionary and
+the payload together:
+
+| Tree | Saved |
+|---|---|
+| YAML, 1500 files | 40.8% |
+| JSON, 150 to 20000 files of 0.3 KB to 3 KB | 25% to 32% |
+| Go, a small package that repeats much code (pflag, 88 files) | 18.6% |
+| Markdown, and HTML with a shared header and footer | 13% |
+| Go, 120 to 950 files | 5% to 8% |
+| mixtures where large files hold most of the bytes | 0.4% to 2.3% |
+| large files: CSV, logs, a large Go module | 0.3% to 0.6% |
+| Go, 2607 files, 232 MB | 0.4% |
+| random data, trees of 19 files or fewer, the documents | 0%: no dictionary |
+
+Three things decide the gain:
+
+- **The size of the files.** zstd compresses each file alone, and a small
+  file starts with no history. The dictionary gives it the shared text at
+  the start. In a file of tens of KB, zstd finds most repeats in the file
+  itself.
+- **The text that the files share.** The YAML files share almost all their
+  structure, and differ only in values. The Go files share license headers,
+  imports and some idioms, but their bodies are different.
+- **The part of the bytes in small files.** In a mixture of 2000 small JSON
+  files and 40 large logs, the JSON files gained about 30%. But they hold
+  4% of the 110 MB, so the archive gained 1.8%.
+
+Before `train=auto`, a fixed 112 KiB made 9 of the 29 trees larger than no
+dictionary, by up to 35%. With `train=auto`, no tree was larger than with
+no dictionary. The measurement is an estimate, so this is not certain, but
+a wrong choice costs little: the worst tree was 1.2% above its best size.
+
+The time is the trade-off. Without a dictionary, the 120 Go files took
+0.2 s, the 20000 JSON files 0.7 s, and the 232 MB tree 0.8 s. With
+`train=auto`, they took 2.1 s, 21.5 s and 14.3 s. The trainer uses one
+thread for each candidate, and it takes most of the time. Thus `train` is
+good for many small, similar files. For a tree of large files, it costs
+seconds and saves almost nothing.
+
+A dictionary does not give the result of one stream. On the 441 Go files of
+the first table, files alone gave 22.6%, a dictionary 21.2%, and one stream
+17.3%. The dictionary holds text from the start of the files. One stream
+also finds repeats deep inside the files, and between them.
+
 
 **The archive stores each dictionary as a blob,** before the members of the
 generation that uses it. The index lists the dictionaries, and each catalog
@@ -1839,17 +1976,17 @@ Examples:
 ```
 
 **A key without a value is the key's "on" form** (M10). `long` is
-`long=27`, the window of `zstd --long`, and `train` trains a dictionary of the
-default size (§4.2). `k=on` means the same as `k`, and `k=off` turns the key
-off. Thus a configuration can say `train = on`, and a command line can say
-`train=off` against it. A key with no "on" form, such as `level`, needs a
+`long=27`, the window of `zstd --long`, and `train` is `train=auto`: the
+writer measures the dictionary size on the files (§4.2). `k=on` means the
+same as `k`, and `k=off` turns the key off. Thus a configuration can say
+`train = on`, and a command line can say `train=off` against it. A key with no "on" form, such as `level`, needs a
 value.
 
 | zstd key | Values | Default | Bare |
 |---|---|---|---|
 | `level` | 1..22 | 12 | needs a value |
 | `long` | `off`, or 10..30: the window is 2^long bytes | `off` | 27 |
-| `train` | `off`, or a dictionary size, 4 KiB..1 MiB | `off` | 112 KiB |
+| `train` | `off`, `auto`, or a dictionary size, 4 KiB..1 MiB | `off` | `auto` |
 
 **The zstd library has four speeds, not 22 levels.** `klauspost/compress`
 maps each level of the zstd command line to one of its speeds:

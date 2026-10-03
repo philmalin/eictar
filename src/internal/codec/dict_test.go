@@ -69,7 +69,8 @@ func TestTrainSize(t *testing.T) {
 	}{
 		{nil, 0},
 		{Params{"train": Off}, 0},
-		{Params{"train": On}, 112 << 10},
+		{Params{"train": On}, TrainAuto},
+		{Params{"train": "auto"}, TrainAuto},
 		{Params{"train": "64KiB"}, 64 << 10},
 		{Params{"train": "8192"}, 8192},
 	} {
