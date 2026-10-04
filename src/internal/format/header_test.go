@@ -191,12 +191,16 @@ func TestCryptoHeaderRefusesCostlyParameters(t *testing.T) {
 		{"memory above the cap", func(c *CryptoHeader) { c.Memory = MaxKDFMemoryKiB + 1 }},
 		{"zero time", func(c *CryptoHeader) { c.Time = 0 }},
 		{"zero threads", func(c *CryptoHeader) { c.Threads = 0 }},
+		{"zero memory", func(c *CryptoHeader) { c.Memory = 0 }},
+		{"memory below 8 KiB a thread", func(c *CryptoHeader) { c.Memory = 8*4 - 1 }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := base()
 			tc.mutate(c)
-			if err := c.Validate(); err == nil {
-				t.Error("accepted")
+			// A damaged header is ErrCorruptIndex, which is exit 3, and not an
+			// error of this build (exit 4).
+			if err := c.Validate(); !errors.Is(err, ErrCorruptIndex) {
+				t.Errorf("got %v, want ErrCorruptIndex", err)
 			}
 		})
 	}

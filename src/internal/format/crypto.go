@@ -117,6 +117,12 @@ func (c *CryptoHeader) Validate() error {
 		return fmt.Errorf("format: %w: key derivation needs a positive time and thread count",
 			ErrCorruptIndex)
 	}
+	// Argon2id needs 8 KiB for each lane. Less is a damaged header, as a zero
+	// time is, and not a fault of this build.
+	if minimum := 8 * uint32(c.Threads); c.Memory < minimum {
+		return fmt.Errorf("format: %w: key derivation needs at least %d KiB of memory for %d threads, the archive gives %d",
+			ErrCorruptIndex, minimum, c.Threads, c.Memory)
+	}
 	// Time is as dangerous as memory, just slower to notice: Argon2id cost is
 	// linear in it, about 1.8 s per iteration at the memory cap, so a crafted
 	// header asking for 2^32-1 iterations hangs a listing for centuries after

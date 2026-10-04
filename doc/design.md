@@ -1025,7 +1025,9 @@ only inside one member.
 
 **The KDF parameters come from the archive, and the reader treats them as
 hostile.** It refuses `time` more than **64** and `memory` more than
-**4 GiB**. Then it compares the memory with this machine (§A.3). All of this
+**4 GiB**. It also refuses a zero `time` or `threads`, and `memory` less than
+8 KiB for each thread, which Argon2id cannot use. These are damage, with exit
+3. Then it compares the memory with this machine (§A.3). All of this
 occurs *before* the prompt for the passphrase. The cost of Argon2id is linear
 in `time`, approximately 1.8 s for each pass at the memory limit. Without the
 time limit, a crafted header that asks for 2³²−1 passes stops a listing for
@@ -4158,7 +4160,9 @@ of each path on extraction, and `--diff` with it compares the tree that
 such an extraction writes (§10.14). When two members get one path, the
 later one is extracted, with a warning and exit 1. `--diff` no longer
 reports the directory of a member that was added by its own path as a
-path that the archive lacks (§9.8). The stress tester has steps for
+path that the archive lacks (§9.8). An encrypted archive whose header
+gives less than 8 KiB of KDF memory for each thread is damaged, with exit 3,
+and not an internal error with exit 4 (§6.2). The stress tester has steps for
 `--diff`, `-n` and `--strip-components`, and its summary gives the result
 and each check (§13.4).
 

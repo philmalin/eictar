@@ -6813,11 +6813,14 @@ must be unique only inside one member.</p>
 <p><strong>The KDF parameters come from the archive, and the reader
 treats them as hostile.</strong> It refuses <code>time</code> more than
 <strong>64</strong> and <code>memory</code> more than <strong>4
-GiB</strong>. Then it compares the memory with this machine (§A.3). All
-of this occurs <em>before</em> the prompt for the passphrase. The cost
-of Argon2id is linear in <code>time</code>, approximately 1.8 s for each
-pass at the memory limit. Without the time limit, a crafted header that
-asks for 2³²−1 passes stops a listing for centuries.</p>
+GiB</strong>. It also refuses a zero <code>time</code> or
+<code>threads</code>, and <code>memory</code> less than 8 KiB for each
+thread, which Argon2id cannot use. These are damage, with exit 3. Then
+it compares the memory with this machine (§A.3). All of this occurs
+<em>before</em> the prompt for the passphrase. The cost of Argon2id is
+linear in <code>time</code>, approximately 1.8 s for each pass at the
+memory limit. Without the time limit, a crafted header that asks for
+2³²−1 passes stops a listing for centuries.</p>
 <p><strong>In an encrypted archive, the member digest is keyed.</strong>
 A plain BLAKE3 digest of the content is readable in an index that is not
 sealed, which is the default. Anyone with a copy of a file can then find
@@ -10840,8 +10843,10 @@ removes the first N components of each path on extraction, and
 writes (§10.14). When two members get one path, the later one is
 extracted, with a warning and exit 1. <code>--diff</code> no longer
 reports the directory of a member that was added by its own path as a
-path that the archive lacks (§9.8). The stress tester has steps for
-<code>--diff</code>, <code>-n</code> and
+path that the archive lacks (§9.8). An encrypted archive whose header
+gives less than 8 KiB of KDF memory for each thread is damaged, with
+exit 3, and not an internal error with exit 4 (§6.2). The stress tester
+has steps for <code>--diff</code>, <code>-n</code> and
 <code>--strip-components</code>, and its summary gives the result and
 each check (§13.4).</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
