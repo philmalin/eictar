@@ -1988,7 +1988,9 @@ file that it cannot read, and the mode of that file is then a difference.
 
 - A tree extracted without `-p` has each mode less the umask. A user who is
   not root does not get the owners of the archive. Both are differences. An
-  operational test checks that a tree extracted with `-p` has none.
+  operational test checks that a tree extracted with `-p` has none. On macOS,
+  extraction skips pipes (§15.1), so a pipe of the archive is not on disk,
+  and the test expects that one difference.
 - A create writes the archive into its directory. If that directory is in
   the tree, its modification time changes, and that is a difference.
 - An archive made with `--no-xattrs` holds no attributes. Thus each
@@ -3307,8 +3309,8 @@ parts work.
   - the `.ect` name
   - a dictionary, in `--info` and in the listing
   - shared content, in the listing, in `--info` and in `--json`
-  - `--diff`: no difference after `-xp`, and then a changed file and a
-    missing file with exit 1 (§9.8)
+  - `--diff`: no difference after `-xp`, except the pipe on macOS, and then
+    a changed file and a missing file with exit 1 (§9.8)
 
   The dry run (§9.9) has no operational test. The tests of package `cli`
   run it through `Run`, and check its output and that nothing changes.

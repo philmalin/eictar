@@ -4247,7 +4247,9 @@ and the mode of that file is then a difference.</p>
 <li>A tree extracted without <code>-p</code> has each mode less the
 umask. A user who is not root does not get the owners of the archive.
 Both are differences. An operational test checks that a tree extracted
-with <code>-p</code> has none.</li>
+with <code>-p</code> has none. On macOS, extraction skips pipes (§15.1),
+so a pipe of the archive is not on disk, and the test expects that one
+difference.</li>
 <li>A create writes the archive into its directory. If that directory is
 in the tree, its modification time changes, and that is a
 difference.</li>
@@ -6131,8 +6133,9 @@ effect.</li>
 <li>a dictionary, in <code>--info</code> and in the listing</li>
 <li>shared content, in the listing, in <code>--info</code> and in
 <code>--json</code></li>
-<li><code>--diff</code>: no difference after <code>-xp</code>, and then
-a changed file and a missing file with exit 1 (§9.8)</li>
+<li><code>--diff</code>: no difference after <code>-xp</code>, except
+the pipe on macOS, and then a changed file and a missing file with exit
+1 (§9.8)</li>
 </ul>
 The dry run (§9.9) has no operational test. The tests of package
 <code>cli</code> run it through <code>Run</code>, and check its output

@@ -1089,7 +1089,8 @@ func TestRegexThroughTheBinary(t *testing.T) {
 
 // TestDiffThroughTheBinary: a tree extracted with -p is what the archive
 // holds, so --diff finds nothing there, and in the tree that it came from.
-// A change to either is a difference, with exit 1.
+// A change to either is a difference, with exit 1. Where extraction skips
+// pipes (macOS, doc/design.md 15.1), the pipe is the one difference.
 func TestDiffThroughTheBinary(t *testing.T) {
 	tree := metadataFixture(t)
 	archive := filepath.Join(t.TempDir(), "meta.ect")
@@ -1099,6 +1100,13 @@ func TestDiffThroughTheBinary(t *testing.T) {
 
 	for _, dir := range []string{tree.Root, dest} {
 		res := testutil.Run(t, dir, "--diff", "-f", archive)
+		if dir == dest && !platform.pipes {
+			if want := "work/pipe: not on disk\n"; res.ExitCode != exitPartial || res.Stdout != want {
+				t.Errorf("--diff in %s: exit %d, stdout %q, want exit %d and %q (stderr: %s)",
+					dir, res.ExitCode, res.Stdout, exitPartial, want, res.Stderr)
+			}
+			continue
+		}
 		if res.ExitCode != exitOK || !strings.Contains(res.Stdout, "no differences") {
 			t.Errorf("--diff in %s: exit %d\nstdout: %s\nstderr: %s", dir, res.ExitCode, res.Stdout, res.Stderr)
 		}
