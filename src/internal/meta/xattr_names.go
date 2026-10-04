@@ -25,8 +25,25 @@ func ReadXattrs(path string, follow bool) (map[string][]byte, error) {
 		list = unix.Listxattr
 		get = unix.Getxattr
 	}
+	return readXattrs(path,
+		func(buf []byte) (int, error) { return list(path, buf) },
+		func(name string, buf []byte) (int, error) { return get(path, name, buf) })
+}
 
-	names, err := growRead(func(buf []byte) (int, error) { return list(path, buf) })
+// ReadXattrsFile returns every extended attribute of an open file or
+// directory. Working on the descriptor, not a path, reads the attributes of
+// the file that the walk opened, whatever the path names by now
+// (doc/Security_Audit.md, finding 11). where names the file in an error.
+func ReadXattrsFile(f *os.File, where string) (map[string][]byte, error) {
+	fd := int(f.Fd())
+	return readXattrs(where,
+		func(buf []byte) (int, error) { return unix.Flistxattr(fd, buf) },
+		func(name string, buf []byte) (int, error) { return unix.Fgetxattr(fd, name, buf) })
+}
+
+func readXattrs(path string, list func(buf []byte) (int, error),
+	get func(name string, buf []byte) (int, error)) (map[string][]byte, error) {
+	names, err := growRead(list)
 	if err != nil {
 		if isUnsupported(err) {
 			return nil, nil
@@ -40,7 +57,7 @@ func ReadXattrs(path string, follow bool) (map[string][]byte, error) {
 			continue
 		}
 		n := string(name)
-		value, err := growRead(func(buf []byte) (int, error) { return get(path, n, buf) })
+		value, err := growRead(func(buf []byte) (int, error) { return get(n, buf) })
 		if err != nil {
 			// Removed between the list and the read: not an error.
 			if errors.Is(err, errNoAttr) {

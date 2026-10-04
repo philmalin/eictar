@@ -1488,6 +1488,18 @@ changes</a></li>
 <li><a href="#status-of-the-recommendations" id="toc-status-of-the-recommendations">Status of the
 recommendations</a></li>
 </ul></li>
+<li><a href="#follow-up-review-of---diff-and--n" id="toc-follow-up-review-of---diff-and--n">7. Follow-up review of
+<code>--diff</code> and <code>-n</code></a>
+<ul>
+<li><a href="#finding-11.-a-directory-that-becomes-a-link-during-the-walk-medium" id="toc-finding-11.-a-directory-that-becomes-a-link-during-the-walk-medium">Finding
+11. A directory that becomes a link during the walk (medium)</a></li>
+<li><a href="#finding-12.-control-characters-in-names-go-to-the-terminal-low" id="toc-finding-12.-control-characters-in-names-go-to-the-terminal-low">Finding
+12. Control characters in names go to the terminal (low)</a></li>
+<li><a href="#the-other-changes-1" id="toc-the-other-changes-1">The
+other changes</a></li>
+<li><a href="#status-of-the-recommendations-1" id="toc-status-of-the-recommendations-1">Status of the
+recommendations</a></li>
+</ul></li>
 </ul></li>
 </ul>
 </nav>
@@ -1515,6 +1527,11 @@ recommendations</a></li>
 <td>the changes after v1.0.2, with fixes in v1.0.3, 2026-10-01 (§6)</td>
 </tr>
 <tr class="odd">
+<td>Second follow-up</td>
+<td><code>--diff</code>, <code>-n</code>, and <code>--exclude</code> on
+a read, after v1.0.5, 2026-10-04 (§7)</td>
+</tr>
+<tr class="even">
 <td>Scope</td>
 <td>the source code, the archive format, and encrypted archives</td>
 </tr>
@@ -1621,6 +1638,20 @@ limits</td>
 <td>The pool of decoders kept one decoder for each kind that the index
 named (after v1.0.2, not released)</td>
 <td>Fixed in v1.0.3</td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td>Medium</td>
+<td>The walk followed a directory that became a link after its
+<code>lstat</code> (found after v1.0.5)</td>
+<td>Fixed (§7)</td>
+</tr>
+<tr class="even">
+<td>12</td>
+<td>Low</td>
+<td>Control characters in member names went to the terminal as they are
+(found after v1.0.5)</td>
+<td>Open (§7)</td>
 </tr>
 </tbody>
 </table>
@@ -1992,6 +2023,168 @@ recommendations</h3>
 <li>Open. It is a decision about a feature, not a fault.</li>
 <li>Done for v1.0.3, in this section. It stays a rule for later
 changes.</li>
+</ol>
+<h2 id="follow-up-review-of---diff-and--n">7. Follow-up review of
+<code>--diff</code> and <code>-n</code></h2>
+<p>This review applies recommendation 3 of §5 to the changes after
+v1.0.5:</p>
+<ul>
+<li><code>--diff</code> (design §9.8): member paths from the archive
+decide where the program reads the disk</li>
+<li><code>-n</code>, the dry run (design §9.9): with <code>-x</code>,
+member paths decide where the program looks under the destination</li>
+<li><code>--exclude</code> on a read: a matched directory takes its
+contents</li>
+<li><code>-h</code> on the command line: refused where it means
+nothing</li>
+</ul>
+<p>The review read <code>diff.go</code>, <code>plan.go</code> and the
+walk that both use, and made the attacks below happen.</p>
+<h3 id="finding-11.-a-directory-that-becomes-a-link-during-the-walk-medium">Finding
+11. A directory that becomes a link during the walk (medium)</h3>
+<p><strong>Where:</strong> <code>walk</code> and
+<code>walkChildren</code> in <code>src/internal/archive/walk.go</code>.
+Found in the code, and tested. The walk is older than
+<code>--diff</code>. It is the walk of create, append, update,
+<code>--diff</code>, <code>-n</code> and the samples of a
+dictionary.</p>
+<p><strong>Problem.</strong> The walk finds a directory with
+<code>lstat</code>, and then reads it with <code>os.ReadDir</code>, by
+its path. The path of each entry below it is the path of the directory
+and the name. Each later call resolves the whole path again, and follows
+a link in it.</p>
+<p>Between the <code>lstat</code> and the <code>ReadDir</code>, a user
+who can write the parent can put a link in place of the directory. The
+walk then reads the directory that the link points to. The
+<code>lstat</code> of each entry goes through the link, so
+<code>openWalked</code> (finding 3) finds the device and the inode that
+it expects: <code>O_NOFOLLOW</code> applies to the last name of a path
+only. Thus:</p>
+<ul>
+<li>A backup by root of a tree that other users can write stores files
+from outside the tree, under that user’s names, as finding 3 did for one
+file.</li>
+<li><code>--diff</code> by another user, with an archive from the
+attacker, tells the attacker if a file outside the tree has the content
+that a member names. The attacker must also see the output.</li>
+</ul>
+<p>The check of <code>--diff</code> on the start of each walk
+(<code>rootThere</code>, through <code>os.Root</code>) does not help.
+The walk itself starts again from the path.</p>
+<p><strong>Test.</strong> A test walked a directory while another
+goroutine put a link to another directory in its place, and back, in a
+loop. The walk reported a file of the other directory after 3749 walks,
+in 0.2 s.</p>
+<p><strong>Fix.</strong> The walk holds each directory that it enters
+open, as an <code>os.Root</code>, and does each operation below it
+through that root, by one name: the <code>lstat</code>, the
+<code>readlink</code>, the open of a file, and the open of a
+subdirectory. It opens a subdirectory, and checks that it has the device
+and the inode of the <code>lstat</code>, before it reads it. Otherwise
+the directory fails as a member that changed, and the walk does not
+enter it. <code>os.Root</code> follows a link that stays inside the
+directory, and does not take <code>O_NOFOLLOW</code>. The check of the
+device and the inode refuses what such a link opens, for a directory and
+for a file (<code>openWalked</code>).</p>
+<p>The extended attributes come from the open file or directory
+(<code>ReadXattrsFile</code>: <code>flistxattr</code> and
+<code>fgetxattr</code> on Linux and macOS, <code>extattr_list_fd</code>
+and <code>extattr_get_fd</code> on FreeBSD and NetBSD).
+<code>--diff</code> opens each file during the walk, and its workers
+read the open file. The samples of a dictionary come from a second walk,
+which reads each file that the first walk chose while it holds the
+file’s directory. <code>--diff</code> starts each walk inside its
+<code>os.Root</code>. The open of a file has <code>O_NONBLOCK</code>
+too, so that a pipe in the place of a file does not stop the open.</p>
+<p><strong>Limits.</strong></p>
+<ul>
+<li>A path that the user names is opened from its parent, by the path.
+The user chose that path.</li>
+<li>A directory that the process cannot open, for want of permission, is
+archived empty, as before. Its attributes then come from the path. Root
+can open every directory, so this does not apply to a backup by
+root.</li>
+<li><code>-h</code> follows links on purpose. A link that it follows is
+followed by its path, and the walk holds the directory from there.</li>
+</ul>
+<p><strong>Tests.</strong>
+<code>TestWalkRefusesADirectoryThatBecameALink</code> puts a link in the
+place of a directory between its <code>lstat</code> and its open: the
+walk does not enter it, and reports it as changed.
+<code>TestWalkHoldsTheDirectoryItOpened</code> puts the link there after
+the walk opened the directory, between two of its entries: the next
+entry is still the file of the tree. Each test fails when its part of
+the fix is taken out. The race of the first test, in a loop, made
+206,703 walks in 10 s with no walk out of the tree.</p>
+<p><strong>Cost.</strong> On 20,000 small files in 2,000 directories,
+create took the same time. <code>--diff</code> took 0.175 s, against
+0.14 s before: it opens each file in the walk, not in a worker.</p>
+<p><strong>Status:</strong> fixed.</p>
+<h3 id="finding-12.-control-characters-in-names-go-to-the-terminal-low">Finding
+12. Control characters in names go to the terminal (low)</h3>
+<p><strong>Where:</strong> each output of a member path:
+<code>-t</code>, <code>-v</code>, <code>-n</code>, the lines of
+<code>--diff</code>, and the messages that name a member. Found in the
+code, and tested.</p>
+<p><strong>Problem.</strong> A name on Linux can hold any byte except
+<code>/</code> and NUL, and the index of a crafted archive can hold any
+name. The program writes a name to the terminal as it is. An escape
+sequence in a name can change the colours, move the cursor, write over
+the lines before it, or hide other names. Some terminals do more with
+some sequences. Thus <code>-t</code> or <code>-n</code> of an archive
+from someone else can show a listing that is not the content. A test
+archived the name <code>a&lt;ESC&gt;[31mRED</code>, and <code>-t</code>
+and <code>-cn</code> wrote the ESC byte.</p>
+<p><strong>Proposed fix.</strong> When it writes to a terminal, the
+program shows a control character in a name as an escape, as
+<code>ls</code> does. <code>--json</code> already escapes it. Output to
+a pipe or a file can stay exact, for a script that reads the names.</p>
+<p><strong>Status:</strong> open.</p>
+<h3 id="the-other-changes-1">The other changes</h3>
+<ul>
+<li><strong><code>--diff</code> checks every member path</strong> as
+extraction does (design §7.5), before it reads the disk. A path with
+<code>..</code>, an absolute path, or a path that is not canonical stops
+the run with exit 3.</li>
+<li><strong>The start of each walk</strong> is checked through
+<code>os.Root</code>. A link on disk that leads out of the directory
+stops the run with exit 3
+(<code>TestDiffDoesNotLeaveTheBaseThroughALink</code>). The fix of
+finding 11 starts the walk inside that root too.</li>
+<li><strong>The target of a hardlink</strong> is found through
+<code>os.Root</code> too. A target path that <code>--exclude</code> left
+out, and that the path check did not see, cannot leave the
+directory.</li>
+<li><strong>What <code>--diff</code> shows</strong> of the disk: the
+kind of each difference, modes, owners by number, times, and the target
+of a link, in quotes. It shows the names of the extended attributes that
+differ, not their values. It reads no member data, and the digests that
+it compares are keyed in an encrypted archive.</li>
+<li><strong>A dry run of <code>-x</code></strong> looks only under the
+destination, through <code>os.Root</code>, and refuses an unsafe path
+with exit 3, as extraction does. When the destination does not exist, it
+reads nothing on disk. It shows which paths exist under the destination,
+which the user can see anyway.</li>
+<li><strong>A dry run of <code>-c</code>, <code>-r</code> and
+<code>-u</code></strong> walks only the paths that the user gave. The
+archive decides only what happens to each path, by the rules of the real
+run. <code>-u --update-mode=digest</code> reads each file with
+<code>openWalked</code>. A dry run of <code>--delete</code> reads
+nothing on disk.</li>
+<li><strong>No dry run takes a lock</strong> or opens the archive for
+writing. A writer at the same time is safe: a reader sees one complete
+generation.</li>
+<li><strong><code>--exclude</code> on a read</strong> only removes
+members from a selection. It cannot add one.</li>
+<li><strong><code>-h</code></strong> on an operation that does not walk
+was ignored. It is now a usage error, as each other option of the walk
+is. This has no effect on security.</li>
+</ul>
+<h3 id="status-of-the-recommendations-1">Status of the
+recommendations</h3>
+<ol start="3" type="1">
+<li>Done for these changes, in this section. Finding 11 is fixed, and
+finding 12 is open. It stays a rule for later changes.</li>
 </ol>
 </body>
 </html>

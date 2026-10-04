@@ -643,6 +643,7 @@ func (o *Options) validate() error {
 		ops  []Operation
 	}{
 		{"one-file-system", walking},
+		{"dereference", walking},
 		{"no-dedup", adding},
 		{"preserve-permissions", []Operation{OpExtract}},
 		{"preserve-owner", []Operation{OpExtract}},

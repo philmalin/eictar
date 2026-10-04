@@ -2,6 +2,7 @@ package archive
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -192,5 +193,93 @@ func TestExtractAppliesTheUmask(t *testing.T) {
 		if f != wantF || d != wantD {
 			t.Errorf("-p=%v: file %o and directory %o, want %o and %o", p, f, d, wantF, wantD)
 		}
+	}
+}
+
+// swapForLink puts a symbolic link to target in the place of the directory
+// dir, as a user who can write its parent can do while a walk runs.
+func swapForLink(t *testing.T, dir, target string) {
+	t.Helper()
+	if err := os.Rename(dir, dir+".moved"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Finding 11: a directory that becomes a link between the walk's lstat and
+// its read is not entered. Before the fix, the walk read the directory that
+// the link pointed to, and a backup by root stored the files of another user
+// under the attacker's names.
+func TestWalkRefusesADirectoryThatBecameALink(t *testing.T) {
+	tree := testutil.NewTree(t)
+	tree.Text("tree/d/mine", 0o644, "mine")
+	outside := testutil.NewTree(t)
+	outside.Text("secret", 0o600, "the secret")
+
+	var stored []string
+	var failed []error
+	wk := newWalker(walkOptions{
+		baseDir: tree.Root,
+		onError: func(_ string, err error) error { failed = append(failed, err); return nil },
+		afterLstat: func(src string) {
+			if src == tree.Path("tree/d") {
+				swapForLink(t, src, outside.Root)
+			}
+		},
+	}, func(e entry) error {
+		stored = append(stored, e.Stored)
+		return nil
+	})
+	if err := wk.Walk("tree"); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range stored {
+		if p == "tree/d/secret" || p == "tree/d" {
+			t.Errorf("walked %q: the walk followed the link that took the place of tree/d", p)
+		}
+	}
+	if len(failed) != 1 || !errors.Is(failed[0], errChangedDuringWalk) {
+		t.Errorf("failures %v, want one errChangedDuringWalk for tree/d", failed)
+	}
+}
+
+// Finding 11, the other window: the directory becomes a link after the walk
+// opened it, between two of its entries. The entries after the swap are
+// still found, opened and read through the directory that the walk holds, so
+// they are the files of the tree, not of the link's target.
+func TestWalkHoldsTheDirectoryItOpened(t *testing.T) {
+	tree := testutil.NewTree(t)
+	tree.Text("tree/d/a", 0o644, "mine a").Text("tree/d/b", 0o644, "mine b")
+	outside := testutil.NewTree(t)
+	outside.Text("b", 0o600, "the secret")
+
+	content := map[string]string{}
+	wk := newWalker(walkOptions{
+		baseDir: tree.Root,
+		afterLstat: func(src string) {
+			if src == tree.Path("tree/d/a") {
+				swapForLink(t, tree.Path("tree/d"), outside.Root)
+			}
+		},
+	}, func(e entry) error {
+		if e.Kind != kindFile {
+			return nil
+		}
+		f, err := openWalked(e)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		b, err := io.ReadAll(f)
+		content[e.Stored] = string(b)
+		return err
+	})
+	if err := wk.Walk("tree"); err != nil {
+		t.Fatal(err)
+	}
+	if got := content["tree/d/b"]; got != "mine b" {
+		t.Errorf("tree/d/b holds %q, want %q from the directory that the walk opened", got, "mine b")
 	}
 }

@@ -12,6 +12,8 @@ import (
 
 func ReadXattrs(string, bool) (map[string][]byte, error) { return nil, nil }
 
+func ReadXattrsFile(*os.File, string) (map[string][]byte, error) { return nil, nil }
+
 func SetXattr(_ *os.File, name string, _ []byte) error {
 	return fmt.Errorf("setting %s: %w", name, ErrRefused)
 }

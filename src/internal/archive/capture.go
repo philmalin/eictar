@@ -185,7 +185,7 @@ func (c *capturer) record(e entry) error {
 	switch e.Kind {
 	case kindDir:
 		m.Type = format.TypeDir
-		if err := c.recordXattrs(&m, e); err != nil {
+		if err := c.recordXattrs(&m, e, e.self); err != nil {
 			return err
 		}
 		return c.b.AddMeta(m)
@@ -233,15 +233,15 @@ func (c *capturer) submitFile(m format.Member, e entry) error {
 		}
 	}
 
-	if err := c.recordXattrs(&m, e); err != nil {
-		return err
-	}
-
 	f, err := openWalked(e)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+
+	if err := c.recordXattrs(&m, e, f); err != nil {
+		return err
+	}
 
 	m.Type = format.TypeReg
 	m.Codec = c.w.CodecRef()
@@ -340,14 +340,23 @@ var errChangedDuringWalk = errors.New("changed after the walk found it; not arch
 // someone who can write the directory can put a symbolic link there, to
 // /etc/shadow for example. A privileged backup of such a tree then stored the
 // target under the file's name (doc/Security_Audit.md, finding 3). The open
-// does not follow a link, except under -h, and the file must have the device
-// and inode that the walk saw.
+// goes through the directory that the walk opened, by the file's name alone,
+// so that a directory above it that became a link is not followed (finding
+// 11). It does not follow a link, except under -h, and the file must have the
+// device and inode that the walk saw: os.Root follows a link that stays in
+// the directory, and this check refuses what it opens.
 func openWalked(e entry) (*os.File, error) {
-	open := meta.OpenNoFollow
-	if e.Followed {
-		open = os.Open
+	var f *os.File
+	var err error
+	switch {
+	case e.Followed:
+		f, err = os.Open(e.Src)
+	case e.dir != nil:
+		f, err = e.dir.OpenFile(e.name, os.O_RDONLY|meta.NoBlock, 0)
+		err = atPathErr(err, e.Src)
+	default:
+		f, err = meta.OpenNoFollow(e.Src)
 	}
-	f, err := open(e.Src)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", e.Src, err)
 	}
@@ -373,9 +382,10 @@ func (c *capturer) recordOwner(m *format.Member, sys meta.Info) {
 	m.Gname = c.names.GroupName(sys.GID)
 }
 
-// recordXattrs stores the extended attributes that the options allow.
-func (c *capturer) recordXattrs(m *format.Member, e entry) error {
-	xattrs, err := readXattrs(e, c.opt, func(name string, size int) {
+// recordXattrs stores the extended attributes that the options allow. f is
+// the entry, open, or nil to read them by the path.
+func (c *capturer) recordXattrs(m *format.Member, e entry, f *os.File) error {
+	xattrs, err := readXattrs(e, f, c.opt, func(name string, size int) {
 		// Linux never makes one this large, but macOS can: a resource
 		// fork is an xattr with no size limit. The file is still
 		// archived; the attribute is not (doc/design.md 15.1).
@@ -389,14 +399,22 @@ func (c *capturer) recordXattrs(m *format.Member, e entry) error {
 }
 
 // readXattrs reads the extended attributes of e that opt records: what create
-// stores, and what --diff compares with. An attribute larger than the format
-// allows is left out, and tooLarge is told of it. The result is nil when
-// there is none.
-func readXattrs(e entry, opt MetadataOptions, tooLarge func(name string, size int)) (map[string][]byte, error) {
+// stores, and what --diff compares with. They come from f, the entry open,
+// so that they are the attributes of what the walk found (finding 11). f is
+// nil only for a directory that cannot be opened: then they come from the
+// path. An attribute larger than the format allows is left out, and tooLarge
+// is told of it. The result is nil when there is none.
+func readXattrs(e entry, f *os.File, opt MetadataOptions, tooLarge func(name string, size int)) (map[string][]byte, error) {
 	if opt.NoXattrs && opt.NoACLs {
 		return nil, nil
 	}
-	all, err := meta.ReadXattrs(e.Src, e.Followed)
+	var all map[string][]byte
+	var err error
+	if f != nil {
+		all, err = meta.ReadXattrsFile(f, e.Src)
+	} else {
+		all, err = meta.ReadXattrs(e.Src, e.Followed)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -509,8 +527,7 @@ func memberTypeFor(k entryKind) format.MemberType {
 // of the file must be zero. Only the file's current data outside those
 // regions is read for that; its current holes are zero already.
 func sameContent(old *format.Member, e entry, newHash func() hash.Hash) (bool, error) {
-	size := e.Info.Size()
-	if uint64(size) != old.Size {
+	if uint64(e.Info.Size()) != old.Size {
 		return false, nil
 	}
 	f, err := openWalked(e)
@@ -518,7 +535,16 @@ func sameContent(old *format.Member, e entry, newHash func() hash.Hash) (bool, e
 		return false, err
 	}
 	defer f.Close()
+	return sameContentOf(old, f, e, newHash)
+}
 
+// sameContentOf is sameContent on f, the walked file that openWalked opened.
+// --diff opens the file during the walk, and reads it in a worker after.
+func sameContentOf(old *format.Member, f *os.File, e entry, newHash func() hash.Hash) (bool, error) {
+	size := e.Info.Size()
+	if uint64(size) != old.Size {
+		return false, nil
+	}
 	h := newHash()
 	if len(old.Sparse) == 0 {
 		// Stored dense: the digest is of the file as a reader sees it,

@@ -2348,11 +2348,14 @@ the run.</p>
 writer walks the paths, with the same filters, and makes a list of the
 regular files and their sizes. It takes the first 32 KiB of each file as
 a sample. When the samples are more than 100 times the dictionary size,
-it takes every k-th file, with the smallest k that fits. For
-<code>train=auto</code>, the budget is 100 times 1 MiB, the largest
-size. Thus the choice of samples depends only on the tree. The trainer
-is not deterministic: the same samples can give a different dictionary,
-and the archive size changed by up to 0.1% from run to run.</p>
+it takes every k-th file, with the smallest k that fits. The pass walks
+two times: the first finds the files and their sizes, and the second
+reads the samples that the first chose, while the walk holds their
+directories (§14.5). For <code>train=auto</code>, the budget is 100
+times 1 MiB, the largest size. Thus the choice of samples depends only
+on the tree. The trainer is not deterministic: the same samples can give
+a different dictionary, and the archive size changed by up to 0.1% from
+run to run.</p>
 <p>Then the writer trains the dictionary, and the normal walk compresses
 the files with it. A file that changes between the two walks costs ratio
 only. If the trainer cannot make a dictionary, for example from too
@@ -4262,16 +4265,22 @@ parallel. One goroutine walks the tree and compares the metadata. The
 program sorts the differences, so the output does not change with
 <code>-j</code>. On 32 CPUs, a tree of 2.0 GB in 21270 files, in the
 page cache, took 1.25 s with one worker and 0.27 s with the default of
-24. <code>--verify</code> of the same archive took 0.32 s.</p>
+24. <code>--verify</code> of the same archive took 0.32 s. The walk
+opens each file, while it holds the file’s directory (§14.5), and a
+worker reads it. On 20000 small files in 2000 directories, this made
+<code>--diff</code> take 0.175 s, against 0.14 s when the workers opened
+the files by their paths.</p>
 <p><strong>A hostile archive.</strong> The member paths decide where
 each walk starts on disk. The program checks each path as extraction
-does (§7.5). It finds the start of each walk through
-<code>os.Root</code>, so a symbolic link on disk cannot take the walk
-out of the directory. Without this rule, an archive can make
-<code>--diff</code> read any file of the system. The output then tells
-if that file has a given digest. Below its start, the walk follows no
-link, except with <code>-h</code>. It opens each file as create does
-(§9, <code>doc/Security_Audit.md</code> finding 3).</p>
+does (§7.5). Each walk starts inside an <code>os.Root</code> of the
+directory, and goes through each directory that it opens (§14.5). Thus a
+symbolic link on disk cannot take the walk out of the directory, also
+when it takes the place of a directory during the walk. Without this
+rule, an archive can make <code>--diff</code> read any file of the
+system. The output then tells if that file has a given digest. Below its
+start, the walk follows no link, except with <code>-h</code>. It opens
+each file as create does (§9, <code>doc/Security_Audit.md</code> finding
+3).</p>
 <h3 id="dry-run--n">9.9 Dry run (<code>-n</code>)</h3>
 <p><code>-n</code> (<code>--dry-run</code>) shows the paths that an
 operation would write or delete, and changes nothing. It applies to
@@ -6001,6 +6010,8 @@ an unsafe member path, and no destination made (§9.9).</li>
 <li>the decision for each class of xattr</li>
 <li>a member <code>.</code></li>
 <li>a file that becomes a link after the walk</li>
+<li>a directory that becomes a link during the walk, before and after
+the walk opens it</li>
 <li>the rule for links in the archive path</li>
 <li>the umask</li>
 <li>the expansion of the index</li>
@@ -6459,25 +6470,43 @@ without a passphrase source.</p>
 tree that other users can write</h3>
 <p>A backup often runs as root, over directories that other users can
 write. Such a user can change the tree while the program walks it, and
-can plant links where the program writes. Two rules apply:</p>
+can plant links where the program writes. Three rules apply:</p>
 <ul>
-<li><strong>The writer opens a walked file only as it was
+<li><p><strong>The writer opens a walked file only as it was
 walked.</strong> Between the walk’s <code>lstat</code> and the open, a
 user can put a symbolic link to <code>/etc/shadow</code> in place of a
 file. The open does not follow a link, except with <code>-h</code>. The
 file that it opens must have the device and the inode that the walk saw.
 Otherwise the member fails, as for a read error. This rule also applies
 to the samples of a dictionary and to
-<code>-u   --update-mode=digest</code>.</li>
-<li><strong>The archive path follows only the links that the kernel
-follows</strong> (§9).</li>
+<code>-u   --update-mode=digest</code>.</p></li>
+<li><p><strong>The walk goes through each directory that it
+opens.</strong> A path is resolved again at each call, and a directory
+above an entry can become a link between two calls. Thus the walk holds
+each directory that it enters open, as an <code>os.Root</code>. Below
+it, each <code>lstat</code>, <code>readlink</code> and open uses one
+name in that directory. A subdirectory must have the device and the
+inode of its <code>lstat</code>, or it fails as a member that changed,
+and the walk does not enter it. The extended attributes come from the
+open file or directory, not from the path. Before this rule, a link put
+in the place of a directory took the walk into the directory that the
+link points to (<code>doc/Security_Audit.md</code>, finding 11).</p>
+<p>A path that the user names is opened by its path, from its parent. A
+directory that the process cannot open is archived empty, and its
+attributes come from the path. Root can open every directory.
+<code>-h</code> follows a link by its path, on purpose.</p></li>
+<li><p><strong>The archive path follows only the links that the kernel
+follows</strong> (§9).</p></li>
 </ul>
 <h3 id="audit">14.6 Audit</h3>
 <p><code>doc/Security_Audit.md</code> records the review of v1.0.1:
 eight findings, the fixes of v1.0.2, and a test for each fix. It also
 lists what the review examined and found sound. Its §6 records a
 follow-up review of the changes after v1.0.2, with one more finding and
-its fix in v1.0.3.</p>
+its fix in v1.0.3. Its §7 reviews <code>--diff</code> and
+<code>-n</code>, with two findings: a directory that becomes a link
+during the walk, which is fixed (§14.5), and control characters in names
+on the terminal, which is open.</p>
 <h2 id="future-work">15. Future work</h2>
 <p>Some of these items change the format. An older reader must then
 refuse the archive, with a header flag or a new
@@ -6878,7 +6907,11 @@ a read, an <code>--exclude</code> glob with a <code>/</code> now takes
 the contents of a directory that it matches, as the walk does (§10.11).
 <code>--diff</code> keeps the differences of a path whose attributes it
 cannot read, which macOS refuses for a file that the user cannot read
-(§9.8).</p>
+(§9.8). The walk holds each directory that it enters open, and goes
+through it, so that a directory that becomes a link cannot take the walk
+out of the tree (§14.5, finding 11 of
+<code>doc/Security_Audit.md</code>). <code>-h</code> on an operation
+that does not walk is a usage error.</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
 <p>This appendix supports §6.1. The question “how does this compare with

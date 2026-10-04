@@ -339,7 +339,9 @@ check then refused the archive at the end of the run.
 with the same filters, and makes a list of the regular files and their
 sizes. It takes the first 32 KiB of each file as a sample. When the samples
 are more than 100 times the dictionary size, it takes every k-th file, with
-the smallest k that fits. For `train=auto`, the budget is 100 times 1 MiB,
+the smallest k that fits. The pass walks two times: the first finds the
+files and their sizes, and the second reads the samples that the first
+chose, while the walk holds their directories (§14.5). For `train=auto`, the budget is 100 times 1 MiB,
 the largest size. Thus the choice of samples depends only on the tree. The
 trainer is not deterministic: the same samples can give a different
 dictionary, and the archive size changed by up to 0.1% from run to run.
@@ -2000,12 +2002,17 @@ file that it cannot read, and the mode of that file is then a difference.
 tree and compares the metadata. The program sorts the differences, so the
 output does not change with `-j`. On 32 CPUs, a tree of 2.0 GB in 21270
 files, in the page cache, took 1.25 s with one worker and 0.27 s with the
-default of 24. `--verify` of the same archive took 0.32 s.
+default of 24. `--verify` of the same archive took 0.32 s. The walk opens
+each file, while it holds the file's directory (§14.5), and a worker reads
+it. On 20000 small files in 2000 directories, this made `--diff` take
+0.175 s, against 0.14 s when the workers opened the files by their paths.
 
 **A hostile archive.** The member paths decide where each walk starts on
-disk. The program checks each path as extraction does (§7.5). It finds the
-start of each walk through `os.Root`, so a symbolic link on disk cannot take
-the walk out of the directory. Without this rule, an archive can make
+disk. The program checks each path as extraction does (§7.5). Each walk
+starts inside an `os.Root` of the directory, and goes through each
+directory that it opens (§14.5). Thus a symbolic link on disk cannot take
+the walk out of the directory, also when it takes the place of a directory
+during the walk. Without this rule, an archive can make
 `--diff` read any file of the system. The output then tells if that file
 has a given digest. Below its start, the walk follows no link, except with
 `-h`. It opens each file as create does (§9, `doc/Security_Audit.md`
@@ -3204,6 +3211,8 @@ Every item in the lists below exists now, except the items marked "later".
   - the decision for each class of xattr
   - a member `.`
   - a file that becomes a link after the walk
+  - a directory that becomes a link during the walk, before and after the
+    walk opens it
   - the rule for links in the archive path
   - the umask
   - the expansion of the index
@@ -3587,7 +3596,7 @@ denial of service, not a forgery. The derived subkeys are not set to zero
 
 A backup often runs as root, over directories that other users can write.
 Such a user can change the tree while the program walks it, and can plant
-links where the program writes. Two rules apply:
+links where the program writes. Three rules apply:
 
 - **The writer opens a walked file only as it was walked.** Between the
   walk's `lstat` and the open, a user can put a symbolic link to
@@ -3596,6 +3605,21 @@ links where the program writes. Two rules apply:
   the walk saw. Otherwise the member fails, as for a read error. This rule
   also applies to the samples of a dictionary and to `-u
   --update-mode=digest`.
+- **The walk goes through each directory that it opens.** A path is
+  resolved again at each call, and a directory above an entry can become a
+  link between two calls. Thus the walk holds each directory that it enters
+  open, as an `os.Root`. Below it, each `lstat`, `readlink` and open uses one
+  name in that directory. A subdirectory must have the device and the inode
+  of its `lstat`, or it fails as a member that changed, and the walk does
+  not enter it. The extended attributes come from the open file or
+  directory, not from the path. Before this rule, a link put in the place of
+  a directory took the walk into the directory that the link points to
+  (`doc/Security_Audit.md`, finding 11).
+
+  A path that the user names is opened by its path, from its parent. A
+  directory that the process cannot open is archived empty, and its
+  attributes come from the path. Root can open every directory. `-h`
+  follows a link by its path, on purpose.
 - **The archive path follows only the links that the kernel follows** (§9).
 
 ### 14.6 Audit
@@ -3603,7 +3627,10 @@ links where the program writes. Two rules apply:
 `doc/Security_Audit.md` records the review of v1.0.1: eight findings, the
 fixes of v1.0.2, and a test for each fix. It also lists what the review
 examined and found sound. Its §6 records a follow-up review of the changes
-after v1.0.2, with one more finding and its fix in v1.0.3.
+after v1.0.2, with one more finding and its fix in v1.0.3. Its §7 reviews
+`--diff` and `-n`, with two findings: a directory that becomes a link
+during the walk, which is fixed (§14.5), and control characters in names on
+the terminal, which is open.
 
 ## 15. Future work
 
@@ -3907,7 +3934,10 @@ delete would write or delete, and changes nothing (§9.9). On a read, an
 `--exclude` glob with a `/` now takes the contents of a directory that it
 matches, as the walk does (§10.11). `--diff` keeps the differences of a path
 whose attributes it cannot read, which macOS refuses for a file that the
-user cannot read (§9.8).
+user cannot read (§9.8). The walk holds each directory that it enters open,
+and goes through it, so that a directory that becomes a link cannot take the
+walk out of the tree (§14.5, finding 11 of `doc/Security_Audit.md`). `-h`
+on an operation that does not walk is a usage error.
 
 
 ## Appendix A. Why these primitives, compared with AES

@@ -278,10 +278,13 @@ type differ struct {
 	firstErr error
 }
 
-// contentJob is one file to read and compare with its member's digest.
+// contentJob is one file to read and compare with its member's digest. The
+// walk opens the file, through the directory that it walked, and the worker
+// reads it and closes it.
 type contentJob struct {
 	content *format.Member
 	e       entry
+	f       *os.File
 }
 
 // linkCheck is a hardlink member found on disk, whose target is checked after
@@ -333,9 +336,11 @@ func (d *differ) startWorkers() {
 			defer d.wg.Done()
 			for job := range d.jobs {
 				if d.stopped() != nil {
+					job.f.Close()
 					continue // drain
 				}
-				same, err := sameContent(job.content, job.e, newHash)
+				same, err := sameContentOf(job.content, job.f, job.e, newHash)
+				job.f.Close()
 				if d.progress != nil {
 					d.progress.Advance(int64(job.content.Size))
 				}
@@ -359,6 +364,7 @@ func (d *differ) stopWorkers() {
 // disk is not walked: its members are then reported as missing.
 func (d *differ) walk(roots []string) error {
 	wk := newWalker(walkOptions{
+		root:          d.root,
 		baseDir:       d.cfg.BaseDir,
 		dereference:   d.cfg.Dereference,
 		exclude:       d.cfg.Exclude,
@@ -443,10 +449,28 @@ func (d *differ) visit(e entry) error {
 		d.cfg.Reporter.Member(m)
 	}
 
-	diffs, content, err := compareEntry(m, contentOf(m, d.byID), e, d.cfg.Metadata)
+	// A file is opened here, while the walk holds its directory, and not by
+	// its path in a worker later (doc/Security_Audit.md, finding 11). Its
+	// attributes and its content come from what this opens.
+	var f *os.File
+	var openErr error
+	if e.Kind == kindFile && (m.Type == format.TypeReg || m.Type == format.TypeHardlink) {
+		f, openErr = openWalked(e)
+	}
+	open := f
+	if e.Kind == kindDir {
+		open = e.self
+	}
+	diffs, content, err := compareEntry(m, contentOf(m, d.byID), e, d.cfg.Metadata, open, openErr)
 	d.add(diffs...)
+	if err == nil && content != nil && f == nil {
+		err = openErr
+	}
 	if err != nil {
-		d.fail(fmt.Errorf("%s: %w", e.Src, err))
+		if f != nil {
+			f.Close()
+		}
+		d.fail(err)
 		return d.stopped()
 	}
 	sameType := len(diffs) == 0 || diffs[0].Kind != DiffType
@@ -454,8 +478,13 @@ func (d *differ) visit(e entry) error {
 		d.links = append(d.links, linkCheck{m: m, info: e.Info})
 	}
 	if content != nil {
-		d.jobs <- contentJob{content: content, e: e}
-	} else if c := contentOf(m, d.byID); d.progress != nil && c.Type.HasPayload() {
+		d.jobs <- contentJob{content: content, e: e, f: f}
+		return nil
+	}
+	if f != nil {
+		f.Close()
+	}
+	if c := contentOf(m, d.byID); d.progress != nil && c.Type.HasPayload() {
 		d.progress.Advance(int64(c.Size))
 	}
 	return nil
@@ -483,8 +512,10 @@ func (d *differ) checkHardlinks() {
 // compareEntry compares the metadata of member m with the path e on disk.
 // content holds m's content: the target of a hardlink, or m. When the content
 // can be the same, compareEntry returns the member to compare it with, and
-// the caller reads the file.
-func compareEntry(m, content *format.Member, e entry, opt MetadataOptions) ([]Difference, *format.Member, error) {
+// the caller reads the file. f is e open, for its attributes: a file that the
+// caller opened, or the directory that the walk opened. For a file that did
+// not open, f is nil and openErr says why.
+func compareEntry(m, content *format.Member, e entry, opt MetadataOptions, f *os.File, openErr error) ([]Difference, *format.Member, error) {
 	var diffs []Difference
 	add := func(kind, archive, disk string) {
 		diffs = append(diffs, Difference{Path: m.Path, Kind: kind, Archive: archive, Disk: disk})
@@ -541,7 +572,10 @@ func compareEntry(m, content *format.Member, e entry, opt MetadataOptions) ([]Di
 		// The differences found so far are still differences. macOS, for
 		// one, cannot list the attributes of a file that it cannot read, and
 		// its mode is then the difference that tells why.
-		got, err := readXattrs(e, opt, nil)
+		if f == nil && openErr != nil && !(opt.NoXattrs && opt.NoACLs) {
+			return diffs, nil, openErr
+		}
+		got, err := readXattrs(e, f, opt, nil)
 		if err != nil {
 			return diffs, nil, err
 		}

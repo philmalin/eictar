@@ -19,6 +19,8 @@ func Stat(fs.FileInfo) Info { return Info{} }
 
 func ReadXattrs(string, bool) (map[string][]byte, error) { return nil, nil }
 
+func ReadXattrsFile(*os.File, string) (map[string][]byte, error) { return nil, nil }
+
 func SetXattr(_ *os.File, name string, _ []byte) error {
 	return fmt.Errorf("setting %s: %w", name, ErrRefused)
 }
@@ -35,6 +37,9 @@ func Lchown(*os.File, string, uint32, uint32) error { return ErrUnsupported }
 
 // Umask is 0: these platforms have no mode creation mask.
 func Umask() uint32 { return 0 }
+
+// NoBlock is 0: these platforms have no named pipes to wait on.
+const NoBlock = 0
 
 // OpenNoFollow opens a file for reading. These platforms have no O_NOFOLLOW;
 // the caller still compares the file with the walked entry.

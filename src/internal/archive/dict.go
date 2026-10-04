@@ -468,56 +468,70 @@ func (r *Reader) dictFor(m *format.Member) ([]byte, error) {
 // start of each regular file. Over the budget, it takes every k-th file, so
 // that the choice depends only on the tree. An error here is not reported:
 // the real walk meets the same file and reports it there.
+//
+// It walks two times. The first walk counts the files and their sizes, which
+// decide k. The second reads the files that k selects. A file is read while
+// the walk holds its directory, as the capture reads it, so that a directory
+// that became a link does not put another file into the dictionary
+// (doc/Security_Audit.md, finding 11). A tree that changes between the two
+// walks costs ratio only.
 func sampleTree(w *Writer, cfg CreateConfig, budget int) ([][]byte, int, error) {
-	type file struct {
-		e entry
-		n int
-	}
-	var files []file
 	oldArchive, oldErr := os.Stat(cfg.Archive)
-	wk := newWalker(walkOptions{
-		baseDir:       cfg.BaseDir,
-		dereference:   cfg.Dereference,
-		exclude:       cfg.Exclude,
-		regex:         cfg.Regex,
-		excludeRegex:  cfg.ExcludeRegex,
-		oneFileSystem: cfg.OneFileSystem,
-		// The walk that archives reports what cannot be read; the sample
-		// goes on without it.
-		onError: func(string, error) error { return nil },
-	}, func(e entry) error {
-		if e.Kind != kindFile || e.Info.Size() == 0 || w.SameFile(e.Info) ||
-			(oldErr == nil && os.SameFile(e.Info, oldArchive)) {
+	walkFiles := func(visit func(e entry, n int)) {
+		wk := newWalker(walkOptions{
+			baseDir:       cfg.BaseDir,
+			dereference:   cfg.Dereference,
+			exclude:       cfg.Exclude,
+			regex:         cfg.Regex,
+			excludeRegex:  cfg.ExcludeRegex,
+			oneFileSystem: cfg.OneFileSystem,
+			// The walk that archives reports what cannot be read; the
+			// sample goes on without it.
+			onError: func(string, error) error { return nil },
+		}, func(e entry) error {
+			if e.Kind != kindFile || e.Info.Size() == 0 || w.SameFile(e.Info) ||
+				(oldErr == nil && os.SameFile(e.Info, oldArchive)) {
+				return nil
+			}
+			visit(e, int(min(e.Info.Size(), sampleSize)))
 			return nil
+		})
+		for _, p := range cfg.Paths {
+			wk.Walk(p)
 		}
-		files = append(files, file{e, int(min(e.Info.Size(), sampleSize))})
-		return nil
-	})
-	for _, p := range cfg.Paths {
-		wk.Walk(p)
 	}
 
-	sizes := make([]int, len(files))
+	var sizes []int
 	total := 0
-	for i, f := range files {
-		sizes[i] = f.n
-		total += f.n
-	}
-	var samples [][]byte
+	walkFiles(func(_ entry, n int) {
+		sizes = append(sizes, n)
+		total += n
+	})
+	picked := map[int]bool{}
 	for _, i := range pickSamples(sizes, budget) {
+		picked[i] = true
+	}
+
+	var samples [][]byte
+	i := 0
+	walkFiles(func(e entry, n int) {
+		defer func() { i++ }()
+		if !picked[i] {
+			return
+		}
 		// As the capture does: a link put there after the walk is not
 		// followed, or its target would go into the dictionary.
-		f, err := openWalked(files[i].e)
+		f, err := openWalked(e)
 		if err != nil {
-			continue
+			return
 		}
-		buf := make([]byte, files[i].n)
-		n, _ := io.ReadFull(f, buf)
+		buf := make([]byte, n)
+		got, _ := io.ReadFull(f, buf)
 		f.Close()
-		if n > 0 {
-			samples = append(samples, buf[:n])
+		if got > 0 {
+			samples = append(samples, buf[:got])
 		}
-	}
+	})
 	return samples, total, nil
 }
 

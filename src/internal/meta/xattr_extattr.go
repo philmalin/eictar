@@ -35,12 +35,30 @@ func ReadXattrs(path string, follow bool) (map[string][]byte, error) {
 	if follow {
 		list, get = unix.ExtattrListFile, unix.ExtattrGetFile
 	}
+	return readXattrs(path,
+		func(ns int, buf []byte) (int, error) { return list(path, ns, bufPtr(buf), len(buf)) },
+		func(ns int, name string, buf []byte) (int, error) { return get(path, ns, name, bufPtr(buf), len(buf)) })
+}
 
+// ReadXattrsFile returns every extended attribute of an open file or
+// directory that this process may read. Working on the descriptor, not a
+// path, reads the attributes of the file that the walk opened, whatever the
+// path names by now (doc/Security_Audit.md, finding 11). where names the file
+// in an error.
+func ReadXattrsFile(f *os.File, where string) (map[string][]byte, error) {
+	fd := int(f.Fd())
+	return readXattrs(where,
+		func(ns int, buf []byte) (int, error) { return unix.ExtattrListFd(fd, ns, bufPtr(buf), len(buf)) },
+		func(ns int, name string, buf []byte) (int, error) {
+			return unix.ExtattrGetFd(fd, ns, name, bufPtr(buf), len(buf))
+		})
+}
+
+func readXattrs(path string, list func(ns int, buf []byte) (int, error),
+	get func(ns int, name string, buf []byte) (int, error)) (map[string][]byte, error) {
 	var out map[string][]byte
 	for _, ns := range namespaces {
-		raw, err := growRead(func(buf []byte) (int, error) {
-			return list(path, ns.id, bufPtr(buf), len(buf))
-		})
+		raw, err := growRead(func(buf []byte) (int, error) { return list(ns.id, buf) })
 		if err != nil {
 			// The system namespace needs privilege to read, and a
 			// filesystem can have no extended attributes at all.
@@ -57,9 +75,7 @@ func ReadXattrs(path string, follow bool) (map[string][]byte, error) {
 			name := string(raw[1 : 1+n])
 			raw = raw[1+n:]
 
-			value, err := growRead(func(buf []byte) (int, error) {
-				return get(path, ns.id, name, bufPtr(buf), len(buf))
-			})
+			value, err := growRead(func(buf []byte) (int, error) { return get(ns.id, name, buf) })
 			if err != nil {
 				if errors.Is(err, errNoAttr) {
 					continue // removed between the list and the read

@@ -459,7 +459,7 @@ func TestOneFileSystemStopsAtAMountPoint(t *testing.T) {
 		return nil
 	})
 	wk.rootDev = ^uint64(0) // a device nothing in the tree is on
-	if err := wk.walk(tree.Path("mnt"), "mnt", true); err != nil {
+	if err := wk.walk(nil, "", tree.Path("mnt"), "mnt", true); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(seen, ",") != "mnt" {

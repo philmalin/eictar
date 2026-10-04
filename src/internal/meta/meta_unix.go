@@ -123,12 +123,17 @@ func Umask() uint32 {
 	return uint32(m)
 }
 
+// NoBlock is the open flag that keeps an open from waiting. The walk opens a
+// file with it: a pipe put in the place of a walked file would otherwise stop
+// the open until a writer came. The check after the open refuses the pipe.
+const NoBlock = unix.O_NONBLOCK
+
 // OpenNoFollow opens a file for reading, and fails if the last name is a
 // symbolic link. The writer uses it for a file that the walk found as a
 // regular file, so that a link put there after the walk is not followed
 // (doc/design.md 14.3).
 func OpenNoFollow(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW, 0)
+	return os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW|NoBlock, 0)
 }
 
 // MayFollow applies the rule of the Linux fs.protected_symlinks setting to a

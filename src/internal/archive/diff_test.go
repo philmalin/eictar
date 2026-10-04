@@ -357,7 +357,7 @@ func TestDiffOfAnUnreadableFile(t *testing.T) {
 // A failure to read the attributes of a file must not lose the differences
 // already found. macOS cannot list the attributes of a file that it cannot
 // read: its mode was then not reported, which is the difference that tells
-// why. Here the file goes away after the walk, which fails the same read on
+// why. Here the file goes away after the walk, which fails its open on
 // every platform.
 func TestDiffKeepsTheDifferencesOfAFailedEntry(t *testing.T) {
 	if !meta.Supports.Xattrs {
@@ -376,9 +376,13 @@ func TestDiffKeepsTheDifferencesOfAFailedEntry(t *testing.T) {
 		Size: uint64(fi.Size()), MTimeNanos: fi.ModTime().UnixNano()}
 	e := entry{Src: path, Stored: m.Path, Kind: kindFile, Info: fi}
 
-	diffs, _, err := compareEntry(m, m, e, MetadataOptions{})
+	f, openErr := openWalked(e)
+	if f != nil {
+		t.Fatal("a file that is gone was opened")
+	}
+	diffs, _, err := compareEntry(m, m, e, MetadataOptions{}, nil, openErr)
 	if err == nil {
-		t.Fatal("the attributes of a file that is gone were read")
+		t.Fatal("no error for a file that is gone")
 	}
 	if len(diffs) != 1 || diffs[0].Kind != DiffMode {
 		t.Errorf("differences %+v, want the mode", diffs)

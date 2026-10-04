@@ -6,6 +6,7 @@
 | Fixes in | v1.0.2 |
 | Date | 2026-09-26 |
 | Follow-up review | the changes after v1.0.2, with fixes in v1.0.3, 2026-10-01 (§6) |
+| Second follow-up | `--diff`, `-n`, and `--exclude` on a read, after v1.0.5, 2026-10-04 (§7) |
 | Scope | the source code, the archive format, and encrypted archives |
 
 ## 1. Scope and method
@@ -41,6 +42,8 @@ means that the review found it in the code, and gives the place.
 | 8 | Low | A passphrase file that other users can read gave no warning | Fixed |
 | 9 | Information | An unsealed index shows link targets and xattr values; other known limits | Documented |
 | 10 | Low | The pool of decoders kept one decoder for each kind that the index named (after v1.0.2, not released) | Fixed in v1.0.3 |
+| 11 | Medium | The walk followed a directory that became a link after its `lstat` (found after v1.0.5) | Fixed (§7) |
+| 12 | Low | Control characters in member names went to the terminal as they are (found after v1.0.5) | Open (§7) |
 
 Findings 1 to 4 matter most when root extracts an archive from someone else,
 or archives a tree that other users can write. Each fix has a test in
@@ -362,3 +365,150 @@ FUZZTIME=5m`). None found a failure.
 1. Done: the new target, and the longer run above.
 2. Open. It is a decision about a feature, not a fault.
 3. Done for v1.0.3, in this section. It stays a rule for later changes.
+
+## 7. Follow-up review of `--diff` and `-n`
+
+This review applies recommendation 3 of §5 to the changes after v1.0.5:
+
+- `--diff` (design §9.8): member paths from the archive decide where the
+  program reads the disk
+- `-n`, the dry run (design §9.9): with `-x`, member paths decide where the
+  program looks under the destination
+- `--exclude` on a read: a matched directory takes its contents
+- `-h` on the command line: refused where it means nothing
+
+The review read `diff.go`, `plan.go` and the walk that both use, and made
+the attacks below happen.
+
+### Finding 11. A directory that becomes a link during the walk (medium)
+
+**Where:** `walk` and `walkChildren` in `src/internal/archive/walk.go`.
+Found in the code, and tested. The walk is older than `--diff`. It is the
+walk of create, append, update, `--diff`, `-n` and the samples of a
+dictionary.
+
+**Problem.** The walk finds a directory with `lstat`, and then reads it with
+`os.ReadDir`, by its path. The path of each entry below it is the path of
+the directory and the name. Each later call resolves the whole path again,
+and follows a link in it.
+
+Between the `lstat` and the `ReadDir`, a user who can write the parent can
+put a link in place of the directory. The walk then reads the directory that
+the link points to. The `lstat` of each entry goes through the link, so
+`openWalked` (finding 3) finds the device and the inode that it expects:
+`O_NOFOLLOW` applies to the last name of a path only. Thus:
+
+- A backup by root of a tree that other users can write stores files from
+  outside the tree, under that user's names, as finding 3 did for one file.
+- `--diff` by another user, with an archive from the attacker, tells the
+  attacker if a file outside the tree has the content that a member names.
+  The attacker must also see the output.
+
+The check of `--diff` on the start of each walk (`rootThere`, through
+`os.Root`) does not help. The walk itself starts again from the path.
+
+**Test.** A test walked a directory while another goroutine put a link to
+another directory in its place, and back, in a loop. The walk reported a
+file of the other directory after 3749 walks, in 0.2 s.
+
+**Fix.** The walk holds each directory that it enters open, as an `os.Root`,
+and does each operation below it through that root, by one name: the
+`lstat`, the `readlink`, the open of a file, and the open of a
+subdirectory. It opens a subdirectory, and checks that it has the device and
+the inode of the `lstat`, before it reads it. Otherwise the directory fails
+as a member that changed, and the walk does not enter it. `os.Root` follows
+a link that stays inside the directory, and does not take `O_NOFOLLOW`. The
+check of the device and the inode refuses what such a link opens, for a
+directory and for a file (`openWalked`).
+
+The extended attributes come from the open file or directory
+(`ReadXattrsFile`: `flistxattr` and `fgetxattr` on Linux and macOS,
+`extattr_list_fd` and `extattr_get_fd` on FreeBSD and NetBSD). `--diff`
+opens each file during the walk, and its workers read the open file. The
+samples of a dictionary come from a second walk, which reads each file that
+the first walk chose while it holds the file's directory. `--diff` starts
+each walk inside its `os.Root`. The open of a file has `O_NONBLOCK` too, so
+that a pipe in the place of a file does not stop the open.
+
+**Limits.**
+
+- A path that the user names is opened from its parent, by the path. The
+  user chose that path.
+- A directory that the process cannot open, for want of permission, is
+  archived empty, as before. Its attributes then come from the path. Root
+  can open every directory, so this does not apply to a backup by root.
+- `-h` follows links on purpose. A link that it follows is followed by its
+  path, and the walk holds the directory from there.
+
+**Tests.** `TestWalkRefusesADirectoryThatBecameALink` puts a link in the
+place of a directory between its `lstat` and its open: the walk does not
+enter it, and reports it as changed. `TestWalkHoldsTheDirectoryItOpened`
+puts the link there after the walk opened the directory, between two of its
+entries: the next entry is still the file of the tree. Each test fails when
+its part of the fix is taken out. The race of the first test, in a loop,
+made 206,703 walks in 10 s with no walk out of the tree.
+
+**Cost.** On 20,000 small files in 2,000 directories, create took the same
+time. `--diff` took 0.175 s, against 0.14 s before: it opens each file in
+the walk, not in a worker.
+
+**Status:** fixed.
+
+### Finding 12. Control characters in names go to the terminal (low)
+
+**Where:** each output of a member path: `-t`, `-v`, `-n`, the lines of
+`--diff`, and the messages that name a member. Found in the code, and
+tested.
+
+**Problem.** A name on Linux can hold any byte except `/` and NUL, and the
+index of a crafted archive can hold any name. The program writes a name to
+the terminal as it is. An escape sequence in a name can change the colours,
+move the cursor, write over the lines before it, or hide other names. Some
+terminals do more with some sequences. Thus `-t` or `-n` of an archive from
+someone else can show a listing that is not the content. A test archived the
+name `a<ESC>[31mRED`, and `-t` and `-cn` wrote the ESC byte.
+
+**Proposed fix.** When it writes to a terminal, the program shows a control
+character in a name as an escape, as `ls` does. `--json` already escapes
+it. Output to a pipe or a file can stay exact, for a script that reads the
+names.
+
+**Status:** open.
+
+### The other changes
+
+- **`--diff` checks every member path** as extraction does (design §7.5),
+  before it reads the disk. A path with `..`, an absolute path, or a path
+  that is not canonical stops the run with exit 3.
+- **The start of each walk** is checked through `os.Root`. A link on disk
+  that leads out of the directory stops the run with exit 3
+  (`TestDiffDoesNotLeaveTheBaseThroughALink`). The fix of finding 11 starts
+  the walk inside that root too.
+- **The target of a hardlink** is found through `os.Root` too. A target path
+  that `--exclude` left out, and that the path check did not see, cannot
+  leave the directory.
+- **What `--diff` shows** of the disk: the kind of each difference, modes,
+  owners by number, times, and the target of a link, in quotes. It shows the
+  names of the extended attributes that differ, not their values. It reads
+  no member data, and the digests that it compares are keyed in an
+  encrypted archive.
+- **A dry run of `-x`** looks only under the destination, through
+  `os.Root`, and refuses an unsafe path with exit 3, as extraction does. When
+  the destination does not exist, it reads nothing on disk. It shows which
+  paths exist under the destination, which the user can see anyway.
+- **A dry run of `-c`, `-r` and `-u`** walks only the paths that the user
+  gave. The archive decides only what happens to each path, by the rules of
+  the real run. `-u --update-mode=digest` reads each file with `openWalked`.
+  A dry run of `--delete` reads nothing on disk.
+- **No dry run takes a lock** or opens the archive for writing. A writer at
+  the same time is safe: a reader sees one complete generation.
+- **`--exclude` on a read** only removes members from a selection. It cannot
+  add one.
+- **`-h`** on an operation that does not walk was ignored. It is now a usage
+  error, as each other option of the walk is. This has no effect on
+  security.
+
+### Status of the recommendations
+
+3. Done for these changes, in this section. Finding 11 is fixed, and
+   finding 12 is open. It stays a rule for later changes.
