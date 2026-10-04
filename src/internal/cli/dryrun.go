@@ -20,20 +20,21 @@ var dryRunOps = []Operation{OpCreate, OpAppend, OpUpdate, OpExtract, OpDelete}
 func runDryRun(o *Options, stdout, stderr io.Writer) error {
 	rep := &reporter{out: stdout, errOut: stderr, verbose: o.Verbose, quiet: o.Quiet}
 	added, replaced := "add", "replace"
+	show := namesFor(stdout)
 	var (
 		stats archive.Stats
 		err   error
 	)
 	plan := func(p archive.Planned) {
 		if o.Verbose == 0 {
-			fmt.Fprintln(stdout, p.Path)
+			fmt.Fprintln(stdout, show(p.Path))
 			return
 		}
 		what := added
 		if p.Replaces {
 			what = replaced
 		}
-		fmt.Fprintf(stdout, "%-8s %s\n", what, p.Path)
+		fmt.Fprintf(stdout, "%-8s %s\n", what, show(p.Path))
 	}
 
 	switch o.Op {

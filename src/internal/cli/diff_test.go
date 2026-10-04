@@ -81,7 +81,7 @@ func TestDifferenceLine(t *testing.T) {
 		{archive.Difference{Path: "a", Kind: archive.DiffACLs, Names: []string{"system.posix_acl_access"}},
 			"a: ACLs differ: system.posix_acl_access"},
 	} {
-		if got := differenceLine(tc.d); got != tc.want {
+		if got := differenceLine(tc.d, printable); got != tc.want {
 			t.Errorf("differenceLine(%+v) = %q, want %q", tc.d, got, tc.want)
 		}
 	}

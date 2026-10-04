@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 	"unicode/utf8"
@@ -28,24 +29,38 @@ type reporter struct {
 	verbose int
 	quiet   bool
 	long    bool
+
+	// show is how a name is shown on out (namesFor), decided at the first
+	// use: a reporter is made before its stream is written.
+	showOnce sync.Once
+	show     func(string) string
 }
 
 func (r *reporter) Member(m *format.Member) {
 	if r.verbose == 0 {
 		return
 	}
+	line := m.Path
 	if r.long {
-		fmt.Fprintln(r.out, longLine(nil, m, false))
-		return
+		line = longLine(nil, m, false)
 	}
-	fmt.Fprintln(r.out, m.Path)
+	fmt.Fprintln(r.out, r.shown(line))
 }
 
+// shown is s as the -v list on out shows it.
+func (r *reporter) shown(s string) string {
+	r.showOnce.Do(func() { r.show = namesFor(r.out) })
+	return r.show(s)
+}
+
+// Warn writes a message on the error stream. A message is for a person, so
+// the names in it are always escaped (printable), on a terminal or in a log
+// that a person reads later on one.
 func (r *reporter) Warn(format string, args ...any) {
 	if r.quiet {
 		return
 	}
-	fmt.Fprintf(r.errOut, "eictar: "+format+"\n", args...)
+	fmt.Fprintln(r.errOut, "eictar: "+printable(fmt.Sprintf(format, args...)))
 }
 
 // passphraseFor builds the source for this run.
@@ -198,9 +213,15 @@ func runList(o *Options, stdout, stderr io.Writer) error {
 	case o.JSON:
 		return writeJSONList(stdout, l)
 	case o.Long || o.Verbose > 0:
+		// Each cell is escaped before the widths are measured, so that the
+		// columns line up on a terminal too.
+		show := namesFor(stdout)
 		rows := make([][]string, len(l.Members))
 		for i := range l.Members {
 			rows[i] = longColumns(l, &l.Members[i], detail)
+			for j := range rows[i] {
+				rows[i][j] = show(rows[i][j])
+			}
 		}
 		// Sizes, stored sizes, percentages and chunk counts line up on the
 		// right, as numbers do in ls and tar; everything else on the left.
@@ -214,8 +235,9 @@ func runList(o *Options, stdout, stderr io.Writer) error {
 		}
 		return nil
 	default:
+		show := namesFor(stdout)
 		for i := range l.Members {
-			fmt.Fprintln(stdout, l.Members[i].Path)
+			fmt.Fprintln(stdout, show(l.Members[i].Path))
 		}
 	}
 	return nil

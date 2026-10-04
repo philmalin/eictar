@@ -1648,6 +1648,7 @@ meter</a></li>
 <li><a href="#patterns" id="toc-patterns">10.11 Patterns</a></li>
 <li><a href="#archive-name" id="toc-archive-name">10.12 Archive
 name</a></li>
+<li><a href="#names-on-the-terminal" id="toc-names-on-the-terminal">10.13 Names on the terminal</a></li>
 </ul></li>
 <li><a href="#configuration-environment-variables-and-the-configuration-file" id="toc-configuration-environment-variables-and-the-configuration-file">11.
 Configuration: environment variables and the configuration file</a>
@@ -5396,6 +5397,69 @@ with <code>.ect</code> exists, the program uses that file. Thus
 name as typed always wins. A directory with that name does not count, so
 <code>-tf backup</code> finds <code>backup.ect</code> next to the
 directory <code>backup</code>.</p>
+<h3 id="names-on-the-terminal">10.13 Names on the terminal</h3>
+<p>A name on Linux can hold any byte except <code>/</code> and NUL, and
+the index of a crafted archive can hold any name. A name that the
+program writes as it is can hold an escape sequence. On a terminal, such
+a sequence can change the colours, move the cursor, write over the lines
+before it, or hide other names. Thus a listing can show what the archive
+does not hold (<code>doc/Security_Audit.md</code>, finding 12).</p>
+<p><strong>On a terminal, the program escapes each name that it
+writes.</strong> This applies to the paths of <code>-t</code>,
+<code>-tv</code> and <code>-v</code>, the paths of a dry run, and the
+lines of <code>--diff</code>. It also applies to the link target, the
+owner and the codec in the long listing. The escapes are:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Character</th>
+<th>Shown as</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>newline, tab, carriage return</td>
+<td><code>\n</code>, <code>\t</code>, <code>\r</code></td>
+</tr>
+<tr class="even">
+<td>another control character, and DEL</td>
+<td><code>\xHH</code></td>
+</tr>
+<tr class="odd">
+<td>a byte that is not UTF-8</td>
+<td><code>\xHH</code></td>
+</tr>
+<tr class="even">
+<td>a C1 control character (U+0080 to U+009F)</td>
+<td><code>\uHHHH</code></td>
+</tr>
+<tr class="odd">
+<td>a character that changes the direction of the text (U+061C, U+200E,
+U+200F, U+202A to U+202E, U+2066 to U+2069)</td>
+<td><code>\uHHHH</code></td>
+</tr>
+<tr class="even">
+<td>a backslash</td>
+<td><code>\\</code></td>
+</tr>
+</tbody>
+</table>
+<p>A backslash is doubled, so that each escape has one meaning. Each
+other character is shown as it is, accents and other scripts too. The
+long listing escapes each column before it measures the widths, so the
+columns still line up.</p>
+<p><strong>To a pipe or a file, a name is exact,</strong> as with
+<code>ls</code>. A script that reads the names gets the bytes of the
+archive. A name that holds a newline is then two lines, so a script that
+must handle any name reads <code>--json</code>. <code>--json</code>
+escapes each name in both cases, as JSON does.</p>
+<p><strong>A message on stderr is always escaped,</strong> on a terminal
+or not. A message is for a person, who can read a log on a terminal
+later. A message never holds a control character of its own.</p>
 <h2 id="configuration-environment-variables-and-the-configuration-file">11.
 Configuration: environment variables and the configuration file</h2>
 <p>A long command line is tedious to type each time, for example:
@@ -6017,6 +6081,10 @@ the walk opens it</li>
 <li>the expansion of the index</li>
 <li>a passphrase file that other users can read</li>
 </ul></li>
+<li><strong>Names on the terminal</strong>: each kind of escape of
+§10.13. A name with an escape sequence in <code>-t</code>,
+<code>-tv</code>, a dry run and <code>--diff</code>: escaped on a
+terminal, and exact to a pipe. A message is escaped in both cases.</li>
 <li><strong>Man page and help</strong>: <code>doc/eictar.1</code> and
 <code>--help</code> name every long option of the parser, and the help
 gives each short form. No line of the help is wider than 80
@@ -6416,6 +6484,9 @@ Extraction also reduces its number of workers, so that
 that, a 256 MiB chunk size with 64 workers needs 32 GiB.</li>
 <li><strong>Cost from a crafted archive.</strong> The KDF limits of §6.2
 apply before the passphrase prompt.</li>
+<li><strong>Names.</strong> On a terminal, a name from the archive is
+escaped, so that an escape sequence in it cannot change what the
+terminal shows. A message on stderr is always escaped (§10.13).</li>
 <li><strong>Compare.</strong> <code>--diff</code> reads the disk at
 paths from the archive. It finds the start of each walk through
 <code>os.Root</code>, so a link on disk cannot take it out of the
@@ -6504,9 +6575,9 @@ eight findings, the fixes of v1.0.2, and a test for each fix. It also
 lists what the review examined and found sound. Its §6 records a
 follow-up review of the changes after v1.0.2, with one more finding and
 its fix in v1.0.3. Its §7 reviews <code>--diff</code> and
-<code>-n</code>, with two findings: a directory that becomes a link
-during the walk, which is fixed (§14.5), and control characters in names
-on the terminal, which is open.</p>
+<code>-n</code>, with two findings, each fixed: a directory that becomes
+a link during the walk (§14.5), and control characters in names on the
+terminal (§10.13).</p>
 <h2 id="future-work">15. Future work</h2>
 <p>Some of these items change the format. An older reader must then
 refuse the archive, with a header flag or a new
@@ -6911,7 +6982,9 @@ cannot read, which macOS refuses for a file that the user cannot read
 through it, so that a directory that becomes a link cannot take the walk
 out of the tree (§14.5, finding 11 of
 <code>doc/Security_Audit.md</code>). <code>-h</code> on an operation
-that does not walk is a usage error.</p>
+that does not walk is a usage error. On a terminal, a name from an
+archive is escaped, so that a crafted name cannot change what the
+terminal shows. A message is always escaped (§10.13, finding 12).</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
 <p>This appendix supports §6.1. The question “how does this compare with

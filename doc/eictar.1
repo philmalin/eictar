@@ -854,8 +854,9 @@ Extraction never changes the destination directory itself, even for an
 archive that holds an entry for its root
 .RB ( . ).
 .IP \(bu 2
-When root archives a tree that other users can write, a file that becomes a
-symbolic link after the walk is not followed. It fails, with a message. The
+When root archives a tree that other users can write, a file or a directory
+that becomes a symbolic link during the walk is not followed. It fails, with
+a message. The
 archive path given with
 .B \-f
 follows a symbolic link in a directory such as
@@ -871,6 +872,25 @@ if the archive holds a guessed file. For such a tree, use
 .B \-\-no\-dedup
 and no
 .BR train .
+.IP \(bu 2
+On a terminal, eictar escapes each character of a name that a terminal can
+act on: a control character shows as
+.BR \(rsn ,
+.BR \(rst ,
+.B \(rsr
+or
+.BR \(rsxHH ,
+a byte that is not UTF\-8 as
+.BR \(rsxHH ,
+a C1 control character or a character that changes the direction of the
+text as
+.BR \(rsuHHHH ,
+and a backslash as
+.BR \(rs\(rs .
+Thus a crafted name cannot change what the terminal shows. To a pipe or a
+file, names are exact; use
+.B \-\-json
+to read any name safely. Messages on standard error are always escaped.
 .IP \(bu 2
 A passphrase file that other users can read gives a warning.
 .IP \(bu 2

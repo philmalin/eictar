@@ -45,8 +45,9 @@ func runDiff(o *Options, stdout, stderr io.Writer) error {
 
 	// The differences are the result of the operation, so -q does not hide
 	// them, as it does not hide the damage that --verify finds.
+	show := namesFor(stdout)
 	for _, d := range res.Differences {
-		fmt.Fprintln(stdout, differenceLine(d))
+		fmt.Fprintln(stdout, differenceLine(d, show))
 	}
 	switch {
 	case res.Failed > 0:
@@ -61,8 +62,18 @@ func runDiff(o *Options, stdout, stderr io.Writer) error {
 }
 
 // differenceLine renders one difference: the path, what differs, and the
-// value in the archive and on disk where there is a short one.
-func differenceLine(d archive.Difference) string {
+// value in the archive and on disk where there is a short one. show is how a
+// name is shown (namesFor). A link target is quoted, which escapes it.
+func differenceLine(d archive.Difference, show func(string) string) string {
+	d.Path = show(d.Path)
+	if d.Kind == archive.DiffHardlink {
+		d.Archive = show(d.Archive)
+	}
+	names := make([]string, len(d.Names))
+	for i, n := range d.Names {
+		names[i] = show(n)
+	}
+	d.Names = names
 	what := map[string]string{
 		archive.DiffType:   "type differs",
 		archive.DiffSize:   "size differs",

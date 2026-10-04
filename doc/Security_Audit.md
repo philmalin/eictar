@@ -43,7 +43,7 @@ means that the review found it in the code, and gives the place.
 | 9 | Information | An unsealed index shows link targets and xattr values; other known limits | Documented |
 | 10 | Low | The pool of decoders kept one decoder for each kind that the index named (after v1.0.2, not released) | Fixed in v1.0.3 |
 | 11 | Medium | The walk followed a directory that became a link after its `lstat` (found after v1.0.5) | Fixed (§7) |
-| 12 | Low | Control characters in member names went to the terminal as they are (found after v1.0.5) | Open (§7) |
+| 12 | Low | Control characters in member names went to the terminal as they are (found after v1.0.5) | Fixed (§7) |
 
 Findings 1 to 4 matter most when root extracts an archive from someone else,
 or archives a tree that other users can write. Each fix has a test in
@@ -468,12 +468,23 @@ terminals do more with some sequences. Thus `-t` or `-n` of an archive from
 someone else can show a listing that is not the content. A test archived the
 name `a<ESC>[31mRED`, and `-t` and `-cn` wrote the ESC byte.
 
-**Proposed fix.** When it writes to a terminal, the program shows a control
-character in a name as an escape, as `ls` does. `--json` already escapes
-it. Output to a pipe or a file can stay exact, for a script that reads the
-names.
+**Fix.** When it writes to a terminal, the program shows each character that
+a terminal can act on as an escape (`printable` in
+`src/internal/cli/names.go`, design §10.13). These are the control
+characters, DEL, the C1 set, a byte that is not UTF-8, and the characters
+that change the direction of the text. A backslash is doubled, so that each
+escape has one meaning. The paths of the listings, of `-v`, of a dry run and
+of `--diff` use it, and the link target, the owner and the codec of the long
+listing too. To a pipe or a file, a name stays exact, as with `ls`, for a
+script that reads the names. `--json` escapes in both cases. A message on
+stderr is always escaped: a person can read a log on a terminal later.
 
-**Status:** open.
+**Tests.** `TestPrintable` covers each kind of escape. `TestNamesOnATerminal`
+archives the name `a<ESC>[2J`, and checks `-t`, `-tv`, `-cn` and `--diff`:
+escaped on a terminal, exact to a pipe. `TestMessagesAreEscaped` checks a
+notice and an error. Each test fails when the escape is taken out.
+
+**Status:** fixed.
 
 ### The other changes
 
@@ -510,5 +521,5 @@ names.
 
 ### Status of the recommendations
 
-3. Done for these changes, in this section. Finding 11 is fixed, and
-   finding 12 is open. It stays a rule for later changes.
+3. Done for these changes, in this section. Findings 11 and 12 are fixed. It
+   stays a rule for later changes.

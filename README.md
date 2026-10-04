@@ -256,10 +256,13 @@ available on each platform: the manual page gives the details.
   no `train`: shared content and dictionaries let them test for a guessed
   file.
 - [`doc/Security_Audit.md`](doc/Security_Audit.md) records the security
-  review of v1.0.1 and the fixes of v1.0.2, and a follow-up review with the
-  fix of v1.0.3.
+  review of v1.0.1 and the fixes of v1.0.2, and the follow-up reviews of
+  v1.0.3 and of `--diff` and `-n`.
 - A change of passphrase does not remove old copies of the archive. Such a
   copy still opens with the old passphrase.
+- On a terminal, eictar escapes control characters in names, so that a name
+  in an archive from someone else cannot change what the terminal shows. To
+  a pipe, names are exact; `--json` is the safe form for scripts.
 
 ## Documentation
 

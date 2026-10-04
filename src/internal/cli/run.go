@@ -66,7 +66,7 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 
 	opts, err := Parse(argv)
 	if err != nil {
-		fmt.Fprintf(stderr, "eictar: %v\n", err)
+		fmt.Fprintln(stderr, "eictar: "+printable(err.Error()))
 		// The hint helps someone who mistyped; it is noise for someone who
 		// asked for a feature that is not built yet.
 		var usage *UsageError
@@ -97,7 +97,7 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 	// Checked after --help and --version, and after Parse has had its say, so
 	// that a genuine usage mistake is reported before "not built yet".
 	if err := opts.Unbuilt(); err != nil {
-		fmt.Fprintf(stderr, "eictar: %v\n", err)
+		fmt.Fprintln(stderr, "eictar: "+printable(err.Error()))
 		return exitCodeFor(err)
 	}
 
@@ -113,7 +113,7 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 	}
 
 	if err := dispatch(opts, stdout, stderr); err != nil {
-		fmt.Fprintf(stderr, "eictar: %v\n", err)
+		fmt.Fprintln(stderr, "eictar: "+printable(err.Error()))
 		return exitCodeFor(err)
 	}
 	return ExitOK

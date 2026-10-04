@@ -1651,7 +1651,7 @@ named (after v1.0.2, not released)</td>
 <td>Low</td>
 <td>Control characters in member names went to the terminal as they are
 (found after v1.0.5)</td>
-<td>Open (§7)</td>
+<td>Fixed (§7)</td>
 </tr>
 </tbody>
 </table>
@@ -2135,11 +2135,25 @@ some sequences. Thus <code>-t</code> or <code>-n</code> of an archive
 from someone else can show a listing that is not the content. A test
 archived the name <code>a&lt;ESC&gt;[31mRED</code>, and <code>-t</code>
 and <code>-cn</code> wrote the ESC byte.</p>
-<p><strong>Proposed fix.</strong> When it writes to a terminal, the
-program shows a control character in a name as an escape, as
-<code>ls</code> does. <code>--json</code> already escapes it. Output to
-a pipe or a file can stay exact, for a script that reads the names.</p>
-<p><strong>Status:</strong> open.</p>
+<p><strong>Fix.</strong> When it writes to a terminal, the program shows
+each character that a terminal can act on as an escape
+(<code>printable</code> in <code>src/internal/cli/names.go</code>,
+design §10.13). These are the control characters, DEL, the C1 set, a
+byte that is not UTF-8, and the characters that change the direction of
+the text. A backslash is doubled, so that each escape has one meaning.
+The paths of the listings, of <code>-v</code>, of a dry run and of
+<code>--diff</code> use it, and the link target, the owner and the codec
+of the long listing too. To a pipe or a file, a name stays exact, as
+with <code>ls</code>, for a script that reads the names.
+<code>--json</code> escapes in both cases. A message on stderr is always
+escaped: a person can read a log on a terminal later.</p>
+<p><strong>Tests.</strong> <code>TestPrintable</code> covers each kind
+of escape. <code>TestNamesOnATerminal</code> archives the name
+<code>a&lt;ESC&gt;[2J</code>, and checks <code>-t</code>,
+<code>-tv</code>, <code>-cn</code> and <code>--diff</code>: escaped on a
+terminal, exact to a pipe. <code>TestMessagesAreEscaped</code> checks a
+notice and an error. Each test fails when the escape is taken out.</p>
+<p><strong>Status:</strong> fixed.</p>
 <h3 id="the-other-changes-1">The other changes</h3>
 <ul>
 <li><strong><code>--diff</code> checks every member path</strong> as
@@ -2183,8 +2197,8 @@ is. This has no effect on security.</li>
 <h3 id="status-of-the-recommendations-1">Status of the
 recommendations</h3>
 <ol start="3" type="1">
-<li>Done for these changes, in this section. Finding 11 is fixed, and
-finding 12 is open. It stays a rule for later changes.</li>
+<li>Done for these changes, in this section. Findings 11 and 12 are
+fixed. It stays a rule for later changes.</li>
 </ol>
 </body>
 </html>

@@ -2634,6 +2634,43 @@ program uses that file. Thus `-tf backup` lists `backup.ect`. A file with
 the name as typed always wins. A directory with that name does not count, so
 `-tf backup` finds `backup.ect` next to the directory `backup`.
 
+### 10.13 Names on the terminal
+
+A name on Linux can hold any byte except `/` and NUL, and the index of a
+crafted archive can hold any name. A name that the program writes as it is
+can hold an escape sequence. On a terminal, such a sequence can change the
+colours, move the cursor, write over the lines before it, or hide other
+names. Thus a listing can show what the archive does not hold
+(`doc/Security_Audit.md`, finding 12).
+
+**On a terminal, the program escapes each name that it writes.** This
+applies to the paths of `-t`, `-tv` and `-v`, the paths of a dry run, and the
+lines of `--diff`. It also applies to the link target, the owner and the
+codec in the long listing. The escapes are:
+
+| Character | Shown as |
+|---|---|
+| newline, tab, carriage return | `\n`, `\t`, `\r` |
+| another control character, and DEL | `\xHH` |
+| a byte that is not UTF-8 | `\xHH` |
+| a C1 control character (U+0080 to U+009F) | `\uHHHH` |
+| a character that changes the direction of the text (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069) | `\uHHHH` |
+| a backslash | `\\` |
+
+A backslash is doubled, so that each escape has one meaning. Each other
+character is shown as it is, accents and other scripts too. The long
+listing escapes each column before it measures the widths, so the columns
+still line up.
+
+**To a pipe or a file, a name is exact,** as with `ls`. A script that reads
+the names gets the bytes of the archive. A name that holds a newline is
+then two lines, so a script that must handle any name reads `--json`.
+`--json` escapes each name in both cases, as JSON does.
+
+**A message on stderr is always escaped,** on a terminal or not. A message is
+for a person, who can read a log on a terminal later. A message never holds
+a control character of its own.
+
 ## 11. Configuration: environment variables and the configuration file
 
 A long command line is tedious to type each time, for example:
@@ -3217,6 +3254,9 @@ Every item in the lists below exists now, except the items marked "later".
   - the umask
   - the expansion of the index
   - a passphrase file that other users can read
+- **Names on the terminal**: each kind of escape of §10.13. A name with an
+  escape sequence in `-t`, `-tv`, a dry run and `--diff`: escaped on a
+  terminal, and exact to a pipe. A message is escaped in both cases.
 - **Man page and help**: `doc/eictar.1` and `--help` name every long option
   of the parser, and the help gives each short form. No line of the help is
   wider than 80 columns.
@@ -3542,6 +3582,9 @@ copies. 51 sequences ended with a dictionary, and 124 with shared content.
   256 MiB chunk size with 64 workers needs 32 GiB.
 - **Cost from a crafted archive.** The KDF limits of §6.2 apply before the
   passphrase prompt.
+- **Names.** On a terminal, a name from the archive is escaped, so that an
+  escape sequence in it cannot change what the terminal shows. A message on
+  stderr is always escaped (§10.13).
 - **Compare.** `--diff` reads the disk at paths from the archive. It finds
   the start of each walk through `os.Root`, so a link on disk cannot take it
   out of the directory (§9.8).
@@ -3628,9 +3671,9 @@ links where the program writes. Three rules apply:
 fixes of v1.0.2, and a test for each fix. It also lists what the review
 examined and found sound. Its §6 records a follow-up review of the changes
 after v1.0.2, with one more finding and its fix in v1.0.3. Its §7 reviews
-`--diff` and `-n`, with two findings: a directory that becomes a link
-during the walk, which is fixed (§14.5), and control characters in names on
-the terminal, which is open.
+`--diff` and `-n`, with two findings, each fixed: a directory that becomes a
+link during the walk (§14.5), and control characters in names on the
+terminal (§10.13).
 
 ## 15. Future work
 
@@ -3937,7 +3980,9 @@ whose attributes it cannot read, which macOS refuses for a file that the
 user cannot read (§9.8). The walk holds each directory that it enters open,
 and goes through it, so that a directory that becomes a link cannot take the
 walk out of the tree (§14.5, finding 11 of `doc/Security_Audit.md`). `-h`
-on an operation that does not walk is a usage error.
+on an operation that does not walk is a usage error. On a terminal, a name
+from an archive is escaped, so that a crafted name cannot change what the
+terminal shows. A message is always escaped (§10.13, finding 12).
 
 
 ## Appendix A. Why these primitives, compared with AES

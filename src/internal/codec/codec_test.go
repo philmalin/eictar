@@ -438,17 +438,24 @@ func TestSharedEncoderRunsInParallel(t *testing.T) {
 		return time.Since(start)
 	}
 
-	serial := timeWith(1, 1)
-	parallel := timeWith(callers, callers)
-	t.Logf("serial %v, parallel %v", serial, parallel)
-
-	// A generous bound: on four cores the parallel run should be far faster,
-	// but a loaded machine must not turn this into a flake.
-	if parallel > serial*3/4 {
-		t.Errorf("sharing an encoder across %d goroutines took %v against %v serial; "+
-			"the encoder is probably serialising on a state pool of one",
-			callers, parallel, serial)
+	// A generous bound: on four cores the parallel run should be far faster.
+	// A serial encoder takes as long as one goroutine, in every attempt. A
+	// loaded machine can miss the bound once: the virtual machine of the
+	// OpenBSD job took 0.83 of the serial time in one run. Thus the test
+	// passes when one of three attempts meets the bound.
+	var tries []string
+	for range 3 {
+		serial := timeWith(1, 1)
+		parallel := timeWith(callers, callers)
+		t.Logf("serial %v, parallel %v", serial, parallel)
+		if parallel <= serial*3/4 {
+			return
+		}
+		tries = append(tries, fmt.Sprintf("%v against %v", parallel, serial))
 	}
+	t.Errorf("sharing an encoder across %d goroutines took %s serial, in each attempt; "+
+		"the encoder is probably serialising on a state pool of one",
+		callers, strings.Join(tries, ", "))
 }
 
 // TestRepetitiveInputIsFast: a chunk of one repeated byte is the worst case
