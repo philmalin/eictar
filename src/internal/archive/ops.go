@@ -582,7 +582,7 @@ func excludeMembers(members []format.Member, exclude []string, excludeRegex fsut
 	}
 	out := members[:0] // in place: the caller's slice is its own copy
 	for _, m := range members {
-		if !fsutil.MatchAny(exclude, m.Path) && !excludeRegex.MatchAnyOrParent(m.Path) {
+		if !fsutil.MatchAnyOrParent(exclude, m.Path) && !excludeRegex.MatchAnyOrParent(m.Path) {
 			out = append(out, m)
 		}
 	}

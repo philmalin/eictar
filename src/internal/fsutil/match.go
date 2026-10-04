@@ -46,6 +46,28 @@ func Match(pattern, memberPath string) bool {
 	return false
 }
 
+// MatchAnyOrParent reports whether any pattern matches the path or a
+// directory above it. It is --exclude on a read: an excluded directory takes
+// its contents, as the walk that made the archive did not enter it. Match
+// alone takes the contents of a directory that a pattern names, or that a
+// pattern with no "/" matches by name, but not of one that a glob with a "/"
+// matches: "src/sub*" matches src/sub, and not src/sub/c.txt.
+func MatchAnyOrParent(patterns []string, memberPath string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+	for p := memberPath; ; {
+		if MatchAny(patterns, p) {
+			return true
+		}
+		i := strings.LastIndexByte(p, '/')
+		if i <= 0 {
+			return false
+		}
+		p = p[:i]
+	}
+}
+
 // MatchAny reports whether any pattern matches.
 func MatchAny(patterns []string, memberPath string) bool {
 	for _, p := range patterns {

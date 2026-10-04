@@ -61,6 +61,31 @@ func TestMatch(t *testing.T) {
 	}
 }
 
+// A glob with a "/" that matches a directory does not match its contents,
+// but on a read --exclude must take them, as the walk did not enter the
+// directory.
+func TestMatchAnyOrParent(t *testing.T) {
+	patterns := []string{"src/sub*", "*.md"}
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		{"src/sub", true},
+		{"src/sub/c.txt", true},
+		{"src/subtle/deep/x", true},
+		{"src/a.txt", false},
+		{"src", false},
+		{"doc/notes.md/inner", true},
+	} {
+		if got := MatchAnyOrParent(patterns, tc.path); got != tc.want {
+			t.Errorf("MatchAnyOrParent(%v, %q) = %v, want %v", patterns, tc.path, got, tc.want)
+		}
+	}
+	if MatchAnyOrParent(nil, "a") {
+		t.Error("no pattern matched a path")
+	}
+}
+
 func TestMatchAny(t *testing.T) {
 	patterns := []string{"src", "*.md"}
 

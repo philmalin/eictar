@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/philmalin/eictar/src/internal/format"
 	"github.com/philmalin/eictar/src/internal/fsutil"
 	"github.com/philmalin/eictar/src/internal/meta"
 	"github.com/philmalin/eictar/src/internal/testutil"
@@ -300,18 +301,22 @@ func TestDiffOfExtendedAttributes(t *testing.T) {
 	if !meta.Supports.Xattrs {
 		t.Skip("no extended attributes on this platform")
 	}
+	// NetBSD changes the modification time when it sets an attribute, so
+	// the times are set again after each change.
 	tree := diffFixture(t)
-	tree.Xattr("tree/same.txt", "user.kept", []byte("1"))
+	tree.Xattr("tree/content.txt", "user.kept", []byte("1"))
+	settle(tree)
 	archivePath := diffArchive(t, tree, "tree")
-	tree.Xattr("tree/same.txt", "user.kept", []byte("2")).Xattr("tree/same.txt", "user.added", []byte("3"))
+	tree.Xattr("tree/content.txt", "user.kept", []byte("2")).Xattr("tree/content.txt", "user.added", []byte("3"))
+	settle(tree)
 
 	res, err := DiffArchive(DiffConfig{Archive: archivePath, BaseDir: tree.Root})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Differences) != 1 || res.Differences[0].Kind != DiffXattrs ||
+	if len(res.Differences) != 1 || res.Differences[0].Path != "tree/content.txt" || res.Differences[0].Kind != DiffXattrs ||
 		!reflect.DeepEqual(res.Differences[0].Names, []string{"user.added", "user.kept"}) {
-		t.Errorf("differences: %+v, want user.added and user.kept on tree/same.txt", res.Differences)
+		t.Errorf("differences: %+v, want user.added and user.kept on tree/content.txt", res.Differences)
 	}
 
 	// --no-xattrs compares none.
@@ -346,6 +351,37 @@ func TestDiffOfAnUnreadableFile(t *testing.T) {
 	}
 	if got, want := found(res), []string{"tree/content.txt mode"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("--keep-going: %q, want %q", got, want)
+	}
+}
+
+// A failure to read the attributes of a file must not lose the differences
+// already found. macOS cannot list the attributes of a file that it cannot
+// read: its mode was then not reported, which is the difference that tells
+// why. Here the file goes away after the walk, which fails the same read on
+// every platform.
+func TestDiffKeepsTheDifferencesOfAFailedEntry(t *testing.T) {
+	if !meta.Supports.Xattrs {
+		t.Skip("no extended attributes on this platform")
+	}
+	tree := diffFixture(t)
+	path := tree.Path("tree/content.txt")
+	fi, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	m := &format.Member{Path: "tree/content.txt", Type: format.TypeReg, Mode: 0o600,
+		Size: uint64(fi.Size()), MTimeNanos: fi.ModTime().UnixNano()}
+	e := entry{Src: path, Stored: m.Path, Kind: kindFile, Info: fi}
+
+	diffs, _, err := compareEntry(m, m, e, MetadataOptions{})
+	if err == nil {
+		t.Fatal("the attributes of a file that is gone were read")
+	}
+	if len(diffs) != 1 || diffs[0].Kind != DiffMode {
+		t.Errorf("differences %+v, want the mode", diffs)
 	}
 }
 

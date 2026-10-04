@@ -205,7 +205,8 @@ is
 .BI \-\-exclude " glob"
 Leave out the paths that match
 .IR glob .
-An excluded directory is not entered. It can be given more than once.
+An excluded directory is not entered, and it takes its contents. It can be
+given more than once.
 .TP
 .BI \-X " file" "\fR, \fP\-\-exclude\-from " file
 Read one glob from each line of
@@ -559,7 +560,20 @@ and
 .B cache
 takes
 .B a/cache
-and everything under it. Each pattern must match at least one member.
+and everything under it. A glob with a
+.B /
+matches the whole path only:
+.B \(aqsrc/sub*\(aq
+takes
+.BR src/sub ,
+but not
+.BR src/sub/main.go .
+An
+.B \-\-exclude
+pattern is the exception: a directory that it matches always takes its
+contents, as the walk does not enter it. Each pattern, except an
+.BR \-\-exclude ,
+must match at least one member.
 .PP
 .B \-R
 and

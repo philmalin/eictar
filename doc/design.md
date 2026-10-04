@@ -2,7 +2,7 @@
 
 Status: M1 to M11 are complete, and v1.0.5 is the current release. The CI workflow passes
 on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
-Date: 2026-10-02
+Date: 2026-10-04
 Applies to: v1 (format version 1.0)
 
 This document specifies the on-disk format, the concurrency model, the command
@@ -28,7 +28,7 @@ requirement starts in the statement. Then it comes into §1.1 of this document.
 **Part II — Behavior.** What this implementation does with the format.
 [7. Path handling](#7-path-handling) ·
 [8. Concurrency](#8-concurrency-model) ·
-[9. Mutation](#9-mutation-append-delete-compact-and-repair)
+[9. Changes and checks](#9-changes-and-checks)
 
 **Part III — Interface.** What a user types.
 [10. Command line](#10-command-line-interface) ·
@@ -38,7 +38,7 @@ requirement starts in the statement. Then it comes into §1.1 of this document.
 [12. Package layout](#12-package-layout) ·
 [13. Testing](#13-testing-plan) ·
 [14. Security](#14-security-considerations) ·
-[15. Future work](#15-future-work-format-compatible) ·
+[15. Future work](#15-future-work) ·
 [16. Milestones](#16-implementation-milestones) ·
 [Appendix A](#appendix-a-why-these-primitives-compared-with-aes)
 
@@ -1203,7 +1203,7 @@ with **no leading `/` and no leading `..` component**. `/etc/passwd` becomes
 path, it prints one warning, not one warning for each file:
 
 ```
-eictar: removing leading '/' from member names
+eictar: removing leading '/' or '..' from member names
 ```
 
 `tar`, `zip` and `pax` use the same rule. An archive holds a portable tree,
@@ -1217,7 +1217,8 @@ time of extraction, not inside the archive.
 
 A `..` inside a path is not an escape. The writer resolves it, so `a/b/../c`
 becomes `a/c`. A path that resolves to nothing (`/`, `..`, `.`) names the root
-of the archived tree. The writer stores it as `.`.
+of the archived tree, which has no name of its own. The writer walks the tree
+below it, and does not store a member for the root itself (§7.7).
 
 ### 7.4 Writing a member
 
@@ -1624,7 +1625,12 @@ its own size. Create became 2.8 times faster with zstd, and 7 times faster
 with no compression.
 
 
-## 9. Mutation: append, update, delete, compact and repair
+## 9. Changes and checks
+
+This section describes the operations on an existing archive. Append,
+update, delete, compact, repair and the change of passphrase change it
+(§9.1 to §9.3, §9.5 to §9.7). `--verify`, `--info` (§9.4), `--diff` (§9.8)
+and a dry run (§9.9) change nothing.
 
 Each mutation writes a new index generation. The body is append-only. The
 writer never writes over bytes that a valid trailer describes.
@@ -1846,8 +1852,9 @@ Each writer takes an advisory lock on the archive file:
 - If another process holds the lock, the program stops with exit 4 and the
   message "another eictar is changing this archive". It does not wait. A
   backup job that waits can hang with no message.
-- List, extract, `--verify` and `--info` take no lock. The trailer is the
-  commit point, so a reader sees one complete generation.
+- List, extract, `--verify`, `--info`, `--diff` and every dry run (`-n`)
+  take no lock. The trailer is the commit point, so a reader sees one
+  complete generation.
 
 **A lock is on one inode, and compact and create rename a new inode over the
 path.** Suppose that a process opens the path immediately before such a
@@ -1973,7 +1980,9 @@ is no difference, the program writes one summary line, unless `-q` is given.
 The exit status is 0 when there is no difference, and 1 when there is one,
 as for `diff` and `tar -d` (§10.7). A file that cannot be read is an error
 of one member. It stops the run with exit 4. Under `--keep-going`, it gives
-a warning and exit 1.
+a warning and exit 1. The differences found for that path before the error
+are still reported. For example, macOS cannot list the attributes of a
+file that it cannot read, and the mode of that file is then a difference.
 
 **Results that are correct, but that can surprise:**
 
@@ -2122,9 +2131,10 @@ a missing or doubled operation gets a short error on stderr and exit 2.
 All operations are built. An option that is not built yet exits with 70 and
 names its milestone (§10.6).
 
-The operations without a short letter did not exist in `tar`. Thus there is
-no habit to keep, and no letter to spend. `--delete` has the GNU tar spelling
-on purpose.
+Most operations without a short letter do not exist in `tar`. Thus there is
+no habit to keep, and no letter to spend. `--delete` and `--diff` have the
+GNU tar spelling on purpose. In GNU tar, `--diff` is `-d`, which is
+`--destination` here (§7.1).
 
 There is no `--replace` operation. `-r` replaces a path that is already in the
 archive (§9.2).
@@ -2297,7 +2307,7 @@ whose encryption was removed (§14).
 | `-f` | `--file ARCHIVE` | the archive to use (necessary). A name with no extension gets `.ect` (§10.12). | M1 |
 | `-d` | `--destination DIR` | extract into DIR, and create DIR if it does not exist. Extraction only. | M2 |
 | `-C` | `--directory DIR` | change to DIR first. DIR must exist. More than one `-C` is refused (open question 2, §1.3). | M2 |
-| `-v` | `--verbose` | list members during the operation. Repeat for more detail. With `-t`, `-v` gives the long listing and `-vv` adds more (§10.9). | M2 |
+| `-v` | `--verbose` | list members during the operation. Repeat for more detail. With `-t`, `-v` gives the long listing and `-vv` adds more (§10.9). With `-n`, a word before each path tells what happens to it (§9.9). | M2 |
 | `-q` | `--quiet` | errors only | M2 |
 | `-n` | `--dry-run` | show the paths that the operation would write or delete, and change nothing (§9.9). Create, append, update, extract and delete. | after v1.0.5 |
 | | `--progress` | a progress meter on stderr when stderr is a terminal (§10.10) | M7 |
@@ -2310,7 +2320,7 @@ whose encryption was removed (§14).
 | `-X` | `--exclude-from FILE` | one glob on each line. Blank lines are ignored. There is no comment syntax, because a file name can start with `#`. | M5 |
 | `-R` | `--regex RE` | can be repeated. Keep only the paths that match a regular expression (§10.11). Create, append, update, list, extract, verify, delete and diff. | after M9 |
 | | `--exclude-regex RE` | can be repeated. Leave out the paths that match. An excluded directory is not entered, and on a read it takes its contents (§10.11). Create, append, update, list, extract and diff. | after M9 |
-| `-h` | `--dereference` | follow links and store what they point to. With `--diff`, compare what they point to. | M2 |
+| `-h` | `--dereference` | follow links and store what they point to. With `--diff`, compare what they point to. Create, append, update and diff. | M2 |
 | | `--no-dedup` | store each copy of the same content in full (§4.3). Create, append and update. | M11 |
 | | `--one-file-system` | do not enter other filesystems. A mount point is recorded, empty. Create, append, update and diff. | M5 |
 | `-p` | `--preserve-permissions` | restore modes exactly, with setuid, setgid and sticky, and not less the umask. Also restore ACLs for any user, and privileged xattrs as root (§7.7). Extract only. | M5 |
@@ -2505,12 +2515,12 @@ second. It draws only when stderr is a terminal. Otherwise it writes nothing,
 so that a log does not fill with carriage returns. `-q` turns it off.
 
 ```
-1.2 GiB / 3.4 GiB  35%  120.4 MiB/s  0:18 left      # -x, --verify, --compact
+1.2 GiB / 3.4 GiB  35%  120.4 MiB/s  0:18 left      # -x, --verify, --compact, --diff
 1.2 GiB  1234 members  120.4 MiB/s                  # -c, -r, -u
 ```
 
-Extraction, `--verify` and `--compact` know their total from the index, so
-they show the percentage and the time left. A create walks the tree while it
+Extraction, `--verify`, `--compact` and `--diff` know their total from the
+index, so they show the percentage and the time left. A create walks the tree while it
 works, so it has no total, and it shows the members instead.
 
 The meter counts plaintext bytes: what is read from the source files, or
@@ -2539,7 +2549,19 @@ pattern matches a member path in any of these cases:
 The last rule applied to the last name only until the stress tester found the
 result (§13.4). `--delete cache` deleted the directory `a/cache`, but its
 members stayed, and `--exclude cache` hid `a/cache` but not its contents. A
-directory that a pattern matches now takes its contents, at any depth.
+directory that a pattern names, or that a pattern with no `/` matches by
+name, now takes its contents, at any depth.
+
+A glob with a `/` matches the whole path only. Thus `src/sub*` selects the
+directory `src/sub`, but not `src/sub/main.go`. To select the contents, name
+the directory. `-n` shows what a pattern selects (§9.9).
+
+**An excluded directory always takes its contents.** The walk of create,
+append, update and diff does not enter an excluded directory. On a read, an
+`--exclude` pattern also excludes each member under a directory that it
+matches, so that a list of an archive agrees with the walk that made it.
+Before this rule, `-t --exclude 'src/sub*'` listed the contents of
+`src/sub`, and `--diff` with the same option reported them as not on disk.
 
 **Regular expressions.** `-R RE` (`--regex`) and `--exclude-regex RE` use
 the RE2 syntax of Go's `regexp` package. The time of a match is linear in the
@@ -2658,8 +2680,9 @@ line, and a configuration that sets one is an error:
 - **The passphrase and its sources** (§11.4).
 - `--config`, `--no-config` and `--show-config`.
 
-Every other long option of §10.2 to §10.4 can come from a configuration. The
-compression shorthands `-z`, `-J` and `--zstd` have the key `compress`.
+Every other long option of §10.2 to §10.4 can come from a configuration,
+except `--help` and `--version`. The compression shorthands `-z`, `-J` and
+`--zstd` have the key `compress`.
 
 **A configured value applies only to the operations that use it.** On any
 other operation, the program ignores it. For example, `compress = xz` does
@@ -2939,7 +2962,7 @@ flowchart TD
     cli --> crypt
     cli --> format
     cli --> fsutil
-    archive["archive<br/>reader, writer, walk, capture,<br/>extract, mutate, lock,<br/>dictionaries, shared content"] --> pipeline
+    archive["archive<br/>reader, writer, walk, capture,<br/>extract, mutate, lock,<br/>dictionaries, shared content,<br/>diff, dry run"] --> pipeline
     archive --> codec
     archive --> crypt
     archive --> format
@@ -3005,7 +3028,7 @@ flowchart LR
 
 **Open and extract.** The reader checks the archive in a fixed order before
 it trusts any number from it (§2). Then extraction runs in four phases
-(§7.7). All writes go through `os.Root`, so no path can leave the
+(§8.3). All writes go through `os.Root`, so no path can leave the
 destination.
 
 ```mermaid
@@ -3209,7 +3232,9 @@ Every item in the lists below exists now, except the items marked "later".
   - a damaged old owner, which is not used
   - delete, compact and recompress
 - **Selection**: `-R` and `--exclude-regex` on the walk and on each read, a
-  whole-path match, and an `-R` that matches nothing (§10.11). The `.ect`
+  whole-path match, and an `-R` that matches nothing. An `--exclude` glob
+  with a `/` takes the contents of a directory on a read, for `-t` and
+  `--diff` (§10.11). The `.ect`
   name rule (§10.12).
 - **Mutation**: append after the old trailer, each `--on-conflict` policy,
   and each `--update-mode` case of §10.5. Also delete, `--verify`, `--info`,
@@ -3282,6 +3307,11 @@ parts work.
   - the `.ect` name
   - a dictionary, in `--info` and in the listing
   - shared content, in the listing, in `--info` and in `--json`
+  - `--diff`: no difference after `-xp`, and then a changed file and a
+    missing file with exit 1 (§9.8)
+
+  The dry run (§9.9) has no operational test. The tests of package `cli`
+  run it through `Run`, and check its output and that nothing changes.
 - **Scale** (nightly, later): 100,000 small files, and one file larger than
   memory.
 
@@ -3471,7 +3501,7 @@ copies. 51 sequences ended with a dictionary, and 124 with shared content.
   or can write. Such a file can set `exclude` or `exclude-regex`, and make a
   backup smaller without a message.
 
-### 14.3 Extraction
+### 14.3 Extraction and reads of the disk
 
 - **Paths** (§7): the writer cleans paths, and the reader checks them again.
   Both refuse absolute paths and `..`, because another program can write an
@@ -3573,12 +3603,15 @@ fixes of v1.0.2, and a test for each fix. It also lists what the review
 examined and found sound. Its §6 records a follow-up review of the changes
 after v1.0.2, with one more finding and its fix in v1.0.3.
 
-## 15. Future work (format-compatible)
+## 15. Future work
+
+Some of these items change the format. An older reader must then refuse the
+archive, with a header flag or a new `format_major` (§3.1, §4.4).
 
 - **Public-key recipients** in the reserved `recipients` field.
 - **Content-defined chunking** with a table of chunk hashes, for chunk-level
-  deduplication and rsync-style synchronization. §1.2 explains why this change
-  is larger than it looks.
+  deduplication and rsync-style synchronization. §4.4 records why it is not
+  adopted, and what can change that decision.
 - **A B-tree or sorted-page index** for archives with tens of millions of
   members, marked by a new `index_kind` in the trailer flags.
 - **A streaming variant** that repeats member metadata inline, for use through
@@ -3766,7 +3799,7 @@ and pass, not that the feature ran once by hand.
 
    The same review made each pattern of `-t`, `-x` and `--verify` match at
    least one member, as for `--delete` (exit 2). It also made the other
-   links to a target that was not extracted link to the first copy (§7). It
+   links to a target that was not extracted link to the first copy (§7.7). It
    removed dead code, and one copy of each chunk. §15.2 lists the items that
    it left for later.
 7. **M7 — Completion** *(complete)*: the configuration file and the
@@ -3868,7 +3901,11 @@ and the actions each month (§12.3).
 (§9.8). It reports the members that are not on disk, the paths on disk that
 are not in the archive, and each difference of type, content or metadata.
 `-n` (`--dry-run`) shows the paths that create, append, update, extract or
-delete would write or delete, and changes nothing (§9.9).
+delete would write or delete, and changes nothing (§9.9). On a read, an
+`--exclude` glob with a `/` now takes the contents of a directory that it
+matches, as the walk does (§10.11). `--diff` keeps the differences of a path
+whose attributes it cannot read, which macOS refuses for a file that the
+user cannot read (§9.8).
 
 
 ## Appendix A. Why these primitives, compared with AES

@@ -1602,8 +1602,8 @@ Parallel extraction</a></li>
 <li><a href="#measured-performance" id="toc-measured-performance">8.4
 Measured performance</a></li>
 </ul></li>
-<li><a href="#mutation-append-update-delete-compact-and-repair" id="toc-mutation-append-update-delete-compact-and-repair">9. Mutation:
-append, update, delete, compact and repair</a>
+<li><a href="#changes-and-checks" id="toc-changes-and-checks">9. Changes
+and checks</a>
 <ul>
 <li><a href="#the-write-sequence" id="toc-the-write-sequence">9.1 The
 write sequence</a></li>
@@ -1691,14 +1691,14 @@ tester</a></li>
 What an observer sees</a></li>
 <li><a href="#keys-and-passphrases" id="toc-keys-and-passphrases">14.2
 Keys and passphrases</a></li>
-<li><a href="#extraction" id="toc-extraction">14.3 Extraction</a></li>
+<li><a href="#extraction-and-reads-of-the-disk" id="toc-extraction-and-reads-of-the-disk">14.3 Extraction and reads of
+the disk</a></li>
 <li><a href="#integrity-and-its-limits" id="toc-integrity-and-its-limits">14.4 Integrity and its limits</a></li>
 <li><a href="#archiving-a-tree-that-other-users-can-write" id="toc-archiving-a-tree-that-other-users-can-write">14.5 Archiving a
 tree that other users can write</a></li>
 <li><a href="#audit" id="toc-audit">14.6 Audit</a></li>
 </ul></li>
-<li><a href="#future-work-format-compatible" id="toc-future-work-format-compatible">15. Future work
-(format-compatible)</a>
+<li><a href="#future-work" id="toc-future-work">15. Future work</a>
 <ul>
 <li><a href="#other-unix-like-platforms" id="toc-other-unix-like-platforms">15.1 Other UNIX-like
 platforms</a></li>
@@ -1723,7 +1723,7 @@ the usual choices</a></li>
 <h1 id="eictar-design-document">eictar — Design Document</h1>
 <p>Status: M1 to M11 are complete, and v1.0.5 is the current release.
 The CI workflow passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD
-(§15.1). Date: 2026-10-02 Applies to: v1 (format version 1.0)</p>
+(§15.1). Date: 2026-10-04 Applies to: v1 (format version 1.0)</p>
 <p>This document specifies the on-disk format, the concurrency model,
 the command line and the internal package layout of <code>eictar</code>.
 It is the reference for all implementation work. When the code changes,
@@ -1741,11 +1741,11 @@ Overview</a> · <a href="#3-fixed-structures">3. Fixed structures</a> ·
 <a href="#4-member-payloads-chunks-and-compression">4. Member
 payloads</a> · <a href="#5-the-index">5. The index</a> · <a href="#6-cryptography">6. Cryptography</a></p>
 <p><strong>Part II — Behavior.</strong> What this implementation does
-with the format. <a href="#7-path-handling">7. Path handling</a> · <a href="#8-concurrency-model">8. Concurrency</a> · <a href="#9-mutation-append-delete-compact-and-repair">9. Mutation</a></p>
+with the format. <a href="#7-path-handling">7. Path handling</a> · <a href="#8-concurrency-model">8. Concurrency</a> · <a href="#9-changes-and-checks">9. Changes and checks</a></p>
 <p><strong>Part III — Interface.</strong> What a user types. <a href="#10-command-line-interface">10. Command line</a> · <a href="#11-configuration-environment-variables-and-the-configuration-file">11.
 Configuration</a></p>
 <p><strong>Part IV — Implementation.</strong> How the work is organized
-and tested. <a href="#12-package-layout">12. Package layout</a> · <a href="#13-testing-plan">13. Testing</a> · <a href="#14-security-considerations">14. Security</a> · <a href="#15-future-work-format-compatible">15. Future work</a> · <a href="#16-implementation-milestones">16. Milestones</a> · <a href="#appendix-a-why-these-primitives-compared-with-aes">Appendix
+and tested. <a href="#12-package-layout">12. Package layout</a> · <a href="#13-testing-plan">13. Testing</a> · <a href="#14-security-considerations">14. Security</a> · <a href="#15-future-work">15. Future work</a> · <a href="#16-implementation-milestones">16. Milestones</a> · <a href="#appendix-a-why-these-primitives-compared-with-aes">Appendix
 A</a></p>
 <p>To learn the format alone, read Part I. To add a feature, read Part
 II and the milestone in §16 that owns the feature.</p>
@@ -3305,7 +3305,7 @@ paths, with <strong>no leading <code>/</code> and no leading
 <code>etc/passwd</code>. <code>../sibling</code> becomes
 <code>sibling</code>. When a run removes part of a path, it prints one
 warning, not one warning for each file:</p>
-<pre><code>eictar: removing leading &#39;/&#39; from member names</code></pre>
+<pre><code>eictar: removing leading &#39;/&#39; or &#39;..&#39; from member names</code></pre>
 <p><code>tar</code>, <code>zip</code> and <code>pax</code> use the same
 rule. An archive holds a portable tree, not a set of locations in a
 filesystem. An absolute <code>/etc/passwd</code> extracts over the file
@@ -3319,8 +3319,9 @@ inside the archive.</p>
 <p>A <code>..</code> inside a path is not an escape. The writer resolves
 it, so <code>a/b/../c</code> becomes <code>a/c</code>. A path that
 resolves to nothing (<code>/</code>, <code>..</code>, <code>.</code>)
-names the root of the archived tree. The writer stores it as
-<code>.</code>.</p>
+names the root of the archived tree, which has no name of its own. The
+writer walks the tree below it, and does not store a member for the root
+itself (§7.7).</p>
 <h3 id="writing-a-member">7.4 Writing a member</h3>
 <p>The reader extracts each member to a temporary name in the same
 directory. When the digest is correct, it renames the file into place.
@@ -3888,8 +3889,12 @@ KiB. For 2000 small files, the program cleared 8 GB of memory, and 20%
 of its CPU time went to that. Now one read buffer stays from file to
 file, and a short chunk is copied out at its own size. Create became 2.8
 times faster with zstd, and 7 times faster with no compression.</p>
-<h2 id="mutation-append-update-delete-compact-and-repair">9. Mutation:
-append, update, delete, compact and repair</h2>
+<h2 id="changes-and-checks">9. Changes and checks</h2>
+<p>This section describes the operations on an existing archive. Append,
+update, delete, compact, repair and the change of passphrase change it
+(§9.1 to §9.3, §9.5 to §9.7). <code>--verify</code>, <code>--info</code>
+(§9.4), <code>--diff</code> (§9.8) and a dry run (§9.9) change
+nothing.</p>
 <p>Each mutation writes a new index generation. The body is append-only.
 The writer never writes over bytes that a valid trailer describes.</p>
 <p>A mutation of an encrypted archive needs the passphrase. New members
@@ -4106,8 +4111,9 @@ the lock until its rename.</li>
 <li>If another process holds the lock, the program stops with exit 4 and
 the message “another eictar is changing this archive”. It does not wait.
 A backup job that waits can hang with no message.</li>
-<li>List, extract, <code>--verify</code> and <code>--info</code> take no
-lock. The trailer is the commit point, so a reader sees one complete
+<li>List, extract, <code>--verify</code>, <code>--info</code>,
+<code>--diff</code> and every dry run (<code>-n</code>) take no lock.
+The trailer is the commit point, so a reader sees one complete
 generation.</li>
 </ul>
 <p><strong>A lock is on one inode, and compact and create rename a new
@@ -4232,7 +4238,10 @@ line, unless <code>-q</code> is given. The exit status is 0 when there
 is no difference, and 1 when there is one, as for <code>diff</code> and
 <code>tar -d</code> (§10.7). A file that cannot be read is an error of
 one member. It stops the run with exit 4. Under
-<code>--keep-going</code>, it gives a warning and exit 1.</p>
+<code>--keep-going</code>, it gives a warning and exit 1. The
+differences found for that path before the error are still reported. For
+example, macOS cannot list the attributes of a file that it cannot read,
+and the mode of that file is then a difference.</p>
 <p><strong>Results that are correct, but that can surprise:</strong></p>
 <ul>
 <li>A tree extracted without <code>-p</code> has each mode less the
@@ -4481,9 +4490,11 @@ again without its dead space (§9.7)</td>
 </table>
 <p>All operations are built. An option that is not built yet exits with
 70 and names its milestone (§10.6).</p>
-<p>The operations without a short letter did not exist in
+<p>Most operations without a short letter do not exist in
 <code>tar</code>. Thus there is no habit to keep, and no letter to
-spend. <code>--delete</code> has the GNU tar spelling on purpose.</p>
+spend. <code>--delete</code> and <code>--diff</code> have the GNU tar
+spelling on purpose. In GNU tar, <code>--diff</code> is <code>-d</code>,
+which is <code>--destination</code> here (§7.1).</p>
 <p>There is no <code>--replace</code> operation. <code>-r</code>
 replaces a path that is already in the archive (§9.2).</p>
 <p><code>-f</code> is necessary for every operation except
@@ -4786,7 +4797,8 @@ is refused (open question 2, §1.3).</td>
 <td><code>--verbose</code></td>
 <td>list members during the operation. Repeat for more detail. With
 <code>-t</code>, <code>-v</code> gives the long listing and
-<code>-vv</code> adds more (§10.9).</td>
+<code>-vv</code> adds more (§10.9). With <code>-n</code>, a word before
+each path tells what happens to it (§9.9).</td>
 <td>M2</td>
 </tr>
 <tr class="odd">
@@ -4875,7 +4887,7 @@ Create, append, update, list, extract and diff.</td>
 <td><code>-h</code></td>
 <td><code>--dereference</code></td>
 <td>follow links and store what they point to. With <code>--diff</code>,
-compare what they point to.</td>
+compare what they point to. Create, append, update and diff.</td>
 <td>M2</td>
 </tr>
 <tr class="even">
@@ -5251,12 +5263,12 @@ tombstone. A program must not have to ask for detail.</p>
 it five times a second. It draws only when stderr is a terminal.
 Otherwise it writes nothing, so that a log does not fill with carriage
 returns. <code>-q</code> turns it off.</p>
-<pre><code>1.2 GiB / 3.4 GiB  35%  120.4 MiB/s  0:18 left      # -x, --verify, --compact
+<pre><code>1.2 GiB / 3.4 GiB  35%  120.4 MiB/s  0:18 left      # -x, --verify, --compact, --diff
 1.2 GiB  1234 members  120.4 MiB/s                  # -c, -r, -u</code></pre>
-<p>Extraction, <code>--verify</code> and <code>--compact</code> know
-their total from the index, so they show the percentage and the time
-left. A create walks the tree while it works, so it has no total, and it
-shows the members instead.</p>
+<p>Extraction, <code>--verify</code>, <code>--compact</code> and
+<code>--diff</code> know their total from the index, so they show the
+percentage and the time left. A create walks the tree while it works, so
+it has no total, and it shows the members instead.</p>
 <p>The meter counts plaintext bytes: what is read from the source files,
 or what is decoded. A copying compact counts the stored bytes that it
 copies.</p>
@@ -5286,8 +5298,21 @@ it.</li>
 found the result (§13.4). <code>--delete cache</code> deleted the
 directory <code>a/cache</code>, but its members stayed, and
 <code>--exclude cache</code> hid <code>a/cache</code> but not its
-contents. A directory that a pattern matches now takes its contents, at
-any depth.</p>
+contents. A directory that a pattern names, or that a pattern with no
+<code>/</code> matches by name, now takes its contents, at any
+depth.</p>
+<p>A glob with a <code>/</code> matches the whole path only. Thus
+<code>src/sub*</code> selects the directory <code>src/sub</code>, but
+not <code>src/sub/main.go</code>. To select the contents, name the
+directory. <code>-n</code> shows what a pattern selects (§9.9).</p>
+<p><strong>An excluded directory always takes its contents.</strong> The
+walk of create, append, update and diff does not enter an excluded
+directory. On a read, an <code>--exclude</code> pattern also excludes
+each member under a directory that it matches, so that a list of an
+archive agrees with the walk that made it. Before this rule,
+<code>-t --exclude &#39;src/sub*&#39;</code> listed the contents of
+<code>src/sub</code>, and <code>--diff</code> with the same option
+reported them as not on disk.</p>
 <p><strong>Regular expressions.</strong> <code>-R RE</code>
 (<code>--regex</code>) and <code>--exclude-regex RE</code> use the RE2
 syntax of Go’s <code>regexp</code> package. The time of a match is
@@ -5423,9 +5448,9 @@ each run a dry run.</li>
 <code>--show-config</code>.</li>
 </ul>
 <p>Every other long option of §10.2 to §10.4 can come from a
-configuration. The compression shorthands <code>-z</code>,
-<code>-J</code> and <code>--zstd</code> have the key
-<code>compress</code>.</p>
+configuration, except <code>--help</code> and <code>--version</code>.
+The compression shorthands <code>-z</code>, <code>-J</code> and
+<code>--zstd</code> have the key <code>compress</code>.</p>
 <p><strong>A configured value applies only to the operations that use
 it.</strong> On any other operation, the program ignores it. For
 example, <code>compress = xz</code> does not stop a listing, and
@@ -5734,7 +5759,7 @@ other package of eictar. The external modules are at the bottom.</p>
     cli --&gt; crypt
     cli --&gt; format
     cli --&gt; fsutil
-    archive[&quot;archive&lt;br/&gt;reader, writer, walk, capture,&lt;br/&gt;extract, mutate, lock,&lt;br/&gt;dictionaries, shared content&quot;] --&gt; pipeline
+    archive[&quot;archive&lt;br/&gt;reader, writer, walk, capture,&lt;br/&gt;extract, mutate, lock,&lt;br/&gt;dictionaries, shared content,&lt;br/&gt;diff, dry run&quot;] --&gt; pipeline
     archive --&gt; codec
     archive --&gt; crypt
     archive --&gt; format
@@ -5794,7 +5819,7 @@ newest one, when the codec asks for one (§4.2).</p>
     append --&gt; close[&quot;Writer.Close&lt;br/&gt;index, digest, trailer,&lt;br/&gt;sync, rename&quot;]</code></pre>
 <p><strong>Open and extract.</strong> The reader checks the archive in a
 fixed order before it trusts any number from it (§2). Then extraction
-runs in four phases (§7.7). All writes go through <code>os.Root</code>,
+runs in four phases (§8.3). All writes go through <code>os.Root</code>,
 so no path can leave the destination.</p>
 <pre class="mermaid"><code>flowchart TD
     open[&quot;OpenWith&quot;] --&gt; hdr[&quot;header:&lt;br/&gt;magic, CRC&quot;]
@@ -6014,8 +6039,10 @@ with <code>-update-golden</code>.</li>
 </ul></li>
 <li><strong>Selection</strong>: <code>-R</code> and
 <code>--exclude-regex</code> on the walk and on each read, a whole-path
-match, and an <code>-R</code> that matches nothing (§10.11). The
-<code>.ect</code> name rule (§10.12).</li>
+match, and an <code>-R</code> that matches nothing. An
+<code>--exclude</code> glob with a <code>/</code> takes the contents of
+a directory on a read, for <code>-t</code> and <code>--diff</code>
+(§10.11). The <code>.ect</code> name rule (§10.12).</li>
 <li><strong>Mutation</strong>: append after the old trailer, each
 <code>--on-conflict</code> policy, and each <code>--update-mode</code>
 case of §10.5. Also delete, <code>--verify</code>, <code>--info</code>,
@@ -6104,7 +6131,12 @@ effect.</li>
 <li>a dictionary, in <code>--info</code> and in the listing</li>
 <li>shared content, in the listing, in <code>--info</code> and in
 <code>--json</code></li>
-</ul></li>
+<li><code>--diff</code>: no difference after <code>-xp</code>, and then
+a changed file and a missing file with exit 1 (§9.8)</li>
+</ul>
+The dry run (§9.9) has no operational test. The tests of package
+<code>cli</code> run it through <code>Run</code>, and check its output
+and that nothing changes.</li>
 <li><strong>Scale</strong> (nightly, later): 100,000 small files, and
 one file larger than memory.</li>
 </ul>
@@ -6333,7 +6365,8 @@ file that another user owns or can write. Such a file can set
 <code>exclude</code> or <code>exclude-regex</code>, and make a backup
 smaller without a message.</li>
 </ul>
-<h3 id="extraction">14.3 Extraction</h3>
+<h3 id="extraction-and-reads-of-the-disk">14.3 Extraction and reads of
+the disk</h3>
 <ul>
 <li><strong>Paths</strong> (§7): the writer cleans paths, and the reader
 checks them again. Both refuse absolute paths and <code>..</code>,
@@ -6442,14 +6475,17 @@ eight findings, the fixes of v1.0.2, and a test for each fix. It also
 lists what the review examined and found sound. Its §6 records a
 follow-up review of the changes after v1.0.2, with one more finding and
 its fix in v1.0.3.</p>
-<h2 id="future-work-format-compatible">15. Future work
-(format-compatible)</h2>
+<h2 id="future-work">15. Future work</h2>
+<p>Some of these items change the format. An older reader must then
+refuse the archive, with a header flag or a new
+<code>format_major</code> (§3.1, §4.4).</p>
 <ul>
 <li><strong>Public-key recipients</strong> in the reserved
 <code>recipients</code> field.</li>
 <li><strong>Content-defined chunking</strong> with a table of chunk
 hashes, for chunk-level deduplication and rsync-style synchronization.
-§1.2 explains why this change is larger than it looks.</li>
+§4.4 records why it is not adopted, and what can change that
+decision.</li>
 <li><strong>A B-tree or sorted-page index</strong> for archives with
 tens of millions of members, marked by a new <code>index_kind</code> in
 the trailer flags.</li>
@@ -6721,7 +6757,7 @@ worker wrote a chunk to a spool that was already closed</li>
 <p>The same review made each pattern of <code>-t</code>, <code>-x</code>
 and <code>--verify</code> match at least one member, as for
 <code>--delete</code> (exit 2). It also made the other links to a target
-that was not extracted link to the first copy (§7). It removed dead
+that was not extracted link to the first copy (§7.7). It removed dead
 code, and one copy of each chunk. §15.2 lists the items that it left for
 later.</p></li>
 <li><p><strong>M7 — Completion</strong> <em>(complete)</em>: the
@@ -6834,7 +6870,12 @@ archive with the tree on disk (§9.8). It reports the members that are
 not on disk, the paths on disk that are not in the archive, and each
 difference of type, content or metadata. <code>-n</code>
 (<code>--dry-run</code>) shows the paths that create, append, update,
-extract or delete would write or delete, and changes nothing (§9.9).</p>
+extract or delete would write or delete, and changes nothing (§9.9). On
+a read, an <code>--exclude</code> glob with a <code>/</code> now takes
+the contents of a directory that it matches, as the walk does (§10.11).
+<code>--diff</code> keeps the differences of a path whose attributes it
+cannot read, which macOS refuses for a file that the user cannot read
+(§9.8).</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
 <p>This appendix supports §6.1. The question “how does this compare with

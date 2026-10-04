@@ -444,11 +444,11 @@ func (d *differ) visit(e entry) error {
 	}
 
 	diffs, content, err := compareEntry(m, contentOf(m, d.byID), e, d.cfg.Metadata)
+	d.add(diffs...)
 	if err != nil {
 		d.fail(fmt.Errorf("%s: %w", e.Src, err))
 		return d.stopped()
 	}
-	d.add(diffs...)
 	sameType := len(diffs) == 0 || diffs[0].Kind != DiffType
 	if m.Type == format.TypeHardlink && sameType {
 		d.links = append(d.links, linkCheck{m: m, info: e.Info})
@@ -538,9 +538,12 @@ func compareEntry(m, content *format.Member, e entry, opt MetadataOptions) ([]Di
 
 	// Create records extended attributes on directories and files only.
 	if m.Type == format.TypeDir || m.Type == format.TypeReg {
+		// The differences found so far are still differences. macOS, for
+		// one, cannot list the attributes of a file that it cannot read, and
+		// its mode is then the difference that tells why.
 		got, err := readXattrs(e, opt, nil)
 		if err != nil {
-			return nil, nil, err
+			return diffs, nil, err
 		}
 		var xattrs, acls []string
 		for _, name := range xattrNames(m.Xattrs, got) {

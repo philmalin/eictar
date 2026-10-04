@@ -408,6 +408,45 @@ func TestExcludePrunes(t *testing.T) {
 	}
 }
 
+// TestExcludeOnAReadAgreesWithTheWalk: an --exclude glob with a "/" that
+// matches a directory keeps the walk out of it. On a read, the same glob must
+// take the directory's contents too, or -t lists them and --diff reports
+// them as not on disk.
+func TestExcludeOnAReadAgreesWithTheWalk(t *testing.T) {
+	tree := testutil.NewTree(t)
+	tree.Text("tree/a.txt", 0o644, "a").Text("tree/sub/c.txt", 0o644, "c").
+		Text("tree/sub/deep/d.txt", 0o644, "d")
+	exclude := []string{"tree/su*"}
+
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
+	if _, err := CreateArchive(CreateConfig{
+		Archive: archivePath, Paths: []string{"tree"}, BaseDir: tree.Root,
+		Options: Options{Codec: "none"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	members, err := List(ListConfig{Archive: archivePath, Exclude: exclude})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, m := range members {
+		paths = append(paths, m.Path)
+	}
+	if got := strings.Join(paths, ","); got != "tree,tree/a.txt" {
+		t.Errorf("listed %q, want tree,tree/a.txt", got)
+	}
+
+	res, err := DiffArchive(DiffConfig{Archive: archivePath, BaseDir: tree.Root, Exclude: exclude})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Differences) != 0 {
+		t.Errorf("--diff with the exclude of the walk: %+v", res.Differences)
+	}
+}
+
 // TestOneFileSystemStopsAtAMountPoint uses a walker whose root device is set
 // to something else, which is what a mount point looks like from above.
 func TestOneFileSystemStopsAtAMountPoint(t *testing.T) {
