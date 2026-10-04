@@ -118,12 +118,19 @@ func (s *sequence) codecSpec() string {
 
 // tuning picks the options that change how the work is done, not what is
 // stored: chunk size, workers, and a memory budget and spill threshold that
-// are now and then small enough to force spilling and waiting.
-func (s *sequence) tuning() []string {
+// are now and then small enough to force spilling and waiting. spec is the
+// codec that the command uses.
+func (s *sequence) tuning(spec string) []string {
 	sizes := chunkSizes
 	if s.profile == "large" {
 		// Chunks as large as the files, which a window of long can use.
 		sizes = append(append([]int(nil), chunkSizes...), 16<<20, 32<<20)
+	}
+	if slowDictionary(spec) {
+		// At level 10 and above, each chunk with a dictionary costs
+		// approximately 0.5 ms (doc/design.md 15.2). Chunks of 512 bytes on a
+		// tree of 125 MiB take more than commandTimeout, and that is not a hang.
+		sizes = sizes[2:]
 	}
 	args := []string{
 		"--chunk-size", strconv.Itoa(sizes[s.rnd.IntN(len(sizes))]),
@@ -136,6 +143,22 @@ func (s *sequence) tuning() []string {
 		args = append(args, "--spill-threshold", strconv.Itoa(1<<(10+s.rnd.IntN(12))))
 	}
 	return args
+}
+
+// slowDictionary reports whether spec trains a zstd dictionary at level 10 or
+// above: the levels of the "best" speed, which copy the tables of the
+// dictionary for each chunk.
+func slowDictionary(spec string) bool {
+	if !strings.HasPrefix(spec, "zstd:") || !strings.Contains(spec, "train") {
+		return false
+	}
+	for _, opt := range strings.Split(strings.TrimPrefix(spec, "zstd:"), ",") {
+		if v, ok := strings.CutPrefix(opt, "level="); ok {
+			level, _ := strconv.Atoi(v)
+			return level >= 10
+		}
+	}
+	return false
 }
 
 func (s *sequence) note(format string, args ...any) {
@@ -185,7 +208,8 @@ func (s *sequence) coverage() error {
 
 func (s *sequence) create() error {
 	args := s.g.pickArgs()
-	opts := append([]string{"-cf", s.archive, "-C", s.src, "--compress", s.codecSpec()}, s.tuning()...)
+	spec := s.codecSpec()
+	opts := append([]string{"-cf", s.archive, "-C", s.src, "--compress", spec}, s.tuning(spec)...)
 	if s.encrypted {
 		opts = append(opts, "-e", "--kdf-memory", "8192", "--kdf-time", "1", "--kdf-threads", "1")
 		if s.rnd.IntN(2) == 0 {
@@ -256,7 +280,8 @@ func (s *sequence) add(op string, dry bool) error {
 	if dry {
 		flags = op + "nf"
 	}
-	opts := append([]string{flags, s.archive, "-C", s.src, "--compress", s.codecSpec()}, s.tuning()...)
+	spec := s.codecSpec()
+	opts := append([]string{flags, s.archive, "-C", s.src, "--compress", spec}, s.tuning(spec)...)
 	var policy, mode string
 	if op == "-r" {
 		policy = []string{"replace", "skip", "error"}[s.rnd.IntN(3)]
@@ -414,7 +439,7 @@ func (s *sequence) compact(recompress bool) error {
 	args := []string{"--compact", "-f", s.archive}
 	if recompress {
 		spec := s.codecSpec()
-		args = append(append(args, "--recompress", spec), s.tuning()...)
+		args = append(append(args, "--recompress", spec), s.tuning(spec)...)
 		s.note("compact --recompress %s", spec)
 		s.stats.ops["compact --recompress"]++
 	} else {

@@ -3485,7 +3485,10 @@ operation runs: append with each `--on-conflict`, update with each
 `--update-mode`, delete, compact, compact with `--recompress`, extraction
 by pattern or by `-R`, `--diff`, a dry run, or `--strip-components`. Each
 operation uses a random codec and random settings: chunk size, workers,
-memory limit and spill threshold.
+memory limit and spill threshold. A zstd dictionary at level 10 or above
+gets chunks of 64 KiB or more. Each chunk with such a dictionary costs
+approximately 0.5 ms (§15.2), and chunks of 512 bytes on a large tree take
+more than the limit of two minutes for one command, which counts as a hang.
 
 The last three steps test the operations that compare and plan:
 
@@ -3601,6 +3604,14 @@ their first runs:
 - `--diff --strip-components` compared a hard link with the file at its
   target's path when a collision had left the target out. Extraction gives
   such a link a copy of the content (§10.14).
+
+Longer runs found one more fault, and one fault in the tester:
+
+- A damaged crypto header that gave less than 8 KiB of KDF memory for each
+  thread gave exit 4. It must give exit 3, for damage (§6.2).
+- `zstd:level=13,train=16K` with chunks of 512 bytes took 124 s on a tree of
+  125 MiB, and the tester reported a hang. The output was correct. At
+  level 9, the same command took 0.6 s. This is the cost that §15.2 records.
 
 A run of ten minutes, over all the profiles, made 146 sequences. They ran
 approximately 14,000 eictar commands, with 256 crashes and 510 damaged
@@ -3933,7 +3944,9 @@ parallel `--verify` (§9.4) and a decoder that the workers use again (§8.3).
   dictionary, about 34 MiB, at the start of each chunk. A small file is one
   chunk, so the copy costs much more than the compression. A large chunk
   hides the copy. The speeds below 10 copy only the parts of their tables
-  that the last chunk changed.
+  that the last chunk changed. A small `--chunk-size` has the same cost on
+  large files: a tree of 125 MiB in chunks of 512 bytes took 124 s at
+  level 13, and 0.6 s at level 9 (§13.4).
 
   A lower speed for small chunks is not a good fix. With a 32 KiB
   dictionary on the same files, level 7 for small chunks made the archive

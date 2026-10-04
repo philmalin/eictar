@@ -489,7 +489,8 @@ func (s *sequence) addTwin(n int) error {
 	top := prefix[0]
 	s.note("add a twin of %q at %q, and append it", orig, twin)
 	s.stats.ops["-r of a twin"]++
-	opts := append([]string{"-rf", s.archive, "-C", s.src, "--compress", s.codecSpec()}, s.tuning()...)
+	spec := s.codecSpec()
+	opts := append([]string{"-rf", s.archive, "-C", s.src, "--compress", spec}, s.tuning(spec)...)
 	if _, err := s.r.expect(true, withPaths(opts, []string{top})...); err != nil {
 		return fmt.Errorf("append a twin: %w", err)
 	}
