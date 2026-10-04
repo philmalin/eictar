@@ -1,6 +1,6 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete, and v1.0.5 is the current release. The CI workflow passes
+Status: M1 to M11 are complete, and v1.0.6 is the current release. The CI workflow passes
 on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
 Date: 2026-10-04
 Applies to: v1 (format version 1.0)
@@ -2131,7 +2131,7 @@ a missing or doubled operation gets a short error on stderr and exit 2.
 | | `--delete` | Tombstone the matching members | patterns | M6 |
 | | `--compact` | Write the archive again without the tombstoned blobs | none | M6 |
 | | `--verify` | Check integrity without extraction | patterns (default: all) | M6 |
-| | `--diff` | Compare the members with the tree on disk, and change nothing (§9.8) | patterns (default: all) | after v1.0.5 |
+| | `--diff` | Compare the members with the tree on disk, and change nothing (§9.8) | patterns (default: all) | v1.0.6 |
 | | `--repair` | Restore the last complete generation after an interrupted write (§9.5) | none | M6 |
 | | `--info` | Show the archive header, the codecs, the dictionaries, the counts, the shared content and the dead space | none | M6 |
 | | `--change-passphrase` | Seal the data key under a new passphrase, and write the archive again without its dead space (§9.7) | none | M9 |
@@ -2318,7 +2318,7 @@ whose encryption was removed (§14).
 | `-C` | `--directory DIR` | change to DIR first. DIR must exist. More than one `-C` is refused (open question 2, §1.3). | M2 |
 | `-v` | `--verbose` | list members during the operation. Repeat for more detail. With `-t`, `-v` gives the long listing and `-vv` adds more (§10.9). With `-n`, a word before each path tells what happens to it (§9.9). | M2 |
 | `-q` | `--quiet` | errors only | M2 |
-| `-n` | `--dry-run` | show the paths that the operation would write or delete, and change nothing (§9.9). Create, append, update, extract and delete. | after v1.0.5 |
+| `-n` | `--dry-run` | show the paths that the operation would write or delete, and change nothing (§9.9). Create, append, update, extract and delete. | v1.0.6 |
 | | `--progress` | a progress meter on stderr when stderr is a terminal (§10.10) | M7 |
 | `-j` | `--workers N` | number of workers, 1..1024. Default three quarters of `GOMAXPROCS`, at least 1 (§8). | M3 |
 | | `--chunk-size SIZE` | plaintext chunk size, 512 B..256 MiB. Default 4 MiB. | M2 |
@@ -3969,21 +3969,54 @@ has a dictionary larger than the chunk size, as it does for a zstd window
 texts, and a release includes it. Dependabot proposes updates of the modules
 and the actions each month (§12.3).
 
-**After v1.0.5**, `--diff` compares an archive with the tree on disk
-(§9.8). It reports the members that are not on disk, the paths on disk that
-are not in the archive, and each difference of type, content or metadata.
-`-n` (`--dry-run`) shows the paths that create, append, update, extract or
-delete would write or delete, and changes nothing (§9.9). On a read, an
-`--exclude` glob with a `/` now takes the contents of a directory that it
-matches, as the walk does (§10.11). `--diff` keeps the differences of a path
-whose attributes it cannot read, which macOS refuses for a file that the
-user cannot read (§9.8). The walk holds each directory that it enters open,
-and goes through it, so that a directory that becomes a link cannot take the
-walk out of the tree (§14.5, finding 11 of `doc/Security_Audit.md`). `-h`
-on an operation that does not walk is a usage error. On a terminal, a name
-from an archive is escaped, so that a crafted name cannot change what the
-terminal shows. A message is always escaped (§10.13, finding 12).
+**v1.0.6 is a security release**, and it adds two operations. A review of
+the changes after v1.0.5 found two problems (`doc/Security_Audit.md` §7).
+The release fixes both, each with a test:
 
+- **The walk can leave the tree** (finding 11, medium). The walk examined a
+  directory with `lstat`, and then opened it by its path. A user who can
+  write in the tree can replace the directory with a link between the two
+  steps. A root backup of that tree then stores files from outside it. The
+  walk now holds each directory that it enters open, opens each entry
+  through it, and makes sure that a directory it opens is the one that
+  `lstat` found (§14.5). The cost is about 30 ms on 20000 files, for
+  `--diff` only (§9.8).
+- **A name can control the terminal** (finding 12, low). The program wrote
+  member names to the terminal as they are. A crafted name can move the
+  cursor, change the title, or hide text. On a terminal, the program now
+  escapes control characters, invalid UTF-8, bidirectional controls and the
+  backslash in a name. A message is always escaped (§10.13). A listing that
+  goes to a file or a pipe does not change.
+
+The new operations:
+
+- `--diff` compares an archive with the tree on disk (§9.8). It reports the
+  members that are not on disk, the paths on disk that are not in the
+  archive, and each difference of type, content or metadata. It changes
+  nothing, and it ends with exit 1 when there is a difference.
+- `-n` (`--dry-run`) shows the paths that create, append, update, extract or
+  delete would write or delete, with the same selection, and changes
+  nothing (§9.9). Use it to see what a pattern or a regular expression
+  takes.
+
+Other changes:
+
+- `zstd:train` alone is now `train=auto`. The writer measures the best size
+  of the dictionary on the files, and uses no dictionary when none helps
+  (§4.2). Before, `train` used a fixed 112 KiB, which made 9 of 29 test
+  trees larger than no dictionary. `train=SIZE` still gives a fixed size.
+- On a read, an `--exclude` glob with a `/` now takes the contents of a
+  directory that it matches, as the walk does (§10.11). Before, it took
+  only the directory.
+- `--diff` keeps the differences of a path whose extended attributes it
+  cannot read. macOS refuses them for a file that the user cannot read
+  (§9.8).
+- `-h` on an operation that does not walk is a usage error. Before, the
+  program ignored it.
+
+The format is still 1.0. v1.0.6 reads every earlier archive, and earlier
+versions read what it writes. An archive made with `train=auto` holds an
+ordinary dictionary, so v1.0.5 reads it too.
 
 ## Appendix A. Why these primitives, compared with AES
 

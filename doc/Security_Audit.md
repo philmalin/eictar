@@ -6,7 +6,7 @@
 | Fixes in | v1.0.2 |
 | Date | 2026-09-26 |
 | Follow-up review | the changes after v1.0.2, with fixes in v1.0.3, 2026-10-01 (§6) |
-| Second follow-up | `--diff`, `-n`, and `--exclude` on a read, after v1.0.5, 2026-10-04 (§7) |
+| Second follow-up | `--diff`, `-n`, and `--exclude` on a read, after v1.0.5, with fixes in v1.0.6, 2026-10-04 (§7) |
 | Scope | the source code, the archive format, and encrypted archives |
 
 ## 1. Scope and method
@@ -42,8 +42,8 @@ means that the review found it in the code, and gives the place.
 | 8 | Low | A passphrase file that other users can read gave no warning | Fixed |
 | 9 | Information | An unsealed index shows link targets and xattr values; other known limits | Documented |
 | 10 | Low | The pool of decoders kept one decoder for each kind that the index named (after v1.0.2, not released) | Fixed in v1.0.3 |
-| 11 | Medium | The walk followed a directory that became a link after its `lstat` (found after v1.0.5) | Fixed (§7) |
-| 12 | Low | Control characters in member names went to the terminal as they are (found after v1.0.5) | Fixed (§7) |
+| 11 | Medium | The walk followed a directory that became a link after its `lstat` (found after v1.0.5) | Fixed in v1.0.6 (§7) |
+| 12 | Low | Control characters in member names went to the terminal as they are (found after v1.0.5) | Fixed in v1.0.6 (§7) |
 
 Findings 1 to 4 matter most when root extracts an archive from someone else,
 or archives a tree that other users can write. Each fix has a test in

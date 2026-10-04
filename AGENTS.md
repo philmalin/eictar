@@ -27,8 +27,10 @@ written in Go.  The design and the archive format are specified in doc/.
 -  Write documentation in the style of ASD-STE100 Simplified Technical
    English, as the documents in doc/ are: short sentences, one topic for each
    sentence, simple tenses, the active voice, and one meaning for each word.
--  The .html files are generated from the .md files with pandoc.  Do not edit
-   them; I regenerate them.
+-  The .html files are generated from the .md files with pandoc.  See the
+   exceptions section to see which tool to use to generate them.  Only
+   regenerate if there is an html file corresponding to the md file.  If
+   there is none then don't generate one.
 -  Do not commit or push; I do that.  When a change is done, suggest a
    one-line commit message for it.
 -  No changes to outside the directory should be done unless explicitly asked
@@ -51,6 +53,10 @@ The exceptions:
    run the go command from there.
 -  tar, zstd, xz and gzip may be run to compare eictar with them in
    benchmarks (bench/compare.sh), on files inside the project.
+-  If you need to generate the html for a .md file, you may execute
+   /home/psm/bin/md2html 'filename'.  If the file has mermaid diagrams then
+   use the --mermaid option, which will include the javascript needed to
+   render the mermaid diagrams.
 
 If a tool call would touch any path outside the project root and these
 exceptions, DO NOT make that tool call. Instead, respond with: "I cannot

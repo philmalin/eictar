@@ -257,7 +257,7 @@ available on each platform: the manual page gives the details.
   file.
 - [`doc/Security_Audit.md`](doc/Security_Audit.md) records the security
   review of v1.0.1 and the fixes of v1.0.2, and the follow-up reviews of
-  v1.0.3 and of `--diff` and `-n`.
+  v1.0.3 and of v1.0.6 (`--diff` and `-n`).
 - A change of passphrase does not remove old copies of the archive. Such a
   copy still opens with the old passphrase.
 - On a terminal, eictar escapes control characters in names, so that a name
