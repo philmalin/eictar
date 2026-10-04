@@ -17,12 +17,17 @@
 // (mixed, small, large or versions; see gen.go), then takes random steps:
 // changes to the tree, append with each --on-conflict, update with each
 // --update-mode, both now and then with -R, --exclude-regex or --no-dedup,
-// delete, compact, recompress, change of passphrase and extraction by
-// pattern or by -R. The codecs vary their settings, dictionaries and windows
-// included.
+// delete, compact, recompress, change of passphrase, extraction by pattern
+// or by -R, --diff of an extracted tree before and after one change, the dry
+// run (-n) of -r, -u, --delete and -x, and --strip-components with its dry
+// run and its --diff (features.go). The codecs vary their settings,
+// dictionaries and windows included.
 // After each step it lists, verifies and extracts the archive, and compares
 // the result with the model. In the fault mode it also cuts the archive as a
 // crash would, and flips bits in a copy.
+//
+// The summary starts with the result, PASS or FAIL, and then gives each
+// check with the number of times that it held.
 //
 // The first failure stops the run. Its directory stays, with failure.txt,
 // which gives the seed and the steps, and replay.sh, which repeats the
@@ -67,7 +72,14 @@ func main() {
 	if *profile != "" && profileWeights[*profile] == 0 {
 		fatal(fmt.Errorf("unknown profile %q: want one of %v", *profile, profiles))
 	}
-	st := &stats{ops: map[string]int{}, profiles: map[string]int{}}
+	st := &stats{ops: map[string]int{}, profiles: map[string]int{}, checks: map[string]int{}}
+	// On a terminal the progress line is rewritten in place. To a file or a
+	// pipe, a line is written once a minute.
+	tty := false
+	if fi, err := os.Stdout.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
+		tty = true
+	}
+	lastLine := time.Now()
 	seeds := rand.New(rand.NewPCG(*seed, 0))
 	start := time.Now()
 	for n := 0; ; n++ {
@@ -99,40 +111,86 @@ func main() {
 			seq.r.writeReplay()
 			fmt.Printf("\nFAIL in sequence %d\n%s\nkept in %s (failure.txt, replay.sh)\n", st.sequences, report, seqDir)
 			fmt.Printf("replay: make stress STRESS=\"-seed %d -sequences 1 -profile %s\"\n", s, seq.profile)
-			summary(st, start)
+			summary(st, start, err)
 			os.Exit(1)
 		}
 		if !*keep {
 			removeAll(seqDir)
 		}
-		fmt.Printf("\r%d sequences, %d steps, %d commands, %v", st.sequences, st.steps, st.commands,
+		progress := fmt.Sprintf("%d sequences, %d steps, %d commands, %v", st.sequences, st.steps, st.commands,
 			time.Since(start).Round(time.Second))
-	}
-	fmt.Println()
-	summary(st, start)
-}
-
-func summary(st *stats, start time.Time) {
-	fmt.Printf("\n%d sequences, %d steps, %d eictar commands in %v\n",
-		st.sequences, st.steps, st.commands, time.Since(start).Round(time.Second))
-	fmt.Printf("faults: %d crashes repaired, %d damaged copies (%d refused, %d damage only in dead space)\n",
-		st.crashes, st.flips, st.flipsCaught, st.flips-st.flipsCaught)
-	var kinds []string
-	for _, p := range profiles {
-		if st.profiles[p] > 0 {
-			kinds = append(kinds, fmt.Sprintf("%s %d", p, st.profiles[p]))
+		switch {
+		case tty:
+			fmt.Printf("\r%s", progress)
+		case time.Since(lastLine) >= time.Minute:
+			fmt.Println(progress)
+			lastLine = time.Now()
 		}
 	}
-	fmt.Printf("trees: %s; %d ended with a dictionary, %d with shared content\n",
-		strings.Join(kinds, ", "), st.withDict, st.withShared)
+	if tty {
+		fmt.Println()
+	}
+	summary(st, start, nil)
+}
+
+// checkNames are the checks that the summary reports, in order, by their
+// key in stats.checks. Each is a rule that held each time it was counted.
+var checkNames = []struct{ key, rule string }{
+	{"state", "after each step: -t lists the model, --verify passes, and a full extraction gives back the model"},
+	{"partial", "extraction by pattern or -R gives exactly the matching members"},
+	{"refused", "an operation that must be refused exits with 2, and leaves the archive byte for byte as it was"},
+	{"passphrase", "after a change of passphrase, the old passphrase is refused with exit 3"},
+	{"crash", "crash: the cut archive is refused with exit 3, and --repair gives back the archive of before, byte for byte"},
+	{"damage-refused", "damage: --verify and extraction both refuse the damaged copy with exit 3"},
+	{"damage-dead", "damage: --verify and extraction both accept the damaged copy, and extraction gives back the model (the bits were in dead space)"},
+	{"diff-clean", "--diff of a tree just extracted finds no difference"},
+	{"diff-change", "--diff after one change to that tree reports that path and that kind of change, and nothing else"},
+	{"dry-run", "-n lists exactly the paths of the real run (-r, -u, --delete, -x), changes nothing, and makes no destination"},
+	{"strip", "--strip-components gives the stripped model; each collision has its warning, and the run exits with 1"},
+	{"strip-diff", "--diff --strip-components of that tree finds no difference"},
+}
+
+// summary reports the run: the result first, then each check with the
+// number of times that it held, the operations, and the coverage. failed is
+// the error that stopped the run, or nil.
+func summary(st *stats, start time.Time, failed error) {
+	took := time.Since(start).Round(time.Second)
+	if failed == nil {
+		fmt.Printf("\nRESULT: PASS. %d sequences, %d steps and %d eictar commands in %v. Every check held.\n",
+			st.sequences, st.steps, st.commands, took)
+	} else {
+		fmt.Printf("\nRESULT: FAIL in sequence %d, after %d steps and %d eictar commands in %v (see above).\n",
+			st.sequences, st.steps, st.commands, took)
+		fmt.Println("The counts below are the checks that held before the failure.")
+	}
+	fmt.Println("\nChecks (the number of times that each one held):")
+	for _, c := range checkNames {
+		n := st.checks[c.key]
+		note := ""
+		if n == 0 {
+			note = "  [not reached in this run]"
+		}
+		fmt.Printf("  %6d  %s%s\n", n, c.rule, note)
+	}
+
+	fmt.Println("\nOperations:")
 	names := make([]string, 0, len(st.ops))
 	for k := range st.ops {
 		names = append(names, k)
 	}
 	sort.Strings(names)
 	for _, k := range names {
-		fmt.Printf("  %-26s %d\n", k, st.ops[k])
+		fmt.Printf("  %6d  %s\n", st.ops[k], k)
 	}
+
+	var kinds []string
+	for _, p := range profiles {
+		if st.profiles[p] > 0 {
+			kinds = append(kinds, fmt.Sprintf("%s %d", p, st.profiles[p]))
+		}
+	}
+	fmt.Printf("\nCoverage: trees %s; %d archives ended with a dictionary, %d with shared content.\n",
+		strings.Join(kinds, ", "), st.withDict, st.withShared)
 }
 
 func fatal(err error) {

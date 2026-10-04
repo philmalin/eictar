@@ -237,6 +237,41 @@ func TestDiffOfAFileArchivedAlone(t *testing.T) {
 	}
 }
 
+// TestDiffOfAMemberWithoutItsParent: a member added by its own path, as
+// -r tree/sub/deep.txt adds it, has no member for its directory tree/sub.
+// That directory on disk holds a member, so it is not a path that the archive
+// lacks. Found by the stress tester.
+func TestDiffOfAMemberWithoutItsParent(t *testing.T) {
+	tree := diffFixture(t)
+	archivePath := diffArchive(t, tree, "tree")
+	tree.Dir("tree/sub", 0o755).Text("tree/sub/deep.txt", 0o644, "deep")
+	settle(tree)
+	if _, err := AppendArchive(AppendConfig{CreateConfig: CreateConfig{
+		Archive: archivePath, Paths: []string{"tree/sub/deep.txt"}, BaseDir: tree.Root,
+		Options: Options{Codec: "zstd", ChunkSize: 4096},
+	}}); err != nil {
+		t.Fatalf("AppendArchive: %v", err)
+	}
+
+	res, err := DiffArchive(DiffConfig{Archive: archivePath, BaseDir: tree.Root})
+	if err != nil {
+		t.Fatalf("DiffArchive: %v", err)
+	}
+	if len(res.Differences) != 0 {
+		t.Errorf("differences %q, want none", found(res))
+	}
+
+	// A new file in that directory is still a path that the archive lacks.
+	tree.Text("tree/sub/new.txt", 0o644, "new")
+	settle(tree)
+	if res, err = DiffArchive(DiffConfig{Archive: archivePath, BaseDir: tree.Root}); err != nil {
+		t.Fatalf("DiffArchive: %v", err)
+	}
+	if got, want := found(res), []string{"tree/sub/new.txt extra"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 // An archive made with -C dir . does not record ".", so it cannot tell that
 // it holds the whole base directory. A new path at the top is not reported;
 // a new path in an archived directory is (doc/design.md 9.8).

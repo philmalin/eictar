@@ -2023,13 +2023,21 @@ has a given digest. Below its start, the walk follows no link, except with
 `-h`. It opens each file as create does (§9, `doc/Security_Audit.md`
 finding 3).
 
+**A directory above a member is not an extra path.** `-r a/b/c` adds the
+member `a/b/c`, and no member for `a/b`. Extraction makes `a/b`. Thus a
+directory on disk that holds a compared member is not reported, but a new
+path in it is.
+
 **With `--strip-components`,** `--diff` compares the tree that extraction
 with the same option writes (§10.14). The patterns, `--exclude` and `-R`
 match the paths in the archive. A path on disk is shorter than its path in
 the archive, so the walk does not apply these options. Instead, a path on
 disk that is not a member is in the comparison when one of the removed
 prefixes before it gives a path that the options select. A hard link is
-compared with the path of its target after the strip.
+compared with the path of its target after the strip. When a collision
+left the target out, another member holds that path, and extraction gave
+the link a copy of the content. Then the link is not compared with a
+target.
 
 ### 9.9 Dry run (`-n`)
 
@@ -3472,9 +3480,27 @@ pattern rule are each a few lines of the tester.
 Before most steps, the tree changes. A file gets new content, a new time or
 a new mode, or it goes, or it becomes a link, or new entries come. Then one
 operation runs: append with each `--on-conflict`, update with each
-`--update-mode`, delete, compact, compact with `--recompress`, or extraction
-by pattern or by `-R`. Each operation uses a random codec and random
-settings: chunk size, workers, memory limit and spill threshold.
+`--update-mode`, delete, compact, compact with `--recompress`, extraction
+by pattern or by `-R`, `--diff`, a dry run, or `--strip-components`. Each
+operation uses a random codec and random settings: chunk size, workers,
+memory limit and spill threshold.
+
+The last three steps test the operations that compare and plan:
+
+- **`--diff`** of a tree just extracted must find no difference. Then the
+  tester makes one change to that tree: other bytes of the same size, a
+  mode, a time, a file removed, a file added, or another link target. It
+  keeps the time of the parent directory. `--diff` must then report that
+  path with that kind of difference, and nothing else, with exit 1.
+- **A dry run** of `-r`, `-u`, `--delete` or `-x` must list the paths that
+  the model says the real run writes or deletes. The archive must not
+  change, and `-x -n` must not make its destination.
+- **`--strip-components`** 1 or 2: half the time, the tester first appends
+  a twin of an entry under a new top directory, so that two members get one
+  path. The model gives the expected tree and the collisions. The dry run
+  must list the paths after the strip, the extraction must give the
+  expected tree, and `--diff` with the option must find no difference.
+  Each must warn for each collision and exit with 1 when there is one.
 
 **Each sequence has a profile,** the kind of tree that it works on. The seed
 chooses it, and `-profile` forces one:
@@ -3534,6 +3560,14 @@ pattern.
 Any other exit code, a panic, or a command that runs for more than two
 minutes is a failure.
 
+**The summary** starts with the result: `PASS`, or `FAIL` with the sequence.
+Then it gives each check, and the number of times that it held. A check
+that the run did not reach has the note `[not reached in this run]`. Then it
+gives the number of each operation, and the coverage of the profiles,
+dictionaries and shared content. After a failure, the counts are the checks
+that held before it. To a file or a pipe, the progress line comes once a
+minute.
+
 **A failure stops the run.** The sequence's directory stays, with the source
 tree, `failure.txt` and `replay.sh`. `failure.txt` gives the seed and each
 step. `replay.sh` repeats the eictar commands. All randomness comes from the
@@ -3556,9 +3590,22 @@ a test of its own:
 - `-u --update-mode=digest` archived an unchanged sparse file again, when the
   filesystem reported its data regions in another way (§10.5).
 
+The steps for `--diff`, `-n` and `--strip-components` found two more in
+their first runs:
+
+- `--diff` reported the directory of a member as a path that the archive
+  lacks, when `-r a/b/c` had added the member by its own path, with no
+  member for `a/b` (§9.8).
+- `--diff --strip-components` compared a hard link with the file at its
+  target's path when a collision had left the target out. Extraction gives
+  such a link a copy of the content (§10.14).
+
 A run of ten minutes, over all the profiles, made 146 sequences. They ran
 approximately 14,000 eictar commands, with 256 crashes and 510 damaged
 copies. 51 sequences ended with a dictionary, and 124 with shared content.
+With the new steps, a run of five minutes made 106 sequences and 10988
+commands. It ran 207 `--diff` steps, 305 dry runs and 161 extractions with
+`--strip-components`.
 
 ## 14. Security considerations
 
@@ -4109,7 +4156,11 @@ ordinary dictionary, so v1.0.5 reads it too.
 **After v1.0.6**, `--strip-components N` removes the first N components
 of each path on extraction, and `--diff` with it compares the tree that
 such an extraction writes (§10.14). When two members get one path, the
-later one is extracted, with a warning and exit 1.
+later one is extracted, with a warning and exit 1. `--diff` no longer
+reports the directory of a member that was added by its own path as a
+path that the archive lacks (§9.8). The stress tester has steps for
+`--diff`, `-n` and `--strip-components`, and its summary gives the result
+and each check (§13.4).
 
 ## Appendix A. Why these primitives, compared with AES
 

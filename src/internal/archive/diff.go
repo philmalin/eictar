@@ -172,7 +172,16 @@ func DiffArchive(cfg DiffConfig) (DiffResult, error) {
 		}
 	}
 
-	d := &differ{cfg: cfg, r: r, byID: byID, want: want, seen: map[string]bool{},
+	// A member added by its own path, as -r a/b/c adds it, can have no
+	// member for its directory a/b. Extraction makes that directory, so on
+	// disk it is not a path that the archive lacks.
+	parents := map[string]bool{}
+	for p := range want {
+		for dir := path.Dir(p); dir != "." && !parents[dir]; dir = path.Dir(dir) {
+			parents[dir] = true
+		}
+	}
+	d := &differ{cfg: cfg, r: r, byID: byID, want: want, parents: parents, seen: map[string]bool{},
 		extraDirs: map[string]bool{}, prefixes: sortedKeys(prefixes)}
 	d.progress = progressOf(cfg.Reporter)
 	if d.progress != nil {
@@ -288,6 +297,8 @@ type differ struct {
 	r    *Reader
 	root *os.Root
 	byID map[uint64]*format.Member
+	// parents holds the directories above the members of want.
+	parents map[string]bool
 	// prefixes are the leading components that --strip-components removed,
 	// in order. They are empty without it.
 	prefixes []string
@@ -487,7 +498,7 @@ func (d *differ) visit(e entry) error {
 		return nil
 	}
 	m, ok := d.want[e.Stored]
-	if !ok && !d.inScope(e.Stored) {
+	if !ok && (!d.inScope(e.Stored) || e.Kind == kindDir && d.parents[e.Stored]) {
 		return nil
 	}
 	if !ok {
@@ -552,11 +563,18 @@ func (d *differ) visit(e entry) error {
 
 // checkHardlinks checks that each hardlink on disk is the same file as its
 // target. A target that is not live, or not on disk, is not checked: a
-// missing target is reported as missing.
+// missing target is reported as missing. Nor is a target whose path another
+// member holds after --strip-components.
 func (d *differ) checkHardlinks() {
 	for _, l := range d.links {
 		t, ok := d.byID[l.m.HardlinkTo]
 		if !ok || t.Dead || t.Path == "" {
+			continue
+		}
+		// After --strip-components, another member can hold the target's
+		// path. Extraction then gave the link a copy of the content, and
+		// the file at that path is not the target.
+		if w, held := d.want[t.Path]; held && w.ID != t.ID {
 			continue
 		}
 		fi, err := d.root.Lstat(t.Path)

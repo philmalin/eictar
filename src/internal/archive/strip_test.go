@@ -242,6 +242,40 @@ func TestDiffStripComponents(t *testing.T) {
 	}
 }
 
+// TestDiffStripOfAHardlinkWhoseTargetCollided: the target of q1/hl is
+// q1/a, which q2/a replaces after the strip. Extraction gives hl a copy of
+// the content, and --diff must not compare hl with q2's a. The target comes
+// first in the walk, so it holds the content and hl is the link. Found by the
+// stress tester.
+func TestDiffStripOfAHardlinkWhoseTargetCollided(t *testing.T) {
+	tree := testutil.NewTree(t)
+	tree.Dir("q1", 0o755).Dir("q2", 0o755)
+	tree.Text("q1/a", 0o644, "first")
+	tree.Hardlink("q1/hl", "q1/a")
+	tree.Text("q2/a", 0o644, "second")
+	settle(tree)
+	archivePath := filepath.Join(t.TempDir(), "a.ect")
+	if _, err := CreateArchive(CreateConfig{
+		Archive: archivePath, Paths: []string{"q1", "q2"}, BaseDir: tree.Root, Options: Options{Codec: "zstd"},
+	}); err != nil {
+		t.Fatalf("CreateArchive: %v", err)
+	}
+	dest := t.TempDir()
+	if _, err := Extract(ExtractConfig{Archive: archivePath, Destination: dest, StripComponents: 1, Reporter: &recordingReporter{}}); err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if got := readText(t, filepath.Join(dest, "hl")); got != "first" {
+		t.Errorf("hl = %q, want a copy of q1/a", got)
+	}
+	res, err := DiffArchive(DiffConfig{Archive: archivePath, BaseDir: dest, StripComponents: 1, Reporter: &recordingReporter{}})
+	if err != nil {
+		t.Fatalf("DiffArchive: %v", err)
+	}
+	if len(res.Differences) != 0 || res.Collided != 1 {
+		t.Errorf("differences %q, Collided %d; want none, 1", found(res), res.Collided)
+	}
+}
+
 // TestStripMembersKeepsOneDirectory: two directories with one path are one
 // directory, with no warning; two files are a collision.
 func TestStripMembersKeepsOneDirectory(t *testing.T) {

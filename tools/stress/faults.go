@@ -37,7 +37,6 @@ func (s *sequence) crashable(change func() error) error {
 	}
 	cut := int64(len(before)) + 1 + s.rnd.Int64N(grown-1)
 	s.note("crash: cut the archive at %d of %d bytes (the old generation ends at %d)", cut, fi.Size(), len(before))
-	s.stats.crashes++
 	if err := os.Truncate(s.archive, cut); err != nil {
 		return err
 	}
@@ -61,6 +60,7 @@ func (s *sequence) crashable(change func() error) error {
 			len(after), len(before))
 	}
 	s.model = modelBefore
+	s.stats.checks["crash"]++
 	return nil
 }
 
@@ -89,7 +89,6 @@ func (s *sequence) flipCheck() error {
 		return err
 	}
 	s.note("damage a copy: flip bits at %s", strings.Join(where, ", "))
-	s.stats.flips++
 
 	verify, err := s.r.run(true, "--verify", "-q", "-f", damaged)
 	if err != nil {
@@ -114,12 +113,13 @@ func (s *sequence) flipCheck() error {
 		return fmt.Errorf("--verify and extraction disagree about a damaged archive:\n%s\n%s", verify, extract)
 	}
 	if extract.code != 0 {
-		s.stats.flipsCaught++
+		s.stats.checks["damage-refused"]++
 		return nil
 	}
 	// Accepted: the damage must have been in dead space.
 	if err := compareTree(out, s.model); err != nil {
 		return fmt.Errorf("a damaged archive was accepted with wrong content: %w", err)
 	}
+	s.stats.checks["damage-dead"]++
 	return nil
 }

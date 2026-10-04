@@ -33,10 +33,11 @@ type sequence struct {
 }
 
 type stats struct {
-	sequences, steps, commands  int
-	crashes, flips, flipsCaught int
-	ops                         map[string]int
-	profiles                    map[string]int
+	sequences, steps, commands int
+	ops                        map[string]int
+	profiles                   map[string]int
+	// checks counts, by key of checkNames (main.go), the checks that held.
+	checks map[string]int
 	// withDict and withShared count the sequences that ended with a
 	// dictionary, and with shared content: coverage, not assumed.
 	withDict, withShared int
@@ -200,7 +201,7 @@ func (s *sequence) create() error {
 		return fmt.Errorf("create: %w", err)
 	}
 	s.model = Model{}
-	if _, _, err := s.addToModel(args, "replace", "", filter{}); err != nil {
+	if _, _, _, err := s.addToModel(args, "replace", "", filter{}); err != nil {
 		return err
 	}
 	if err := s.checkArchive(); err != nil {
@@ -218,12 +219,12 @@ func (s *sequence) step() error {
 		}
 		s.note("change the source: %s", did)
 	}
-	op := s.rnd.IntN(20)
+	op := s.rnd.IntN(26)
 	switch {
 	case op < 5:
-		return s.crashable(func() error { return s.add("-r") })
+		return s.crashable(func() error { return s.add("-r", false) })
 	case op < 9:
-		return s.crashable(func() error { return s.add("-u") })
+		return s.crashable(func() error { return s.add("-u", false) })
 	case op < 12:
 		return s.crashable(s.delete)
 	case op < 14:
@@ -232,18 +233,30 @@ func (s *sequence) step() error {
 		return s.compact(true)
 	case op < 16 && s.encrypted:
 		return s.changePassphrase()
+	case op < 18:
+		return s.diffStep()
+	case op < 20:
+		return s.dryRun()
+	case op < 22:
+		return s.stripStep()
 	default:
 		return s.extractSome()
 	}
 }
 
 // add is -r (with an --on-conflict policy) or -u (with an --update-mode).
-func (s *sequence) add(op string) error {
+// With dry, it is the dry run of it (-n): the output must name the paths
+// that the real run writes, and the archive and the model do not change.
+func (s *sequence) add(op string, dry bool) error {
 	args := s.g.pickArgs()
 	if len(args) == 0 {
 		return nil
 	}
-	opts := append([]string{op + "f", s.archive, "-C", s.src, "--compress", s.codecSpec()}, s.tuning()...)
+	flags := op + "f"
+	if dry {
+		flags = op + "nf"
+	}
+	opts := append([]string{flags, s.archive, "-C", s.src, "--compress", s.codecSpec()}, s.tuning()...)
 	var policy, mode string
 	if op == "-r" {
 		policy = []string{"replace", "skip", "error"}[s.rnd.IntN(3)]
@@ -271,8 +284,12 @@ func (s *sequence) add(op string) error {
 	if s.rnd.IntN(5) == 0 {
 		opts = append(opts, "--no-dedup")
 	}
-	s.note("%s %q %s%s%s", op, args, policy, map[bool]string{true: " " + mode}[mode != ""], f)
-	s.stats.ops[strings.TrimSpace(op+" "+policy+" "+mode)]++
+	name := strings.TrimSpace(op + " " + policy + " " + mode)
+	if dry {
+		name = "-n " + name
+	}
+	s.note("%s %q%s", name, args, f)
+	s.stats.ops[name]++
 	if f.include != nil || f.exclude != nil {
 		s.stats.ops["-r/-u with a regex"]++
 	}
@@ -281,7 +298,13 @@ func (s *sequence) add(op string) error {
 	if err != nil {
 		return err
 	}
-	refused, why, err := s.addToModel(args, policy, mode, f)
+	if dry {
+		// The dry run works on a copy of the model, which is then dropped.
+		kept := s.model
+		s.model = s.model.clone()
+		defer func() { s.model = kept }()
+	}
+	refused, why, changed, err := s.addToModel(args, policy, mode, f)
 	if err != nil {
 		return err
 	}
@@ -295,46 +318,54 @@ func (s *sequence) add(op string) error {
 		if res.code != 2 {
 			return fmt.Errorf("%s: exit %d, want 2:\n%s", why, res.code, res)
 		}
-		return s.unchanged(before)
+		if err := s.unchanged(before); err != nil {
+			return err
+		}
+		s.stats.checks["refused"]++
+		return nil
 	}
 	if res.code != 0 {
 		return fmt.Errorf("exit %d, want 0:\n%s", res.code, res)
+	}
+	if dry {
+		return s.checkDryRun(res, changed, false, before)
 	}
 	return nil
 }
 
 // addToModel applies an append, update or create to the model, from the
-// source tree as it is now. For --on-conflict=error with a conflict, or an -R
-// that matches nothing, it reports a refusal and changes nothing.
-func (s *sequence) addToModel(args []string, policy, mode string, f filter) (refused bool, why string, err error) {
+// source tree as it is now, and returns the paths that it writes. For
+// --on-conflict=error with a conflict, or an -R that matches nothing, it
+// reports a refusal and changes nothing.
+func (s *sequence) addToModel(args []string, policy, mode string, f filter) (refused bool, why string, changed []string, err error) {
 	paths, err := walkedFiltered(s.src, args, f)
 	if err != nil {
-		return false, "", err
+		return false, "", nil, err
 	}
 	if f.include != nil && len(paths) == 0 {
-		return true, "an -R that matches nothing", nil
+		return true, "an -R that matches nothing", nil, nil
 	}
 	if policy == "error" {
 		for _, p := range paths {
 			if _, ok := s.model[p]; ok {
-				return true, "a conflict under --on-conflict=error", nil
+				return true, "a conflict under --on-conflict=error", nil, nil
 			}
 		}
 	}
 	for _, p := range paths {
 		cur, err := readEntry(filepath.Join(s.src, p))
 		if err != nil {
-			return false, "", err
+			return false, "", nil, err
 		}
 		old, exists := s.model[p]
 		switch {
-		case !exists, policy == "replace", policy == "error":
+		case !exists, policy == "replace", policy == "error",
+			policy == "update" && stale(old, cur, mode):
 			s.model[p] = cur
-		case policy == "update" && stale(old, cur, mode):
-			s.model[p] = cur
+			changed = append(changed, p)
 		}
 	}
-	return false, "", nil
+	return false, "", changed, nil
 }
 
 // delete removes the members that match one or two paths, and now and then
@@ -358,7 +389,11 @@ func (s *sequence) delete() error {
 		if res.code != 2 {
 			return fmt.Errorf("delete with no match: exit %d, want 2:\n%s", res.code, res)
 		}
-		return s.unchanged(before)
+		if err := s.unchanged(before); err != nil {
+			return err
+		}
+		s.stats.checks["refused"]++
+		return nil
 	}
 	var patterns []string
 	for n := 1 + s.rnd.IntN(2); n > 0; n-- {
@@ -418,6 +453,7 @@ func (s *sequence) changePassphrase() error {
 	if res.code != 3 {
 		return fmt.Errorf("the old passphrase after a change: exit %d, want 3:\n%s", res.code, res)
 	}
+	s.stats.checks["passphrase"]++
 	return nil
 }
 
@@ -451,11 +487,19 @@ func (s *sequence) extractSome() error {
 		}
 		s.note("extract -R %q", re)
 		s.stats.ops["extract by -R"]++
-		return s.checkExtractArgs(s.archive, []string{"-R", re}, want)
+		if err := s.checkExtractArgs(s.archive, []string{"-R", re}, want); err != nil {
+			return err
+		}
+		s.stats.checks["partial"]++
+		return nil
 	}
 	s.note("extract %q", patterns)
 	s.stats.ops["extract by pattern"]++
-	return s.checkExtract(s.archive, patterns, s.model.selectPaths(patterns))
+	if err := s.checkExtract(s.archive, patterns, s.model.selectPaths(patterns)); err != nil {
+		return err
+	}
+	s.stats.checks["partial"]++
+	return nil
 }
 
 // allUTF8 reports whether every path is valid UTF-8. An expression cannot

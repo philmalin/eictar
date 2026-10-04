@@ -25,7 +25,11 @@ func (s *sequence) checkArchive() error {
 	if _, err := s.r.expect(true, "--verify", "-q", "-f", s.archive); err != nil {
 		return fmt.Errorf("verify: %w", err)
 	}
-	return s.checkExtract(s.archive, nil, s.model)
+	if err := s.checkExtract(s.archive, nil, s.model); err != nil {
+		return err
+	}
+	s.stats.checks["state"]++
+	return nil
 }
 
 // checkExtract extracts archive (the members matching patterns, or all) and

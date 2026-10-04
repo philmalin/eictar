@@ -7941,6 +7941,11 @@ system. The output then tells if that file has a given digest. Below its
 start, the walk follows no link, except with <code>-h</code>. It opens
 each file as create does (§9, <code>doc/Security_Audit.md</code> finding
 3).</p>
+<p><strong>A directory above a member is not an extra path.</strong>
+<code>-r a/b/c</code> adds the member <code>a/b/c</code>, and no member
+for <code>a/b</code>. Extraction makes <code>a/b</code>. Thus a
+directory on disk that holds a compared member is not reported, but a
+new path in it is.</p>
 <p><strong>With <code>--strip-components</code>,</strong>
 <code>--diff</code> compares the tree that extraction with the same
 option writes (§10.14). The patterns, <code>--exclude</code> and
@@ -7949,7 +7954,9 @@ shorter than its path in the archive, so the walk does not apply these
 options. Instead, a path on disk that is not a member is in the
 comparison when one of the removed prefixes before it gives a path that
 the options select. A hard link is compared with the path of its target
-after the strip.</p>
+after the strip. When a collision left the target out, another member
+holds that path, and extraction gave the link a copy of the content.
+Then the link is not compared with a target.</p>
 <h3 id="dry-run--n">9.9 Dry run (<code>-n</code>)</h3>
 <p><code>-n</code> (<code>--dry-run</code>) shows the paths that an
 operation would write or delete, and changes nothing. It applies to
@@ -9990,10 +9997,31 @@ and then takes steps. Before most steps, the tree changes. A file gets
 new content, a new time or a new mode, or it goes, or it becomes a link,
 or new entries come. Then one operation runs: append with each
 <code>--on-conflict</code>, update with each <code>--update-mode</code>,
-delete, compact, compact with <code>--recompress</code>, or extraction
-by pattern or by <code>-R</code>. Each operation uses a random codec and
+delete, compact, compact with <code>--recompress</code>, extraction by
+pattern or by <code>-R</code>, <code>--diff</code>, a dry run, or
+<code>--strip-components</code>. Each operation uses a random codec and
 random settings: chunk size, workers, memory limit and spill
 threshold.</p>
+<p>The last three steps test the operations that compare and plan:</p>
+<ul>
+<li><strong><code>--diff</code></strong> of a tree just extracted must
+find no difference. Then the tester makes one change to that tree: other
+bytes of the same size, a mode, a time, a file removed, a file added, or
+another link target. It keeps the time of the parent directory.
+<code>--diff</code> must then report that path with that kind of
+difference, and nothing else, with exit 1.</li>
+<li><strong>A dry run</strong> of <code>-r</code>, <code>-u</code>,
+<code>--delete</code> or <code>-x</code> must list the paths that the
+model says the real run writes or deletes. The archive must not change,
+and <code>-x -n</code> must not make its destination.</li>
+<li><strong><code>--strip-components</code></strong> 1 or 2: half the
+time, the tester first appends a twin of an entry under a new top
+directory, so that two members get one path. The model gives the
+expected tree and the collisions. The dry run must list the paths after
+the strip, the extraction must give the expected tree, and
+<code>--diff</code> with the option must find no difference. Each must
+warn for each collision and exit with 1 when there is one.</li>
+</ul>
 <p><strong>Each sequence has a profile,</strong> the kind of tree that
 it works on. The seed chooses it, and <code>-profile</code> forces
 one:</p>
@@ -10082,6 +10110,14 @@ exit 0 is the failure that this test looks for.</li>
 </ul>
 <p>Any other exit code, a panic, or a command that runs for more than
 two minutes is a failure.</p>
+<p><strong>The summary</strong> starts with the result:
+<code>PASS</code>, or <code>FAIL</code> with the sequence. Then it gives
+each check, and the number of times that it held. A check that the run
+did not reach has the note <code>[not reached in this run]</code>. Then
+it gives the number of each operation, and the coverage of the profiles,
+dictionaries and shared content. After a failure, the counts are the
+checks that held before it. To a file or a pipe, the progress line comes
+once a minute.</p>
 <p><strong>A failure stops the run.</strong> The sequence’s directory
 stays, with the source tree, <code>failure.txt</code> and
 <code>replay.sh</code>. <code>failure.txt</code> gives the seed and each
@@ -10105,10 +10141,22 @@ did not take the directory’s contents (§10.11).</li>
 file again, when the filesystem reported its data regions in another way
 (§10.5).</li>
 </ul>
+<p>The steps for <code>--diff</code>, <code>-n</code> and
+<code>--strip-components</code> found two more in their first runs:</p>
+<ul>
+<li><code>--diff</code> reported the directory of a member as a path
+that the archive lacks, when <code>-r a/b/c</code> had added the member
+by its own path, with no member for <code>a/b</code> (§9.8).</li>
+<li><code>--diff --strip-components</code> compared a hard link with the
+file at its target’s path when a collision had left the target out.
+Extraction gives such a link a copy of the content (§10.14).</li>
+</ul>
 <p>A run of ten minutes, over all the profiles, made 146 sequences. They
 ran approximately 14,000 eictar commands, with 256 crashes and 510
 damaged copies. 51 sequences ended with a dictionary, and 124 with
-shared content.</p>
+shared content. With the new steps, a run of five minutes made 106
+sequences and 10988 commands. It ran 207 <code>--diff</code> steps, 305
+dry runs and 161 extractions with <code>--strip-components</code>.</p>
 <h2 id="security-considerations">14. Security considerations</h2>
 <h3 id="what-an-observer-sees">14.1 What an observer sees</h3>
 <ul>
@@ -10790,7 +10838,12 @@ too.</p>
 removes the first N components of each path on extraction, and
 <code>--diff</code> with it compares the tree that such an extraction
 writes (§10.14). When two members get one path, the later one is
-extracted, with a warning and exit 1.</p>
+extracted, with a warning and exit 1. <code>--diff</code> no longer
+reports the directory of a member that was added by its own path as a
+path that the archive lacks (§9.8). The stress tester has steps for
+<code>--diff</code>, <code>-n</code> and
+<code>--strip-components</code>, and its summary gives the result and
+each check (§13.4).</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
 <p>This appendix supports §6.1. The question “how does this compare with
