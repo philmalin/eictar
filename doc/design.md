@@ -3808,15 +3808,34 @@ parallel `--verify` (§9.4) and a decoder that the workers use again (§8.3).
   written for the Member map can be much faster. It is a parser of hostile
   input, so it needs a differential fuzz test against the library.
 - **Dictionaries at the best speed.** `zstd:train` at level 10 to 22 makes
-  create of many small files very slow: 20000 small source files took 15.3
-  s and 229 s of CPU, against 0.7 s without a dictionary. At this speed, the
-  library (klauspost/compress v1.20.1, `bestFastEncoder.Reset`) copies the
-  tables that it made from the dictionary, about 34 MiB, at the start of
-  each chunk. A small file is one chunk, so the copy costs much more than
-  the compression. At level 3 with `train`, the same tree took 1.1 s, and
-  the archive was 2.7% larger (4.04 MB against 3.93 MB). A large chunk
-  hides the copy. The fix can come from the library, or eictar can use a
-  lower speed for small chunks when a dictionary is in use.
+  create of many small files very slow. Level 12, the default, is in this
+  range. 20000 small JSON files took 24.2 s and 263 s of CPU, against 1.3 s
+  without a dictionary. At this speed, the library (klauspost/compress
+  v1.20.1, `bestFastEncoder.Reset`) copies the tables that it made from the
+  dictionary, about 34 MiB, at the start of each chunk. A small file is one
+  chunk, so the copy costs much more than the compression. A large chunk
+  hides the copy. The speeds below 10 copy only the parts of their tables
+  that the last chunk changed.
+
+  A lower speed for small chunks is not a good fix. With a 32 KiB
+  dictionary on the same files, level 7 for small chunks made the archive
+  4.6% larger, and level 3 made it 7.9% larger.
+
+  The fix belongs in the library. A test copy of `bestFastEncoder` kept a
+  list of the table entries that each chunk writes, and its reset put back
+  only those entries. When the list became long, it copied the full tables.
+  The change gave these results with `zstd:train` at level 12:
+
+  | Tree | Library v1.20.1 | With the change |
+  |---|---|---|
+  | 20000 JSON files | 24.2 s, 263 s of CPU | 3.0 s, 5.5 s of CPU |
+  | 3000 JSON files | 8.5 s, 43 s of CPU | 1.3 s, 2.0 s of CPU |
+  | 1500 YAML files | 10.0 s, 32 s of CPU | 0.7 s, 1.0 s of CPU |
+
+  The archive sizes did not change, and a reused encoder wrote the same
+  bytes as a new encoder. eictar does not carry a changed copy of the
+  library: `go install` refuses a module with a `replace` directive. The item
+  waits for a fix in the library.
 
 
 ## 16. Implementation milestones

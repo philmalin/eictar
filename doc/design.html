@@ -10420,30 +10420,68 @@ the keyed content digest, were decided for M9 (§6.2, §9.7). Two more are
 done: parallel <code>--verify</code> (§9.4) and a decoder that the
 workers use again (§8.3).</p>
 <ul>
-<li><strong>The decode of the index.</strong> Each operation decodes the
-whole index when it opens the archive. <code>BenchmarkDecodeIndex</code>
-(package <code>format</code>) decodes an index of 20000 members in about
-19 ms: 16 ms of CBOR decode, 1.5 ms of zstd and 1 ms of
-<code>Validate</code>. The CBOR library decodes by reflection, with 9
-allocations for each member, at about 240 MB/s. The check for duplicate
-keys costs nothing that can be measured. A test decoded the members in
-parallel, after a first pass that splits them as raw CBOR items. It
-saved only 6 ms with 16 goroutines, because the first pass costs 7 ms,
-and it added a second path through the parser. It is not adopted. A
-decoder written for the Member map can be much faster. It is a parser of
-hostile input, so it needs a differential fuzz test against the
-library.</li>
-<li><strong>Dictionaries at the best speed.</strong>
+<li><p><strong>The decode of the index.</strong> Each operation decodes
+the whole index when it opens the archive.
+<code>BenchmarkDecodeIndex</code> (package <code>format</code>) decodes
+an index of 20000 members in about 19 ms: 16 ms of CBOR decode, 1.5 ms
+of zstd and 1 ms of <code>Validate</code>. The CBOR library decodes by
+reflection, with 9 allocations for each member, at about 240 MB/s. The
+check for duplicate keys costs nothing that can be measured. A test
+decoded the members in parallel, after a first pass that splits them as
+raw CBOR items. It saved only 6 ms with 16 goroutines, because the first
+pass costs 7 ms, and it added a second path through the parser. It is
+not adopted. A decoder written for the Member map can be much faster. It
+is a parser of hostile input, so it needs a differential fuzz test
+against the library.</p></li>
+<li><p><strong>Dictionaries at the best speed.</strong>
 <code>zstd:train</code> at level 10 to 22 makes create of many small
-files very slow: 20000 small source files took 15.3 s and 229 s of CPU,
-against 0.7 s without a dictionary. At this speed, the library
-(klauspost/compress v1.20.1, <code>bestFastEncoder.Reset</code>) copies
-the tables that it made from the dictionary, about 34 MiB, at the start
-of each chunk. A small file is one chunk, so the copy costs much more
-than the compression. At level 3 with <code>train</code>, the same tree
-took 1.1 s, and the archive was 2.7% larger (4.04 MB against 3.93 MB). A
-large chunk hides the copy. The fix can come from the library, or eictar
-can use a lower speed for small chunks when a dictionary is in use.</li>
+files very slow. Level 12, the default, is in this range. 20000 small
+JSON files took 24.2 s and 263 s of CPU, against 1.3 s without a
+dictionary. At this speed, the library (klauspost/compress v1.20.1,
+<code>bestFastEncoder.Reset</code>) copies the tables that it made from
+the dictionary, about 34 MiB, at the start of each chunk. A small file
+is one chunk, so the copy costs much more than the compression. A large
+chunk hides the copy. The speeds below 10 copy only the parts of their
+tables that the last chunk changed.</p>
+<p>A lower speed for small chunks is not a good fix. With a 32 KiB
+dictionary on the same files, level 7 for small chunks made the archive
+4.6% larger, and level 3 made it 7.9% larger.</p>
+<p>The fix belongs in the library. A test copy of
+<code>bestFastEncoder</code> kept a list of the table entries that each
+chunk writes, and its reset put back only those entries. When the list
+became long, it copied the full tables. The change gave these results
+with <code>zstd:train</code> at level 12:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Tree</th>
+<th>Library v1.20.1</th>
+<th>With the change</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>20000 JSON files</td>
+<td>24.2 s, 263 s of CPU</td>
+<td>3.0 s, 5.5 s of CPU</td>
+</tr>
+<tr class="even">
+<td>3000 JSON files</td>
+<td>8.5 s, 43 s of CPU</td>
+<td>1.3 s, 2.0 s of CPU</td>
+</tr>
+<tr class="odd">
+<td>1500 YAML files</td>
+<td>10.0 s, 32 s of CPU</td>
+<td>0.7 s, 1.0 s of CPU</td>
+</tr>
+</tbody>
+</table>
+<p>The archive sizes did not change, and a reused encoder wrote the same
+bytes as a new encoder. eictar does not carry a changed copy of the
+library: <code>go install</code> refuses a module with a
+<code>replace</code> directive. The item waits for a fix in the
+library.</p></li>
 </ul>
 <h2 id="implementation-milestones">16. Implementation milestones</h2>
 <p>Each milestone includes its unit tests (§13.1). From M2, each
