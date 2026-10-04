@@ -25,6 +25,12 @@ type runner struct {
 	crypt   []string // the passphrase options, for an encrypted archive
 	history []string // shell lines, for replay.sh
 	calls   int
+
+	// slow keeps the slowest commands of the run, and seed and profile say
+	// where each one came from (slow.go).
+	slow    *slowest
+	seed    uint64
+	profile string
 }
 
 type result struct {
@@ -65,7 +71,9 @@ func (r *runner) run(withKey bool, args ...string) (result, error) {
 	cmd.Dir = r.dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	began := time.Now()
 	err := cmd.Run()
+	took := time.Since(began)
 
 	res := result{stdout: stdout.String(), stderr: stderr.String(), args: full}
 	var exit *exec.ExitError
@@ -77,6 +85,7 @@ func (r *runner) run(withKey bool, args ...string) (result, error) {
 	case err != nil:
 		return res, fmt.Errorf("could not run eictar: %w", err)
 	}
+	r.record(full, took)
 	// A panic or a runtime error is a failure whatever the exit code.
 	if strings.Contains(res.stderr, "panic:") || strings.Contains(res.stderr, "fatal error:") {
 		return res, fmt.Errorf("eictar crashed:\n%s", res)

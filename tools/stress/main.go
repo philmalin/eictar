@@ -27,7 +27,9 @@
 // crash would, and flips bits in a copy.
 //
 // The summary starts with the result, PASS or FAIL, and then gives each
-// check with the number of times that it held.
+// check with the number of times that it held. It ends with the slowest
+// commands, which are not failures: a command fails only as a hang, after
+// two minutes.
 //
 // The first failure stops the run. Its directory stays, with failure.txt,
 // which gives the seed and the steps, and replay.sh, which repeats the
@@ -151,7 +153,8 @@ var checkNames = []struct{ key, rule string }{
 }
 
 // summary reports the run: the result first, then each check with the
-// number of times that it held, the operations, and the coverage. failed is
+// number of times that it held, the operations, the coverage, and the
+// slowest commands. failed is
 // the error that stopped the run, or nil.
 func summary(st *stats, start time.Time, failed error) {
 	took := time.Since(start).Round(time.Second)
@@ -191,6 +194,8 @@ func summary(st *stats, start time.Time, failed error) {
 	}
 	fmt.Printf("\nCoverage: trees %s; %d archives ended with a dictionary, %d with shared content.\n",
 		strings.Join(kinds, ", "), st.withDict, st.withShared)
+
+	st.slow.report()
 }
 
 func fatal(err error) {

@@ -41,6 +41,7 @@ type stats struct {
 	// withDict and withShared count the sequences that ended with a
 	// dictionary, and with shared content: coverage, not assumed.
 	withDict, withShared int
+	slow                 slowest
 }
 
 func newSequence(seed uint64, dir, bin string, faults bool, st *stats, profile string) (*sequence, error) {
@@ -64,7 +65,7 @@ func newSequence(seed uint64, dir, bin string, faults bool, st *stats, profile s
 		return nil, err
 	}
 	s.g = newGen(s.rnd, s.src, s.profile)
-	s.r = &runner{bin: bin, dir: dir}
+	s.r = &runner{bin: bin, dir: dir, slow: &st.slow, seed: seed, profile: s.profile}
 	s.encrypted = s.rnd.IntN(3) == 0
 	if s.encrypted {
 		pass := filepath.Join(dir, "passphrase")

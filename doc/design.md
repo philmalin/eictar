@@ -3569,7 +3569,12 @@ minutes is a failure.
 Then it gives each check, and the number of times that it held. A check
 that the run did not reach has the note `[not reached in this run]`. Then it
 gives the number of each operation, and the coverage of the profiles,
-dictionaries and shared content. After a failure, the counts are the checks
+dictionaries and shared content. Last, it gives the five slowest commands
+of the run. Each line has the time, the options, the size of the source
+tree, and the `make stress` command that repeats its sequence. A slow
+command is not a failure. Only a command that takes more than two minutes
+fails, as a hang. The list shows a slow case before it becomes a hang, as
+the case of §15.2 became. After a failure, the counts are the checks
 that held before it. To a file or a pipe, the progress line comes once a
 minute.
 
@@ -4176,8 +4181,8 @@ reports the directory of a member that was added by its own path as a
 path that the archive lacks (§9.8). An encrypted archive whose header
 gives less than 8 KiB of KDF memory for each thread is damaged, with exit 3,
 and not an internal error with exit 4 (§6.2). The stress tester has steps for
-`--diff`, `-n` and `--strip-components`, and its summary gives the result
-and each check (§13.4).
+`--diff`, `-n` and `--strip-components`, and its summary gives the result,
+each check and the slowest commands (§13.4).
 
 ## Appendix A. Why these primitives, compared with AES
 
