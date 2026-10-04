@@ -228,7 +228,8 @@ func exitCodeFor(err error) int {
 	}
 	var partial *partialError
 	var differ *differError
-	if errors.As(err, &partial) || errors.As(err, &differ) {
+	var collided *collisionError
+	if errors.As(err, &partial) || errors.As(err, &differ) || errors.As(err, &collided) {
 		return ExitPartial
 	}
 	// A pattern that matches nothing, and a path that is already in the
@@ -322,6 +323,8 @@ Extraction:
       --overwrite           replace existing files (the default)
       --newer-only          replace only when the member is newer
   -O, --to-stdout           write the content to standard output
+      --strip-components N  with -x or --diff: remove the first N components
+                            of each path; a shorter path is left out
   -p, --preserve-permissions  modes exactly, with setuid and no umask; ACLs,
                             and privileged xattrs as root (trusted archives)
       --preserve-owner      restore the owner (root only)

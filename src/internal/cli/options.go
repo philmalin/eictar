@@ -154,10 +154,13 @@ type Options struct {
 	NoACLs              bool
 	NoOwner             bool
 
-	Overwrite  string
-	ToStdout   bool
-	UpdateMode string
-	OnConflict string
+	Overwrite string
+	ToStdout  bool
+	// StripComponents is --strip-components: with -x and --diff, remove
+	// this many leading components from each path (doc/design.md 10.14).
+	StripComponents int
+	UpdateMode      string
+	OnConflict      string
 
 	KeepGoing bool
 	// DryRun is -n: show what the operation would write, and write nothing
@@ -289,6 +292,7 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs.BoolVar(&ops.overwrite, "overwrite", false, "overwrite existing files (the default)")
 	fs.BoolVar(&ops.newerOnly, "newer-only", false, "overwrite only when the member is newer")
 	fs.BoolVarP(&o.ToStdout, "to-stdout", "O", false, "write extracted content to stdout")
+	fs.IntVar(&o.StripComponents, "strip-components", 0, "with -x or --diff, remove this many leading components from each path")
 
 	fs.StringVar(&o.UpdateMode, "update-mode", o.UpdateMode, "with -u: newer, different or digest")
 	fs.StringVar(&o.OnConflict, "on-conflict", o.OnConflict, "with -r: replace, skip or error")
@@ -609,6 +613,12 @@ func (o *Options) validate() error {
 	if o.Op != OpAppend && o.explicit["on-conflict"] {
 		return &UsageError{fmt.Errorf("--on-conflict applies to -r only")}
 	}
+	if o.StripComponents < 0 {
+		return &UsageError{fmt.Errorf("--strip-components must be 0 or more, got %d", o.StripComponents)}
+	}
+	if o.ToStdout && o.StripComponents > 0 {
+		return &UsageError{fmt.Errorf("--strip-components changes the paths of the files, and -O writes no paths")}
+	}
 	if o.Quick && o.Op != OpVerify {
 		return &UsageError{fmt.Errorf("--quick applies to --verify only")}
 	}
@@ -648,6 +658,7 @@ func (o *Options) validate() error {
 		{"preserve-permissions", []Operation{OpExtract}},
 		{"preserve-owner", []Operation{OpExtract}},
 		{"preserve-devices", []Operation{OpExtract}},
+		{"strip-components", []Operation{OpExtract, OpDiff}},
 		{"no-owner", append([]Operation{OpExtract}, walking...)},
 		{"no-xattrs", append([]Operation{OpExtract}, walking...)},
 		{"no-acls", append([]Operation{OpExtract}, walking...)},

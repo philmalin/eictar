@@ -217,6 +217,10 @@ func TestParseUsageErrors(t *testing.T) {
 		{"dereference on list", []string{"-tf", "a", "-h"}},
 		{"dereference on extract", []string{"-xf", "a", "--dereference"}},
 		{"dereference on verify", []string{"--verify", "-f", "a", "-h"}},
+		{"strip-components on list", []string{"-tf", "a", "--strip-components", "1"}},
+		{"strip-components on create", []string{"-cf", "a", "--strip-components", "1", "p"}},
+		{"strip-components with -O", []string{"-xOf", "a", "--strip-components", "1"}},
+		{"negative strip-components", []string{"-xf", "a", "--strip-components", "-1"}},
 		{"dry run of a listing", []string{"-tnf", "a"}},
 		{"dry run of compact", []string{"--compact", "-n", "-f", "a"}},
 		{"dry run of diff", []string{"--diff", "-n", "-f", "a"}},
@@ -703,8 +707,10 @@ func TestMutationOptionsAreBuilt(t *testing.T) {
 // so it takes the options that change the walk and what create records.
 func TestDiffTakesTheOptionsOfTheWalk(t *testing.T) {
 	o := mustParse(t, "--diff", "-f", "a", "-C", "dir", "--exclude", "x", "--exclude-regex", "y",
-		"-R", "z", "-h", "--one-file-system", "--no-owner", "--no-xattrs", "--no-acls", "--keep-going", "p")
-	if o.Op != OpDiff || !o.NoOwner || !o.NoXattrs || !o.NoACLs || !o.OneFileSystem || !o.Dereference {
+		"-R", "z", "-h", "--one-file-system", "--no-owner", "--no-xattrs", "--no-acls", "--keep-going",
+		"--strip-components", "2", "p")
+	if o.Op != OpDiff || !o.NoOwner || !o.NoXattrs || !o.NoACLs || !o.OneFileSystem || !o.Dereference ||
+		o.StripComponents != 2 {
 		t.Errorf("parsed %+v", o)
 	}
 }

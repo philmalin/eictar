@@ -383,6 +383,39 @@ Replace an existing file only when the member is newer.
 .BR \-O ", " \-\-to\-stdout
 Write the content to standard output.
 .TP
+.BI \-\-strip\-components " N"
+Remove the first
+.I N
+components from the path of each member, as tar does. For example,
+.B \-\-strip\-components 1
+extracts
+.B project\-1.2/src/main.go
+as
+.BR src/main.go .
+A member with
+.I N
+components or fewer is not extracted. The patterns,
+.BR \-R ,
+.B \-\-exclude
+and
+.B \-\-exclude\-regex
+match the paths in the archive, before the strip. A path after the strip
+gets the same checks as any other path.
+.IP
+When two members get the same path, the later member in path order is
+extracted, and the program gives a warning that names both. The run then
+ends with exit 1. Two directories with the same path are not a collision:
+the contents of both go into one directory. A hard link to a member that is
+not extracted gets a copy of its content.
+.IP
+With
+.BR \-\-diff ,
+compare the tree that extraction with this option writes. With
+.BR \-n ,
+show the paths after the strip. Not with
+.BR \-O ,
+which writes no paths.
+.TP
 .BR \-p ", " \-\-preserve\-permissions
 Restore the modes exactly: with the setuid, setgid and sticky bits, and not
 less the umask. Also restore POSIX ACLs as any user, and, as root, the
@@ -792,7 +825,9 @@ The operation completed, but some members failed under
 .BR \-\-keep\-going .
 Also, for
 .BR \-\-diff ,
-the archive and the disk are different.
+the archive and the disk are different. Also, with
+.BR \-\-strip\-components ,
+two members had the same path, and one was left out.
 .TP
 .B 2
 A usage error: a bad option, a bad configuration, a pattern or an
@@ -957,6 +992,15 @@ Extract one directory into another place:
 .nf
 .RS
 eictar \-xf home.ect \-d /tmp/restore Documents/letters
+.RE
+.fi
+.PP
+Extract a release without its top directory, and check the result:
+.PP
+.nf
+.RS
+eictar \-xf project\-1.2.ect \-d project \-\-strip\-components 1
+eictar \-\-diff \-f project\-1.2.ect \-C project \-\-strip\-components 1
 .RE
 .fi
 .PP

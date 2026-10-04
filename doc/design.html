@@ -5302,6 +5302,8 @@ meter</a></li>
 <li><a href="#archive-name" id="toc-archive-name">10.12 Archive
 name</a></li>
 <li><a href="#names-on-the-terminal" id="toc-names-on-the-terminal">10.13 Names on the terminal</a></li>
+<li><a href="#strip-components---strip-components" id="toc-strip-components---strip-components">10.14 Strip components
+(<code>--strip-components</code>)</a></li>
 </ul></li>
 <li><a href="#configuration-environment-variables-and-the-configuration-file" id="toc-configuration-environment-variables-and-the-configuration-file">11.
 Configuration: environment variables and the configuration file</a>
@@ -7004,6 +7006,10 @@ member again on the way out. The path must be relative, canonical and
 free of <code>..</code>. It must also resolve to a place under the
 destination. The reader refuses any other path, and a refusal is an
 error, not a skip.</p>
+<p><code>--strip-components</code> (§10.14) removes components only from
+a path that is canonical. A path that is not canonical stays as it is,
+and the check refuses it. Thus a strip cannot change
+<code>../../etc/x</code> into <code>etc/x</code>, which passes.</p>
 <h3 id="symbolic-links">7.6 Symbolic links</h3>
 <p>Three rules apply to links:</p>
 <ul>
@@ -7935,6 +7941,15 @@ system. The output then tells if that file has a given digest. Below its
 start, the walk follows no link, except with <code>-h</code>. It opens
 each file as create does (§9, <code>doc/Security_Audit.md</code> finding
 3).</p>
+<p><strong>With <code>--strip-components</code>,</strong>
+<code>--diff</code> compares the tree that extraction with the same
+option writes (§10.14). The patterns, <code>--exclude</code> and
+<code>-R</code> match the paths in the archive. A path on disk is
+shorter than its path in the archive, so the walk does not apply these
+options. Instead, a path on disk that is not a member is in the
+comparison when one of the removed prefixes before it gives a path that
+the options select. A hard link is compared with the path of its target
+after the strip.</p>
 <h3 id="dry-run--n">9.9 Dry run (<code>-n</code>)</h3>
 <p><code>-n</code> (<code>--dry-run</code>) shows the paths that an
 operation would write or delete, and changes nothing. It applies to
@@ -7963,7 +7978,9 @@ date.</li>
 It applies <code>-k</code> and <code>--newer-only</code> to the files
 that are already under the destination. It skips a device node without
 <code>--preserve-devices</code>, and a socket. With <code>-O</code>, it
-shows the members whose content goes to stdout.</li>
+shows the members whose content goes to stdout. With
+<code>--strip-components</code>, it shows the paths after the strip, and
+gives the warnings for the collisions (§10.14).</li>
 <li>Delete selects the live members as delete does.</li>
 </ul>
 <p><strong>The output.</strong> Each path is on its own line on stdout,
@@ -8623,6 +8640,13 @@ extract, do not apply it. On diff, do not compare it.</td>
 </tr>
 <tr class="even">
 <td></td>
+<td><code>--strip-components N</code></td>
+<td>with <code>-x</code> and <code>--diff</code>, remove the first N
+components of each path (§10.14). Not with <code>-O</code>.</td>
+<td>after v1.0.6</td>
+</tr>
+<tr class="odd">
+<td></td>
 <td><code>--keep-going</code></td>
 <td>continue after an error on one member, and exit with 1. On create,
 append and update, an entry that the walk cannot read is such an error:
@@ -8633,13 +8657,13 @@ and counts as a second failure. A path given on the command line that
 cannot be read still stops the run.</td>
 <td>M2</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--long</code></td>
 <td>the long listing, the same as <code>-tv</code> (§10.9)</td>
 <td>M2</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--json</code></td>
 <td>listing for programs, with every field of §10.9. A path that is not
@@ -8647,52 +8671,52 @@ valid UTF-8 also has <code>path_base64</code>, because a JSON string
 cannot hold its bytes.</td>
 <td>M2</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--quick</code></td>
 <td>with <code>--verify</code>, check only the structure and read no
 member data (§9.4)</td>
 <td>M6</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--on-conflict MODE</code></td>
 <td>with <code>-r</code>: <code>replace</code> (default),
 <code>skip</code> or <code>error</code> (§9.2)</td>
 <td>M6</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--update-mode MODE</code></td>
 <td>with <code>-u</code>: <code>newer</code> (default),
 <code>different</code> or <code>digest</code> (§10.5)</td>
 <td>M6</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--recompress SPEC</code></td>
 <td>with <code>--compact</code>, encode again with SPEC</td>
 <td>M7</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--config FILE</code></td>
 <td>use FILE as the configuration file (§11)</td>
 <td>M7</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--no-config</code></td>
 <td>read no configuration file</td>
 <td>M7</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--show-config</code></td>
 <td>show the settings in effect and where each came from, then exit</td>
 <td>M7</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--version</code>, <code>--help</code></td>
 <td></td>
@@ -8822,7 +8846,9 @@ Thus a default value never causes this error.</p>
 <td>1</td>
 <td>the operation completed, but one or more members failed under
 <code>--keep-going</code>. Also, <code>--diff</code> found a difference
-between the archive and the disk (§9.8).</td>
+between the archive and the disk (§9.8). Also,
+<code>--strip-components</code> gave two members the same path, and one
+was left out (§10.14).</td>
 </tr>
 <tr class="odd">
 <td>2</td>
@@ -9113,6 +9139,46 @@ escapes each name in both cases, as JSON does.</p>
 <p><strong>A message on stderr is always escaped,</strong> on a terminal
 or not. A message is for a person, who can read a log on a terminal
 later. A message never holds a control character of its own.</p>
+<h3 id="strip-components---strip-components">10.14 Strip components
+(<code>--strip-components</code>)</h3>
+<p>An archive of a release often has one top directory, for example
+<code>project-1.2/</code>. <code>--strip-components N</code> removes the
+first N components of each path on extraction, as in tar. Thus
+<code>project-1.2/src/main.go</code> with
+<code>--strip-components 1</code> becomes <code>src/main.go</code>. The
+option applies to <code>-x</code>, with <code>-n</code> too, and to
+<code>--diff</code>. It is a usage error on another operation, with
+<code>-O</code>, which writes no paths, and with a negative N. A
+configuration cannot set it (§11.1).</p>
+<p><strong>The selection comes first.</strong> The patterns,
+<code>--exclude</code>, <code>--exclude-regex</code> and <code>-R</code>
+match the paths in the archive, before the strip. Thus the same pattern
+selects the same members with the option and without it.</p>
+<p><strong>A short path is left out.</strong> A member with N components
+or fewer has no path after the strip, and is not extracted. tar does the
+same. The top directory is such a member.</p>
+<p><strong>Each path is checked after the strip</strong> (§7.5). A path
+that is not canonical is not stripped, so the check refuses it.</p>
+<p><strong>A collision is a warning, and exit 1.</strong> Two members
+can get one path, for example <code>a/x</code> and <code>b/x</code> with
+N = 1. The program knows all the paths before it writes, so it finds
+each collision first. The later member in the order of the archive paths
+is extracted. The earlier member is left out, with a warning that names
+both:</p>
+<pre><code>eictar: a/x: not extracted: b/x has the same path after --strip-components</code></pre>
+<p>The run then ends with exit 1 (§10.7). tar replaces the earlier file
+with no warning. The program does not ask the user what to do: it never
+asks a question, except for a passphrase, so that a script never waits.
+A dry run gives the same warnings, so <code>-n</code> shows the
+collisions before a real run. Two directories with one path are not a
+collision. The contents of both go into the one directory, which gets
+the metadata of the later member.</p>
+<p><strong>Hard links follow their targets.</strong> A hard link names
+its target by its member id, not by its path. Thus a link goes to the
+target at the target’s path after the strip. When the target is not
+extracted, because the strip or a collision left it out, the first link
+gets a copy of the content, as when a pattern leaves the target out
+(§9.2).</p>
 <h2 id="configuration-environment-variables-and-the-configuration-file">11.
 Configuration: environment variables and the configuration file</h2>
 <p>A long command line is tedious to type each time, for example:
@@ -9168,7 +9234,9 @@ configuration file must never change a create into an extract, or make
 each run a dry run.</li>
 <li><strong>What the operation works on:</strong> <code>-f</code>,
 <code>-C</code>, <code>-d</code>, <code>-T</code>, <code>-O</code>,
-<code>-R</code>, and all positional paths and patterns.
+<code>-R</code>, <code>--strip-components</code>, and all positional
+paths and patterns. <code>--strip-components</code> depends on how the
+archive was made, so it is not a preference.
 <code>--exclude-regex</code> can come from a configuration, as
 <code>exclude</code> can.</li>
 <li><strong>The passphrase and its sources</strong> (§11.4).</li>
@@ -9235,22 +9303,22 @@ occur only one time, except <code>exclude</code> and
 <code>[codec.NAME]</code> sections give defaults for one codec. The
 parser has no dependency, and it checks each codec value when it reads
 it, so that an error names the line.</p>
-<div class="sourceCode" id="cb23"><pre class="sourceCode ini"><code class="sourceCode ini"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ~/.eictarrc</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="dt">compress    </span><span class="ot">=</span><span class="st"> zstd</span></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="dt">workers     </span><span class="ot">=</span><span class="st"> </span><span class="dv">12</span></span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="dt">chunk-size  </span><span class="ot">=</span><span class="st"> 8MiB</span></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="dt">update-mode </span><span class="ot">=</span><span class="st"> different</span></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="dt">progress    </span><span class="ot">=</span><span class="st"> </span><span class="kw">true</span></span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> *.o</span></span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> .cache</span></span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.zstd]</span></span>
-<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a><span class="dt">level </span><span class="ot">=</span><span class="st"> </span><span class="dv">19</span></span>
-<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a><span class="dt">long  </span><span class="ot">=</span><span class="st"> </span><span class="dv">27</span></span>
-<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a><span class="dt">train </span><span class="ot">=</span><span class="st"> </span><span class="kw">on</span></span>
-<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.xz]</span></span>
-<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a><span class="dt">preset </span><span class="ot">=</span><span class="st"> </span><span class="dv">6</span></span></code></pre></div>
+<div class="sourceCode" id="cb24"><pre class="sourceCode ini"><code class="sourceCode ini"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ~/.eictarrc</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="dt">compress    </span><span class="ot">=</span><span class="st"> zstd</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="dt">workers     </span><span class="ot">=</span><span class="st"> </span><span class="dv">12</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="dt">chunk-size  </span><span class="ot">=</span><span class="st"> 8MiB</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="dt">update-mode </span><span class="ot">=</span><span class="st"> different</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a><span class="dt">progress    </span><span class="ot">=</span><span class="st"> </span><span class="kw">true</span></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> *.o</span></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> .cache</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.zstd]</span></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a><span class="dt">level </span><span class="ot">=</span><span class="st"> </span><span class="dv">19</span></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a><span class="dt">long  </span><span class="ot">=</span><span class="st"> </span><span class="dv">27</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a><span class="dt">train </span><span class="ot">=</span><span class="st"> </span><span class="kw">on</span></span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.xz]</span></span>
+<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a><span class="dt">preset </span><span class="ot">=</span><span class="st"> </span><span class="dv">6</span></span></code></pre></div>
 <p>A key that is not a known long option is a usage error, for the
 reason in §11.2. So is a section that is not <code>[codec.NAME]</code>,
 and a codec that does not exist.</p>
@@ -9418,48 +9486,48 @@ package of its own. It changes nothing but options, and it needs the
 option parser.</p>
 <h3 id="core-interfaces">12.1 Core interfaces</h3>
 <p>The codec interfaces:</p>
-<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co">// codec: one chunk in, one chunk out. Encoders hold no state between chunks,</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="co">// so all workers can share one encoder.</span></span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Encoder <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    Encode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    Resolved<span class="op">()</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">any</span> <span class="co">// the parameters in effect, for the index catalog</span></span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Decode receives the plaintext size that the index gives. Without it, a</span></span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="co">// crafted chunk is a decompression bomb with nothing to compare against.</span></span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Decoder <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>    Decode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> plainSize <span class="dt">int</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Factory <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a>    Name<span class="op">()</span> <span class="dt">string</span></span>
-<span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a>    Describe<span class="op">()</span> Spec                                      <span class="co">// for --list-codecs</span></span>
-<span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a>    NewEncoder<span class="op">(</span>p Params<span class="op">,</span> concurrency <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Encoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// concurrency: §8.2</span></span>
-<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a>    NewDecoder<span class="op">(</span>maxPlain <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Decoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co">// codec: one chunk in, one chunk out. Encoders hold no state between chunks,</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="co">// so all workers can share one encoder.</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Encoder <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    Encode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>    Resolved<span class="op">()</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">any</span> <span class="co">// the parameters in effect, for the index catalog</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Decode receives the plaintext size that the index gives. Without it, a</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="co">// crafted chunk is a decompression bomb with nothing to compare against.</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Decoder <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>    Decode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> plainSize <span class="dt">int</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Factory <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a>    Name<span class="op">()</span> <span class="dt">string</span></span>
+<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a>    Describe<span class="op">()</span> Spec                                      <span class="co">// for --list-codecs</span></span>
+<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a>    NewEncoder<span class="op">(</span>p Params<span class="op">,</span> concurrency <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Encoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// concurrency: §8.2</span></span>
+<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a>    NewDecoder<span class="op">(</span>maxPlain <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Decoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <p>A decoder takes no compression parameters, because the stream
 contains what decoding needs. Thus a later build can read an archive
 even if its view of the recorded parameters changed.</p>
 <p>The index encoder takes hooks, so that encryption did not change the
 shape of the pipeline:</p>
-<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co">// format</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Sealer <span class="kw">func</span><span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Opener <span class="kw">func</span><span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> EncodeOptions <span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    Compress <span class="dt">bool</span></span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>    Seal     Sealer                           <span class="co">// nil: the index is not sealed</span></span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>    Digest   <span class="kw">func</span><span class="op">([]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">[</span>DigestSize<span class="op">]</span><span class="dt">byte</span>    <span class="co">// nil: the plain BLAKE3 (§6.4)</span></span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co">// format</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Sealer <span class="kw">func</span><span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Opener <span class="kw">func</span><span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> EncodeOptions <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>    Compress <span class="dt">bool</span></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>    Seal     Sealer                           <span class="co">// nil: the index is not sealed</span></span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>    Digest   <span class="kw">func</span><span class="op">([]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">[</span>DigestSize<span class="op">]</span><span class="dt">byte</span>    <span class="co">// nil: the plain BLAKE3 (§6.4)</span></span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <p>The chunk sealer in <code>crypt</code> is a different thing. It seals
 one chunk with a counter and a final-chunk flag.
 <code>format.Sealer</code> seals the whole index in one call:</p>
-<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co">// crypt</span></span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> MemberSealer <span class="kw">struct</span><span class="op">{</span> <span class="op">...</span> <span class="op">}</span></span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Seal<span class="op">(</span>dst<span class="op">,</span> plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Open<span class="op">(</span>dst<span class="op">,</span> ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co">// crypt</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> MemberSealer <span class="kw">struct</span><span class="op">{</span> <span class="op">...</span> <span class="op">}</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Seal<span class="op">(</span>dst<span class="op">,</span> plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Open<span class="op">(</span>dst<span class="op">,</span> ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
 <p>There is one sealer and one key for each member. <code>final</code>
 is a parameter, not a state of the sealer. The writer learns which chunk
 is last only when the next read reaches the end of the file (§8).</p>
@@ -9721,6 +9789,12 @@ with each overwrite policy, and delete, the paths of the dry run are the
 paths that the real run writes, and the archive does not change. Also
 the conflict policies, the key for the digests of an encrypted archive,
 an unsafe member path, and no destination made (§9.9).</li>
+<li><strong>Strip components</strong>: the paths after the strip, a
+short path left out, the later member of a collision with its warning,
+two directories with one path, a hard link to a target that is extracted
+and to one that is not, patterns on the archive paths, the dry run,
+<code>--diff</code> with patterns, excludes and a hard link, a path that
+is not canonical, and exit 1 (§10.14).</li>
 <li><strong>Security regressions</strong>: one test for each finding of
 <code>doc/Security_Audit.md</code>:
 <ul>
@@ -10712,6 +10786,11 @@ Before, the program ignored it.</li>
 earlier versions read what it writes. An archive made with
 <code>train=auto</code> holds an ordinary dictionary, so v1.0.5 reads it
 too.</p>
+<p><strong>After v1.0.6</strong>, <code>--strip-components N</code>
+removes the first N components of each path on extraction, and
+<code>--diff</code> with it compares the tree that such an extraction
+writes (§10.14). When two members get one path, the later one is
+extracted, with a warning and exit 1.</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
 <p>This appendix supports §6.1. The question “how does this compare with

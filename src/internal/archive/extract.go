@@ -30,8 +30,12 @@ type ExtractConfig struct {
 	ExcludeRegex fsutil.Regexps // --exclude-regex
 	Overwrite    OverwritePolicy
 	ToStdout     io.Writer // when non-nil, content goes here instead of to files
-	KeepGoing    bool
-	Reporter     Reporter
+	// StripComponents is --strip-components: the number of leading
+	// components to remove from each path (doc/design.md 10.14). The
+	// patterns match the stored paths, before the strip.
+	StripComponents int
+	KeepGoing       bool
+	Reporter        Reporter
 
 	// Passphrase supplies the key for an encrypted archive.
 	Passphrase PassphraseFunc
@@ -110,7 +114,7 @@ func Extract(cfg ExtractConfig) (Stats, error) {
 	}
 	defer r.Close()
 
-	members, byID, err := cfg.selection(r)
+	members, byID, collided, err := cfg.selection(r)
 	if err != nil {
 		return Stats{}, err
 	}
@@ -144,28 +148,34 @@ func Extract(cfg ExtractConfig) (Stats, error) {
 		x.umask = fs.FileMode(meta.Umask())
 	}
 	stats, err := x.run(members, byID)
+	stats.Collided = collided
 	x.reportRefused()
 	return stats, err
 }
 
 // selection returns the members that cfg extracts, in path order, and every
 // member of the archive by id. Tombstones are in the map: a live hardlink
-// can point to one (§9.2).
-func (cfg ExtractConfig) selection(r *Reader) ([]format.Member, map[uint64]*format.Member, error) {
-	members, err := selectMembers(r.Members(), cfg.Patterns, cfg.Regex)
+// can point to one (§9.2). The members have their paths after
+// --strip-components; the map keeps the stored paths. collided counts the
+// members that the strip left out because of a collision.
+func (cfg ExtractConfig) selection(r *Reader) (members []format.Member, byID map[uint64]*format.Member, collided int, err error) {
+	members, err = selectMembers(r.Members(), cfg.Patterns, cfg.Regex)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	members = excludeMembers(members, cfg.Exclude, cfg.ExcludeRegex)
 	members = withoutRoot(members, cfg.Reporter)
 	sort.SliceStable(members, func(i, j int) bool { return members[i].Path < members[j].Path })
+	if cfg.StripComponents > 0 {
+		members, collided = stripMembers(members, cfg.StripComponents, cfg.Reporter, "not extracted")
+	}
 
 	everything := r.AllMembers()
-	byID := make(map[uint64]*format.Member, len(everything))
+	byID = make(map[uint64]*format.Member, len(everything))
 	for i := range everything {
 		byID[everything[i].ID] = &everything[i]
 	}
-	return members, byID, nil
+	return members, byID, collided, nil
 }
 
 // withoutRoot removes a member whose path is ".", the root of the archived

@@ -105,6 +105,7 @@ var refusedKeys = map[string]string{
 	"no-config":           "--no-config is given on the command line only",
 	"show-config":         "--show-config is given on the command line only",
 	"dry-run":             "a dry run is asked for on the command line only",
+	"strip-components":    "--strip-components depends on how the archive was made, so it is given on the command line only",
 }
 
 // keyGroups are keys that decide one thing together. If the command line

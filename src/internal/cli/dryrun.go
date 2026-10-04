@@ -85,6 +85,9 @@ func runDryRun(o *Options, stdout, stderr io.Writer) error {
 	if stats.Failed > 0 {
 		return &partialError{failed: stats.Failed}
 	}
+	if stats.Collided > 0 {
+		return &collisionError{collided: stats.Collided}
+	}
 	return nil
 }
 
@@ -108,6 +111,9 @@ func dryRunSummary(op Operation, s archive.Stats) string {
 	}
 	if s.Failed > 0 {
 		parts = append(parts, fmt.Sprintf("%d failed", s.Failed))
+	}
+	if s.Collided > 0 {
+		parts = append(parts, fmt.Sprintf("%d left out (same path)", s.Collided))
 	}
 	return strings.Join(parts, "; ")
 }

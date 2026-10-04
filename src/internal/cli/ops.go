@@ -263,6 +263,9 @@ func runExtract(o *Options, stdout, stderr io.Writer) error {
 	if stats.Failed > 0 {
 		return &partialError{failed: stats.Failed}
 	}
+	if stats.Collided > 0 {
+		return &collisionError{collided: stats.Collided}
+	}
 	return nil
 }
 
@@ -323,10 +326,12 @@ func extractConfig(o *Options, stdout io.Writer, rep *reporter) (archive.Extract
 		Patterns:    o.Args,
 		Overwrite:   policy,
 		ToStdout:    toStdout,
-		KeepGoing:   o.KeepGoing,
-		Workers:     o.Workers,
-		MemoryLimit: int64(o.MemoryLimit),
-		Reporter:    rep,
+
+		StripComponents: o.StripComponents,
+		KeepGoing:       o.KeepGoing,
+		Workers:         o.Workers,
+		MemoryLimit:     int64(o.MemoryLimit),
+		Reporter:        rep,
 	}, nil
 }
 
@@ -728,4 +733,12 @@ type partialError struct{ failed int }
 
 func (e *partialError) Error() string {
 	return fmt.Sprintf("%d member(s) failed; the archive is otherwise complete", e.failed)
+}
+
+// collisionError ends a run in which --strip-components gave members the
+// same path. The warnings named each one (doc/design.md 10.14).
+type collisionError struct{ collided int }
+
+func (e *collisionError) Error() string {
+	return fmt.Sprintf("%d member(s) left out: a later member has the same path after --strip-components", e.collided)
 }

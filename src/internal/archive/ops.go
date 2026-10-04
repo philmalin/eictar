@@ -35,6 +35,9 @@ type Stats struct {
 
 	Unchanged int // found up to date by -u
 	Replaced  int // live members that this run tombstoned
+	// Collided counts the members left out because a later member has the
+	// same path after --strip-components (doc/design.md 10.14).
+	Collided int
 }
 
 // CreateConfig drives archive creation.

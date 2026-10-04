@@ -1249,6 +1249,11 @@ the way out. The path must be relative, canonical and free of `..`. It must
 also resolve to a place under the destination. The reader refuses any other
 path, and a refusal is an error, not a skip.
 
+`--strip-components` (§10.14) removes components only from a path that is
+canonical. A path that is not canonical stays as it is, and the check
+refuses it. Thus a strip cannot change `../../etc/x` into `etc/x`, which
+passes.
+
 ### 7.6 Symbolic links
 
 Three rules apply to links:
@@ -2018,6 +2023,14 @@ has a given digest. Below its start, the walk follows no link, except with
 `-h`. It opens each file as create does (§9, `doc/Security_Audit.md`
 finding 3).
 
+**With `--strip-components`,** `--diff` compares the tree that extraction
+with the same option writes (§10.14). The patterns, `--exclude` and `-R`
+match the paths in the archive. A path on disk is shorter than its path in
+the archive, so the walk does not apply these options. Instead, a path on
+disk that is not a member is in the comparison when one of the removed
+prefixes before it gives a path that the options select. A hard link is
+compared with the path of its target after the strip.
+
 ### 9.9 Dry run (`-n`)
 
 `-n` (`--dry-run`) shows the paths that an operation would write or delete,
@@ -2041,7 +2054,9 @@ copy of the rules. It calls the code of the real run:
   `--exclude` and `-R`. It checks each path (§7.5). It applies `-k` and
   `--newer-only` to the files that are already under the destination. It
   skips a device node without `--preserve-devices`, and a socket. With `-O`,
-  it shows the members whose content goes to stdout.
+  it shows the members whose content goes to stdout. With
+  `--strip-components`, it shows the paths after the strip, and gives the
+  warnings for the collisions (§10.14).
 - Delete selects the live members as delete does.
 
 **The output.** Each path is on its own line on stdout, so that a pipe can
@@ -2340,6 +2355,7 @@ whose encryption was removed (§14).
 | | `--overwrite` | overwrite (the default) | M2 |
 | | `--newer-only` | overwrite only when the member is newer | M2 |
 | `-O` | `--to-stdout` | write the extracted content to stdout | M2 |
+| | `--strip-components N` | with `-x` and `--diff`, remove the first N components of each path (§10.14). Not with `-O`. | after v1.0.6 |
 | | `--keep-going` | continue after an error on one member, and exit with 1. On create, append and update, an entry that the walk cannot read is such an error: a directory that cannot be read is archived empty, and a file that went away is left out. macOS needs read permission to list the extended attributes of a directory, so there such a directory is left out too, and counts as a second failure. A path given on the command line that cannot be read still stops the run. | M2 |
 | | `--long` | the long listing, the same as `-tv` (§10.9) | M2 |
 | | `--json` | listing for programs, with every field of §10.9. A path that is not valid UTF-8 also has `path_base64`, because a JSON string cannot hold its bytes. | M2 |
@@ -2433,7 +2449,7 @@ value never causes this error.
 | Code | Meaning |
 |------|---------|
 | 0 | success |
-| 1 | the operation completed, but one or more members failed under `--keep-going`. Also, `--diff` found a difference between the archive and the disk (§9.8). |
+| 1 | the operation completed, but one or more members failed under `--keep-going`. Also, `--diff` found a difference between the archive and the disk (§9.8). Also, `--strip-components` gave two members the same path, and one was left out (§10.14). |
 | 2 | usage error: an unknown option, no operation, two operations, no `-f`, a bad compression spec. Also a pattern that matches no member, for `-t`, `-x`, `--verify`, `--diff` and `--delete`, an `-R` that matches no path or member, a regular expression that does not compile, and a path that is already in the archive under `--on-conflict=error`. Nothing is changed or extracted. |
 | 3 | the archive failed a check. Causes: corrupt data, an unsafe member path, a wrong passphrase or a failed tag. Also a plaintext archive when a passphrase source was given, and an archive path through a link that the program does not follow (§9). |
 | 4 | any other failure, usually an I/O error on the archive or the filesystem |
@@ -2671,6 +2687,51 @@ then two lines, so a script that must handle any name reads `--json`.
 for a person, who can read a log on a terminal later. A message never holds
 a control character of its own.
 
+### 10.14 Strip components (`--strip-components`)
+
+An archive of a release often has one top directory, for example
+`project-1.2/`. `--strip-components N` removes the first N components of
+each path on extraction, as in tar. Thus `project-1.2/src/main.go` with
+`--strip-components 1` becomes `src/main.go`. The option applies to `-x`,
+with `-n` too, and to `--diff`. It is a usage error on another operation,
+with `-O`, which writes no paths, and with a negative N. A configuration
+cannot set it (§11.1).
+
+**The selection comes first.** The patterns, `--exclude`,
+`--exclude-regex` and `-R` match the paths in the archive, before the
+strip. Thus the same pattern selects the same members with the option and
+without it.
+
+**A short path is left out.** A member with N components or fewer has no
+path after the strip, and is not extracted. tar does the same. The top
+directory is such a member.
+
+**Each path is checked after the strip** (§7.5). A path that is not
+canonical is not stripped, so the check refuses it.
+
+**A collision is a warning, and exit 1.** Two members can get one path, for
+example `a/x` and `b/x` with N = 1. The program knows all the paths before
+it writes, so it finds each collision first. The later member in the order
+of the archive paths is extracted. The earlier member is left out, with a
+warning that names both:
+
+```
+eictar: a/x: not extracted: b/x has the same path after --strip-components
+```
+
+The run then ends with exit 1 (§10.7). tar replaces the earlier file with
+no warning. The program does not ask the user what to do: it never asks a
+question, except for a passphrase, so that a script never waits. A dry run
+gives the same warnings, so `-n` shows the collisions before a real run.
+Two directories with one path are not a collision. The contents of both go
+into the one directory, which gets the metadata of the later member.
+
+**Hard links follow their targets.** A hard link names its target by its
+member id, not by its path. Thus a link goes to the target at the target's
+path after the strip. When the target is not extracted, because the strip
+or a collision left it out, the first link gets a copy of the content, as
+when a pattern leaves the target out (§9.2).
+
 ## 11. Configuration: environment variables and the configuration file
 
 A long command line is tedious to type each time, for example:
@@ -2720,8 +2781,10 @@ line, and a configuration that sets one is an error:
   `--recompress`, which is part of compact, and `-n`, which decides if the
   operation changes anything. A configuration file must never change a
   create into an extract, or make each run a dry run.
-- **What the operation works on:** `-f`, `-C`, `-d`, `-T`, `-O`, `-R`, and
-  all positional paths and patterns. `--exclude-regex` can come from a
+- **What the operation works on:** `-f`, `-C`, `-d`, `-T`, `-O`, `-R`,
+  `--strip-components`, and all positional paths and patterns.
+  `--strip-components` depends on how the archive was made, so it is not a
+  preference. `--exclude-regex` can come from a
   configuration, as `exclude` can.
 - **The passphrase and its sources** (§11.4).
 - `--config`, `--no-config` and `--show-config`.
@@ -3243,6 +3306,12 @@ Every item in the lists below exists now, except the items marked "later".
   the real run writes, and the archive does not change. Also the conflict
   policies, the key for the digests of an encrypted archive, an unsafe
   member path, and no destination made (§9.9).
+- **Strip components**: the paths after the strip, a short path left out,
+  the later member of a collision with its warning, two directories with
+  one path, a hard link to a target that is extracted and to one that is
+  not, patterns on the archive paths, the dry run, `--diff` with patterns,
+  excludes and a hard link, a path that is not canonical, and exit 1
+  (§10.14).
 - **Security regressions**: one test for each finding of
   `doc/Security_Audit.md`:
   - the decision for each class of xattr
@@ -4036,6 +4105,11 @@ Other changes:
 The format is still 1.0. v1.0.6 reads every earlier archive, and earlier
 versions read what it writes. An archive made with `train=auto` holds an
 ordinary dictionary, so v1.0.5 reads it too.
+
+**After v1.0.6**, `--strip-components N` removes the first N components
+of each path on extraction, and `--diff` with it compares the tree that
+such an extraction writes (§10.14). When two members get one path, the
+later one is extracted, with a warning and exit 1.
 
 ## Appendix A. Why these primitives, compared with AES
 

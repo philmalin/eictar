@@ -86,6 +86,7 @@ func TestConfigRefusals(t *testing.T) {
 		{"archive in file", "file = a.ect\n", nil, "command line only"},
 		{"regex in file", "regex = .*\n", nil, "command line only"},
 		{"dry run in file", "dry-run = true\n", nil, "command line only"},
+		{"strip-components in file", "strip-components = 1\n", nil, "command line only"},
 		{"bad value", "workers = many\n", nil, ".eictarrc:1"},
 		{"bad bool", "keep-going = maybe\n", nil, "want true or false"},
 		{"bad codec value", "[codec.zstd]\nlevel = 99\n", nil, ".eictarrc:2"},

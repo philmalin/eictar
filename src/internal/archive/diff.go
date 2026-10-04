@@ -33,6 +33,10 @@ type DiffConfig struct {
 	// Dereference and OneFileSystem walk the tree as create did with them.
 	Dereference   bool
 	OneFileSystem bool
+	// StripComponents is --strip-components: the tree on disk is what
+	// extraction with it writes (doc/design.md 10.14). The patterns match
+	// the stored paths, before the strip.
+	StripComponents int
 	// Metadata leaves out what --no-owner, --no-xattrs and --no-acls name.
 	Metadata MetadataOptions
 	Open     OpenOptions
@@ -85,6 +89,9 @@ type DiffResult struct {
 	// Paths counts the paths with at least one difference.
 	Paths  int
 	Failed int
+	// Collided counts the members left out because a later member has the
+	// same path after --strip-components.
+	Collided int
 }
 
 // DiffArchive compares the live members of an archive with the tree on disk
@@ -113,7 +120,9 @@ func DiffArchive(cfg DiffConfig) (DiffResult, error) {
 			return res, err
 		}
 		if live[i].Type == format.TypeDir {
-			dirs[live[i].Path] = true
+			if p, ok := stripPath(live[i].Path, cfg.StripComponents); ok {
+				dirs[p] = true
+			}
 		}
 	}
 	selected, err := selectMembers(live, cfg.Patterns, cfg.Regex)
@@ -123,6 +132,27 @@ func DiffArchive(cfg DiffConfig) (DiffResult, error) {
 	byID := map[uint64]*format.Member{}
 	for i := range r.index.Members {
 		byID[r.index.Members[i].ID] = &r.index.Members[i]
+	}
+	// prefixes holds what the strip removes from the selected members. A
+	// path on disk is in the comparison when one of them before it gives a
+	// path that the patterns select (differ.inScope).
+	prefixes := map[string]bool{}
+	if cfg.StripComponents > 0 {
+		for i := range selected {
+			if rest, ok := stripPath(selected[i].Path, cfg.StripComponents); ok {
+				prefixes[selected[i].Path[:len(selected[i].Path)-len(rest)-1]] = true
+			}
+		}
+		sort.SliceStable(selected, func(i, j int) bool { return selected[i].Path < selected[j].Path })
+		selected, res.Collided = stripMembers(selected, cfg.StripComponents, cfg.Reporter, "not compared")
+		// A hardlink is checked against its target's path on disk, which
+		// is the target's path after the strip. A target that the strip
+		// leaves out has no path, and is not checked.
+		for id, m := range byID {
+			c := *m
+			c.Path, _ = stripPath(m.Path, cfg.StripComponents)
+			byID[id] = &c
+		}
 	}
 
 	// The writer never stores the root of the tree, ".". Another writer can:
@@ -143,7 +173,7 @@ func DiffArchive(cfg DiffConfig) (DiffResult, error) {
 	}
 
 	d := &differ{cfg: cfg, r: r, byID: byID, want: want, seen: map[string]bool{},
-		extraDirs: map[string]bool{}}
+		extraDirs: map[string]bool{}, prefixes: sortedKeys(prefixes)}
 	d.progress = progressOf(cfg.Reporter)
 	if d.progress != nil {
 		d.progress.Total(total)
@@ -254,10 +284,13 @@ func sortedKeys(set map[string]bool) []string {
 
 // differ holds the state of one --diff.
 type differ struct {
-	cfg      DiffConfig
-	r        *Reader
-	root     *os.Root
-	byID     map[uint64]*format.Member
+	cfg  DiffConfig
+	r    *Reader
+	root *os.Root
+	byID map[uint64]*format.Member
+	// prefixes are the leading components that --strip-components removed,
+	// in order. They are empty without it.
+	prefixes []string
 	want     map[string]*format.Member // the selected members, by path
 	archive  os.FileInfo               // the archive file, which the walk skips
 	progress Progress
@@ -363,7 +396,7 @@ func (d *differ) stopWorkers() {
 // walk visits each root of the archived tree on disk. A root that is not on
 // disk is not walked: its members are then reported as missing.
 func (d *differ) walk(roots []string) error {
-	wk := newWalker(walkOptions{
+	opt := walkOptions{
 		root:          d.root,
 		baseDir:       d.cfg.BaseDir,
 		dereference:   d.cfg.Dereference,
@@ -375,7 +408,13 @@ func (d *differ) walk(roots []string) error {
 			d.fail(err)
 			return d.stopped()
 		},
-	}, d.visit)
+	}
+	// The selection options match stored paths. After --strip-components,
+	// the paths on disk are shorter, and inScope tests them instead.
+	if d.cfg.StripComponents > 0 {
+		opt.exclude, opt.regex, opt.excludeRegex = nil, nil, nil
+	}
+	wk := newWalker(opt, d.visit)
 	for _, root := range roots {
 		there, err := d.rootThere(root)
 		if err != nil {
@@ -417,6 +456,27 @@ func (d *differ) rootThere(root string) (bool, error) {
 	return false, fmt.Errorf("%s: %w", root, err)
 }
 
+// inScope reports whether the path p on disk, which is not a member, is one
+// that the selection options take: a path that the archive lacks, or one to
+// leave out. After --strip-components, p is in scope when a removed prefix
+// before it gives a stored path that the options select.
+func (d *differ) inScope(p string) bool {
+	if d.cfg.StripComponents == 0 {
+		// The walk applied the other options.
+		return len(d.cfg.Patterns) == 0 || fsutil.MatchAny(d.cfg.Patterns, p)
+	}
+	for _, prefix := range d.prefixes {
+		stored := prefix + "/" + p
+		if (len(d.cfg.Patterns) == 0 || fsutil.MatchAny(d.cfg.Patterns, stored)) &&
+			(len(d.cfg.Regex) == 0 || d.cfg.Regex.MatchAny(stored)) &&
+			!fsutil.MatchAnyOrParent(d.cfg.Exclude, stored) &&
+			!d.cfg.ExcludeRegex.MatchAnyOrParent(stored) {
+			return true
+		}
+	}
+	return false
+}
+
 // visit compares one path of the walk with its member.
 func (d *differ) visit(e entry) error {
 	if err := d.stopped(); err != nil {
@@ -426,10 +486,10 @@ func (d *differ) visit(e entry) error {
 	if d.archive != nil && os.SameFile(e.Info, d.archive) {
 		return nil
 	}
-	if len(d.cfg.Patterns) > 0 && !fsutil.MatchAny(d.cfg.Patterns, e.Stored) {
+	m, ok := d.want[e.Stored]
+	if !ok && !d.inScope(e.Stored) {
 		return nil
 	}
-	m, ok := d.want[e.Stored]
 	if !ok {
 		// Create skips a socket, so it is not a path that the archive lacks.
 		// Under a directory that is not in the archive, only the directory
@@ -496,7 +556,7 @@ func (d *differ) visit(e entry) error {
 func (d *differ) checkHardlinks() {
 	for _, l := range d.links {
 		t, ok := d.byID[l.m.HardlinkTo]
-		if !ok || t.Dead {
+		if !ok || t.Dead || t.Path == "" {
 			continue
 		}
 		fi, err := d.root.Lstat(t.Path)

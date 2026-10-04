@@ -194,6 +194,12 @@ shows each path that the command would write or delete, with the same
 selection as a real run, and changes nothing. With `-v`, a word before each
 path tells what happens to it: `add`, `replace`, `extract` or `delete`.
 
+`--strip-components N` removes the first N components of each path on
+extraction, as in tar: `eictar -xf project-1.2 --strip-components 1`
+extracts `project-1.2/src/main.go` as `src/main.go`. When two members get
+one path, the later one is extracted, with a warning and exit 1. `--diff`
+takes the option too, to compare the tree that such an extraction writes.
+
 ### Check an archive
 
 ```

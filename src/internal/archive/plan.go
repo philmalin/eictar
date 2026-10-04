@@ -112,10 +112,11 @@ func PlanExtract(cfg ExtractConfig, plan PlanFunc) (Stats, error) {
 	}
 	defer r.Close()
 
-	members, byID, err := cfg.selection(r)
+	members, byID, collided, err := cfg.selection(r)
 	if err != nil {
 		return stats, err
 	}
+	stats.Collided = collided
 	contentSize := func(m *format.Member) uint64 {
 		if m.Type == format.TypeReg {
 			return m.Size

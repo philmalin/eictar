@@ -30,6 +30,8 @@ func runDiff(o *Options, stdout, stderr io.Writer) error {
 		ExcludeRegex:  o.excludeRegex,
 		Dereference:   o.Dereference,
 		OneFileSystem: o.OneFileSystem,
+
+		StripComponents: o.StripComponents,
 		Metadata: archive.MetadataOptions{
 			NoOwner: o.NoOwner, NoXattrs: o.NoXattrs, NoACLs: o.NoACLs,
 		},
@@ -54,6 +56,8 @@ func runDiff(o *Options, stdout, stderr io.Writer) error {
 		return &partialError{failed: res.Failed}
 	case res.Paths > 0:
 		return &differError{paths: res.Paths}
+	case res.Collided > 0:
+		return &collisionError{collided: res.Collided}
 	}
 	if !o.Quiet {
 		fmt.Fprintf(stdout, "%s: no differences, %d members compared\n", o.Archive, res.Compared)

@@ -117,3 +117,48 @@ func TestDryRunSummary(t *testing.T) {
 		}
 	}
 }
+
+// TestStripComponentsThroughRun: a collision is a warning that names both
+// members, in the dry run and in the extraction, and the run ends with
+// exit 1.
+func TestStripComponentsThroughRun(t *testing.T) {
+	dir := t.TempDir()
+	for _, p := range []string{"p1", "p2"} {
+		if err := os.MkdirAll(filepath.Join(dir, p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, p, "a"), []byte(p), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	archivePath := filepath.Join(dir, "a.ect")
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"-cf", archivePath, "-C", dir, "p1", "p2"}, &stdout, &stderr); code != ExitOK {
+		t.Fatalf("create: exit %d: %s", code, stderr.String())
+	}
+	dest := filepath.Join(dir, "out")
+	warning := "p1/a: not extracted: p2/a has the same path after --strip-components"
+	for _, argv := range [][]string{
+		{"-xnf", archivePath, "-d", dest, "--strip-components", "1"},
+		{"-xf", archivePath, "-d", dest, "--strip-components", "1"},
+	} {
+		stdout.Reset()
+		stderr.Reset()
+		code := Run(argv, &stdout, &stderr)
+		if code != ExitPartial || !strings.Contains(stderr.String(), warning) ||
+			!strings.Contains(stderr.String(), "1 member(s) left out") {
+			t.Errorf("%q: exit %d, stdout %q, stderr %q", argv, code, stdout.String(), stderr.String())
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(dest, "a")); err != nil || string(b) != "p2" {
+		t.Errorf("a = %q (%v), want p2", b, err)
+	}
+
+	// --diff of the result: the collision only.
+	stdout.Reset()
+	stderr.Reset()
+	code := Run([]string{"--diff", "-f", archivePath, "-C", dest, "--strip-components", "1"}, &stdout, &stderr)
+	if code != ExitPartial || stdout.String() != "" || !strings.Contains(stderr.String(), "p1/a: not compared") {
+		t.Errorf("diff: exit %d, stdout %q, stderr %q", code, stdout.String(), stderr.String())
+	}
+}
