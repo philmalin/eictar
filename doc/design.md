@@ -1,8 +1,8 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete, and v1.0.6 is the current release. The CI workflow passes
+Status: M1 to M11 are complete, and v1.0.7 is the current release. The CI workflow passes
 on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
-Date: 2026-10-04
+Date: 2026-10-05
 Applies to: v1 (format version 1.0)
 
 This document specifies the on-disk format, the concurrency model, the command
@@ -2365,7 +2365,7 @@ whose encryption was removed (§14).
 | | `--overwrite` | overwrite (the default) | M2 |
 | | `--newer-only` | overwrite only when the member is newer | M2 |
 | `-O` | `--to-stdout` | write the extracted content to stdout | M2 |
-| | `--strip-components N` | with `-x` and `--diff`, remove the first N components of each path (§10.14). Not with `-O`. | after v1.0.6 |
+| | `--strip-components N` | with `-x` and `--diff`, remove the first N components of each path (§10.14). Not with `-O`. | v1.0.7 |
 | | `--keep-going` | continue after an error on one member, and exit with 1. On create, append and update, an entry that the walk cannot read is such an error: a directory that cannot be read is archived empty, and a file that went away is left out. macOS needs read permission to list the extended attributes of a directory, so there such a directory is left out too, and counts as a second failure. A path given on the command line that cannot be read still stops the run. | M2 |
 | | `--long` | the long listing, the same as `-tv` (§10.9) | M2 |
 | | `--json` | listing for programs, with every field of §10.9. A path that is not valid UTF-8 also has `path_base64`, because a JSON string cannot hold its bytes. | M2 |
@@ -4173,16 +4173,45 @@ The format is still 1.0. v1.0.6 reads every earlier archive, and earlier
 versions read what it writes. An archive made with `train=auto` holds an
 ordinary dictionary, so v1.0.5 reads it too.
 
-**After v1.0.6**, `--strip-components N` removes the first N components
-of each path on extraction, and `--diff` with it compares the tree that
-such an extraction writes (§10.14). When two members get one path, the
-later one is extracted, with a warning and exit 1. `--diff` no longer
-reports the directory of a member that was added by its own path as a
-path that the archive lacks (§9.8). An encrypted archive whose header
-gives less than 8 KiB of KDF memory for each thread is damaged, with exit 3,
-and not an internal error with exit 4 (§6.2). The stress tester has steps for
-`--diff`, `-n` and `--strip-components`, and its summary gives the result,
-each check and the slowest commands (§13.4).
+**v1.0.7 adds one option, and fixes two faults.**
+
+The new option:
+
+- `--strip-components N`, with `-x` and `--diff`, removes the first N
+  components of each path (§10.14). Patterns, `-R` and `--exclude` match
+  the paths in the archive, before the strip. A member with N components
+  or fewer is not extracted. When two members get one path, the later one
+  in path order is extracted, with a warning, and the run ends with exit 1.
+  Two directories with one path are not a collision. A path that is not
+  safe is not stripped, so the extraction still refuses it. `--diff` with
+  the option compares the tree that such an extraction writes. The option
+  is refused with `-O`, and in a configuration file.
+
+The fixes:
+
+- `--diff` reported the directory of a member as a path that the archive
+  lacks, when `-r a/b/c` had added the member by its own path, with no
+  member for `a/b` (§9.8).
+- An encrypted archive whose crypto header gives less than 8 KiB of KDF
+  memory for each thread now gives exit 3, for damage. Before, it gave
+  exit 4, as for an internal error (§6.2). The program refused the archive
+  in both versions, and read no data from it.
+
+Other changes:
+
+- The stress tester has steps for `--diff`, `-n` and `--strip-components`.
+  Its summary starts with PASS or FAIL, and gives each check with the
+  number of times that it held, and the five slowest commands (§13.4).
+  Runs of 1, 2 and 3 hours found the second fix above, and the cost that
+  §15.2 records.
+- §15.2 records why `zstd:train` is slow at level 10 and above on small
+  files or small chunks, and a fix in the library that a prototype
+  measured. The item waits for the library.
+- A test of `--diff` no longer depends on the resolution of the file
+  times. It failed now and then on OpenBSD.
+
+The format is still 1.0. v1.0.7 reads every earlier archive, and earlier
+versions read what it writes.
 
 ## Appendix A. Why these primitives, compared with AES
 

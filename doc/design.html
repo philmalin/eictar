@@ -5377,9 +5377,9 @@ the usual choices</a></li>
 </ul>
 </nav>
 <h1 id="eictar-design-document">eictar — Design Document</h1>
-<p>Status: M1 to M11 are complete, and v1.0.6 is the current release.
+<p>Status: M1 to M11 are complete, and v1.0.7 is the current release.
 The CI workflow passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD
-(§15.1). Date: 2026-10-04 Applies to: v1 (format version 1.0)</p>
+(§15.1). Date: 2026-10-05 Applies to: v1 (format version 1.0)</p>
 <p>This document specifies the on-disk format, the concurrency model,
 the command line and the internal package layout of <code>eictar</code>.
 It is the reference for all implementation work. When the code changes,
@@ -8653,7 +8653,7 @@ extract, do not apply it. On diff, do not compare it.</td>
 <td><code>--strip-components N</code></td>
 <td>with <code>-x</code> and <code>--diff</code>, remove the first N
 components of each path (§10.14). Not with <code>-O</code>.</td>
-<td>after v1.0.6</td>
+<td>v1.0.7</td>
 </tr>
 <tr class="odd">
 <td></td>
@@ -10856,18 +10856,46 @@ Before, the program ignored it.</li>
 earlier versions read what it writes. An archive made with
 <code>train=auto</code> holds an ordinary dictionary, so v1.0.5 reads it
 too.</p>
-<p><strong>After v1.0.6</strong>, <code>--strip-components N</code>
-removes the first N components of each path on extraction, and
-<code>--diff</code> with it compares the tree that such an extraction
-writes (§10.14). When two members get one path, the later one is
-extracted, with a warning and exit 1. <code>--diff</code> no longer
-reports the directory of a member that was added by its own path as a
-path that the archive lacks (§9.8). An encrypted archive whose header
-gives less than 8 KiB of KDF memory for each thread is damaged, with
-exit 3, and not an internal error with exit 4 (§6.2). The stress tester
-has steps for <code>--diff</code>, <code>-n</code> and
-<code>--strip-components</code>, and its summary gives the result, each
-check and the slowest commands (§13.4).</p>
+<p><strong>v1.0.7 adds one option, and fixes two faults.</strong></p>
+<p>The new option:</p>
+<ul>
+<li><code>--strip-components N</code>, with <code>-x</code> and
+<code>--diff</code>, removes the first N components of each path
+(§10.14). Patterns, <code>-R</code> and <code>--exclude</code> match the
+paths in the archive, before the strip. A member with N components or
+fewer is not extracted. When two members get one path, the later one in
+path order is extracted, with a warning, and the run ends with exit 1.
+Two directories with one path are not a collision. A path that is not
+safe is not stripped, so the extraction still refuses it.
+<code>--diff</code> with the option compares the tree that such an
+extraction writes. The option is refused with <code>-O</code>, and in a
+configuration file.</li>
+</ul>
+<p>The fixes:</p>
+<ul>
+<li><code>--diff</code> reported the directory of a member as a path
+that the archive lacks, when <code>-r a/b/c</code> had added the member
+by its own path, with no member for <code>a/b</code> (§9.8).</li>
+<li>An encrypted archive whose crypto header gives less than 8 KiB of
+KDF memory for each thread now gives exit 3, for damage. Before, it gave
+exit 4, as for an internal error (§6.2). The program refused the archive
+in both versions, and read no data from it.</li>
+</ul>
+<p>Other changes:</p>
+<ul>
+<li>The stress tester has steps for <code>--diff</code>, <code>-n</code>
+and <code>--strip-components</code>. Its summary starts with PASS or
+FAIL, and gives each check with the number of times that it held, and
+the five slowest commands (§13.4). Runs of 1, 2 and 3 hours found the
+second fix above, and the cost that §15.2 records.</li>
+<li>§15.2 records why <code>zstd:train</code> is slow at level 10 and
+above on small files or small chunks, and a fix in the library that a
+prototype measured. The item waits for the library.</li>
+<li>A test of <code>--diff</code> no longer depends on the resolution of
+the file times. It failed now and then on OpenBSD.</li>
+</ul>
+<p>The format is still 1.0. v1.0.7 reads every earlier archive, and
+earlier versions read what it writes.</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
 <p>This appendix supports §6.1. The question “how does this compare with
