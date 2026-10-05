@@ -303,7 +303,11 @@ func TestDiffSkipsTheArchive(t *testing.T) {
 	}
 
 	// The archive changed the time of its directory when it was written,
-	// and that is a real difference. The archive itself is not one.
+	// and that is a real difference. The archive itself is not one. The
+	// walk records the time after the temporary file is made, and the
+	// rename changes it again, but a coarse clock (OpenBSD) can give both
+	// one value. The fixture's time makes the difference certain.
+	tree.SetTimes("tree", diffStamp, diffStamp)
 	res, err := DiffArchive(DiffConfig{Archive: archivePath, BaseDir: tree.Root})
 	if err != nil {
 		t.Fatalf("DiffArchive: %v", err)
