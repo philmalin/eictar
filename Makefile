@@ -66,10 +66,10 @@ release: | $(TMPDIR)
 	done
 
 test: | $(TMPDIR)
-	$(GO) test $(PKGS)
+	$(GO) test $(PKGS) ./tools/...
 
 test-race: | $(TMPDIR)
-	$(GO) test -race $(PKGS)
+	$(GO) test -race $(PKGS) ./tools/...
 
 # Drives the compiled binary end to end; see doc/design.md 13.2.
 operational: | $(TMPDIR)

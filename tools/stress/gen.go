@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"math/rand/v2"
@@ -117,6 +118,20 @@ func (g *gen) name() string {
 		b.WriteString([]string{".txt", ".bin", ".dat", ".go"}[g.rnd.IntN(4)])
 	}
 	return b.String()
+}
+
+// newPath makes the path of a new entry in parent. The names come from a
+// finite set, so in a long run two entries of one parent sometimes draw the
+// same name. newPath then draws again. It uses the random
+// source again only on such a collision, so a seed without one gives the
+// same tree as before.
+func (g *gen) newPath(parent string) string {
+	for {
+		rel := path.Join(parent, g.name())
+		if _, err := os.Lstat(filepath.Join(g.src, rel)); errors.Is(err, fs.ErrNotExist) {
+			return rel
+		}
+	}
 }
 
 // size picks a file size: mostly small, often at a chunk boundary, and now
@@ -246,8 +261,7 @@ func (g *gen) populate() error {
 	n := g.treeSize()
 	dirs := []string{"."}
 	for i := 0; i < n; i++ {
-		parent := dirs[g.rnd.IntN(len(dirs))]
-		rel := path.Join(parent, g.name())
+		rel := g.newPath(dirs[g.rnd.IntN(len(dirs))])
 		if err := g.addEntry(rel, &dirs); err != nil {
 			return err
 		}
@@ -399,7 +413,7 @@ func (g *gen) mutate() (string, error) {
 			}
 		default: // something new
 			dirs := append([]string{"."}, g.dirs()...)
-			rel := path.Join(dirs[g.rnd.IntN(len(dirs))], g.name())
+			rel := g.newPath(dirs[g.rnd.IntN(len(dirs))])
 			did = append(did, "add "+rel)
 			if err := g.addEntry(rel, &dirs); err != nil {
 				return "", err

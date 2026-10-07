@@ -3610,13 +3610,16 @@ their first runs:
   target's path when a collision had left the target out. Extraction gives
   such a link a copy of the content (§10.14).
 
-Longer runs found one more fault, and one fault in the tester:
+Longer runs found one more fault, and two faults in the tester:
 
 - A damaged crypto header that gave less than 8 KiB of KDF memory for each
   thread gave exit 4. It must give exit 3, for damage (§6.2).
 - `zstd:level=13,train=16K` with chunks of 512 bytes took 124 s on a tree of
   125 MiB, and the tester reported a hang. The output was correct. At
   level 9, the same command took 0.6 s. This is the cost that §15.2 records.
+- After 4 hours, the generator gave two new entries of one directory the
+  same name, and the second one failed. A new entry now gets another name
+  when its name is taken. `make check` now runs the tests of `tools/` too.
 
 A run of ten minutes, over all the profiles, made 146 sequences. They ran
 approximately 14,000 eictar commands, with 256 crashes and 510 damaged
