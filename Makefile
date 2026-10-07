@@ -38,7 +38,7 @@ VERSION  ?= $(or $(shell git describe --tags --dirty 2>/dev/null | sed 's/^v//')
 LDFLAGS    := -s -w -X github.com/philmalin/eictar/src/internal/cli.Version=$(VERSION)
 BUILDFLAGS := -trimpath -ldflags="$(LDFLAGS)"
 
-.PHONY: all build release test test-race operational fuzz bench compare stress stress-build vet fmt check check-norace skips clean
+.PHONY: all build release test test-race operational large fuzz bench compare stress stress-build vet fmt check check-norace skips clean
 
 all: build
 
@@ -74,6 +74,13 @@ test-race: | $(TMPDIR)
 # Drives the compiled binary end to end; see doc/design.md 13.2.
 operational: | $(TMPDIR)
 	$(GO) test -tags operational ./src/operational/
+
+# An archive larger than 4 GiB through each operation (doc/design.md 13.2).
+# LARGE is the size of its large file in GiB. The test needs approximately
+# four times that much free space in .tmp/.
+LARGE ?= 4
+large: | $(TMPDIR)
+	EICTAR_TEST_LARGE=$(LARGE) $(GO) test -count=1 -tags operational -run TestLargeArchive -timeout 2h -v ./src/operational/
 
 fuzz: | $(TMPDIR)
 	@for t in FuzzHeaderUnmarshal FuzzTrailerUnmarshal FuzzDecodeIndex FuzzUnmarshalCryptoHeader; do \

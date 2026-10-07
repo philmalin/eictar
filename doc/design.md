@@ -2947,6 +2947,7 @@ bare `go` command:
 | `make test` | run the unit tests |
 | `make test-race` | run the unit tests with the race detector |
 | `make operational` | run the operational tests (§13.2) |
+| `make large` | run the operational test of an archive larger than 4 GiB (§13.2). `LARGE=8` sets the size of its large file in GiB (default 4). It needs approximately four times that much free space in `.tmp/`. |
 | `make fuzz` | run each fuzz target for `FUZZTIME` (default 30s) |
 | `make bench` | run the Go benchmarks of create and extract (§8.4) |
 | `make compare` | compare eictar with `tar` and a compressor, on `DIR` (default: the module cache). Needs `tar`, `zstd`, `xz` and `gzip`. |
@@ -3442,6 +3443,17 @@ parts work.
 
   The dry run (§9.9) has no operational test. The tests of package `cli`
   run it through `Run`, and check its output and that nothing changes.
+- **Large archive**: an archive larger than 4 GiB, plain and encrypted.
+  `make large` runs it. Other runs skip it, because it needs time and disk
+  space. The format stores offsets and lengths as CBOR uints, which take 8
+  bytes above 2^32. The test takes each of these past 2^32: the size of one
+  member, the offset of a blob, the offsets of data segments in a sparse
+  file, the index offset, and `prev_index_offset`. The data is random and
+  the codec is `none`, so the archive is as large as its data. The test
+  checks the sizes in `--json`, `--verify`, a full extraction, `-O`,
+  `--diff`, an append, a cut append and `--repair`, and a delete with
+  `--compact`. It compares each file with SHA-256. A reader that keeps only
+  32 bits of a blob offset fails `--verify` in this test.
 - **Scale** (nightly, later): 100,000 small files, and one file larger than
   memory.
 
