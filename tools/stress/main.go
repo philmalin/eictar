@@ -139,6 +139,7 @@ func main() {
 // key in stats.checks. Each is a rule that held each time it was counted.
 var checkNames = []struct{ key, rule string }{
 	{"state", "after each step: -t lists the model, --verify passes, and a full extraction gives back the model"},
+	{"hardlinks", "after each step with hardlinks in the model: the extraction gives each link group as one file, and other names as other files"},
 	{"partial", "extraction by pattern or -R gives exactly the matching members"},
 	{"refused", "an operation that must be refused exits with 2, and leaves the archive byte for byte as it was"},
 	{"passphrase", "after a change of passphrase, the old passphrase is refused with exit 3"},

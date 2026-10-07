@@ -10082,12 +10082,17 @@ so that the coverage of these features is measured, not assumed.</p>
 <p>A third of the sequences are encrypted, some with a sealed index. In
 these, a step can also change the passphrase. After the change, the old
 passphrase must fail with exit 3.</p>
-<p><strong>After each step</strong> the tester makes three checks:</p>
+<p><strong>After each step</strong> the tester makes four checks:</p>
 <ol type="1">
 <li><code>-t</code> lists exactly the model’s paths.</li>
 <li><code>--verify</code> passes.</li>
 <li>A full extraction gives back the model. The only extra paths allowed
 are the parent directories that extraction makes itself.</li>
+<li>The hardlinks of the extraction agree with the model. The model
+gives each file a link group. One run puts the names of one inode that
+it stores into one group. The names of a group must be one file, and the
+names of two groups must be two files. Each extraction of the tester
+makes this check, not only the full extraction.</li>
 </ol>
 <p>Some operations must be refused: a conflict under
 <code>--on-conflict=error</code>, an <code>-R</code> that matches

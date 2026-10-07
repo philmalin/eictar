@@ -9,11 +9,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 )
 
-// checkArchive makes the three checks of doc/design.md 13.4 after a step:
+// checkArchive makes the four checks of doc/design.md 13.4 after a step:
 // the listing names exactly the model's paths, --verify passes, and a full
-// extraction gives back the model.
+// extraction gives back the model, with its hardlinks.
 func (s *sequence) checkArchive() error {
 	res, err := s.r.expect(true, "-tf", s.archive)
 	if err != nil {
@@ -29,6 +30,9 @@ func (s *sequence) checkArchive() error {
 		return err
 	}
 	s.stats.checks["state"]++
+	if len(s.model.linkGroups()) > 0 {
+		s.stats.checks["hardlinks"]++
+	}
 	return nil
 }
 
@@ -84,11 +88,15 @@ func sameListing(listing string, m Model) error {
 // compareTree compares an extracted tree with the model: every model path is
 // there with its type, content, size, mode, time and link target, and
 // nothing else is, apart from the parent directories that extraction makes
-// for a member whose directory the archive does not hold.
+// for a member whose directory the archive does not hold. The files of one
+// link group are one inode, and the files of two groups are two.
 func compareTree(root string, want Model) error {
 	implicit := want.ancestors()
 	var problems []string
 	seen := map[string]bool{}
+	groupFile := map[int]inode{}    // the inode of each link group
+	fileGroup := map[inode]int{}    // the link group of each inode
+	firstName := map[inode]string{} // a name of each inode, for the message
 
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -113,6 +121,23 @@ func compareTree(root string, want Model) error {
 		}
 		if msg := diffEntry(w, got); msg != "" {
 			problems = append(problems, rel+": "+msg)
+		}
+		if w.Kind == kFile && got.Kind == kFile {
+			ino, err := inodeOf(p)
+			if err != nil {
+				return err
+			}
+			if g, ok := fileGroup[ino]; ok && g != w.Link {
+				problems = append(problems, fmt.Sprintf("%s: one file with %s, want two files", rel, firstName[ino]))
+			} else if other, ok := groupFile[w.Link]; ok && other != ino {
+				problems = append(problems, fmt.Sprintf("%s: not one file with %s, want a hardlink", rel, firstName[other]))
+			}
+			if _, ok := groupFile[w.Link]; !ok {
+				groupFile[w.Link] = ino
+			}
+			if _, ok := fileGroup[ino]; !ok {
+				fileGroup[ino], firstName[ino] = w.Link, rel
+			}
 		}
 		return nil
 	})
@@ -158,6 +183,22 @@ func diffEntry(want, got Entry) string {
 		return fmt.Sprintf("mtime %d, want %d", got.MTime, want.MTime)
 	}
 	return ""
+}
+
+// inode identifies a file: its device and inode number.
+type inode struct{ dev, ino uint64 }
+
+// inodeOf returns the inode of abs, not following a link.
+func inodeOf(abs string) (inode, error) {
+	fi, err := os.Lstat(abs)
+	if err != nil {
+		return inode{}, err
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return inode{}, fmt.Errorf("%s: no inode", abs)
+	}
+	return inode{uint64(st.Dev), uint64(st.Ino)}, nil
 }
 
 // removeAll removes a tree whose directories may be read-only.

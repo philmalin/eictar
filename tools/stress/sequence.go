@@ -30,6 +30,7 @@ type sequence struct {
 	faults      bool
 	stats       *stats
 	profile     string // the kind of tree (gen.go)
+	links       int    // the last link group given (Entry.Link)
 }
 
 type stats struct {
@@ -378,8 +379,12 @@ func (s *sequence) addToModel(args []string, policy, mode string, f filter) (ref
 			}
 		}
 	}
+	// eictar links the names of one inode that one run records, and no
+	// others (doc/design.md 8): each run starts its groups again.
+	groups := map[inode]int{}
 	for _, p := range paths {
-		cur, err := readEntry(filepath.Join(s.src, p))
+		abs := filepath.Join(s.src, p)
+		cur, err := readEntry(abs)
 		if err != nil {
 			return false, "", nil, err
 		}
@@ -387,6 +392,17 @@ func (s *sequence) addToModel(args []string, policy, mode string, f filter) (ref
 		switch {
 		case !exists, policy == "replace", policy == "error",
 			policy == "update" && stale(old, cur, mode):
+			if cur.Kind == kFile {
+				ino, err := inodeOf(abs)
+				if err != nil {
+					return false, "", nil, err
+				}
+				if cur.Link = groups[ino]; cur.Link == 0 {
+					s.links++
+					cur.Link = s.links
+					groups[ino] = cur.Link
+				}
+			}
 			s.model[p] = cur
 			changed = append(changed, p)
 		}

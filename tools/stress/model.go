@@ -37,6 +37,11 @@ type Entry struct {
 	Size   int64       // files only
 	Hash   [32]byte    // SHA-256 of the content, files only
 	Target string      // symlinks only
+	// Link is the link group, files only. The names of one inode that one
+	// run records share a group, and extraction must give them back as
+	// one file (doc/design.md 7.7, 9.2). Names from other runs, or of other
+	// inodes, have other groups, and must be other files.
+	Link int
 }
 
 // Model maps a stored path to its entry.
@@ -227,6 +232,23 @@ func (m Model) selectPaths(patterns []string) Model {
 				out[p] = e
 				break
 			}
+		}
+	}
+	return out
+}
+
+// linkGroups returns the paths of each link group with two names or more.
+func (m Model) linkGroups() map[int][]string {
+	all := map[int][]string{}
+	for _, p := range m.paths() {
+		if e := m[p]; e.Kind == kFile {
+			all[e.Link] = append(all[e.Link], p)
+		}
+	}
+	out := map[int][]string{}
+	for g, ps := range all {
+		if len(ps) > 1 {
+			out[g] = ps
 		}
 	}
 	return out
