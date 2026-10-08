@@ -10605,6 +10605,11 @@ no file identity. The walk opens each entry for its attributes, and
 reads the volume serial number, the file index and the link count. These
 take the place of the device, the inode and the link count of Unix.
 <code>--one-file-system</code> uses the volume serial number.</li>
+<li><strong>File identity of a named path.</strong> The
+<code>FileInfo</code> of <code>os.Lstat</code> has no identity on
+Windows, and <code>os.SameFile</code> reads it from the path later. The
+walk reads it at once, so that the check against a swap after the walk
+works (<code>doc/Security_Audit.md</code>, finding 3).</li>
 <li><strong>Times of links.</strong> The reader opens the link relative
 to the handle of its directory (<code>NtCreateFile</code> with
 <code>FILE_OPEN_REPARSE_POINT</code>), and sets the times on that

@@ -1742,6 +1742,21 @@ place of a walked file. The first version of the test deleted the walked
 file, and CI found that the new file then often got its inode.
 <code>TestCreateSkipsAFileThatBecameALink</code> does the same through
 the capture of a member.</p>
+<p><strong>Windows.</strong> The Windows CI job (§15.1 of
+<code>doc/design.md</code>) found that the check did nothing there for a
+path named on the command line. The walk reads such a path with
+<code>os.Lstat</code>. On Windows, that <code>FileInfo</code> has no
+file identity. <code>os.SameFile</code> reads the identity from the path
+the first time it needs it, so <code>openWalked</code> compared the open
+file with the file at the path at that time, not at the time of the
+walk. A file put there after the walk passed the check. The files below
+a named path were safe, because the walk reads them through
+<code>os.Root</code>, and that <code>FileInfo</code> has its identity
+already. The fix: the walk calls <code>pinIdentity</code> after
+<code>os.Lstat</code> and after the <code>os.Stat</code> of
+<code>-h</code>. It reads the identity at that time.
+<code>TestWalkPinsTheIdentityOfANamedPath</code> puts another file at a
+named path after the walk, and expects the refusal.</p>
 <h3 id="finding-4.-a-planted-link-in-the-archive-path-medium">Finding 4.
 A planted link in the archive path (medium)</h3>
 <p><strong>Where:</strong> <code>createTarget</code> in

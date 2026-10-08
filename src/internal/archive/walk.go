@@ -215,6 +215,7 @@ func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
 		fi, err = dir.Lstat(name)
 	} else {
 		fi, err = os.Lstat(src)
+		pinIdentity(fi)
 	}
 	if err != nil {
 		return w.fail(src, top, atPath(err, src))
@@ -247,6 +248,7 @@ func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
 		if err != nil {
 			return w.fail(src, top, fmt.Errorf("following link %s: %w", src, err))
 		}
+		pinIdentity(followed)
 		e.Info, e.Followed = followed, true
 		e.dir, e.name = nil, ""
 		fi = followed
@@ -337,6 +339,19 @@ func (w *walker) openDir(e entry) (*os.Root, error) {
 		return nil, fmt.Errorf("%s: %w", e.Src, err)
 	}
 	return sub, nil
+}
+
+// pinIdentity makes fi hold the identity of the file at its path now. On
+// Windows, the FileInfo of os.Lstat and os.Stat has no identity. os.SameFile
+// reads it from the path the first time that it needs it. Thus openWalked
+// compared the file that it opened with the file at the path then, and a
+// file put there after the walk passed as the walked file (doc/Security_Audit.md,
+// finding 3). The FileInfo of os.Root and of an open file has its identity
+// already, as on Unix. A nil fi does nothing.
+func pinIdentity(fi os.FileInfo) {
+	if fi != nil {
+		os.SameFile(fi, fi)
+	}
 }
 
 // emit hands an entry to the visitor, unless it names the archived tree's

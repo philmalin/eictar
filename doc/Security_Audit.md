@@ -128,6 +128,19 @@ version of the test deleted the walked file, and CI found that the new file
 then often got its inode. `TestCreateSkipsAFileThatBecameALink` does the
 same through the capture of a member.
 
+**Windows.** The Windows CI job (§15.1 of `doc/design.md`) found that the
+check did nothing there for a path named on the command line. The walk reads
+such a path with `os.Lstat`. On Windows, that `FileInfo` has no file
+identity. `os.SameFile` reads the identity from the path the first time it
+needs it, so `openWalked` compared the open file with the file at the path
+at that time, not at the time of the walk. A file put there after the walk
+passed the check. The files below a named path were safe, because the walk
+reads them through `os.Root`, and that `FileInfo` has its identity already.
+The fix: the walk calls `pinIdentity` after `os.Lstat` and after the
+`os.Stat` of `-h`. It reads the identity at that time.
+`TestWalkPinsTheIdentityOfANamedPath` puts another file at a named path
+after the walk, and expects the refusal.
+
 ### Finding 4. A planted link in the archive path (medium)
 
 **Where:** `createTarget` in `src/internal/archive/writer.go`, and

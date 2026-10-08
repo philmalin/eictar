@@ -65,12 +65,15 @@ func TestExtractDoesNotChangeTheDestination(t *testing.T) {
 	if err := os.Mkdir(dest, 0o750); err != nil {
 		t.Fatal(err)
 	}
+	// Windows has no mode bits: a directory reads back as 0777. The member
+	// must not change the read-only attribute either.
+	before := mustStat(t, dest).Mode().Perm()
 	rep := &recordingReporter{}
 	if _, err := Extract(ExtractConfig{Archive: path, Destination: dest, Reporter: rep}); err != nil {
 		t.Fatal(err)
 	}
-	if got := mustStat(t, dest).Mode().Perm(); got != 0o750 {
-		t.Errorf("the destination became %o; want it unchanged at 750", got)
+	if got := mustStat(t, dest).Mode().Perm(); got != before {
+		t.Errorf("the destination became %o; want it unchanged at %o", got, before)
 	}
 	if len(rep.warnings) != 1 || !strings.Contains(rep.warnings[0], "root of its tree") {
 		t.Errorf("warnings %q", rep.warnings)
@@ -90,6 +93,7 @@ func TestOpenWalkedRefusesASwap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		pinIdentity(fi) // as the walk does
 		return entry{Src: file, Info: fi}
 	}
 
@@ -112,7 +116,10 @@ func TestOpenWalkedRefusesASwap(t *testing.T) {
 	if err := os.Link(secret, file); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openWalked(e); !errors.Is(err, errChangedDuringWalk) {
+	if f, err := openWalked(e); !errors.Is(err, errChangedDuringWalk) {
+		if f != nil {
+			f.Close()
+		}
 		t.Errorf("a hardlink to another file at the path: %v, want errChangedDuringWalk", err)
 	}
 
@@ -126,8 +133,44 @@ func TestOpenWalkedRefusesASwap(t *testing.T) {
 	e = walked()
 	os.Rename(file, file+".aside")
 	os.WriteFile(file, []byte("another"), 0o644)
-	if _, err := openWalked(e); !errors.Is(err, errChangedDuringWalk) {
+	if f, err := openWalked(e); !errors.Is(err, errChangedDuringWalk) {
+		if f != nil {
+			f.Close() // Windows cannot remove the temporary directory with it open
+		}
 		t.Errorf("another file at the path: %v, want errChangedDuringWalk", err)
+	}
+}
+
+// TestWalkPinsTheIdentityOfANamedPath: a path named on the command line is
+// read with os.Lstat. On Windows, its FileInfo got the identity of the file
+// at the path when openWalked compared it, not when the walk read it. So a
+// file put there after the walk was archived as the walked file.
+func TestWalkPinsTheIdentityOfANamedPath(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "f")
+	os.WriteFile(file, []byte("walked"), 0o644)
+
+	var walked []entry
+	wk := newWalker(walkOptions{baseDir: dir, afterLstat: func(src string) {
+		// After the lstat, another file takes the path.
+		os.Rename(src, src+".aside")
+		os.WriteFile(src, []byte("put there later"), 0o644)
+	}}, func(e entry) error {
+		walked = append(walked, e)
+		return nil
+	})
+	if err := wk.walk(nil, "", file, "f", true); err != nil {
+		t.Fatal(err)
+	}
+	if len(walked) != 1 {
+		t.Fatalf("walked %d entries, want 1", len(walked))
+	}
+	f, err := openWalked(walked[0])
+	if f != nil {
+		f.Close()
+	}
+	if !errors.Is(err, errChangedDuringWalk) {
+		t.Errorf("a file put at the path after the walk: %v, want errChangedDuringWalk", err)
 	}
 }
 

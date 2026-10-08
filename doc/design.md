@@ -3959,6 +3959,10 @@ Unix in these ways, and the program does as follows:
   the file index and the link count. These take the place of the device, the
   inode and the link count of Unix. `--one-file-system` uses the volume serial
   number.
+- **File identity of a named path.** The `FileInfo` of `os.Lstat` has no
+  identity on Windows, and `os.SameFile` reads it from the path later. The
+  walk reads it at once, so that the check against a swap after the walk
+  works (`doc/Security_Audit.md`, finding 3).
 - **Times of links.** The reader opens the link relative to the handle of its
   directory (`NtCreateFile` with `FILE_OPEN_REPARSE_POINT`), and sets the
   times on that handle. Thus the times of the target do not change, and the

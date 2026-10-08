@@ -79,7 +79,7 @@ func TestLockOnAReplacedFileIsRefused(t *testing.T) {
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	f, err := os.Open(path)
+	f, err := openArchiveFile(path, os.O_RDONLY) // as the program opens an archive
 	if err != nil {
 		t.Fatal(err)
 	}
