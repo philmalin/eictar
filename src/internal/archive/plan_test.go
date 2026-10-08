@@ -40,17 +40,6 @@ func (r *memberReporter) Warn(f string, args ...any) {
 	r.warnings = append(r.warnings, fmt.Sprintf(f, args...))
 }
 
-// planned collects the paths of a dry run, as "path" or "path replaces".
-type planned struct{ lines []string }
-
-func (p *planned) add(pl Planned) {
-	line := pl.Path
-	if pl.Replaces {
-		line += " replaces"
-	}
-	p.lines = append(p.lines, line)
-}
-
 func sorted(s []string) []string {
 	out := append([]string(nil), s...)
 	sort.Strings(out)

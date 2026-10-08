@@ -9445,8 +9445,8 @@ It needs approximately four times that much free space in
 <tr class="even">
 <td><code>make crossvet</code></td>
 <td>run <code>vet</code> for each platform of the CI workflow: Linux,
-macOS, FreeBSD, NetBSD and OpenBSD (§15.1). A cross-compile finds a name
-that one platform does not have, before a push.</td>
+macOS, FreeBSD, NetBSD, OpenBSD and Windows (§15.1). A cross-compile
+finds a name that one platform does not have, before a push.</td>
 </tr>
 <tr class="odd">
 <td><code>make check</code></td>
@@ -9697,7 +9697,7 @@ branch, it does not run for a push or a pull request that changes only
 Markdown, HTML or the license. The man page is not in that list, because
 a test reads it. A tag always runs it. The draft is published by hand,
 after that run passes too. Windows builds, but it is not in the release,
-because no workflow tests it (§15.1).</p>
+because it does not pass the tests yet (§15.1).</p>
 <p><strong>Dependencies do not change by themselves.</strong>
 <code>go.mod</code> gives the exact version of each module, and
 <code>go.sum</code> its checksum, so each build of one commit uses the
@@ -10574,6 +10574,23 @@ Linux and macOS, and in virtual machines for FreeBSD, NetBSD and
 OpenBSD. NetBSD and OpenBSD have no race detector, so they run
 <code>make check-norace</code>. A platform is supported while the
 workflow passes on it.</p>
+<p>The workflow also runs the tests on Windows, but a failure there does
+not fail the workflow. Windows is not a supported platform yet. The
+program builds there, and the tests compile, but some operations
+fail:</p>
+<ul>
+<li>A spill file is deleted while it is open
+(<code>src/internal/pipeline/spool.go</code>). Windows refuses to delete
+an open file.</li>
+<li><code>--compact</code> renames the new archive over the old one
+while the old one is open. Windows refuses that rename.</li>
+<li>The lock of <code>LockFileEx</code> is mandatory, not advisory.
+While one eictar changes an archive, a second one cannot read its first
+byte.</li>
+</ul>
+<p>The Windows job shows the full list. Windows becomes a supported
+platform when that job passes, and then its failure fails the
+workflow.</p>
 <p>The first runs found five faults that no run on Linux had shown:</p>
 <ul>
 <li><code>.tmp</code> is not in the repository, and <code>vet</code> and

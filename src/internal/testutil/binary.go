@@ -33,6 +33,9 @@ func Binary(tb testing.TB) string {
 			return
 		}
 		binPath = filepath.Join(dir, "eictar")
+		if runtime.GOOS == "windows" {
+			binPath += ".exe" // exec finds a program on Windows by its extension
+		}
 
 		cmd := exec.Command(goTool(), "build", "-o", binPath, "./src/cmd/eictar")
 		cmd.Dir = root

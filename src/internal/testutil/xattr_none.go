@@ -1,4 +1,4 @@
-//go:build unix && !(linux || darwin || freebsd || netbsd)
+//go:build !(linux || darwin || freebsd || netbsd)
 
 package testutil
 

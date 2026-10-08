@@ -129,8 +129,9 @@ vet: | $(TMPDIR)
 
 # vet for each platform of CI (doc/design.md 15.1), from this machine. A
 # file for one platform can use a name that another platform does not have,
-# and only a build for that platform shows it.
-CROSS_GOOS := linux darwin freebsd netbsd openbsd
+# and only a build for that platform shows it. Windows is not supported yet,
+# but its CI job needs code and tests that compile.
+CROSS_GOOS := linux darwin freebsd netbsd openbsd windows
 
 crossvet: | $(TMPDIR)
 	@set -e; for os in $(CROSS_GOOS); do \

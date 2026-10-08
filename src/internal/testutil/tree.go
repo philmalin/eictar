@@ -144,6 +144,17 @@ func (t *Tree) SetTimes(rel string, atime, mtime time.Time) *Tree {
 	return t
 }
 
+// Chmod sets a mode, special bits included, which File's os.WriteFile cannot.
+// On Windows, only the write bit of the owner has an effect: it is the
+// read-only attribute.
+func (t *Tree) Chmod(rel string, mode os.FileMode) *Tree {
+	t.tb.Helper()
+	if err := os.Chmod(t.Path(rel), mode); err != nil {
+		t.tb.Fatalf("testutil: chmod %s: %v", rel, err)
+	}
+	return t
+}
+
 // Entry is one observed filesystem object, as Snapshot sees it.
 type Entry struct {
 	Path    string // relative to the tree root, slash-separated
@@ -199,7 +210,7 @@ func Snapshot(tb testing.TB, root string) []Entry {
 			if e.Content, err = os.ReadFile(p); err != nil {
 				return err
 			}
-			if key, n, ok := inodeOf(fi); ok && n > 1 {
+			if key, n, ok := inodeOf(p, fi); ok && n > 1 {
 				g, seen := groups[key]
 				if !seen {
 					g = len(groups) + 1

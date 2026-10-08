@@ -22,15 +22,6 @@ func fillSys(e *Entry, path string, fi os.FileInfo) {
 	e.Xattrs = userXattrs(path)
 }
 
-// Chmod sets a mode, special bits included, which File's os.WriteFile cannot.
-func (t *Tree) Chmod(rel string, mode os.FileMode) *Tree {
-	t.tb.Helper()
-	if err := os.Chmod(t.Path(rel), mode); err != nil {
-		t.tb.Fatalf("testutil: chmod %s: %v", rel, err)
-	}
-	return t
-}
-
 // SetLinkTimes sets a symbolic link's own times, not its target's.
 func (t *Tree) SetLinkTimes(rel string, atime, mtime time.Time) *Tree {
 	t.tb.Helper()

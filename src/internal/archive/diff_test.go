@@ -17,8 +17,6 @@ import (
 	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
-var diffStamp = time.Unix(1_600_000_000, 0)
-
 // diffFixture is a tree with one entry for each kind of difference, all with
 // the same times, so that a change of one entry is the only difference.
 func diffFixture(t *testing.T) *testutil.Tree {
@@ -38,22 +36,6 @@ func diffFixture(t *testing.T) *testutil.Tree {
 	return tree
 }
 
-// settle gives every entry of the tree the fixture's times.
-func settle(tree *testutil.Tree) {
-	filepath.Walk(tree.Root, func(p string, fi os.FileInfo, err error) error {
-		if err != nil || p == tree.Root {
-			return err
-		}
-		rel, _ := filepath.Rel(tree.Root, p)
-		if fi.Mode()&os.ModeSymlink != 0 {
-			tree.SetLinkTimes(rel, diffStamp, diffStamp)
-		} else {
-			tree.SetTimes(rel, diffStamp, diffStamp)
-		}
-		return nil
-	})
-}
-
 func diffArchive(t *testing.T, tree *testutil.Tree, paths ...string) string {
 	t.Helper()
 	archivePath := filepath.Join(t.TempDir(), "a.ect")
@@ -64,15 +46,6 @@ func diffArchive(t *testing.T, tree *testutil.Tree, paths ...string) string {
 		t.Fatalf("CreateArchive: %v", err)
 	}
 	return archivePath
-}
-
-// found renders the differences as "path kind" lines, for comparison.
-func found(res DiffResult) []string {
-	var out []string
-	for _, d := range res.Differences {
-		out = append(out, d.Path+" "+d.Kind)
-	}
-	return out
 }
 
 func TestDiffOfAnUnchangedTree(t *testing.T) {

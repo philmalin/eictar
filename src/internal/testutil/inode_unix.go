@@ -14,9 +14,10 @@ type inodeKey struct {
 	ino uint64
 }
 
-// inodeOf returns the identity of fi and its link count. The final result
-// reports whether the platform supplied the information at all.
-func inodeOf(fi os.FileInfo) (inodeKey, uint64, bool) {
+// inodeOf returns the identity of fi, the file at path, and its link count.
+// The final result reports whether the platform supplied the information at
+// all.
+func inodeOf(_ string, fi os.FileInfo) (inodeKey, uint64, bool) {
 	st, ok := fi.Sys().(*syscall.Stat_t)
 	if !ok {
 		return inodeKey{}, 0, false

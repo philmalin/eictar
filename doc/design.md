@@ -2951,7 +2951,7 @@ bare `go` command:
 | `make fuzz` | run each fuzz target for `FUZZTIME` (default 30s) |
 | `make bench` | run the Go benchmarks of create and extract (§8.4) |
 | `make compare` | compare eictar with `tar` and a compressor, on `DIR` (default: the module cache). Needs `tar`, `zstd`, `xz` and `gzip`. |
-| `make crossvet` | run `vet` for each platform of the CI workflow: Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1). A cross-compile finds a name that one platform does not have, before a push. |
+| `make crossvet` | run `vet` for each platform of the CI workflow: Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows (§15.1). A cross-compile finds a name that one platform does not have, before a push. |
 | `make check` | `fmt`, `vet`, `crossvet`, `test-race` and `operational` |
 | `make check-norace` | `make check` with `test` for `test-race`, for NetBSD and OpenBSD |
 | `make skips` | list each test that this platform skips, with its reason, and the totals |
@@ -3216,7 +3216,7 @@ does not run for a push or a pull request that changes only Markdown, HTML or
 the license. The man page is not in that list, because a test reads it. A
 tag always runs it. The draft is
 published by hand, after that run passes too. Windows builds, but it is not
-in the release, because no workflow tests it (§15.1).
+in the release, because it does not pass the tests yet (§15.1).
 
 **Dependencies do not change by themselves.** `go.mod` gives the exact
 version of each module, and `go.sum` its checksum, so each build of one
@@ -3928,6 +3928,20 @@ filesystem.
 and in virtual machines for FreeBSD, NetBSD and OpenBSD. NetBSD and OpenBSD
 have no race detector, so they run `make check-norace`. A platform is
 supported while the workflow passes on it.
+
+The workflow also runs the tests on Windows, but a failure there does not
+fail the workflow. Windows is not a supported platform yet. The program
+builds there, and the tests compile, but some operations fail:
+
+- A spill file is deleted while it is open (`src/internal/pipeline/spool.go`).
+  Windows refuses to delete an open file.
+- `--compact` renames the new archive over the old one while the old one is
+  open. Windows refuses that rename.
+- The lock of `LockFileEx` is mandatory, not advisory. While one eictar
+  changes an archive, a second one cannot read its first byte.
+
+The Windows job shows the full list. Windows becomes a supported platform
+when that job passes, and then its failure fails the workflow.
 
 The first runs found five faults that no run on Linux had shown:
 

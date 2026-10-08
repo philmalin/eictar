@@ -54,6 +54,36 @@ jobs:
         if: always()
         run: make skips GO=go
 
+  # Windows is not a supported platform yet (doc/design.md 15.1). The job
+  # shows what fails there, and its failure does not fail the workflow.
+  # Windows has no make in the runner image, so the job runs go directly.
+  windows:
+    runs-on: windows-latest
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # The checkout keeps LF line ends: with CRLF, gofmt and the tests that
+      # read the files of the repository see a change.
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go vet ./src/... ./tools/...
+      - run: go test ./src/... ./tools/...
+      - name: operational tests
+        if: ${{ !cancelled() }}
+        run: go test -tags operational ./src/operational/
+      - name: skipped tests
+        if: ${{ !cancelled() }}
+        run: |
+          echo "=== unit tests"
+          go test -count=1 -json ./src/... | go run ./tools/testskips
+          echo "=== operational tests"
+          go test -count=1 -json -tags operational ./src/operational/ | go run ./tools/testskips
+
   freebsd:
     runs-on: ubuntu-latest
     steps:
