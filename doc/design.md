@@ -1745,8 +1745,10 @@ shares (§4.3). It does not decompress or unseal a blob.
 
 The new archive keeps the uuid, the crypto header and the encryption settings
 of the original. It uses the next generation. Then the program renames the new
-file over the original with `rename(2)`, and syncs the directory. A crash
-before the rename leaves the original unchanged.
+file over the original with `rename(2)`, and syncs the directory. Windows
+cannot sync a directory, so there the program does not. NTFS records the
+rename in its journal. A crash before the rename leaves the original
+unchanged.
 
 The new file gets the mode of the original. It also gets the owner and the
 group, when the process has permission to set them. Otherwise the program

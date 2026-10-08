@@ -7669,8 +7669,9 @@ unseal a blob.</p>
 <p>The new archive keeps the uuid, the crypto header and the encryption
 settings of the original. It uses the next generation. Then the program
 renames the new file over the original with <code>rename(2)</code>, and
-syncs the directory. A crash before the rename leaves the original
-unchanged.</p>
+syncs the directory. Windows cannot sync a directory, so there the
+program does not. NTFS records the rename in its journal. A crash before
+the rename leaves the original unchanged.</p>
 <p>The new file gets the mode of the original. It also gets the owner
 and the group, when the process has permission to set them. Otherwise
 the program prints a warning. If <code>-f</code> names a symbolic link,

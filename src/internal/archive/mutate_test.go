@@ -1515,3 +1515,12 @@ func TestRegexSelectsMembers(t *testing.T) {
 		t.Errorf("after delete -R: %s", got)
 	}
 }
+
+// TestSyncDir: a create and a compact sync the directory of the
+// archive after its rename. On Windows, a directory cannot be synced, and
+// the sync must not fail the operation.
+func TestSyncDir(t *testing.T) {
+	if err := syncDir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+}
