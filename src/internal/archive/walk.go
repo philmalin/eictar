@@ -236,7 +236,9 @@ func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
 			if err != nil {
 				return w.fail(src, top, fmt.Errorf("reading link %s: %w", src, err))
 			}
-			e.Kind, e.LinkTarget, e.Sys = kindSymlink, target, meta.Stat(fi)
+			// The archive stores / as the separator of a target. On Unix,
+			// ToSlash changes nothing, and a \ in a target stays a name byte.
+			e.Kind, e.LinkTarget, e.Sys = kindSymlink, filepath.ToSlash(target), meta.Stat(fi)
 			return w.emit(e)
 		}
 		// -h: archive what the link points at, under the link's own name.

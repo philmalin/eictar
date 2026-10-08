@@ -1524,3 +1524,36 @@ func TestSyncDir(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestReplaceWhileAReaderIsOpen: a compact and a create rename a new archive
+// over one that a reader has open. The rename succeeds, and the reader keeps
+// the old file. Windows refused the rename, "Access is denied", until each
+// archive handle allowed it and the rename used POSIX semantics.
+func TestReplaceWhileAReaderIsOpen(t *testing.T) {
+	tree := mutTree(t)
+	archive := mkArchive(t, tree, false, "t/a.txt")
+	r, err := Open(archive, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	if _, err := CompactArchive(CompactConfig{Archive: archive}); err != nil {
+		t.Fatalf("compact while a reader is open: %v", err)
+	}
+	if _, err := CreateArchive(CreateConfig{Archive: archive, Paths: []string{"t/b.txt"}, BaseDir: tree.Root}); err != nil {
+		t.Fatalf("create over an archive that a reader has open: %v", err)
+	}
+	if live, _, _ := state(t, archive, false); !slices.Equal(live, []string{"t/b.txt"}) {
+		t.Errorf("the archive at the path holds %v, want [t/b.txt]", live)
+	}
+
+	m := r.Members()
+	if len(m) != 1 || m[0].Path != "t/a.txt" {
+		t.Fatalf("the open reader lists %v, want t/a.txt", m)
+	}
+	var got bytes.Buffer
+	if err := r.WriteMember(&m[0], &got); err != nil {
+		t.Fatalf("the open reader cannot read the old file: %v", err)
+	}
+}

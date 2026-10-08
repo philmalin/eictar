@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -455,7 +456,8 @@ func (x *extraction) writeSpecial(m *format.Member, create func(dir *os.File, ba
 }
 
 // writeSymlink recreates a link, target verbatim, and restores the link's own
-// owner and times without touching what it points at.
+// owner and times without touching what it points at. On Windows, the / of
+// the stored target becomes \, the separator that Windows resolves.
 func (x *extraction) writeSymlink(m *format.Member) (bool, error) {
 	if skip, err := x.clearForReplace(m); err != nil || skip {
 		return skip, err
@@ -465,7 +467,7 @@ func (x *extraction) writeSymlink(m *format.Member) (bool, error) {
 			return false, unsafeOrRaw(x.root, m, err)
 		}
 	}
-	if err := x.root.Symlink(m.LinkTarget, m.Path); err != nil {
+	if err := x.root.Symlink(filepath.FromSlash(m.LinkTarget), m.Path); err != nil {
 		return false, unsafeOrRaw(x.root, m, err)
 	}
 

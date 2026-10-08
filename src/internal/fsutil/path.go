@@ -33,9 +33,17 @@ const RootPath = "."
 // of filesystem locations, so /etc/passwd is stored as etc/passwd and unpacks
 // under the destination rather than over the system. Unlike tar, there is no
 // option to turn this off; see doc/design.md 7.
+//
+// On Windows, the volume name is removed too, as tar does: C:\Users\a.txt
+// and \\server\share\a.txt are stored as Users/a.txt and a.txt. On other
+// platforms, VolumeName is always empty.
 func StorePath(p string) (stored string, stripped bool, err error) {
 	if p == "" {
 		return "", false, fmt.Errorf("%w: empty path", ErrUnsafePath)
+	}
+	if v := filepath.VolumeName(p); v != "" {
+		p = p[len(v):]
+		stripped = true
 	}
 
 	s := path.Clean(filepath.ToSlash(p))

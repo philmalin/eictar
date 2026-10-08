@@ -6967,7 +6967,11 @@ paths, with <strong>no leading <code>/</code> and no leading
 <code>etc/passwd</code>. <code>../sibling</code> becomes
 <code>sibling</code>. When a run removes part of a path, it prints one
 warning, not one warning for each file:</p>
-<pre><code>eictar: removing leading &#39;/&#39; or &#39;..&#39; from member names</code></pre>
+<pre><code>eictar: removing leading &#39;/&#39;, &#39;..&#39; or drive from member names</code></pre>
+<p>On Windows, the writer also removes the volume name:
+<code>C:\Users\a.txt</code> becomes <code>Users/a.txt</code>, and
+<code>\\server\share\a.txt</code> becomes <code>a.txt</code>
+(§15.1).</p>
 <p><code>tar</code>, <code>zip</code> and <code>pax</code> use the same
 rule. An archive holds a portable tree, not a set of locations in a
 filesystem. An absolute <code>/etc/passwd</code> extracts over the file
@@ -7022,8 +7026,9 @@ the tree (<code>../../outside</code>). A link target is content, not a
 path inside the archive. To restore
 <code>/usr/bin/vi -&gt; /etc/alternatives/vi</code>, the reader must
 write that exact target. The protection is that extraction never
-<em>follows</em> a link. A link does nothing until something follows
-it.</p></li>
+<em>follows</em> a link. A link does nothing until something follows it.
+The one change is the separator on Windows: the archive holds
+<code>/</code>, and Windows uses <code>\</code> (§15.1).</p></li>
 <li><p><strong>The reader restores the times of a link with
 <code>utimensat</code> and <code>AT_SYMLINK_NOFOLLOW</code>.</strong>
 <code>Chtimes</code> and <code>os.Root.Chtimes</code> follow the link.
@@ -7798,9 +7803,10 @@ not stop the lost write.</p>
 write. The kernel removes the lock when the process ends, so a crash
 leaves no stale lock. Linux, macOS and the BSDs use <code>flock</code>,
 and Windows uses <code>LockFileEx</code>, in a separate file for that
-platform. Plan 9, WASI and AIX have no <code>flock</code>, so there the
-program does not find a second writer. A lock on NFS is not reliable,
-and the man page says so.</p>
+platform. A <code>LockFileEx</code> lock is mandatory, so it covers one
+byte far past the end of the archive (§15.1). Plan 9, WASI and AIX have
+no <code>flock</code>, so there the program does not find a second
+writer. A lock on NFS is not reliable, and the man page says so.</p>
 <h3 id="change-of-passphrase">9.7 Change of passphrase</h3>
 <p><code>--change-passphrase</code> seals the archive’s data key under a
 new passphrase (§6.2). It needs the old passphrase, and it asks for the
@@ -10579,20 +10585,50 @@ OpenBSD. NetBSD and OpenBSD have no race detector, so they run
 <code>make check-norace</code>. A platform is supported while the
 workflow passes on it.</p>
 <p>The workflow also runs the tests on Windows, but a failure there does
-not fail the workflow. Windows is not a supported platform yet. The
-program builds there, and the tests compile, but some operations
-fail:</p>
+not fail the workflow. Windows is not a supported platform yet. Windows
+becomes a supported platform when its job passes, and then its failure
+fails the workflow.</p>
+<p><strong>Windows (in progress).</strong> The program archives content,
+directories and links on Windows. It records no other metadata
+(<code>meta_other.go</code>). Windows differs from Unix in these ways,
+and the program does as follows:</p>
 <ul>
-<li><code>--compact</code> renames the new archive over the old one
-while the old one is open. Windows refuses that rename.
-<code>--change-passphrase</code> does the same.</li>
-<li>The lock of <code>LockFileEx</code> is mandatory, not advisory.
-While one eictar changes an archive, a second one cannot read its first
-byte.</li>
+<li><strong>Paths.</strong> An absolute path starts with a volume name:
+a drive (<code>C:</code>) or a share (<code>\\server\share</code>). The
+writer removes the volume name, as it removes a leading <code>/</code>
+(§7.3).</li>
+<li><strong>Link targets.</strong> Windows gives a target with
+<code>\</code>. The writer stores it with <code>/</code>. The reader
+changes <code>/</code> back to <code>\</code> when it creates the link
+on Windows. On Unix, the writer and the reader keep a <code>\</code> in
+a target, because there <code>\</code> is a character of a name.</li>
+<li><strong>Replacement of an open file.</strong> Windows does not let a
+rename replace a file that is open, and Go opens each file without
+<code>FILE_SHARE_DELETE</code>. Create, compact and the change of
+passphrase rename a new archive over an old one that is open and locked.
+So on Windows, the program opens each archive with
+<code>FILE_SHARE_DELETE</code>, and renames with POSIX semantics
+(<code>FileRenameInfoEx</code>). Then the rename removes the old file
+from the directory, as on Unix, and the open handles can still read it.
+A file system without POSIX semantics (FAT) gets
+<code>MoveFileEx</code>. There, the rename fails while another handle
+has the archive open.</li>
+<li><strong>The lock.</strong> A <code>LockFileEx</code> lock is
+mandatory: no other handle can read the bytes that it covers. The
+program locks the byte at offset 2^63 - 1, far past the end of any
+archive. Thus a reader is not stopped, as on Unix with
+<code>flock</code> (§9.6).</li>
+<li><strong>Spill files.</strong> Windows cannot delete an open file. A
+spill file has <code>FILE_FLAG_DELETE_ON_CLOSE</code> in place of the
+unlink (§8).</li>
+<li><strong>Directory sync.</strong> Windows cannot sync a directory.
+The program does not sync it after a rename (§9.3).</li>
+<li><strong>Configuration file.</strong> The home directory is
+<code>%USERPROFILE%</code>, not <code>$HOME</code>.</li>
+<li><strong>Names.</strong> Windows file names are UTF-16. A name that
+is not valid UTF-8 cannot be created, and the tests of such names
+skip.</li>
 </ul>
-<p>The Windows job shows the full list. Windows becomes a supported
-platform when that job passes, and then its failure fails the
-workflow.</p>
 <p>The first runs found five faults that no run on Linux had shown:</p>
 <ul>
 <li><code>.tmp</code> is not in the repository, and <code>vet</code> and

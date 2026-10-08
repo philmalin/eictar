@@ -107,7 +107,7 @@ func Open(path string, ask PassphraseFunc) (*Reader, error) {
 
 // OpenWith is Open with options.
 func OpenWith(path string, opt OpenOptions) (*Reader, error) {
-	f, err := os.Open(path)
+	f, err := openArchiveFile(path, os.O_RDONLY)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", path, err)
 	}

@@ -260,7 +260,7 @@ func Create(path string, opt Options) (*Writer, error) {
 // the file. Until Close writes the new trailer, the old one still describes
 // the old generation, in place (doc/design.md 9.1).
 func OpenAppend(path string, opt Options, open OpenOptions) (*Writer, error) {
-	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	f, err := openArchiveFile(path, os.O_RDWR)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", path, err)
 	}
@@ -487,7 +487,7 @@ func (w *Writer) Close() error {
 
 	// The rename is the commit for a new archive: before it, any old file at
 	// the path is intact, and after it the new one is complete.
-	if err := os.Rename(w.tmpPath, w.path); err != nil {
+	if err := renameOver(w.tmpPath, w.path); err != nil {
 		os.Remove(w.tmpPath)
 		return fmt.Errorf("replacing %s: %w", w.path, err)
 	}
@@ -527,7 +527,7 @@ func createTarget(path string) (string, os.FileMode, error) {
 // create cannot rename over a file that another run is appending to. It
 // returns nil when there is no file at target yet.
 func guardExisting(target string) (*os.File, error) {
-	f, err := os.Open(target)
+	f, err := openArchiveFile(target, os.O_RDONLY)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}

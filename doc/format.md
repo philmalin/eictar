@@ -312,7 +312,7 @@ A Dict map:
 | `mtime` | int | always | nanoseconds since the Unix epoch |
 | `atime`, `ctime` | int | optional | nanoseconds since the Unix epoch |
 | `size` | uint | always | the logical length of the content. 0 for a type without content. |
-| `link` | text | `symlink` only, and required there | the target of the link, as recorded |
+| `link` | text | `symlink` only, and required there | the target of the link, as recorded, with `/` as the separator |
 | `hardlink` | uint | `hardlink` only, and required there | the `id` of a `reg` member |
 | `data` | uint | `reg` only, optional | the `id` of the member whose blob holds this member's content (§8.5) |
 | `rdev` | array of 2 uint | `chardev` and `blockdev` only, and required there | major, minor |

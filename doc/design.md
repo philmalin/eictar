@@ -1207,8 +1207,11 @@ with **no leading `/` and no leading `..` component**. `/etc/passwd` becomes
 path, it prints one warning, not one warning for each file:
 
 ```
-eictar: removing leading '/' or '..' from member names
+eictar: removing leading '/', '..' or drive from member names
 ```
+
+On Windows, the writer also removes the volume name: `C:\Users\a.txt` becomes
+`Users/a.txt`, and `\\server\share\a.txt` becomes `a.txt` (§15.1).
 
 `tar`, `zip` and `pax` use the same rule. An archive holds a portable tree,
 not a set of locations in a filesystem. An absolute `/etc/passwd` extracts
@@ -1265,7 +1268,8 @@ Three rules apply to links:
   link target is content, not a path inside the archive. To restore
   `/usr/bin/vi -> /etc/alternatives/vi`, the reader must write that exact
   target. The protection is that extraction never *follows* a link. A link
-  does nothing until something follows it.
+  does nothing until something follows it. The one change is the separator
+  on Windows: the archive holds `/`, and Windows uses `\` (§15.1).
 - **The reader restores the times of a link with `utimensat` and
   `AT_SYMLINK_NOFOLLOW`.** `Chtimes` and `os.Root.Chtimes` follow the link. On
   a link, they change the time of the file that the link points to, without
@@ -1883,7 +1887,8 @@ the lost write.
 The lock is advisory: a program that does not ask for it can still write.
 The kernel removes the lock when the process ends, so a crash leaves no stale
 lock. Linux, macOS and the BSDs use `flock`, and Windows uses `LockFileEx`,
-in a separate file for that platform. Plan 9, WASI and AIX have no `flock`, so
+in a separate file for that platform. A `LockFileEx` lock is mandatory, so
+it covers one byte far past the end of the archive (§15.1). Plan 9, WASI and AIX have no `flock`, so
 there the program does not find a second writer. A lock on NFS is not
 reliable, and the man page says so.
 
@@ -3935,16 +3940,41 @@ have no race detector, so they run `make check-norace`. A platform is
 supported while the workflow passes on it.
 
 The workflow also runs the tests on Windows, but a failure there does not
-fail the workflow. Windows is not a supported platform yet. The program
-builds there, and the tests compile, but some operations fail:
+fail the workflow. Windows is not a supported platform yet. Windows becomes
+a supported platform when its job passes, and then its failure fails the
+workflow.
 
-- `--compact` renames the new archive over the old one while the old one is
-  open. Windows refuses that rename. `--change-passphrase` does the same.
-- The lock of `LockFileEx` is mandatory, not advisory. While one eictar
-  changes an archive, a second one cannot read its first byte.
+**Windows (in progress).** The program archives content, directories and
+links on Windows. It records no other metadata (`meta_other.go`). Windows
+differs from Unix in these ways, and the program does as follows:
 
-The Windows job shows the full list. Windows becomes a supported platform
-when that job passes, and then its failure fails the workflow.
+- **Paths.** An absolute path starts with a volume name: a drive (`C:`) or a
+  share (`\\server\share`). The writer removes the volume name, as it removes
+  a leading `/` (§7.3).
+- **Link targets.** Windows gives a target with `\`. The writer stores it
+  with `/`. The reader changes `/` back to `\` when it creates the link on
+  Windows. On Unix, the writer and the reader keep a `\` in a target, because
+  there `\` is a character of a name.
+- **Replacement of an open file.** Windows does not let a rename replace a
+  file that is open, and Go opens each file without `FILE_SHARE_DELETE`.
+  Create, compact and the change of passphrase rename a new archive over an
+  old one that is open and locked. So on Windows, the program opens each
+  archive with `FILE_SHARE_DELETE`, and renames with POSIX semantics
+  (`FileRenameInfoEx`). Then the rename removes the old file from the
+  directory, as on Unix, and the open handles can still read it. A file
+  system without POSIX semantics (FAT) gets `MoveFileEx`. There, the rename
+  fails while another handle has the archive open.
+- **The lock.** A `LockFileEx` lock is mandatory: no other handle can read the
+  bytes that it covers. The program locks the byte at offset 2^63 - 1, far
+  past the end of any archive. Thus a reader is not stopped, as on Unix
+  with `flock` (§9.6).
+- **Spill files.** Windows cannot delete an open file. A spill file has
+  `FILE_FLAG_DELETE_ON_CLOSE` in place of the unlink (§8).
+- **Directory sync.** Windows cannot sync a directory. The program does not
+  sync it after a rename (§9.3).
+- **Configuration file.** The home directory is `%USERPROFILE%`, not `$HOME`.
+- **Names.** Windows file names are UTF-16. A name that is not valid UTF-8
+  cannot be created, and the tests of such names skip.
 
 The first runs found five faults that no run on Linux had shown:
 

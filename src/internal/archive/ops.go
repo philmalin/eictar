@@ -276,7 +276,7 @@ func (g *walkGuard) skip(e entry) bool {
 	if e.Stripped && !g.warnedStrip {
 		g.warnedStrip = true
 		if g.rep != nil {
-			g.rep.Warn("removing leading '/' or '..' from member names")
+			g.rep.Warn("removing leading '/', '..' or drive from member names")
 		}
 	}
 	return false
