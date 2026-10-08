@@ -264,7 +264,16 @@ func (b *Builder) AddFile(m format.Member, r io.Reader, digest io.Writer) error 
 		// The budget is taken before the read and held until the encoded
 		// chunk has landed, so an unread chunk cannot start until an earlier
 		// one has finished.
-		b.acquireFor(mb)
+		if err := b.acquireFor(mb); err != nil {
+			// The spool could not move to disk, so its budget is not free,
+			// and a wait for budget would never end. Abandon the member, as
+			// a read failure does.
+			if held != nil {
+				b.cfg.Budget.Release(int64(b.cfg.ChunkSize))
+			}
+			mb.close()
+			return err
+		}
 
 		if b.scratch == nil {
 			b.scratch = make([]byte, b.cfg.ChunkSize)
@@ -367,13 +376,19 @@ func (b *Builder) AddFile(m format.Member, r io.Reader, digest io.Writer) error 
 // Everything else that holds budget - chunks in the workers, finished
 // members on their way to the emitter - is released without this reader,
 // so the wait that follows ends.
-func (b *Builder) acquireFor(mb *memberBuild) {
+//
+// If the spill fails, the spool keeps its budget, and the wait could never
+// end. acquireFor then returns the error and takes no budget.
+func (b *Builder) acquireFor(mb *memberBuild) error {
 	n := int64(b.cfg.ChunkSize)
 	if b.cfg.Budget.TryAcquire(n) {
-		return
+		return nil
 	}
-	mb.spill()
+	if err := mb.spill(); err != nil {
+		return err
+	}
 	b.cfg.Budget.Acquire(n)
+	return nil
 }
 
 // sum returns the digest accumulated so far, or nil if there was no hasher.
@@ -443,16 +458,19 @@ func (mb *memberBuild) close() {
 }
 
 // spill moves the member's spool to disk, giving its memory back to the
-// budget. A failure fails the member, as a failed spool write does.
-func (mb *memberBuild) spill() {
+// budget. A failure fails the member, as a failed spool write does, and is
+// returned.
+func (mb *memberBuild) spill() error {
 	mb.mu.Lock()
 	defer mb.mu.Unlock()
 	if mb.spool == nil {
-		return
+		return nil
 	}
-	if err := mb.spool.Spill(); err != nil && mb.failed == nil {
+	err := mb.spool.Spill()
+	if err != nil && mb.failed == nil {
 		mb.failed = err
 	}
+	return err
 }
 
 func (mb *memberBuild) fail(err error) {

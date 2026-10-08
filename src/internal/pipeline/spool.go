@@ -62,15 +62,9 @@ func (s *Spool) Write(p []byte) (int, error) {
 // spill moves what is buffered into a temporary file and hands the memory
 // back to the budget.
 func (s *Spool) spill() error {
-	f, err := os.CreateTemp(s.dir, ".eictar-spool-*")
+	f, err := createSpillFile(s.dir)
 	if err != nil {
-		return fmt.Errorf("pipeline: creating spill file: %w", err)
-	}
-	// Unlink now: the file stays usable through the descriptor and cannot be
-	// left behind by a crash.
-	if err := os.Remove(f.Name()); err != nil {
-		f.Close()
-		return fmt.Errorf("pipeline: unlinking spill file: %w", err)
+		return err
 	}
 
 	if len(s.buf) > 0 {

@@ -113,7 +113,8 @@ func TestConfigurationThroughTheBinary(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Text("f.txt", 0o644, strings.Repeat("configured ", 1000))
 	archive := filepath.Join(t.TempDir(), "a.ect")
-	env := []string{"HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, "none")}
+	// Windows takes the home directory from USERPROFILE, not HOME.
+	env := []string{"HOME=" + home, "USERPROFILE=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, "none")}
 
 	create := testutil.RunEnv(t, tree.Root, env, "-cvf", archive, "f.txt")
 	if create.ExitCode != exitOK || !strings.Contains(create.Stderr, "using configuration file "+rc) {

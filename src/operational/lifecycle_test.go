@@ -375,7 +375,7 @@ func TestDereferenceOption(t *testing.T) {
 func TestJSONListingIsValidJSON(t *testing.T) {
 	tree := testutil.NewTree(t)
 	if !tree.AcceptsNonUTF8() {
-		t.Skip("this filesystem refuses file names that are not UTF-8 (APFS)")
+		t.Skip("this filesystem does not keep file names that are not UTF-8 (APFS, Windows)")
 	}
 	tree.Text("plain.txt", 0o644, "content").
 		Text("caf\xe9.txt", 0o644, "latin-1 name").

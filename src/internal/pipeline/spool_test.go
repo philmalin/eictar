@@ -3,6 +3,7 @@ package pipeline
 import (
 	"bytes"
 	"math/rand"
+	"os"
 	"testing"
 )
 
@@ -36,10 +37,13 @@ func TestSpoolStaysInMemoryUnderThreshold(t *testing.T) {
 }
 
 // TestSpoolSpillsAndReleasesBudget is the point of the spill: one large
-// member must not decide the program's memory footprint.
+// member must not decide the program's memory footprint. The spill file
+// must not stay after Close. On Windows, the spill failed: Windows cannot
+// delete an open file.
 func TestSpoolSpillsAndReleasesBudget(t *testing.T) {
 	b := NewBudget(1 << 20)
-	s := NewSpool(b, 1024, t.TempDir())
+	dir := t.TempDir()
+	s := NewSpool(b, 1024, dir)
 	defer s.Close()
 
 	rnd := rand.New(rand.NewSource(3))
@@ -70,6 +74,13 @@ func TestSpoolSpillsAndReleasesBudget(t *testing.T) {
 	}
 	if !bytes.Equal(got.Bytes(), want) {
 		t.Error("spilled content did not survive the round trip")
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if left, _ := os.ReadDir(dir); len(left) != 0 {
+		t.Errorf("the spill file stayed after Close: %s", left[0].Name())
 	}
 }
 

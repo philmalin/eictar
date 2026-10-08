@@ -3,6 +3,8 @@ package pipeline
 import (
 	"errors"
 	"io"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -98,8 +100,17 @@ func (p *pacedReader) Read(b []byte) (int, error) {
 }
 
 // addWithin runs AddFile and Finish, and fails the test if they have not
-// returned in time: the failure it looks for is a hang.
+// returned in time or give an error: the failure it looks for is a hang.
 func addWithin(t *testing.T, b *Builder, r io.Reader) {
+	t.Helper()
+	if err := addOrFail(t, b, r); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// addOrFail runs AddFile and Finish, and returns the first error. It fails
+// the test if they have not returned in time.
+func addOrFail(t *testing.T, b *Builder, r io.Reader) error {
 	t.Helper()
 	done := make(chan error, 1)
 	go func() {
@@ -111,11 +122,10 @@ func addWithin(t *testing.T, b *Builder, r io.Reader) {
 	}()
 	select {
 	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
-		}
+		return err
 	case <-time.After(20 * time.Second):
 		t.Fatal("the builder hung: the reader is waiting for budget that only its own member can give back")
+		return nil
 	}
 }
 
@@ -142,6 +152,30 @@ func TestReaderDoesNotWaitOnItsOwnSpool(t *testing.T) {
 	addWithin(t, b, &pacedReader{chunk: chunk, left: 40})
 	if got != 40*chunk {
 		t.Errorf("emitted %d bytes, want %d", got, 40*chunk)
+	}
+}
+
+// TestFailedSpillDoesNotHang: when the budget is full, the reader moves its
+// member's spool to disk, and then waits for budget. If the spill fails, the
+// spool keeps its budget, and the wait never ends. A spill fails on a full
+// disk, and failed every spill on Windows: the run hung, with no error.
+func TestFailedSpillDoesNotHang(t *testing.T) {
+	const chunk = 512
+	budget := NewBudget(4 * chunk)
+	b := New(Config{
+		Workers: 2, ChunkSize: chunk, Budget: budget,
+		SpillThreshold: 1 << 20, // large: only budget pressure can move the spool to disk
+		SpillDir:       filepath.Join(t.TempDir(), "missing"),
+		Stored:         true,
+		Emit:           func(*format.Member, io.WriterTo) error { return nil },
+	})
+	b.Start()
+	err := addOrFail(t, b, &pacedReader{chunk: chunk, left: 40})
+	if err == nil || !strings.Contains(err.Error(), "spill") {
+		t.Fatalf("err = %v, want the failure of the spill", err)
+	}
+	if n := budget.InUse(); n != 0 {
+		t.Errorf("%d bytes of budget still held", n)
 	}
 }
 

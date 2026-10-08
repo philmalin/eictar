@@ -819,6 +819,9 @@ func TestKeepGoingPastAnUnreadableDirectory(t *testing.T) {
 	if meta.IsRoot() {
 		t.Skip("root reads a directory of mode 0")
 	}
+	if runtime.GOOS == "windows" {
+		t.Skip("a mode cannot make a directory unreadable on Windows")
+	}
 	tree := testutil.NewTree(t)
 	tree.Dir("t", 0o755).Text("t/good.txt", 0o644, "fine").
 		Dir("t/locked", 0o755).Text("t/locked/inside.txt", 0o644, "unreachable").
@@ -905,8 +908,11 @@ func TestKeepGoingPastADirectoryWhoseMetadataFails(t *testing.T) {
 		t.Errorf("stats = %+v, want 3 members and 1 failure", stats)
 	}
 	for _, dir := range []string{"a", "c"} {
-		if fi, err := os.Stat(filepath.Join(dest, dir)); err != nil || fi.Mode().Perm() != 0o750 {
-			t.Errorf("%s: %v, %v; want mode 0750", dir, fi.Mode().Perm(), err)
+		fi, err := os.Stat(filepath.Join(dest, dir))
+		if err != nil {
+			t.Errorf("%s: %v", dir, err)
+		} else if fi.Mode().Perm() != 0o750 && runtime.GOOS != "windows" { // no mode bits on Windows
+			t.Errorf("%s: %v; want mode 0750", dir, fi.Mode().Perm())
 		}
 	}
 }

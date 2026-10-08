@@ -1414,7 +1414,10 @@ sockets too. This is the one type that is skipped, not refused.
 - **Spools.** A spool holds the encoded blob of one member until the emitter
   is ready. It keeps the bytes in memory up to `--spill-threshold` (default
   32 MiB). After that, or when memory is short, it moves the bytes to an
-  unlinked temporary file in the directory of the archive.
+  unlinked temporary file in the directory of the archive. Windows cannot
+  unlink an open file, so there the file has `FILE_FLAG_DELETE_ON_CLOSE`.
+  If the move fails, the member fails. The reader does not wait for memory
+  that the spool cannot give back.
 - **Emitter.** One goroutine owns the file offset. It takes each complete
   member in the order that members finish. It writes the blob, records the
   real offset in the index, and releases the spool. Member order in the
@@ -3935,10 +3938,8 @@ The workflow also runs the tests on Windows, but a failure there does not
 fail the workflow. Windows is not a supported platform yet. The program
 builds there, and the tests compile, but some operations fail:
 
-- A spill file is deleted while it is open (`src/internal/pipeline/spool.go`).
-  Windows refuses to delete an open file.
 - `--compact` renames the new archive over the old one while the old one is
-  open. Windows refuses that rename.
+  open. Windows refuses that rename. `--change-passphrase` does the same.
 - The lock of `LockFileEx` is mandatory, not advisory. While one eictar
   changes an archive, a second one cannot read its first byte.
 

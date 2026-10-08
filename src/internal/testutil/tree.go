@@ -380,14 +380,26 @@ func joinLines(lines []string) string {
 	return out
 }
 
-// AcceptsNonUTF8 reports whether the filesystem of the tree takes a file name
+// AcceptsNonUTF8 reports whether the filesystem of the tree keeps a file name
 // that is not valid UTF-8. POSIX names are bytes, and Linux and the BSDs take
-// any; APFS on macOS refuses them (EILSEQ). A test of such names skips there.
+// any; APFS on macOS refuses them (EILSEQ). Windows names are UTF-16: Go
+// writes U+FFFD for the bad byte, so the name that is read back is another
+// name. A test of such names skips there.
 func (t *Tree) AcceptsNonUTF8() bool {
-	p := filepath.Join(t.Root, ".probe-\xe9")
+	const name = ".probe-\xe9"
+	p := filepath.Join(t.Root, name)
 	if err := os.WriteFile(p, nil, 0o600); err != nil {
 		return false
 	}
-	os.Remove(p)
-	return true
+	defer os.Remove(p)
+	entries, err := os.ReadDir(t.Root)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.Name() == name {
+			return true
+		}
+	}
+	return false
 }
