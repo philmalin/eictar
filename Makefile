@@ -12,7 +12,8 @@ $(error GO is empty; give the go command, for example GO=go)
 endif
 export GOMODCACHE := $(CURDIR)/.gocache
 # The build cache, which also holds the fuzz corpus. Go's default is
-# ~/.cache/go-build, outside the project.
+# ~/.cache/go-build, outside the project. CI gives the directories that
+# setup-go saves between runs, on the command line: make check GOCACHE=...
 export GOCACHE    := $(CURDIR)/.gobuildcache
 export GOTOOL     := $(GO)
 # Temporary files - t.TempDir(), the test binary build, spill files from
@@ -143,11 +144,15 @@ crossvet: | $(TMPDIR)
 fmt: | $(TMPDIR)
 	$(GO) fmt $(PKGS) ./tools/...
 
-check: fmt vet crossvet test-race operational
+# CI builds and tests on each platform itself, so it leaves crossvet out:
+# make check CROSSVET=
+CROSSVET ?= crossvet
+
+check: fmt vet $(CROSSVET) test-race operational
 
 # check without the race detector, for platforms that do not have it
 # (NetBSD, OpenBSD).
-check-norace: fmt vet crossvet test operational
+check-norace: fmt vet $(CROSSVET) test operational
 
 clean:
 	rm -rf .build .tmp

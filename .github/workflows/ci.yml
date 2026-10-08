@@ -36,11 +36,15 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: make check GO=go
+      # The Makefile keeps the caches inside the project, where setup-go does
+      # not save or restore them. Its own directories take their place here.
+      - name: use the caches of setup-go
+        run: echo "GODIRS=GOCACHE=$(go env GOCACHE) GOMODCACHE=$(go env GOMODCACHE)" >> "$GITHUB_ENV"
+      - run: make check GO=go CROSSVET= $GODIRS
       - name: skipped tests
         if: always()
-        run: make skips GO=go
-      - run: make fuzz GO=go FUZZTIME=20s
+        run: make skips GO=go $GODIRS
+      - run: make fuzz GO=go FUZZTIME=20s $GODIRS
 
   macos:
     runs-on: macos-latest
@@ -49,10 +53,14 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: make check GO=go
+      # The Makefile keeps the caches inside the project, where setup-go does
+      # not save or restore them. Its own directories take their place here.
+      - name: use the caches of setup-go
+        run: echo "GODIRS=GOCACHE=$(go env GOCACHE) GOMODCACHE=$(go env GOMODCACHE)" >> "$GITHUB_ENV"
+      - run: make check GO=go CROSSVET= $GODIRS
       - name: skipped tests
         if: always()
-        run: make skips GO=go
+        run: make skips GO=go $GODIRS
 
   # Windows is not a supported platform yet (doc/design.md 15.1). The job
   # shows what fails there, and its failure does not fail the workflow.
@@ -94,7 +102,7 @@ jobs:
           prepare: pkg install -y go gmake
           # The job's result is check's; the list of skipped tests follows it.
           run: |
-            gmake check GO=go; status=$?
+            gmake check GO=go CROSSVET=; status=$?
             gmake skips GO=go
             exit $status
 
@@ -113,7 +121,7 @@ jobs:
             GO=$(command -v go || true)
             [ -n "$GO" ] || GO=$(ls /usr/pkg/bin/go1[0-9]* /usr/pkg/go*/bin/go 2>/dev/null | tail -1)
             echo "Go: $GO"
-            gmake check-norace GO="$GO"; status=$?
+            gmake check-norace GO="$GO" CROSSVET=; status=$?
             gmake skips GO="$GO"
             exit $status
 
@@ -127,6 +135,6 @@ jobs:
           prepare: pkg_add go gmake
           # OpenBSD has no race detector.
           run: |
-            gmake check-norace GO=go; status=$?
+            gmake check-norace GO=go CROSSVET=; status=$?
             gmake skips GO=go
             exit $status

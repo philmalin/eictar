@@ -2962,7 +2962,7 @@ bare `go` command:
 | `make bench` | run the Go benchmarks of create and extract (§8.4) |
 | `make compare` | compare eictar with `tar` and a compressor, on `DIR` (default: the module cache). Needs `tar`, `zstd`, `xz` and `gzip`. |
 | `make crossvet` | run `vet` for each platform of the CI workflow: Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows (§15.1). A cross-compile finds a name that one platform does not have, before a push. |
-| `make check` | `fmt`, `vet`, `crossvet`, `test-race` and `operational` |
+| `make check` | `fmt`, `vet`, `crossvet`, `test-race` and `operational`. `CROSSVET=` leaves out `crossvet`, as CI does. |
 | `make check-norace` | `make check` with `test` for `test-race`, for NetBSD and OpenBSD |
 | `make skips` | list each test that this platform skips, with its reason, and the totals |
 | `make stress` | random end-to-end tests against a model (§13.4). `STRESS="-duration 30m"` runs longer, and `STRESS="-seed N -sequences 1"` replays a failure. |
@@ -3938,6 +3938,13 @@ filesystem.
 and in virtual machines for FreeBSD, NetBSD and OpenBSD. NetBSD and OpenBSD
 have no race detector, so they run `make check-norace`. A platform is
 supported while the workflow passes on it.
+
+Each job runs on its platform, so CI leaves out `crossvet` (`CROSSVET=`). On
+Linux and macOS, `setup-go` saves the build cache and the module cache
+between runs. The Makefile keeps them in `.gobuildcache/` and `.gocache/`,
+where `setup-go` does not look. So these jobs give the directories of
+`setup-go` on the command line of `make`. Before, each run built every
+package again, with the race detector and for each fuzz target.
 
 The workflow also runs the tests on Windows, but a failure there does not
 fail the workflow. Windows is not a supported platform yet. Windows becomes

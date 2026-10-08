@@ -9461,7 +9461,9 @@ finds a name that one platform does not have, before a push.</td>
 <tr class="odd">
 <td><code>make check</code></td>
 <td><code>fmt</code>, <code>vet</code>, <code>crossvet</code>,
-<code>test-race</code> and <code>operational</code></td>
+<code>test-race</code> and <code>operational</code>.
+<code>CROSSVET=</code> leaves out <code>crossvet</code>, as CI
+does.</td>
 </tr>
 <tr class="even">
 <td><code>make check-norace</code></td>
@@ -10584,6 +10586,14 @@ Linux and macOS, and in virtual machines for FreeBSD, NetBSD and
 OpenBSD. NetBSD and OpenBSD have no race detector, so they run
 <code>make check-norace</code>. A platform is supported while the
 workflow passes on it.</p>
+<p>Each job runs on its platform, so CI leaves out <code>crossvet</code>
+(<code>CROSSVET=</code>). On Linux and macOS, <code>setup-go</code>
+saves the build cache and the module cache between runs. The Makefile
+keeps them in <code>.gobuildcache/</code> and <code>.gocache/</code>,
+where <code>setup-go</code> does not look. So these jobs give the
+directories of <code>setup-go</code> on the command line of
+<code>make</code>. Before, each run built every package again, with the
+race detector and for each fuzz target.</p>
 <p>The workflow also runs the tests on Windows, but a failure there does
 not fail the workflow. Windows is not a supported platform yet. Windows
 becomes a supported platform when its job passes, and then its failure
