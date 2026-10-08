@@ -9443,27 +9443,33 @@ It needs approximately four times that much free space in
 <code>zstd</code>, <code>xz</code> and <code>gzip</code>.</td>
 </tr>
 <tr class="even">
-<td><code>make check</code></td>
-<td><code>fmt</code>, <code>vet</code>, <code>test-race</code> and
-<code>operational</code></td>
+<td><code>make crossvet</code></td>
+<td>run <code>vet</code> for each platform of the CI workflow: Linux,
+macOS, FreeBSD, NetBSD and OpenBSD (§15.1). A cross-compile finds a name
+that one platform does not have, before a push.</td>
 </tr>
 <tr class="odd">
+<td><code>make check</code></td>
+<td><code>fmt</code>, <code>vet</code>, <code>crossvet</code>,
+<code>test-race</code> and <code>operational</code></td>
+</tr>
+<tr class="even">
 <td><code>make check-norace</code></td>
 <td><code>make check</code> with <code>test</code> for
 <code>test-race</code>, for NetBSD and OpenBSD</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>make skips</code></td>
 <td>list each test that this platform skips, with its reason, and the
 totals</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>make stress</code></td>
 <td>random end-to-end tests against a model (§13.4).
 <code>STRESS=&quot;-duration 30m&quot;</code> runs longer, and
 <code>STRESS=&quot;-seed N -sequences 1&quot;</code> replays a failure.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>make stress-build</code></td>
 <td>build the stress tester alone, as <code>.build/stress</code></td>
 </tr>

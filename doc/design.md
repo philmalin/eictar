@@ -2951,7 +2951,8 @@ bare `go` command:
 | `make fuzz` | run each fuzz target for `FUZZTIME` (default 30s) |
 | `make bench` | run the Go benchmarks of create and extract (§8.4) |
 | `make compare` | compare eictar with `tar` and a compressor, on `DIR` (default: the module cache). Needs `tar`, `zstd`, `xz` and `gzip`. |
-| `make check` | `fmt`, `vet`, `test-race` and `operational` |
+| `make crossvet` | run `vet` for each platform of the CI workflow: Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1). A cross-compile finds a name that one platform does not have, before a push. |
+| `make check` | `fmt`, `vet`, `crossvet`, `test-race` and `operational` |
 | `make check-norace` | `make check` with `test` for `test-race`, for NetBSD and OpenBSD |
 | `make skips` | list each test that this platform skips, with its reason, and the totals |
 | `make stress` | random end-to-end tests against a model (§13.4). `STRESS="-duration 30m"` runs longer, and `STRESS="-seed N -sequences 1"` replays a failure. |

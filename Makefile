@@ -38,7 +38,7 @@ VERSION  ?= $(or $(shell git describe --tags --dirty 2>/dev/null | sed 's/^v//')
 LDFLAGS    := -s -w -X github.com/philmalin/eictar/src/internal/cli.Version=$(VERSION)
 BUILDFLAGS := -trimpath -ldflags="$(LDFLAGS)"
 
-.PHONY: all build release test test-race operational large fuzz bench compare stress stress-build vet fmt check check-norace skips clean
+.PHONY: all build release test test-race operational large fuzz bench compare stress stress-build vet crossvet fmt check check-norace skips clean
 
 all: build
 
@@ -127,14 +127,26 @@ vet: | $(TMPDIR)
 	$(GO) vet $(PKGS) ./tools/...
 	$(GO) vet -tags operational ./src/operational/
 
+# vet for each platform of CI (doc/design.md 15.1), from this machine. A
+# file for one platform can use a name that another platform does not have,
+# and only a build for that platform shows it.
+CROSS_GOOS := linux darwin freebsd netbsd openbsd
+
+crossvet: | $(TMPDIR)
+	@set -e; for os in $(CROSS_GOOS); do \
+		echo "vet GOOS=$$os"; \
+		GOOS=$$os $(GO) vet $(PKGS) ./tools/...; \
+		GOOS=$$os $(GO) vet -tags operational ./src/operational/; \
+	done
+
 fmt: | $(TMPDIR)
 	$(GO) fmt $(PKGS) ./tools/...
 
-check: fmt vet test-race operational
+check: fmt vet crossvet test-race operational
 
 # check without the race detector, for platforms that do not have it
 # (NetBSD, OpenBSD).
-check-norace: fmt vet test operational
+check-norace: fmt vet crossvet test operational
 
 clean:
 	rm -rf .build .tmp
