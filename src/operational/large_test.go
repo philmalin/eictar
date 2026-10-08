@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/philmalin/eictar/src/internal/testutil"
@@ -207,11 +206,11 @@ func largeLifecycle(t *testing.T, gib int64, encrypted bool) {
 // the check, a full disk shows as a fault of eictar, late in the run.
 func needSpace(t *testing.T, n int64) {
 	t.Helper()
-	var st syscall.Statfs_t
-	if err := syscall.Statfs(os.TempDir(), &st); err != nil {
+	free, err := testutil.FreeSpace(os.TempDir())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if free := int64(st.Bavail) * int64(st.Bsize); free < n {
+	if free < n {
 		t.Fatalf("%s has %d GiB free; this test needs %d GiB", os.TempDir(), free>>30, n>>30+1)
 	}
 }
