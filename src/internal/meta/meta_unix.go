@@ -26,6 +26,10 @@ func Stat(fi fs.FileInfo) Info {
 	return statInfo(st)
 }
 
+// StatPath is Stat for fi, the FileInfo of path. The UNIX-like platforms do
+// not need the path. Windows does: its FileInfo holds no file identity.
+func StatPath(_ string, fi fs.FileInfo) Info { return Stat(fi) }
+
 // Mkfifo creates a named pipe as name inside the directory dir. dir must have
 // come from os.Root, and name must be one path component: together those
 // keep the operation inside the extraction root. A platform without mkfifoat

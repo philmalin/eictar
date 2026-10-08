@@ -114,6 +114,9 @@ func TestCompareTreesDetects(t *testing.T) {
 		}, CompareOptions{Hardlinks: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if (tc.opt.Mode || tc.opt.Special) && !HasModes {
+				t.Skip("testutil: this platform has no mode bits")
+			}
 			build := func() *Tree {
 				tr := NewTree(t)
 				tr.Text("a.txt", 0o644, "alpha").

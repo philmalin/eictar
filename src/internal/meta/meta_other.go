@@ -1,4 +1,4 @@
-//go:build !(linux || darwin || freebsd || netbsd || openbsd)
+//go:build !(linux || darwin || freebsd || netbsd || openbsd || windows)
 
 package meta
 
@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-// On the other platforms (Windows, illumos, Plan 9 and the rest) the program
+// On the other platforms (illumos, Plan 9 and the rest) the program
 // archives content, directories and links, and reports anything more as
 // unsupported rather than pretending (doc/design.md 15.1).
 
@@ -16,6 +16,8 @@ import (
 var Supports Capabilities
 
 func Stat(fs.FileInfo) Info { return Info{} }
+
+func StatPath(string, fs.FileInfo) Info { return Info{} }
 
 func ReadXattrs(string, bool) (map[string][]byte, error) { return nil, nil }
 

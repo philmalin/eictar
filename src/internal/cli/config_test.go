@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -137,6 +138,9 @@ func TestConfigScope(t *testing.T) {
 }
 
 func TestConfigFileMustBePrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file permissions are ACLs, which this program does not read")
+	}
 	home := t.TempDir()
 	p := writeConfig(t, filepath.Join(home, ".eictarrc"), "workers = 2\n")
 	if err := os.Chmod(p, 0o620); err != nil {

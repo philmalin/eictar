@@ -80,7 +80,7 @@ func PlanAdd(cfg AppendConfig, existing bool, plan PlanFunc) (Stats, error) {
 		p := Planned{Path: e.Stored, Replaces: old != nil}
 		if e.Kind == kindFile {
 			p.Size = uint64(e.Info.Size())
-			if e.Sys.OK && e.Sys.Nlink > 1 {
+			if e.Sys.HasID && e.Sys.Nlink > 1 {
 				key := inodeKey{e.Sys.Dev, e.Sys.Ino}
 				if firstName[key] {
 					p.Size = 0

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -40,6 +41,9 @@ func forceTerminal(t *testing.T, yes bool) {
 // escaped, in the listing, the long listing, a dry run and --diff, and a pipe
 // exactly (doc/Security_Audit.md, finding 12).
 func TestNamesOnATerminal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a Windows file name cannot hold a control character")
+	}
 	dir := t.TempDir()
 	evil := "a\x1b[2J"
 	if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {

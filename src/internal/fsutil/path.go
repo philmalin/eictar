@@ -9,6 +9,7 @@ package fsutil
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,7 @@ func StorePath(p string) (stored string, stripped bool, err error) {
 	if p == "" {
 		return "", false, fmt.Errorf("%w: empty path", ErrUnsafePath)
 	}
-	if v := filepath.VolumeName(p); v != "" {
+	if v := volumeName(p); v != "" {
 		p = p[len(v):]
 		stripped = true
 	}
@@ -69,6 +70,16 @@ func StorePath(p string) (stored string, stripped bool, err error) {
 		return "", stripped, fmt.Errorf("%w: %q normalised to %q", ErrUnsafePath, p, s)
 	}
 	return s, stripped, nil
+}
+
+// volumeName is filepath.VolumeName, except for a path that starts with three
+// or more separators. Windows reads ///etc as the share etc, but the writer
+// treats the path as /etc, as on Unix.
+func volumeName(p string) string {
+	if len(p) > 2 && os.IsPathSeparator(p[0]) && os.IsPathSeparator(p[1]) && os.IsPathSeparator(p[2]) {
+		return ""
+	}
+	return filepath.VolumeName(p)
 }
 
 // IsStoredPath reports whether s is in the canonical stored form: relative,

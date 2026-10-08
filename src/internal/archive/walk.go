@@ -126,7 +126,7 @@ func (w *walker) Walk(requested string) error {
 		stat = func(string) (os.FileInfo, error) { return w.opt.root.Stat(requested) }
 	}
 	if fi, err := stat(src); err == nil {
-		w.rootDev = meta.Stat(fi).Dev
+		w.rootDev = meta.StatPath(src, fi).Dev
 	}
 
 	parent, name, err := w.openParent(requested, src)
@@ -238,7 +238,7 @@ func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
 			}
 			// The archive stores / as the separator of a target. On Unix,
 			// ToSlash changes nothing, and a \ in a target stays a name byte.
-			e.Kind, e.LinkTarget, e.Sys = kindSymlink, filepath.ToSlash(target), meta.Stat(fi)
+			e.Kind, e.LinkTarget, e.Sys = kindSymlink, filepath.ToSlash(target), meta.StatPath(src, fi)
 			return w.emit(e)
 		}
 		// -h: archive what the link points at, under the link's own name.
@@ -252,7 +252,7 @@ func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
 		fi = followed
 	}
 
-	e.Sys = meta.Stat(fi)
+	e.Sys = meta.StatPath(src, fi)
 	e.Kind = classify(fi.Mode())
 
 	if e.Kind != kindDir {
@@ -290,7 +290,7 @@ func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
 	// A directory on another filesystem is recorded, empty, but not
 	// entered: the mount point exists in the tree, its contents belong to
 	// something else.
-	if w.opt.oneFileSystem && e.Sys.OK && e.Sys.Dev != w.rootDev {
+	if w.opt.oneFileSystem && e.Sys.HasID && e.Sys.Dev != w.rootDev {
 		return nil
 	}
 

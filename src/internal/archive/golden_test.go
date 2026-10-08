@@ -138,6 +138,7 @@ func TestGolden(t *testing.T) {
 					return err
 				}
 				rel, _ := filepath.Rel(dest, p)
+				rel = filepath.ToSlash(rel)
 				got = append(got, rel)
 				want, ok := goldenContent[rel]
 				switch {

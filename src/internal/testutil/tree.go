@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"testing"
 	"time"
@@ -144,6 +145,12 @@ func (t *Tree) SetTimes(rel string, atime, mtime time.Time) *Tree {
 	return t
 }
 
+// HasModes reports whether the platform keeps the mode bits of Unix. Windows
+// keeps only the read-only attribute: os.Chmod sets it from the write bit of
+// the owner, and a file reads back as 0666 or 0444. A test of modes skips
+// there, or leaves out its check of the mode.
+const HasModes = runtime.GOOS != "windows"
+
 // Chmod sets a mode, special bits included, which File's os.WriteFile cannot.
 // On Windows, only the write bit of the owner has an effect: it is the
 // read-only attribute.
@@ -205,7 +212,8 @@ func Snapshot(tb testing.TB, root string) []Entry {
 			if e.Target, err = os.Readlink(p); err != nil {
 				return err
 			}
-			e.Size = 0 // a symlink's size is its target length; compare the target instead
+			e.Target = filepath.ToSlash(e.Target) // as the archive stores it
+			e.Size = 0                            // a symlink's size is its target length; compare the target instead
 		case fi.Mode().IsRegular():
 			if e.Content, err = os.ReadFile(p); err != nil {
 				return err

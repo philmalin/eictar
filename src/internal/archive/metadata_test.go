@@ -309,6 +309,9 @@ func TestOwnerIsRecorded(t *testing.T) {
 			}
 			continue
 		}
+		if !meta.Supports.Metadata {
+			continue // Windows has no owner as a number
+		}
 		if m.UID == nil || *m.UID != uint32(os.Getuid()) {
 			t.Errorf("uid = %v, want %d", m.UID, os.Getuid())
 		}
@@ -368,7 +371,7 @@ func TestPrivilegedXattrsNeedRoot(t *testing.T) {
 		t.Fatalf("Extract: %v", err)
 	}
 	got, _ := meta.ReadXattrs(filepath.Join(dest, "member.bin"), false)
-	if string(got["user.ok"]) != "yes" {
+	if string(got["user.ok"]) != "yes" && meta.Supports.Xattrs {
 		t.Errorf("user.ok = %q, want yes", got["user.ok"])
 	}
 	for _, name := range []string{"security.selinux", "trusted.secret"} {

@@ -492,7 +492,7 @@ func TestSymlinkRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readlink: %v", err)
 	}
-	if got != "../../outside.txt" {
+	if got = filepath.ToSlash(got); got != "../../outside.txt" { // Windows gives \
 		t.Errorf("escaping link target = %q, want it verbatim", got)
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(dest), "outside.txt")); err == nil {
@@ -819,7 +819,7 @@ func TestKeepGoingPastAnUnreadableDirectory(t *testing.T) {
 	if meta.IsRoot() {
 		t.Skip("root reads a directory of mode 0")
 	}
-	if runtime.GOOS == "windows" {
+	if !testutil.HasModes {
 		t.Skip("a mode cannot make a directory unreadable on Windows")
 	}
 	tree := testutil.NewTree(t)
@@ -911,7 +911,7 @@ func TestKeepGoingPastADirectoryWhoseMetadataFails(t *testing.T) {
 		fi, err := os.Stat(filepath.Join(dest, dir))
 		if err != nil {
 			t.Errorf("%s: %v", dir, err)
-		} else if fi.Mode().Perm() != 0o750 && runtime.GOOS != "windows" { // no mode bits on Windows
+		} else if fi.Mode().Perm() != 0o750 && testutil.HasModes {
 			t.Errorf("%s: %v; want mode 0750", dir, fi.Mode().Perm())
 		}
 	}
@@ -1579,6 +1579,9 @@ func TestFailedMemberLeavesExistingFileAlone(t *testing.T) {
 // briefly 0755 while its contents are written, or a local attacker has a
 // window to walk into it.
 func TestPrivateDirectoryIsNeverWorldTraversable(t *testing.T) {
+	if !testutil.HasModes {
+		t.Skip("no mode bits on Windows: the ACL that the new directory inherits decides who can enter it")
+	}
 	tree := testutil.NewTree(t)
 	tree.Dir("secret", 0o700).Text("secret/key.txt", 0o600, "sensitive")
 

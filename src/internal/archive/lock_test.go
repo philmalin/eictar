@@ -88,7 +88,7 @@ func TestLockOnAReplacedFileIsRefused(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "b"), []byte("new"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(filepath.Join(dir, "b"), path); err != nil {
+	if err := renameOver(filepath.Join(dir, "b"), path); err != nil {
 		t.Fatal(err)
 	}
 	if err := lockArchive(f, path); !errors.Is(err, ErrLocked) {

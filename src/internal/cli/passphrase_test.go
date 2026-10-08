@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -142,6 +143,9 @@ func TestPassphraseWarnsAboutEnv(t *testing.T) {
 // TestPassphraseFileThatOthersCanRead: a warning, as ssh gives for a key
 // (doc/Security_Audit.md, finding 8).
 func TestPassphraseFileThatOthersCanRead(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file permissions are ACLs, which this program does not read")
+	}
 	for _, tc := range []struct {
 		mode os.FileMode
 		warn bool

@@ -3944,13 +3944,31 @@ fail the workflow. Windows is not a supported platform yet. Windows becomes
 a supported platform when its job passes, and then its failure fails the
 workflow.
 
-**Windows (in progress).** The program archives content, directories and
-links on Windows. It records no other metadata (`meta_other.go`). Windows
-differs from Unix in these ways, and the program does as follows:
+**Windows (in progress).** The program archives content, directories,
+links and hardlinks on Windows, with the times of each. It records no owner,
+no mode and no extended attributes (`meta_windows.go`). Windows differs from
+Unix in these ways, and the program does as follows:
 
 - **Paths.** An absolute path starts with a volume name: a drive (`C:`) or a
   share (`\\server\share`). The writer removes the volume name, as it removes
-  a leading `/` (§7.3).
+  a leading `/` (§7.3). A path that starts with three or more separators,
+  such as `///etc`, has no volume name. Windows reads it as a share, but the
+  writer reads it as `/etc`, as on Unix.
+- **Hardlinks.** The `FileInfo` of Windows has no file identity. The walk
+  opens each entry for its attributes, and reads the volume serial number,
+  the file index and the link count. These take the place of the device, the
+  inode and the link count of Unix. `--one-file-system` uses the volume serial
+  number.
+- **Times of links.** The reader opens the link relative to the handle of its
+  directory (`NtCreateFile` with `FILE_OPEN_REPARSE_POINT`), and sets the
+  times on that handle. Thus the times of the target do not change, and the
+  operation stays inside the extraction root, as with the `*at` calls of Unix.
+- **Modes and owners.** Windows has the read-only attribute in place of
+  mode bits, and ACLs in place of owners. `os.Chmod` sets the read-only
+  attribute from the write bit of the owner. A file reads back as 0666 or
+  0444. Thus compact and create do not keep a mode such as 0640. A new
+  directory gets the ACL of its parent, not 0700. The program does not check
+  who can read a configuration file or a passphrase file.
 - **Link targets.** Windows gives a target with `\`. The writer stores it
   with `/`. The reader changes `/` back to `\` when it creates the link on
   Windows. On Unix, the writer and the reader keep a `\` in a target, because
@@ -3974,7 +3992,9 @@ differs from Unix in these ways, and the program does as follows:
   sync it after a rename (§9.3).
 - **Configuration file.** The home directory is `%USERPROFILE%`, not `$HOME`.
 - **Names.** Windows file names are UTF-16. A name that is not valid UTF-8
-  cannot be created, and the tests of such names skip.
+  cannot be created, and the tests of such names skip. A name cannot hold a
+  control character. Windows refuses such a name from an archive made on
+  Unix, so that member does not extract there.
 
 The first runs found five faults that no run on Linux had shown:
 

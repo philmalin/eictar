@@ -222,7 +222,7 @@ func (c *capturer) submitFile(m format.Member, e entry) error {
 	// points at the first. Nlink > 1 is checked first because nearly every
 	// file has one name, and the map should stay small.
 	var key inodeKey
-	linked := e.Sys.OK && e.Sys.Nlink > 1
+	linked := e.Sys.HasID && e.Sys.Nlink > 1
 	if linked {
 		key = inodeKey{e.Sys.Dev, e.Sys.Ino}
 		if first, ok := c.firstLink[key]; ok {

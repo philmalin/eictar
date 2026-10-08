@@ -383,7 +383,7 @@ func TestCompact(t *testing.T) {
 			if res.NewSize >= res.OldSize || res.Dropped != 2 {
 				t.Errorf("result = %+v, want a smaller file and 2 dropped", res)
 			}
-			if fi := mustStat(t, archive); fi.Size() != res.NewSize || fi.Mode().Perm() != 0o640 {
+			if fi := mustStat(t, archive); fi.Size() != res.NewSize || (fi.Mode().Perm() != 0o640 && testutil.HasModes) {
 				t.Errorf("file size %d mode %v, want %d and 0640", fi.Size(), fi.Mode().Perm(), res.NewSize)
 			}
 			live, all, gen := state(t, archive, enc)
@@ -892,7 +892,7 @@ func TestFailedCreateKeepsTheOldArchive(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if fi := mustStat(t, archive); fi.Mode().Perm() != 0o600 {
+	if fi := mustStat(t, archive); fi.Mode().Perm() != 0o600 && testutil.HasModes {
 		t.Errorf("mode = %v, want the old archive's 0600", fi.Mode().Perm())
 	}
 	if live, _, _ := state(t, archive, false); !equalStrings(live, []string{"t/a.txt"}) {

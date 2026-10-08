@@ -10589,14 +10589,37 @@ not fail the workflow. Windows is not a supported platform yet. Windows
 becomes a supported platform when its job passes, and then its failure
 fails the workflow.</p>
 <p><strong>Windows (in progress).</strong> The program archives content,
-directories and links on Windows. It records no other metadata
-(<code>meta_other.go</code>). Windows differs from Unix in these ways,
+directories, links and hardlinks on Windows, with the times of each. It
+records no owner, no mode and no extended attributes
+(<code>meta_windows.go</code>). Windows differs from Unix in these ways,
 and the program does as follows:</p>
 <ul>
 <li><strong>Paths.</strong> An absolute path starts with a volume name:
 a drive (<code>C:</code>) or a share (<code>\\server\share</code>). The
 writer removes the volume name, as it removes a leading <code>/</code>
-(§7.3).</li>
+(§7.3). A path that starts with three or more separators, such as
+<code>///etc</code>, has no volume name. Windows reads it as a share,
+but the writer reads it as <code>/etc</code>, as on Unix.</li>
+<li><strong>Hardlinks.</strong> The <code>FileInfo</code> of Windows has
+no file identity. The walk opens each entry for its attributes, and
+reads the volume serial number, the file index and the link count. These
+take the place of the device, the inode and the link count of Unix.
+<code>--one-file-system</code> uses the volume serial number.</li>
+<li><strong>Times of links.</strong> The reader opens the link relative
+to the handle of its directory (<code>NtCreateFile</code> with
+<code>FILE_OPEN_REPARSE_POINT</code>), and sets the times on that
+handle. Thus the times of the target do not change, and the operation
+stays inside the extraction root, as with the <code>*at</code> calls of
+Unix.</li>
+<li><strong>Modes and owners.</strong> Windows has the read-only
+attribute in place of mode bits, and ACLs in place of owners.
+<code>os.Chmod</code> sets the read-only attribute from the write bit of
+the owner. A file reads back as 0666 or
+<ol start="444" type="1">
+<li>Thus compact and create do not keep a mode such as 0640. A new
+directory gets the ACL of its parent, not 0700. The program does not
+check who can read a configuration file or a passphrase file.</li>
+</ol></li>
 <li><strong>Link targets.</strong> Windows gives a target with
 <code>\</code>. The writer stores it with <code>/</code>. The reader
 changes <code>/</code> back to <code>\</code> when it creates the link
@@ -10626,8 +10649,9 @@ The program does not sync it after a rename (§9.3).</li>
 <li><strong>Configuration file.</strong> The home directory is
 <code>%USERPROFILE%</code>, not <code>$HOME</code>.</li>
 <li><strong>Names.</strong> Windows file names are UTF-16. A name that
-is not valid UTF-8 cannot be created, and the tests of such names
-skip.</li>
+is not valid UTF-8 cannot be created, and the tests of such names skip.
+A name cannot hold a control character. Windows refuses such a name from
+an archive made on Unix, so that member does not extract there.</li>
 </ul>
 <p>The first runs found five faults that no run on Linux had shown:</p>
 <ul>

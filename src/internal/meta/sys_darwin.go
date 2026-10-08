@@ -18,7 +18,7 @@ func statInfo(st *syscall.Stat_t) Info {
 		UID: st.Uid, GID: st.Gid,
 		Major: unix.Major(rdev), Minor: unix.Minor(rdev),
 		ATimeNanos: st.Atimespec.Nano(), MTimeNanos: st.Mtimespec.Nano(),
-		Blocks: st.Blocks, OK: true,
+		Blocks: st.Blocks, OK: true, HasID: true,
 	}
 }
 

@@ -47,6 +47,10 @@ type Info struct {
 	MTimeNanos   int64
 	Blocks       int64 // 512-byte blocks allocated, for hole detection
 	OK           bool  // false when the platform gave no system information
+	// HasID is true when Dev, Ino and Nlink are valid. The UNIX-like
+	// platforms give them with OK. Windows gives them without OK: it has an
+	// identity for a file, but no owner and no mode.
+	HasID bool
 }
 
 // The special mode bits as the kernel numbers them. os.FileMode keeps them
