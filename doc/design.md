@@ -1,8 +1,8 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete, and v1.0.7 is the current release. The CI workflow passes
+Status: M1 to M11 are complete, and v1.0.8 is the current release. The CI workflow passes
 on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
-Date: 2026-10-05
+Date: 2026-10-09
 Applies to: v1 (format version 1.0)
 
 This document specifies the on-disk format, the concurrency model, the command
@@ -4310,6 +4310,40 @@ Other changes:
   times. It failed now and then on OpenBSD.
 
 The format is still 1.0. v1.0.7 reads every earlier archive, and earlier
+versions read what it writes.
+
+**v1.0.8 fixes one fault, and starts the work for Windows.**
+
+The fix:
+
+- A create could hang with no message when a member could not move to disk.
+  When memory is full, the reader moves the member that it reads to a spill
+  file, and then waits for memory. If the spill file could not be made, for
+  example on a full disk, the member kept its memory, and the wait did not
+  end. Now the member fails with the error of the spill (§8).
+
+Other changes:
+
+- On Windows, the writer also removes the drive or the share from an
+  absolute path. Thus the notice is now "removing leading '/', '..' or
+  drive from member names" (§7.3). On other platforms, only the text of
+  the notice changes.
+- Windows is not a supported platform yet, and the release has no Windows
+  binary. The program now passes the tests there, and the CI workflow runs
+  them. §15.1 gives what the program does on Windows. The work found that
+  the check against a file swapped in after the walk did nothing on Windows
+  for a path named on the command line (`doc/Security_Audit.md`, finding 3).
+  That fault was on Windows only.
+- `make large` takes an archive past 4 GiB through each operation that reads
+  or writes an offset or a length (§13.2).
+- The stress tester checks the identity of hardlinks after each extraction.
+  It gives a new entry another name when its name is taken. An 8-hour run
+  failed on such a collision (§13.4).
+- `make crossvet` runs `vet` for each platform from one machine, and `make
+  check` includes it. CI leaves it out, and uses the caches that `setup-go`
+  saves (§12, §15.1).
+
+The format is still 1.0. v1.0.8 reads every earlier archive, and earlier
 versions read what it writes.
 
 ## Appendix A. Why these primitives, compared with AES
