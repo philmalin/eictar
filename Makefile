@@ -51,19 +51,22 @@ build: | $(TMPDIR)
 
 # The release binaries: one directory for each platform that the CI workflow
 # tests (doc/design.md 15.1), with the man page, the README and the license.
+# Windows gets eictar.exe, and no man page.
 # The release workflow packs each directory and writes the checksums.
 #   make release VERSION=1.0.0
 RELEASE_TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 \
                    freebsd/amd64 freebsd/arm64 netbsd/amd64 netbsd/arm64 \
-                   openbsd/amd64 openbsd/arm64
+                   openbsd/amd64 openbsd/arm64 windows/amd64 windows/arm64
 release: | $(TMPDIR)
 	rm -rf .build/release
 	@for t in $(RELEASE_TARGETS); do \
 		os=$${t%/*}; arch=$${t#*/}; dir=.build/release/eictar-$(VERSION)-$$os-$$arch; \
+		exe=eictar; man=doc/eictar.1; \
+		if [ $$os = windows ]; then exe=eictar.exe; man=; fi; \
 		echo "$$os/$$arch"; \
 		mkdir -p $$dir && \
-		GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 $(GO) build $(BUILDFLAGS) -o $$dir/eictar ./src/cmd/eictar && \
-		cp doc/eictar.1 README.md LICENSE TRADEMARKS.md THIRD_PARTY.md $$dir/ || exit 1; \
+		GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 $(GO) build $(BUILDFLAGS) -o $$dir/$$exe ./src/cmd/eictar && \
+		cp $$man README.md LICENSE TRADEMARKS.md THIRD_PARTY.md $$dir/ || exit 1; \
 	done
 
 test: | $(TMPDIR)
@@ -130,8 +133,7 @@ vet: | $(TMPDIR)
 
 # vet for each platform of CI (doc/design.md 15.1), from this machine. A
 # file for one platform can use a name that another platform does not have,
-# and only a build for that platform shows it. Windows is not supported yet,
-# but its CI job needs code and tests that compile.
+# and only a build for that platform shows it.
 CROSS_GOOS := linux darwin freebsd netbsd openbsd windows
 
 crossvet: | $(TMPDIR)

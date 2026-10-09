@@ -62,12 +62,10 @@ jobs:
         if: always()
         run: make skips GO=go $GODIRS
 
-  # Windows is not a supported platform yet (doc/design.md 15.1). The job
-  # shows what fails there, and its failure does not fail the workflow.
   # Windows has no make in the runner image, so the job runs go directly.
+  # gofmt and the fuzz targets run in the linux job.
   windows:
     runs-on: windows-latest
-    continue-on-error: true
     defaults:
       run:
         shell: bash

@@ -5356,7 +5356,7 @@ tree that other users can write</a></li>
 </ul></li>
 <li><a href="#future-work" id="toc-future-work">15. Future work</a>
 <ul>
-<li><a href="#other-unix-like-platforms" id="toc-other-unix-like-platforms">15.1 Other UNIX-like
+<li><a href="#other-platforms" id="toc-other-platforms">15.1 Other
 platforms</a></li>
 <li><a href="#outstanding-items" id="toc-outstanding-items">15.2
 Outstanding items</a></li>
@@ -9701,15 +9701,16 @@ man page, <code>README.md</code>, <code>LICENSE</code>,
 <code>TRADEMARKS.md</code> and <code>THIRD_PARTY.md</code>. The licenses
 of the modules in the binary require their texts in a binary
 distribution, and <code>THIRD_PARTY.md</code> holds them. It must be
-updated when <code>go.mod</code> changes. The workflow packs each one in
-a <code>.tar.gz</code> file, writes <code>SHA256SUMS</code>, and makes a
-draft release with these files.</p>
-<p>The ci workflow runs on the same tag, on all five platforms. On a
+updated when <code>go.mod</code> changes. On Windows, the binary is
+<code>eictar.exe</code>, and the man page is not included. The workflow
+packs each one in a <code>.tar.gz</code> file, or in a <code>.zip</code>
+file for Windows. It writes <code>SHA256SUMS</code>, and makes a draft
+release with these files.</p>
+<p>The ci workflow runs on the same tag, on all six platforms. On a
 branch, it does not run for a push or a pull request that changes only
 Markdown, HTML or the license. The man page is not in that list, because
 a test reads it. A tag always runs it. The draft is published by hand,
-after that run passes too. Windows builds, but it is not in the release,
-because it does not pass the tests yet (§15.1).</p>
+after that run passes too.</p>
 <p><strong>Dependencies do not change by themselves.</strong>
 <code>go.mod</code> gives the exact version of each module, and
 <code>go.sum</code> its checksum, so each build of one commit uses the
@@ -10440,22 +10441,24 @@ inline, for use through a pipe.</li>
 <li><strong>A detached signature</strong> (<code>.ect.sig</code>) of the
 trailer.</li>
 </ul>
-<h3 id="other-unix-like-platforms">15.1 Other UNIX-like platforms</h3>
-<p><strong>Status: complete in M8.</strong> The CI workflow passes on
-all five platforms (see “Testing” below).</p>
+<h3 id="other-platforms">15.1 Other platforms</h3>
+<p><strong>Status: complete in M8</strong> for the five UNIX-like
+platforms. Windows is supported after v1.0.8 (see “Windows” below). The
+CI workflow passes on all six platforms (see “Testing” below).</p>
 <p>The metadata code (<code>src/internal/meta</code>) has a part that
-all five platforms share, and a small file for each platform. On any
-other platform (Windows, illumos, Plan 9 and the rest), the program
-archives content, directories and links, and records no other
-metadata.</p>
+the five UNIX-like platforms share, and a small file for each platform.
+Windows has <code>meta_windows.go</code>. On any other platform
+(illumos, Plan 9 and the rest), the program archives content,
+directories and links, and records no other metadata.</p>
 <table style="width:100%;">
 <colgroup>
-<col style="width: 16%" />
-<col style="width: 16%" />
-<col style="width: 16%" />
-<col style="width: 16%" />
-<col style="width: 16%" />
-<col style="width: 16%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
 </colgroup>
 <thead>
 <tr class="header">
@@ -10465,56 +10468,72 @@ metadata.</p>
 <th>FreeBSD</th>
 <th>NetBSD</th>
 <th>OpenBSD</th>
+<th>Windows</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td>owner, special bits, times, hardlinks, link times</td>
+<td>owner, special bits</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>not recorded</td>
+</tr>
+<tr class="even">
+<td>times, hardlinks, link times</td>
+<td>yes</td>
 <td>yes</td>
 <td>yes</td>
 <td>yes</td>
 <td>yes</td>
 <td>yes</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>holes (<code>SEEK_DATA</code>, <code>SEEK_HOLE</code>)</td>
 <td>yes</td>
 <td>yes</td>
 <td>yes</td>
 <td>stored dense</td>
 <td>stored dense</td>
+<td>stored dense</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>xattrs</td>
 <td>yes</td>
 <td>yes, no namespaces</td>
 <td><code>user</code> and <code>system</code></td>
 <td><code>user</code> and <code>system</code></td>
 <td>none on the platform</td>
+<td>not recorded</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>POSIX ACLs</td>
 <td>yes, as xattrs</td>
 <td>not recorded (§1.1, row 8)</td>
 <td>not recorded</td>
 <td>not recorded</td>
 <td>none on the platform</td>
+<td>none on the platform</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>pipes and device nodes on extraction</td>
 <td>yes</td>
 <td>skipped with a notice</td>
 <td>yes</td>
 <td>yes</td>
 <td>yes</td>
+<td>skipped with a notice</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>memory size for the budget</td>
 <td><code>/proc/meminfo</code></td>
 <td><code>sysctl hw.memsize</code></td>
 <td><code>sysctl hw.physmem</code></td>
 <td><code>sysctl hw.physmem64</code></td>
 <td><code>sysctl hw.physmem64</code></td>
+<td><code>GlobalMemoryStatusEx</code></td>
 </tr>
 </tbody>
 </table>
@@ -10533,9 +10552,9 @@ keep their own copy of the table, from this section. A test must not
 take its expectations from the code that it tests.</p>
 <p><strong>The files:</strong></p>
 <ul>
-<li><code>meta_unix.go</code> has what the five platforms share:
-<code>Stat</code>, link times, the owner, and the checks for a single
-name component.</li>
+<li><code>meta_unix.go</code> has what the five UNIX-like platforms
+share: <code>Stat</code>, link times, the owner, and the checks for a
+single name component.</li>
 <li><code>sys_&lt;os&gt;.go</code> has what differs: the field names of
 <code>syscall.Stat_t</code>, the pipe and device calls, and the
 platform’s row of the table. FreeBSD has <code>mkfifoat</code> as system
@@ -10574,9 +10593,9 @@ names with <code>EILSEQ</code>. An archive from Linux with such a name
 gives an error for that member on macOS. The tests of those names skip
 there.</p>
 <p><strong>The advisory lock</strong> of §9.6 uses <code>flock</code> on
-the five platforms and on the other UNIX systems, except AIX, which has
-no <code>flock</code>. On AIX, as on Plan 9, two writers are not
-found.</p>
+the five UNIX-like platforms and on the other UNIX systems, except AIX,
+which has no <code>flock</code>. On AIX, as on Plan 9, two writers are
+not found.</p>
 <p><strong>Testing is the real condition.</strong> A cross-compile
 proves that the code builds, not that it works. The differences between
 platforms are the subtle ones: xattr meanings, hole reports, and what a
@@ -10594,13 +10613,13 @@ where <code>setup-go</code> does not look. So these jobs give the
 directories of <code>setup-go</code> on the command line of
 <code>make</code>. Before, each run built every package again, with the
 race detector and for each fuzz target.</p>
-<p>The workflow also runs the tests on Windows, but a failure there does
-not fail the workflow. Windows is not a supported platform yet. Windows
-becomes a supported platform when its job passes, and then its failure
-fails the workflow.</p>
-<p><strong>Windows (in progress).</strong> The program archives content,
-directories, links and hardlinks on Windows, with the times of each. It
-records no owner, no mode and no extended attributes
+<p>Windows has no <code>make</code> in the runner image. Its job runs
+<code>go vet</code>, the unit tests and the operational tests directly,
+without the race detector. The Linux job runs <code>gofmt</code> and the
+fuzz targets for all platforms.</p>
+<p><strong>Windows.</strong> The program archives content, directories,
+links and hardlinks on Windows, with the times of each. It records no
+owner, no mode and no extended attributes
 (<code>meta_windows.go</code>). Windows differs from Unix in these ways,
 and the program does as follows:</p>
 <ul>
@@ -10680,6 +10699,11 @@ unlink (§8).</li>
 The program does not sync it after a rename (§9.3).</li>
 <li><strong>Configuration file.</strong> The home directory is
 <code>%USERPROFILE%</code>, not <code>$HOME</code>.</li>
+<li><strong>Memory size.</strong> <code>GlobalMemoryStatusEx</code>
+gives the size of the RAM for the budget (§8.1) and for the check of the
+key derivation. <code>x/sys/windows</code> does not wrap it, so
+<code>memory_windows.go</code> calls it from
+<code>kernel32.dll</code>.</li>
 <li><strong>Names.</strong> Windows file names are UTF-16. A name that
 is not valid UTF-8 cannot be created, and the tests of such names skip.
 A name cannot hold a control character. Windows refuses such a name from

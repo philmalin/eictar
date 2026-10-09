@@ -241,9 +241,11 @@ turns `train` off for one run. `--no-config` ignores the file and the
 
 ## Platforms
 
-Linux, macOS, FreeBSD, NetBSD and OpenBSD, on amd64 and arm64. The CI
-workflow runs every test on each of these platforms. Some metadata is not
-available on each platform: the manual page gives the details.
+Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows, on amd64 and arm64.
+The CI workflow runs every test on each of these platforms. Some metadata is
+not available on each platform: the manual page gives the details. On
+Windows, eictar records no owner, no mode and no extended attributes. The
+Windows release is a `.zip` file with `eictar.exe`.
 
 ## Security notes
 

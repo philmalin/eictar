@@ -3218,15 +3218,15 @@ and on arm64, with the man page, `README.md`, `LICENSE`, `TRADEMARKS.md` and
 `THIRD_PARTY.md`. The licenses of the modules in the binary require their
 texts in a binary distribution, and `THIRD_PARTY.md` holds them. It must be
 updated when `go.mod` changes.
-The workflow packs each one in a `.tar.gz` file, writes `SHA256SUMS`, and
-makes a draft release with these files.
+On Windows, the binary is `eictar.exe`, and the man page is not included.
+The workflow packs each one in a `.tar.gz` file, or in a `.zip` file for
+Windows. It writes `SHA256SUMS`, and makes a draft release with these files.
 
-The ci workflow runs on the same tag, on all five platforms. On a branch, it
+The ci workflow runs on the same tag, on all six platforms. On a branch, it
 does not run for a push or a pull request that changes only Markdown, HTML or
 the license. The man page is not in that list, because a test reads it. A
 tag always runs it. The draft is
-published by hand, after that run passes too. Windows builds, but it is not
-in the release, because it does not pass the tests yet (§15.1).
+published by hand, after that run passes too.
 
 **Dependencies do not change by themselves.** `go.mod` gives the exact
 version of each module, and `go.sum` its checksum, so each build of one
@@ -3855,24 +3855,27 @@ archive, with a header flag or a new `format_major` (§3.1, §4.4).
   a pipe.
 - **A detached signature** (`.ect.sig`) of the trailer.
 
-### 15.1 Other UNIX-like platforms
+### 15.1 Other platforms
 
-**Status: complete in M8.** The CI workflow passes on all five platforms (see
-"Testing" below).
+**Status: complete in M8** for the five UNIX-like platforms. Windows is
+supported after v1.0.8 (see "Windows" below). The CI workflow passes on all
+six platforms (see "Testing" below).
 
-The metadata code (`src/internal/meta`) has a part that all five platforms
-share, and a small file for each platform. On any other platform (Windows,
-illumos, Plan 9 and the rest), the program archives content, directories and
-links, and records no other metadata.
+The metadata code (`src/internal/meta`) has a part that the five UNIX-like
+platforms share, and a small file for each platform. Windows has
+`meta_windows.go`. On any other platform (illumos, Plan 9 and the rest), the
+program archives content, directories and links, and records no other
+metadata.
 
-| Feature | Linux | macOS | FreeBSD | NetBSD | OpenBSD |
-|---|---|---|---|---|---|
-| owner, special bits, times, hardlinks, link times | yes | yes | yes | yes | yes |
-| holes (`SEEK_DATA`, `SEEK_HOLE`) | yes | yes | yes | stored dense | stored dense |
-| xattrs | yes | yes, no namespaces | `user` and `system` | `user` and `system` | none on the platform |
-| POSIX ACLs | yes, as xattrs | not recorded (§1.1, row 8) | not recorded | not recorded | none on the platform |
-| pipes and device nodes on extraction | yes | skipped with a notice | yes | yes | yes |
-| memory size for the budget | `/proc/meminfo` | `sysctl hw.memsize` | `sysctl hw.physmem` | `sysctl hw.physmem64` | `sysctl hw.physmem64` |
+| Feature | Linux | macOS | FreeBSD | NetBSD | OpenBSD | Windows |
+|---|---|---|---|---|---|---|
+| owner, special bits | yes | yes | yes | yes | yes | not recorded |
+| times, hardlinks, link times | yes | yes | yes | yes | yes | yes |
+| holes (`SEEK_DATA`, `SEEK_HOLE`) | yes | yes | yes | stored dense | stored dense | stored dense |
+| xattrs | yes | yes, no namespaces | `user` and `system` | `user` and `system` | none on the platform | not recorded |
+| POSIX ACLs | yes, as xattrs | not recorded (§1.1, row 8) | not recorded | not recorded | none on the platform | none on the platform |
+| pipes and device nodes on extraction | yes | skipped with a notice | yes | yes | yes | skipped with a notice |
+| memory size for the budget | `/proc/meminfo` | `sysctl hw.memsize` | `sysctl hw.physmem` | `sysctl hw.physmem64` | `sysctl hw.physmem64` | `GlobalMemoryStatusEx` |
 
 "Stored dense" is not a failure. Without hole detection, the reader reads the
 whole file, which is correct.
@@ -3891,7 +3894,7 @@ that it tests.
 
 **The files:**
 
-- `meta_unix.go` has what the five platforms share: `Stat`, link times, the
+- `meta_unix.go` has what the five UNIX-like platforms share: `Stat`, link times, the
   owner, and the checks for a single name component.
 - `sys_<os>.go` has what differs: the field names of `syscall.Stat_t`, the
   pipe and device calls, and the platform's row of the table. FreeBSD has
@@ -3925,7 +3928,7 @@ nodes on macOS, with a notice. Pipes are rare in a macOS backup.
 An archive from Linux with such a name gives an error for that member on
 macOS. The tests of those names skip there.
 
-**The advisory lock** of §9.6 uses `flock` on the five platforms and on the
+**The advisory lock** of §9.6 uses `flock` on the five UNIX-like platforms and on the
 other UNIX systems, except AIX, which has no `flock`. On AIX, as on Plan 9,
 two writers are not found.
 
@@ -3946,12 +3949,11 @@ where `setup-go` does not look. So these jobs give the directories of
 `setup-go` on the command line of `make`. Before, each run built every
 package again, with the race detector and for each fuzz target.
 
-The workflow also runs the tests on Windows, but a failure there does not
-fail the workflow. Windows is not a supported platform yet. Windows becomes
-a supported platform when its job passes, and then its failure fails the
-workflow.
+Windows has no `make` in the runner image. Its job runs `go vet`, the unit
+tests and the operational tests directly, without the race detector. The
+Linux job runs `gofmt` and the fuzz targets for all platforms.
 
-**Windows (in progress).** The program archives content, directories,
+**Windows.** The program archives content, directories,
 links and hardlinks on Windows, with the times of each. It records no owner,
 no mode and no extended attributes (`meta_windows.go`). Windows differs from
 Unix in these ways, and the program does as follows:
@@ -4017,6 +4019,9 @@ Unix in these ways, and the program does as follows:
 - **Directory sync.** Windows cannot sync a directory. The program does not
   sync it after a rename (§9.3).
 - **Configuration file.** The home directory is `%USERPROFILE%`, not `$HOME`.
+- **Memory size.** `GlobalMemoryStatusEx` gives the size of the RAM for the
+  budget (§8.1) and for the check of the key derivation. `x/sys/windows`
+  does not wrap it, so `memory_windows.go` calls it from `kernel32.dll`.
 - **Names.** Windows file names are UTF-16. A name that is not valid UTF-8
   cannot be created, and the tests of such names skip. A name cannot hold a
   control character. Windows refuses such a name from an archive made on

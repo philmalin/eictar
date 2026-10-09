@@ -5,7 +5,7 @@
 #
 # The job runs the tests on Linux, builds the binaries of `make release`, and
 # makes a DRAFT release with the archives and their SHA-256 sums. The ci
-# workflow runs on the same tag on all five platforms. Publish the draft on
+# workflow runs on the same tag on all six platforms. Publish the draft on
 # GitHub when that run passes too.
 name: release
 
@@ -30,13 +30,19 @@ jobs:
       - run: make check GO=go
       - name: build
         run: make release GO=go VERSION="${GITHUB_REF_NAME#v}"
+      # A .zip for Windows, which opens it without other tools, and a
+      # .tar.gz for each other platform.
       - name: pack
         working-directory: .build/release
         run: |
-          for dir in eictar-*; do
-            tar --owner=0 --group=0 --numeric-owner -czf "$dir.tar.gz" "$dir"
+          for dir in eictar-*/; do
+            dir=${dir%/}
+            case $dir in
+            *-windows-*) zip -qrX "$dir.zip" "$dir" ;;
+            *) tar --owner=0 --group=0 --numeric-owner -czf "$dir.tar.gz" "$dir" ;;
+            esac
           done
-          sha256sum eictar-*.tar.gz > SHA256SUMS
+          sha256sum eictar-*.tar.gz eictar-*.zip > SHA256SUMS
           cat SHA256SUMS
       - name: draft release
         working-directory: .build/release
@@ -45,4 +51,4 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
             --title "eictar ${GITHUB_REF_NAME#v}" --generate-notes \
-            eictar-*.tar.gz SHA256SUMS
+            eictar-*.tar.gz eictar-*.zip SHA256SUMS

@@ -861,6 +861,10 @@ A setting; see
 .TP
 .BR XDG_CONFIG_HOME ", " HOME
 Where the configuration file is.
+.B USERPROFILE
+takes the place of
+.B HOME
+on Windows.
 .SH SECURITY
 .IP \(bu 2
 eictar asks for the passphrase for every operation on an encrypted archive,
@@ -951,6 +955,18 @@ with a notice. APFS refuses a file name that is not UTF-8.
 NetBSD and OpenBSD store a file with holes dense.
 .IP \(bu 2
 OpenBSD has no extended attributes.
+.PP
+Windows has the times, hardlinks and symbolic links. It records no owner, no
+mode and no extended attributes. Extraction skips named pipes and device
+nodes with a notice. A file with holes is stored dense. Link targets are
+stored with
+.B /
+and created with
+.BR \e .
+The configuration file is found under
+.B %USERPROFILE%
+in place of
+.BR $HOME .
 .PP
 Extended attribute names are stored as the source platform gives them:
 .B user.comment
