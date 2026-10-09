@@ -773,7 +773,8 @@ and
 .BR ~/.eictarrc .
 A file in the current directory is never read. The program refuses a
 configuration file that another user owns, or that the group or other users
-can write.
+can write. On Windows, it refuses one that another account than you, SYSTEM
+or the Administrators group owns, or that its ACL lets such an account write.
 .PP
 Each line is
 .IB key " = " value\fR,\fP

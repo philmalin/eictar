@@ -226,10 +226,13 @@ the features are useful, and the risk needs an unusual setting.
 no message.
 
 **Fix.** A warning, as ssh gives for a key: the file can be read by other
-users, and `chmod 600` it. The program still reads it.
+users, and `chmod 600` it. The program still reads it. On Windows, the
+warning comes from the owner and the ACL of the file: another account than
+you, SYSTEM or the Administrators group can read it (design §15.1).
 
 **Test.** `TestPassphraseFileThatOthersCanRead` checks the modes 0600, 0400,
-0640 and 0644.
+0640 and 0644. On Windows, `TestPassphraseFileACL` checks a file that
+`BUILTIN\Users` can read, and `TestExposure` checks how the ACEs are read.
 
 ### Finding 9. Information
 

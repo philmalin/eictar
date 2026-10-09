@@ -144,7 +144,7 @@ func TestPassphraseWarnsAboutEnv(t *testing.T) {
 // (doc/Security_Audit.md, finding 8).
 func TestPassphraseFileThatOthersCanRead(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Windows file permissions are ACLs, which this program does not read")
+		t.Skip("Windows has ACLs in place of modes; see TestPassphraseFileACL")
 	}
 	for _, tc := range []struct {
 		mode os.FileMode

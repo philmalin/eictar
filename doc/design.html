@@ -9362,8 +9362,8 @@ users can write. The owner can also be root, for a file that an
 administrator installs. The file can set <code>exclude</code> and
 <code>exclude-regex</code>. Thus a person who can write it can make a
 backup smaller without a message, and a refusal is better than a
-warning. On Windows, the program does not read file ACLs, so it does not
-do this check.</li>
+warning. On Windows, the program reads the owner and the ACL of the file
+(§15.1).</li>
 </ul>
 <p><code>-v</code> reports which configuration file the program read.
 Thus a user can find an unexpected setting without
@@ -10632,9 +10632,26 @@ attribute in place of mode bits, and ACLs in place of owners.
 the owner. A file reads back as 0666 or
 <ol start="444" type="1">
 <li>Thus compact and create do not keep a mode such as 0640. A new
-directory gets the ACL of its parent, not 0700. The program does not
-check who can read a configuration file or a passphrase file.</li>
+directory gets the ACL of its parent, not 0700.</li>
 </ol></li>
+<li><strong>Access to a configuration file and a passphrase
+file.</strong> In place of the owner and the mode, the program reads the
+owner and the DACL of the file (<code>access_windows.go</code>). It
+trusts you, SYSTEM and the Administrators group, as it trusts you and
+root on Unix. It refuses a configuration file that another account owns,
+or that the DACL lets another account write. It warns about a passphrase
+file that another account owns, or that the DACL lets another account
+read. A right to change the DACL or the owner counts as a right to read
+and to write. A file with no DACL, or a NULL DACL, gives each right to
+Everyone. This is also what a file on FAT gives, so the program refuses
+a configuration file there. The check reads the ACEs in order, as
+Windows does. A deny to an account, or to Everyone, takes away the right
+from later allows. A deny to a group does not take away the right from
+its members, because the program does not know the members. Thus the
+check can report an account that Windows stops, but it does not miss one
+that Windows lets through. An inherit-only ACE does not apply to the
+file. The program counts an allow with a condition, and does not
+evaluate it.</li>
 <li><strong>Link targets.</strong> Windows gives a target with
 <code>\</code>. The writer stores it with <code>/</code>. The reader
 changes <code>/</code> back to <code>\</code> when it creates the link

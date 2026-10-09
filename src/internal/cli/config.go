@@ -208,7 +208,7 @@ func (l *layers) readFile(path string) error {
 	}
 	// A person who can write the file can set exclude, and make a backup
 	// smaller without a message (doc/design.md 11.4).
-	if err := checkConfigOwner(fi); err != nil {
+	if err := checkConfigOwner(f, fi); err != nil {
 		return &UsageError{fmt.Errorf("configuration file %s: %w", path, err)}
 	}
 

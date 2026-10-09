@@ -2913,8 +2913,8 @@ away. Two rules remain:
   owns, or that the group or other users can write. The owner can also be
   root, for a file that an administrator installs. The file can set `exclude`
   and `exclude-regex`. Thus a person who can write it can make a backup
-  smaller without a message, and a refusal is better than a warning. On Windows, the program
-  does not read file ACLs, so it does not do this check.
+  smaller without a message, and a refusal is better than a warning. On
+  Windows, the program reads the owner and the ACL of the file (§15.1).
 
 `-v` reports which configuration file the program read. Thus a user can find
 an unexpected setting without `--show-config`.
@@ -3978,8 +3978,23 @@ Unix in these ways, and the program does as follows:
   mode bits, and ACLs in place of owners. `os.Chmod` sets the read-only
   attribute from the write bit of the owner. A file reads back as 0666 or
   0444. Thus compact and create do not keep a mode such as 0640. A new
-  directory gets the ACL of its parent, not 0700. The program does not check
-  who can read a configuration file or a passphrase file.
+  directory gets the ACL of its parent, not 0700.
+- **Access to a configuration file and a passphrase file.** In place of the
+  owner and the mode, the program reads the owner and the DACL of the file
+  (`access_windows.go`). It trusts you, SYSTEM and the Administrators group,
+  as it trusts you and root on Unix. It refuses a configuration file that
+  another account owns, or that the DACL lets another account write. It
+  warns about a passphrase file that another account owns, or that the DACL
+  lets another account read. A right to change the DACL or the owner counts
+  as a right to read and to write. A file with no DACL, or a NULL DACL, gives
+  each right to Everyone. This is also what a file on FAT gives, so the
+  program refuses a configuration file there. The check reads the ACEs in
+  order, as Windows does. A deny to an account, or to Everyone, takes away
+  the right from later allows. A deny to a group does not take away the right
+  from its members, because the program does not know the members. Thus the
+  check can report an account that Windows stops, but it does not miss one
+  that Windows lets through. An inherit-only ACE does not apply to the file.
+  The program counts an allow with a condition, and does not evaluate it.
 - **Link targets.** Windows gives a target with `\`. The writer stores it
   with `/`. The reader changes `/` back to `\` when it creates the link on
   Windows. On Unix, the writer and the reader keep a `\` in a target, because

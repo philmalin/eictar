@@ -139,7 +139,7 @@ func TestConfigScope(t *testing.T) {
 
 func TestConfigFileMustBePrivate(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Windows file permissions are ACLs, which this program does not read")
+		t.Skip("Windows has ACLs in place of modes; see TestConfigFileACL")
 	}
 	home := t.TempDir()
 	p := writeConfig(t, filepath.Join(home, ".eictarrc"), "workers = 2\n")
