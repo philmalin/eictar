@@ -10567,8 +10567,8 @@ OpenBSD.</li>
 <li><code>holes_seek.go</code> is for Linux, macOS and FreeBSD, and
 <code>holes_dense.go</code> for NetBSD and OpenBSD.</li>
 </ul>
-<p><strong>Two faults in <code>x/sys</code> v0.48 made eictar call
-<code>extattr</code> directly</strong> on FreeBSD and NetBSD:</p>
+<p><strong>Faults in <code>x/sys</code> v0.48.</strong> Two made eictar
+call <code>extattr</code> directly on FreeBSD and NetBSD:</p>
 <ul>
 <li>The Linux-style <code>Llistxattr</code> returns the raw BSD list: a
 length byte, then the name, with no namespace. Linux returns
@@ -10579,8 +10579,16 @@ does, gets meaningless names.</li>
 <code>e</code>. Thus a failed call looks like a file with no
 xattrs.</li>
 </ul>
-<p>Both are worth a report to the <code>x/sys</code> project. The test
-helpers read xattrs with their own code, not with the code in
+<p>A third fault is on OpenBSD. <code>x/sys</code> finds the MIB of an
+OpenBSD sysctl name in its own table, and the table has no
+<code>hw.physmem64</code>. It gives MIB <code>{6, 19}</code>, which is
+<code>HW_PHYSMEM64</code>, the name <code>hw.physmem</code>. Thus
+<code>memory_bsd.go</code> asks for <code>hw.physmem</code> on OpenBSD.
+Up to v1.0.8, it asked for <code>hw.physmem64</code>, got an error, and
+OpenBSD had no memory size. <code>TestTotalMemory</code> found this when
+it was added for Windows.</p>
+<p>All three are worth a report to the <code>x/sys</code> project. The
+test helpers read xattrs with their own code, not with the code in
 <code>meta</code>, so that a fault in <code>meta</code> cannot hide
 itself.</p>
 <p><strong>macOS cannot make pipes and device nodes safely.</strong>

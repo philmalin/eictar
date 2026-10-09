@@ -3906,7 +3906,7 @@ that it tests.
 - `holes_seek.go` is for Linux, macOS and FreeBSD, and `holes_dense.go` for
   NetBSD and OpenBSD.
 
-**Two faults in `x/sys` v0.48 made eictar call `extattr` directly** on
+**Faults in `x/sys` v0.48.** Two made eictar call `extattr` directly on
 FreeBSD and NetBSD:
 
 - The Linux-style `Llistxattr` returns the raw BSD list: a length byte, then
@@ -3915,7 +3915,14 @@ FreeBSD and NetBSD:
 - `ListxattrNS`, `LlistxattrNS` and `FlistxattrNS` return `err` where they
   mean `e`. Thus a failed call looks like a file with no xattrs.
 
-Both are worth a report to the `x/sys` project. The test helpers read xattrs
+A third fault is on OpenBSD. `x/sys` finds the MIB of an OpenBSD sysctl name
+in its own table, and the table has no `hw.physmem64`. It gives MIB `{6, 19}`,
+which is `HW_PHYSMEM64`, the name `hw.physmem`. Thus `memory_bsd.go` asks for
+`hw.physmem` on OpenBSD. Up to v1.0.8, it asked for `hw.physmem64`, got an
+error, and OpenBSD had no memory size. `TestTotalMemory` found this when it
+was added for Windows.
+
+All three are worth a report to the `x/sys` project. The test helpers read xattrs
 with their own code, not with the code in `meta`, so that a fault in `meta`
 cannot hide itself.
 
