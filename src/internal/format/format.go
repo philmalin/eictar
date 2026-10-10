@@ -1,10 +1,10 @@
 // Package format implements the eictar on-disk structures: the file header,
 // the footer trailer and the index.
 //
-// The authoritative specification is doc/design.md sections 2 to 6. Any change
-// here that alters bytes on disk must be reflected there, and must bump
-// VersionMinor (for a backward-compatible addition) or VersionMajor (for a
-// change that older readers cannot handle).
+// The authoritative specification is doc/format.md; doc/design.md sections 2
+// to 6 give the reasons. Any change here that alters bytes on disk must be
+// reflected in both, and must bump VersionMinor (for a backward-compatible
+// addition) or VersionMajor (for a change that older readers cannot handle).
 package format
 
 import "hash/crc32"

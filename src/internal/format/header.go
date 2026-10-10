@@ -8,7 +8,7 @@ import (
 // Header is the 64-byte structure at offset 0 of every archive. It is always
 // plaintext: it has to be readable before any key exists.
 //
-// Layout (doc/design.md 3.1), little-endian:
+// Layout (doc/format.md 3), little-endian:
 //
 //	 0   8  magic "EICTAR\x1a\n"
 //	 8   2  format_major

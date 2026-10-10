@@ -5,9 +5,11 @@ on Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows (§15.1).
 Date: 2026-10-10
 Applies to: v1 (format version 1.0)
 
-This document specifies the on-disk format, the concurrency model, the command
-line and the internal package layout of `eictar`. It is the reference for all
-implementation work. When the code changes, change this document too.
+This document describes the on-disk format, the concurrency model, the
+command line and the internal package layout of `eictar`, and gives the
+reason for each choice. `doc/format.md` is the specification of the bytes of
+an archive. When the two do not agree, `doc/format.md` is correct. When the
+code changes, change this document too.
 
 `problem_statement.md` and this document stay in agreement. The statement says
 *what* the program does and *why*. This document says *how*. A change to a
@@ -137,9 +139,10 @@ Each term has one meaning in this document.
 
 # Part I — The format on disk
 
-Sections 2 to 6 define the bytes. They are the contract for every
-implementation. The sections after them describe what this implementation
-does.
+Sections 2 to 6 describe the bytes, and give the reasons for them.
+`doc/format.md` gives the same bytes as rules only, and it is the contract
+for every implementation. The sections after section 6 describe what this
+implementation does.
 
 ## 2. Overview of the format
 
@@ -473,15 +476,14 @@ no dictionary. The measurement is an estimate, so this is not certain, but
 a wrong choice costs little: the worst tree was 1.2% above its best size.
 
 The time is the trade-off. Without a dictionary, the 120 Go files took
-0.2 s, the 20000 JSON files 0.7 s, and the 232 MB tree 0.8 s. With
-`train=auto`, they took 2.1 s, 21.5 s and 14.3 s. The trainer uses one
+0.2 s, the 20000 JSON files 0.7 s, and the 232 MB tree 0.8 s, against the
+times of `train=auto` in the table above. The trainer uses one
 thread for each candidate, and it takes most of the time. Thus `train` is
 good for many small, similar files. For a tree of large files, it costs
 seconds and saves almost nothing.
 
-A dictionary does not give the result of one stream. On the 441 Go files of
-the first table, files alone gave 22.6%, a dictionary 21.2%, and one stream
-17.3%. The dictionary holds text from the start of the files. One stream
+A dictionary does not give the result of one stream (the first table of
+this section). The dictionary holds text from the start of the files. One stream
 also finds repeats deep inside the files, and between them.
 
 
@@ -1020,8 +1022,7 @@ not possible.
 
 All HKDF instances use SHA-256. The encoding of `generation` is `uint64_le`
 in every key and digest. `member.salt` is 16 random bytes, stored in each
-member's `enc` field. Each member has its own key, so a nonce must be unique
-only inside one member.
+member's `enc` field. Thus each member has its own key (§6.3).
 
 **The KDF parameters come from the archive, and the reader treats them as
 hostile.** It refuses `time` more than **64** and `memory` more than
@@ -1150,9 +1151,9 @@ an archive can expect every part of it to need the passphrase. This rule
 matches that expectation for eictar itself, and `--encrypt-index` matches it
 for every other tool.
 
-This protection does **not** cover three attacks. They are a rewrite of the
-whole file, a rollback to an older genuine archive, and a downgrade to
-plaintext. §14.4 describes them.
+This protection does **not** cover a rewrite of the whole file, a rollback
+to an older genuine archive, a downgrade to plaintext, or a deletion. §14.4
+describes them.
 
 
 ---
@@ -1418,9 +1419,8 @@ sockets too. This is the one type that is skipped, not refused.
 - **Spools.** A spool holds the encoded blob of one member until the emitter
   is ready. It keeps the bytes in memory up to `--spill-threshold` (default
   32 MiB). After that, or when memory is short, it moves the bytes to an
-  unlinked temporary file in the directory of the archive. Windows cannot
-  unlink an open file, so there the file has `FILE_FLAG_DELETE_ON_CLOSE`.
-  If the move fails, the member fails. The reader does not wait for memory
+  unlinked temporary file in the directory of the archive (on Windows, see
+  §15.1). If the move fails, the member fails. The reader does not wait for memory
   that the spool cannot give back.
 - **Emitter.** One goroutine owns the file offset. It takes each complete
   member in the order that members finish. It writes the blob, records the
@@ -1440,7 +1440,8 @@ does not change.
 
 A global memory budget controls how much data is in flight. `--memory-limit`
 sets it. The default is the smaller of 25% of RAM and `j × 4 × chunk_size`.
-On Linux, the program reads RAM from `/proc/meminfo`. The reader goroutine
+§15.1 gives where each platform reads the size of the RAM. When the size is
+not known, the default is `j × 4 × chunk_size`. The reader goroutine
 reserves one chunk of budget before each read. The worker releases the
 reservation when it has handed the chunk to the spool.
 
@@ -1618,7 +1619,7 @@ modules of the build, 77 MB in 1754 files, on 32 CPUs.
 | eictar `s2` | 65.8% | 0.17 s | 0.09 s |
 | eictar `zstd:level=3`, encrypted | 60.7% | 0.32 s | 0.29 s |
 
-**An eictar archive is 4% to 13% larger.** It compresses each file alone,
+**An eictar archive is 3% to 13% larger.** It compresses each file alone,
 so it cannot use a pattern that repeats across files. A `tar` stream can.
 This is the cost of the design (§1.1). A dictionary (§4.2) and references to
 identical content (§4.3) take back part of it. These measurements are from
@@ -1752,9 +1753,8 @@ shares (§4.3). It does not decompress or unseal a blob.
 
 The new archive keeps the uuid, the crypto header and the encryption settings
 of the original. It uses the next generation. Then the program renames the new
-file over the original with `rename(2)`, and syncs the directory. Windows
-cannot sync a directory, so there the program does not. NTFS records the
-rename in its journal. A crash before the rename leaves the original
+file over the original with `rename(2)`, and syncs the directory (on
+Windows, see §15.1). A crash before the rename leaves the original
 unchanged.
 
 The new file gets the mode of the original. It also gets the owner and the
@@ -1781,9 +1781,9 @@ mark. A member that shares content stays a reference.
 The catalog gets the one new entry. With `train`, a new dictionary replaces
 the old ones.
 
-A sealed member gets a new member salt, and thus a new key. Its new chunks
-are new ciphertext at the old chunk indexes. Under the old key, each chunk
-nonce is then used two times, which §6.3 forbids. The digest of the old
+A sealed member gets a new member salt, and thus a new key. The member
+cannot keep its old key: its new chunks are new ciphertext at the old chunk
+indexes, so each chunk nonce gets a second use, which §6.3 forbids. The digest of the old
 content is checked as it is decoded. The pipeline calculates the new digest
 from the same bytes, so a member that changes on the way stops the run.
 
@@ -1886,10 +1886,9 @@ the lost write.
 
 The lock is advisory: a program that does not ask for it can still write.
 The kernel removes the lock when the process ends, so a crash leaves no stale
-lock. Linux, macOS and the BSDs use `flock`, and Windows uses `LockFileEx`,
-in a separate file for that platform. A `LockFileEx` lock is mandatory, so
-it covers one byte far past the end of the archive (§15.1). Plan 9, WASI and AIX have no `flock`, so
-there the program does not find a second writer. A lock on NFS is not
+lock. Linux, macOS, the BSDs and the other UNIX systems use `flock`. Windows
+uses `LockFileEx` (§15.1). Plan 9, WASI and AIX have no `flock`, so there
+the program does not find a second writer. A lock on NFS is not
 reliable, and the man page says so.
 
 
@@ -2083,12 +2082,13 @@ copy of the rules. It calls the code of the real run:
 use the list. `-q` does not hide the paths, because they are the result, as
 for `--diff` (§9.8). With `-v`, a word before each path tells what happens
 to it: `add`, `replace`, `extract` or `delete`. `replace` is a path that
-replaces a live member (`-r`, `-u`), or a file on disk (`-x`). A summary
-line on stderr gives the number of paths and the size of their content.
-The size counts the content of a hardlinked file once, as create stores it
-once. It does not subtract identical content (§4.3). Unless `-q` is given,
-the summary also gives the number of paths that are replaced, unchanged,
-skipped and failed. The notices of the real run, for example for a socket,
+replaces a live member (`-r`, `-u`), or a file on disk (`-x`). Unless `-q`
+is given, a summary line on stderr gives the number of paths and the size of
+their content. The size counts the content of a hardlinked file once, as
+create stores it once. It does not subtract identical content (§4.3). The
+summary also gives the number of paths that are replaced, unchanged,
+skipped and failed, and the members that a collision of
+`--strip-components` left out. The notices of the real run, for example for a socket,
 go to stderr as usual.
 
 ```
@@ -2815,7 +2815,9 @@ except `--help` and `--version`. The compression shorthands `-z`, `-J` and
 
 **A configured value applies only to the operations that use it.** On any
 other operation, the program ignores it. For example, `compress = xz` does
-not stop a listing, and `preserve-owner = true` applies only to `-x`. On the
+not stop a listing, and `preserve-owner = true` applies only to `-x`. The
+`kdf-*` keys apply only to create. Thus `--change-passphrase` keeps the
+parameters of the archive unless its command line gives new ones (§9.7). On the
 command line, the rules of §10.4 still refuse an option where it means
 nothing.
 
@@ -2973,11 +2975,13 @@ bare `go` command:
 ```
 go.mod
 README.md, LICENSE         the introduction, and GPL-3.0
+problem_statement.md       what the program does, and why
 TRADEMARKS.md              the reserved name, and the term of GPL-3.0 section 7(e)
 THIRD_PARTY.md             the modules in the binary, and their license texts
 .github/workflows/         ci.yml, the tests on each platform; release.yml (§12.3)
 .github/dependabot.yml     a monthly pull request for module and action updates (§12.3)
-doc/                       design.md; format.md, the format reference; eictar.1, the man page
+doc/                       design.md; format.md, the format reference; eictar.1, the man page;
+                           Security_Audit.md, the security review (§14.6)
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
 tools/testskips/           lists the skipped tests and their reasons, for make skips (§13.3)
 tools/stress/              the stress tester: model, generator and profiles, runner, checks and faults (§13.4)
@@ -2995,7 +2999,8 @@ src/internal/cli/          option parsing, the configuration layer (§11), opera
                            passphrase input, output, the progress meter
 src/internal/fsutil/       StorePath and SafeJoin (§7), Match for patterns, Regexps for -R
 src/internal/meta/         xattrs, holes, device numbers, names, *at calls for pipes, devices, link times.
-                           Linux, macOS, FreeBSD, NetBSD and OpenBSD, one file each for what differs (§15.1).
+                           Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows, one file each for what
+                           differs (§15.1).
 src/internal/testutil/     fixture trees, tree comparison, the binary harness (§13.3)
 src/operational/           the end-to-end tests, behind the `operational` build tag
 ```
@@ -3068,16 +3073,17 @@ next read reaches the end of the file (§8).
 Each codec registers itself in `init()`. Thus a new codec changes only one
 file.
 
-A codec with dictionaries also has a second interface, which the package
-does not export. Only zstd has it. The package functions `TrainSize`,
-`TrainDict`, `DictID`, `NewEncoderWithDict` and `NewDecoderWithDict` use it,
-and they refuse a dictionary for any other codec. The functions that take
+A codec can also have interfaces that the package does not export: for a
+window, for the memory of an encoder (§8.2), for encoder options, and for
+dictionaries. Only zstd has dictionaries. The package functions `TrainSize`,
+`TrainDict`, `DictID`, `NewEncoderWith` and `NewDecoderWithDict` refuse a
+dictionary for any other codec. The functions that take
 parameters also turn a key that stands alone into its value (§10.2), so each
 codec sees plain values.
 
 ### 12.2 Diagrams
 
-These diagrams show the source code at the end of M11. The first diagram
+These diagrams show the source code of v1.1.0. The first diagram
 shows the packages. The other three follow the data through the three main
 paths: create, extract, and a change to an archive.
 
@@ -3118,6 +3124,10 @@ flowchart TD
     archive -.-> blake3
     meta -.-> xsys[("x/sys/unix")]
     archive -.-> xsys
+    meta -.-> xwin[("x/sys/windows")]
+    archive -.-> xwin
+    pipeline -.-> xwin
+    cli -.-> xwin
     cli -.-> pflag[("spf13/pflag")]
     cli -.-> xterm[("x/term")]
 ```
@@ -3647,7 +3657,7 @@ Longer runs found one more fault, and two faults in the tester:
   level 9, the same command took 0.6 s. This is the cost that §15.2 records.
 - After 4 hours, the generator gave two new entries of one directory the
   same name, and the second one failed. A new entry now gets another name
-  when its name is taken. `make check` now runs the tests of `tools/` too.
+  when its name is taken. After this fix, a run of 8 hours passed. `make check` now runs the tests of `tools/` too.
 
 A run of ten minutes, over all the profiles, made 146 sequences. They ran
 approximately 14,000 eictar commands, with 256 crashes and 510 damaged
@@ -3711,11 +3721,8 @@ commands. It ran 207 `--diff` steps, 305 dry runs and 161 extractions with
   a warning.
 - **A passphrase file that other users can read gives a warning**, as ssh
   gives for a key.
-- **The configuration never supplies a secret** (§11.4). The program reads no
-  configuration file from the current directory, which can come from someone
-  else's archive. It refuses a configuration file that another user owns
-  or can write. Such a file can set `exclude` or `exclude-regex`, and make a
-  backup smaller without a message.
+- **The configuration never supplies a secret, and no other user can change
+  it** (§11, §11.4).
 
 ### 14.3 Extraction and reads of the disk
 
@@ -3794,10 +3801,10 @@ Four attacks stay outside v1:
   the attacker cannot reach. Another method is signatures with timestamps.
 - **Deletion.** No format can prevent it. More than one copy is the answer.
 
-Three smaller limits are known and accepted. The trailer flags are not in the
+Two smaller limits are known and accepted. The trailer flags are not in the
 keyed digest, so a changed flag stops the archive from opening. That is a
 denial of service, not a forgery. The derived subkeys are not set to zero
-(§14.2). The downgrade gap above applies only without a passphrase source.
+(§14.2).
 
 
 ### 14.5 Archiving a tree that other users can write
@@ -3935,9 +3942,8 @@ nodes on macOS, with a notice. Pipes are rare in a macOS backup.
 An archive from Linux with such a name gives an error for that member on
 macOS. The tests of those names skip there.
 
-**The advisory lock** of §9.6 uses `flock` on the five UNIX-like platforms and on the
-other UNIX systems, except AIX, which has no `flock`. On AIX, as on Plan 9,
-two writers are not found.
+**illumos is different again.** Its xattrs are a hidden directory for each
+file, which is a separate model.
 
 **Testing is the real condition.** A cross-compile proves that the code
 builds, not that it works. The differences between platforms are the subtle
@@ -3948,6 +3954,18 @@ filesystem.
 and in virtual machines for FreeBSD, NetBSD and OpenBSD. NetBSD and OpenBSD
 have no race detector, so they run `make check-norace`. A platform is
 supported while the workflow passes on it.
+
+The first runs on the five UNIX-like platforms (M8) found five faults that
+no run on Linux had shown:
+
+- `.tmp` is not in the repository, and `vet` and `fmt` did not create it.
+- A configuration test used a worker count that is the default on a CI
+  runner with two CPUs.
+- The pipeline deadlock of §8.1, which the check for that test found.
+- The hole test expected the 4 KiB granularity of ext4. ZFS reports 128 KiB
+  records.
+- A recompress test expected holes on NetBSD and OpenBSD, which store files
+  dense. Also, the NetBSD job used `sort -V`, which NetBSD does not have.
 
 Each job runs on its platform, so CI leaves out `crossvet` (`CROSSVET=`). On
 Linux and macOS, `setup-go` saves the build cache and the module cache
@@ -4024,7 +4042,7 @@ Unix in these ways, and the program does as follows:
 - **Spill files.** Windows cannot delete an open file. A spill file has
   `FILE_FLAG_DELETE_ON_CLOSE` in place of the unlink (§8).
 - **Directory sync.** Windows cannot sync a directory. The program does not
-  sync it after a rename (§9.3).
+  sync it after a rename (§9.3). NTFS records the rename in its journal.
 - **Configuration file.** The home directory is `%USERPROFILE%`, not `$HOME`.
 - **Memory size.** `GlobalMemoryStatusEx` gives the size of the RAM for the
   budget (§8.1) and for the check of the key derivation. `x/sys/windows`
@@ -4033,20 +4051,6 @@ Unix in these ways, and the program does as follows:
   cannot be created, and the tests of such names skip. A name cannot hold a
   control character. Windows refuses such a name from an archive made on
   Unix, so that member does not extract there.
-
-The first runs found five faults that no run on Linux had shown:
-
-- `.tmp` is not in the repository, and `vet` and `fmt` did not create it.
-- A configuration test used a worker count that is the default on a CI
-  runner with two CPUs.
-- The pipeline deadlock of §8.1, which the check for that test found.
-- The hole test expected the 4 KiB granularity of ext4. ZFS reports 128 KiB
-  records.
-- A recompress test expected holes on NetBSD and OpenBSD, which store files
-  dense. Also, the NetBSD job used `sort -V`, which NetBSD does not have.
-
-illumos is different again. Its xattrs are a hidden directory for each file,
-which is a separate model.
 
 ### 15.2 Outstanding items
 
@@ -4364,8 +4368,9 @@ Other changes:
 - `make large` takes an archive past 4 GiB through each operation that reads
   or writes an offset or a length (§13.2).
 - The stress tester checks the identity of hardlinks after each extraction.
-  It gives a new entry another name when its name is taken. An 8-hour run
-  failed on such a collision (§13.4).
+  It gives a new entry another name when its name is taken. A 4-hour run
+  failed on such a collision, and an 8-hour run passed after the fix
+  (§13.4).
 - `make crossvet` runs `vet` for each platform from one machine, and `make
   check` includes it. CI leaves it out, and uses the caches that `setup-go`
   saves (§12, §15.1).
@@ -4385,7 +4390,7 @@ Windows:
   It skips named pipes and device nodes on extraction, with a notice. It
   stores a file with holes dense. §15.1 gives the other differences.
 - The program reads the owner and the ACL of a configuration file and a
-  passphrase file. It refuses a configuration file that another account
+  passphrase file. It refuses a configuration file that an account other
   than you, SYSTEM or the Administrators group owns, or that the ACL lets
   such an account write. It warns about a passphrase file that such an
   account owns or can read (§11, §15.1, `doc/Security_Audit.md`,
@@ -4398,9 +4403,9 @@ The fix:
 - On OpenBSD, the program did not get the size of the RAM. It asked for
   `hw.physmem64`, which `x/sys` does not know on OpenBSD. Thus the budget
   did not use a quarter of the RAM as its limit, and the check of the key
-  derivation did nothing. On a small machine, Argon2id could then use more
-  memory than the machine has, and the kernel stopped the process with no
-  message. The program now asks for `hw.physmem`, which `x/sys` maps to
+  derivation did nothing. Thus on a small machine, a key derivation that
+  asked for more memory than the machine had got no refusal, and the kernel
+  stopped the process with no message. The program now asks for `hw.physmem`, which `x/sys` maps to
   `HW_PHYSMEM64` (§15.1). `TestTotalMemory` checks that each supported
   platform gives a size.
 

@@ -9,7 +9,7 @@ import (
 // is the commit point for every mutation (doc/design.md section 9): until
 // these bytes land, the archive still describes its previous generation.
 //
-// Layout (doc/design.md 3.2), little-endian:
+// Layout (doc/format.md 10), little-endian:
 //
 //	 0   8  trailer_magic "EICTRAIL"
 //	 8   2  format_major

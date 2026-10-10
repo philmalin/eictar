@@ -87,7 +87,7 @@ type SparseSegment struct {
 
 // Member is one entry in the archive: a file, a directory, a link or a device.
 //
-// Field order here follows doc/design.md section 5. The cbor keys are short
+// Field order here follows doc/format.md 8.3. The cbor keys are short
 // but remain strings, so an index dumped with a generic CBOR tool is still
 // readable by a human debugging an archive.
 type Member struct {

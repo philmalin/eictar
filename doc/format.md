@@ -3,7 +3,8 @@
 This document specifies the bytes of an eictar archive. With it, you can
 write a reader or a writer without the eictar source code.
 `doc/design.md` gives the reasons for each choice. This document gives only
-the rules.
+the rules, and it is the specification. When the two documents do not
+agree, this document is correct.
 
 The committed archives in `src/internal/archive/testdata/golden/` are
 examples of this format:
