@@ -37,7 +37,14 @@ func Binary(tb testing.TB) string {
 			binPath += ".exe" // exec finds a program on Windows by its extension
 		}
 
-		cmd := exec.Command(goTool(), "build", "-o", binPath, "./src/cmd/eictar")
+		args := []string{"build", "-o", binPath}
+		if os.Getenv("GOCOVERDIR") != "" {
+			// make cover: the binary writes its coverage into GOCOVERDIR
+			// at exit, which the environment of each run passes on
+			// (doc/design.md 13.5).
+			args = append(args, "-cover", "-coverpkg=./src/...")
+		}
+		cmd := exec.Command(goTool(), append(args, "./src/cmd/eictar")...)
 		cmd.Dir = root
 		if out, err := cmd.CombinedOutput(); err != nil {
 			buildErr = &buildFailure{out: string(out), err: err}

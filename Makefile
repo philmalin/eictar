@@ -39,7 +39,7 @@ VERSION  ?= $(or $(shell git describe --tags --dirty 2>/dev/null | sed 's/^v//')
 LDFLAGS    := -s -w -X github.com/philmalin/eictar/src/internal/cli.Version=$(VERSION)
 BUILDFLAGS := -trimpath -ldflags="$(LDFLAGS)"
 
-.PHONY: all build release test test-race operational large fuzz bench compare stress stress-build vet crossvet fmt check check-norace skips clean
+.PHONY: all build release test test-race operational large cover mutate fuzz bench compare stress stress-build vet crossvet fmt check check-norace skips clean
 
 all: build
 
@@ -85,6 +85,38 @@ operational: | $(TMPDIR)
 LARGE ?= 4
 large: | $(TMPDIR)
 	EICTAR_TEST_LARGE=$(LARGE) $(GO) test -count=1 -tags operational -run TestLargeArchive -timeout 2h -v ./src/operational/
+
+# The coverage of the unit tests and the operational tests together
+# (doc/design.md 13.5). The operational tests run a binary that is built with
+# coverage, and each run writes its counts into GOCOVERDIR. The report is in
+# .tmp/cover: cover.txt for each function, and cover.html.
+COVERDIR := $(CURDIR)/.tmp/cover
+COVERPKG  = $(shell $(GO) list ./src/... | grep -v /testutil | paste -sd, -)
+
+cover: | $(TMPDIR)
+	rm -rf $(COVERDIR)
+	mkdir -p $(COVERDIR)/unit $(COVERDIR)/operational
+	$(GO) test -count=1 -cover -coverpkg=$(COVERPKG) $(PKGS) -args -test.gocoverdir=$(COVERDIR)/unit
+	GOCOVERDIR=$(COVERDIR)/operational $(GO) test -count=1 -tags operational ./src/operational/
+	$(GO) tool covdata textfmt -i=$(COVERDIR)/unit,$(COVERDIR)/operational -pkg=$(COVERPKG) -o $(COVERDIR)/cover.out
+	$(GO) tool cover -func=$(COVERDIR)/cover.out > $(COVERDIR)/cover.txt
+	$(GO) tool cover -html=$(COVERDIR)/cover.out -o $(COVERDIR)/cover.html
+	@echo "=== unit tests alone"
+	@$(GO) tool covdata percent -i=$(COVERDIR)/unit -pkg=$(COVERPKG)
+	@echo "=== unit and operational tests"
+	@$(GO) tool covdata percent -i=$(COVERDIR)/unit,$(COVERDIR)/operational -pkg=$(COVERPKG)
+	@tail -1 $(COVERDIR)/cover.txt
+
+# Mutation testing (doc/design.md 13.5): one small change at a time to the
+# code of each package in MUTATE, and its tests. A change that no test finds
+# is a survivor. MUTATE_FLAGS passes options, for example:
+#   make mutate MUTATE=./src/internal/archive MUTATE_FLAGS="-files '^dict' -j 8"
+# go run ./tools/mutate -h lists the options.
+MUTATE       ?= ./src/internal/format ./src/internal/crypt ./src/internal/pipeline
+MUTATE_FLAGS ?=
+
+mutate: | $(TMPDIR)
+	$(GO) run ./tools/mutate $(MUTATE_FLAGS) $(MUTATE)
 
 fuzz: | $(TMPDIR)
 	@for t in FuzzHeaderUnmarshal FuzzTrailerUnmarshal FuzzDecodeIndex FuzzUnmarshalCryptoHeader; do \

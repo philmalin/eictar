@@ -46,6 +46,24 @@ jobs:
         run: make skips GO=go $GODIRS
       - run: make fuzz GO=go FUZZTIME=20s $GODIRS
 
+  # The same tests as root. The linux job runs them as an ordinary user, and
+  # the tests of the owner, device nodes and privileged xattrs skip there
+  # (doc/design.md 13.5). The caches stay inside the project, as the
+  # Makefile keeps them: the caches of setup-go belong to the runner user,
+  # and root must not write in them.
+  linux-root:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: sudo env "PATH=$PATH" GOTOOLCHAIN=auto make test-race operational GO="$(command -v go)"
+      - name: skipped tests
+        if: always()
+        run: sudo env "PATH=$PATH" GOTOOLCHAIN=auto make skips GO="$(command -v go)"
+
   macos:
     runs-on: macos-latest
     steps:

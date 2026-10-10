@@ -5284,6 +5284,8 @@ Operational tests (end to end, build tag
 Supporting tools</a></li>
 <li><a href="#stress-tester" id="toc-stress-tester">13.4 Stress
 tester</a></li>
+<li><a href="#assurance-plan" id="toc-assurance-plan">13.5 Assurance
+plan</a></li>
 </ul></li>
 <li><a href="#security-considerations" id="toc-security-considerations">14. Security considerations</a>
 <ul>
@@ -9424,6 +9426,18 @@ does.</td>
 totals</td>
 </tr>
 <tr class="even">
+<td><code>make cover</code></td>
+<td>the coverage of the unit tests and the operational tests together,
+in <code>.tmp/cover/</code> (§13.5)</td>
+</tr>
+<tr class="odd">
+<td><code>make mutate</code></td>
+<td>mutation testing of the packages in <code>MUTATE</code> (default
+<code>format</code>, <code>crypt</code> and <code>pipeline</code>).
+<code>MUTATE_FLAGS</code> gives options to <code>tools/mutate</code>
+(§13.5).</td>
+</tr>
+<tr class="even">
 <td><code>make stress</code></td>
 <td>random end-to-end tests against a model (§13.4).
 <code>STRESS=&quot;-duration 30m&quot;</code> runs longer, and
@@ -9449,6 +9463,7 @@ doc/                       design.md; format.md, the format reference; eictar.1,
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
 tools/testskips/           lists the skipped tests and their reasons, for make skips (§13.3)
 tools/stress/              the stress tester: model, generator and profiles, runner, checks and faults (§13.4)
+tools/mutate/              mutation testing, for make mutate (§13.5)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
@@ -9973,10 +9988,11 @@ skipping it. Thus <code>make skips</code> runs the tests with
 test with its reason, and the totals. Each CI job runs it after
 <code>make check</code>, so that a green job also says what it did not
 test. The job’s result stays the result of <code>make check</code>.</li>
-<li><strong>Coverage</strong> comes later. <code>format</code>,
-<code>crypt</code> and <code>codec</code> need high coverage, because a
-fault there is silent and permanent. The benchmarks exist:
-<code>make bench</code> and <code>make compare</code> (§8.4).</li>
+<li><strong>Coverage and mutation testing</strong> measure the tests
+(§13.5). <code>format</code>, <code>crypt</code> and <code>codec</code>
+need the strongest tests, because a fault there is silent and permanent.
+The benchmarks are <code>make bench</code> and <code>make compare</code>
+(§8.4).</li>
 </ul>
 <h3 id="stress-tester">13.4 Stress tester</h3>
 <p><code>make stress</code> builds and runs <code>tools/stress</code>,
@@ -10174,7 +10190,7 @@ that §15.2 records.</li>
 <li>After 4 hours, the generator gave two new entries of one directory
 the same name, and the second one failed. A new entry now gets another
 name when its name is taken. After this fix, a run of 8 hours passed.
-<code>make check</code> now runs the tests of <code>tools/</code>
+<code>make   check</code> now runs the tests of <code>tools/</code>
 too.</li>
 </ul>
 <p>A run of ten minutes, over all the profiles, made 146 sequences. They
@@ -10183,6 +10199,221 @@ damaged copies. 51 sequences ended with a dictionary, and 124 with
 shared content. With the new steps, a run of five minutes made 106
 sequences and 10988 commands. It ran 207 <code>--diff</code> steps, 305
 dry runs and 161 extractions with <code>--strip-components</code>.</p>
+<h3 id="assurance-plan">13.5 Assurance plan</h3>
+<p><strong>The goal is evidence that eictar can hold data in a
+mission-critical use.</strong> Tests cannot prove that a program is
+correct. Thus this plan collects evidence of different kinds, and each
+kind finds faults that the others do not find:</p>
+<ul>
+<li>the strength of the tests, measured</li>
+<li>a second implementation, from the specification only</li>
+<li>faults of the disk and of the machine, injected on purpose</li>
+<li>hostile input, generated</li>
+<li>models of the protocols, checked by a tool</li>
+</ul>
+<p>The critical promise is that a user gets back the data that went in,
+or gets an error. Wrong data with exit 0 is the worst failure. Each step
+below tests that promise from a different side.</p>
+<p><strong>Step 1. Measure the strength of the tests.</strong></p>
+<ul>
+<li><strong>Coverage of all the tests together.</strong> Unit coverage
+alone does not count the operational tests, because they run the binary.
+<code>make cover</code> builds the binary with coverage, runs the unit
+tests and the operational tests, and merges the two results.</li>
+<li><strong>Tests as root.</strong> Linux and macOS run the tests as an
+ordinary user, and the BSD virtual machines run them as root. A CI job
+runs the tests on Linux as root too. Then each platform family runs the
+code for the owner, the device nodes and the privileged xattrs at least
+once.</li>
+<li><strong>Mutation testing.</strong> <code>tools/mutate</code> makes
+one small change to the code at a time: a comparison, an operator, or a
+condition. Then it runs the tests. A change that no test finds is a
+<em>survivor</em>. A survivor in code that the tests run is a check that
+no test checks. <code>make mutate</code> runs it.</li>
+</ul>
+<p>The result of step 1 is a list of gaps, in order. That list decides
+where steps 2 to 4 start.</p>
+<p><strong>How <code>tools/mutate</code> works.</strong> It parses each
+file of the package that builds on this platform. It makes these
+changes, one at a time:</p>
+<ul>
+<li>a comparison to its boundary and to its opposite (<code>&lt;</code>
+to <code>&lt;=</code> and <code>&gt;=</code>)</li>
+<li><code>==</code> to <code>!=</code>, <code>&amp;&amp;</code> to
+<code>||</code>, and the reverse of each</li>
+<li>an arithmetic, bitwise or shift operator to its pair (<code>+</code>
+to <code>-</code>, <code>&lt;&lt;</code> to <code>&gt;&gt;</code>)</li>
+<li>a <code>!</code> removed, and <code>++</code> to
+<code>--</code></li>
+<li>the condition of each <code>if</code> to <code>false</code>, so that
+its check never runs</li>
+</ul>
+<p>A run of the tests first gives the coverage. A mutant in code that no
+test runs is <em>not covered</em>, and its tests do not run. Each other
+mutant goes to <code>go test -overlay</code>, so the source tree never
+changes, and mutants run in parallel. A failed test finds the mutant. A
+test binary that does not end in three times the time of the first run
+stops, and that also finds the mutant. A mutant that does not compile
+does not count. The score is the part of the counted mutants that the
+tests find. <code>-test</code> gives other packages whose tests run, so
+that a run can tell a gap of one package from a gap of the whole
+program.</p>
+<p><strong>The first results, with the tests of the package
+itself:</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>Package</th>
+<th>Mutants</th>
+<th>Found</th>
+<th>Survived</th>
+<th>Not covered</th>
+<th>Score</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>format</code></td>
+<td>396</td>
+<td>246</td>
+<td>73</td>
+<td>70</td>
+<td>63.2%</td>
+</tr>
+<tr class="even">
+<td><code>crypt</code></td>
+<td>88</td>
+<td>48</td>
+<td>35</td>
+<td>4</td>
+<td>55.2%</td>
+</tr>
+<tr class="odd">
+<td><code>pipeline</code></td>
+<td>179</td>
+<td>102</td>
+<td>59</td>
+<td>12</td>
+<td>59.0%</td>
+</tr>
+</tbody>
+</table>
+<p>With the tests of <code>archive</code> too, <code>format</code> gets
+68.4% and <code>pipeline</code> 70.5%. Thus most of the gaps are gaps of
+the whole program. The coverage of the unit and the operational tests
+together is 90.3%, and the operational tests raise <code>cli</code> from
+86.8% to 95.3%.</p>
+<p>The survivors fall into these groups, in order of risk:</p>
+<ol type="1">
+<li><strong>Checks of a hostile archive that no test makes
+fail.</strong> No test of any package finds the removal of these checks
+of the crypto header: the version, the KDF, the cipher,
+<code>recipients</code>, and the lengths of the salt and the wrapped
+key. The same is true for these checks of the index: an unknown member
+type, a field on the wrong type, the chunk table, and a sparse segment
+that overflows. Fuzzing finds a panic, but it does not find a check that
+is gone.</li>
+<li><strong>Limits that no test reaches exactly.</strong>
+<code>&gt;</code> to <code>&gt;=</code> survives at each limit:
+<code>MaxIndexSize</code>, <code>MaxIndexMembers</code>,
+<code>MaxDicts</code>, <code>MaxXattrs</code>, the xattr name and value,
+the chunk size, the KDF time and memory, and the bounds of the
+trailer.</li>
+<li><strong>The key schedule above generation 255.</strong>
+<code>uint64LE</code> survives with <code>&gt;&gt;</code> changed to
+<code>&lt;&lt;</code>, because each test vector uses a generation below
+256. An index key of a later generation has no fixed vector.</li>
+<li><strong>Errors of the disk in the pipeline.</strong> No test makes a
+write, a seek or a spill of a spool fail. The v1.0.8 hang was in this
+code. Step 3 covers it. A sparse file that changes while it is read is
+also not tested (<code>builder.go</code>).</li>
+<li><strong>Equivalent mutants.</strong> Some changes cannot change the
+result: the capacity of a <code>make</code>, or the error of
+<code>rand.Read</code>. A list of the accepted survivors, each with its
+reason, is necessary before the release gate can ask for zero
+survivors.</li>
+</ol>
+<p><strong>Step 2. A second reader, from <code>doc/format.md</code>
+only.</strong> An independent program reads an archive with the rules of
+<code>doc/format.md</code> and no code of eictar. On the golden archives
+and on the archives of the stress tester, it must give the same members
+and the same bytes as eictar. Thus the specification is complete, the
+writer obeys it, and a user has a way to read an archive that does not
+depend on eictar.</p>
+<p><strong>Step 3. Faults of the disk and of the machine.</strong> A
+layer under the writer makes a write, an <code>fsync</code> or a rename
+fail, or makes a write short. A power-loss mode records the writes, and
+drops or reorders the writes that were not synced. After each fault, the
+archive must open as the old generation or as the new one, or
+<code>--repair</code> must give back one of them. The stress tester
+injects these faults at random.</p>
+<p><strong>Step 4. More fuzzing.</strong> A fuzz target opens, lists,
+verifies and extracts changed copies of the golden archives into a
+temporary root. Each run must end with exit 3, or with the exact
+content, and never with a panic or a write outside the root. More
+targets cover the chunk opener, the configuration parser, the
+compression spec, and the pattern rules against a simple reference
+matcher. Before a release, each target runs for hours, and the corpus is
+kept.</p>
+<p><strong>Step 5. Models of the protocols.</strong> TLA+ models check
+three protocols, where faults of order and of timing hide:</p>
+<ul>
+<li>the commit of a generation, and <code>--repair</code> (§9.1,
+§9.5)</li>
+<li>the lock, and the check that the path still names the locked file
+(§9.6)</li>
+<li>the rules of the memory budget against a deadlock (§8.1)</li>
+</ul>
+<p>The two hangs that the tests found were both in the memory
+budget.</p>
+<p><strong>Step 6. The release gate.</strong> Before a tag, these must
+pass:</p>
+<ul>
+<li><code>make check</code> on each platform, as CI does</li>
+<li>a run of the stress tester of at least 8 hours</li>
+<li>each fuzz target for at least one hour</li>
+<li><code>make mutate</code> on <code>format</code>, <code>crypt</code>
+and <code>pipeline</code>, with no survivor that is not explained</li>
+<li><code>govulncheck</code> on the modules</li>
+</ul>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1. Strength of the tests</td>
+<td>measured; the tests for the survivors are next</td>
+</tr>
+<tr class="even">
+<td>2. Second reader</td>
+<td>planned</td>
+</tr>
+<tr class="odd">
+<td>3. Faults of the disk and the machine</td>
+<td>planned</td>
+</tr>
+<tr class="even">
+<td>4. More fuzzing</td>
+<td>planned</td>
+</tr>
+<tr class="odd">
+<td>5. Models of the protocols</td>
+<td>planned</td>
+</tr>
+<tr class="even">
+<td>6. Release gate</td>
+<td>planned</td>
+</tr>
+</tbody>
+</table>
 <h2 id="security-considerations">14. Security considerations</h2>
 <h3 id="what-an-observer-sees">14.1 What an observer sees</h3>
 <ul>

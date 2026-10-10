@@ -2967,6 +2967,8 @@ bare `go` command:
 | `make check` | `fmt`, `vet`, `crossvet`, `test-race` and `operational`. `CROSSVET=` leaves out `crossvet`, as CI does. |
 | `make check-norace` | `make check` with `test` for `test-race`, for NetBSD and OpenBSD |
 | `make skips` | list each test that this platform skips, with its reason, and the totals |
+| `make cover` | the coverage of the unit tests and the operational tests together, in `.tmp/cover/` (§13.5) |
+| `make mutate` | mutation testing of the packages in `MUTATE` (default `format`, `crypt` and `pipeline`). `MUTATE_FLAGS` gives options to `tools/mutate` (§13.5). |
 | `make stress` | random end-to-end tests against a model (§13.4). `STRESS="-duration 30m"` runs longer, and `STRESS="-seed N -sequences 1"` replays a failure. |
 | `make stress-build` | build the stress tester alone, as `.build/stress` |
 
@@ -2985,6 +2987,7 @@ doc/                       design.md; format.md, the format reference; eictar.1,
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
 tools/testskips/           lists the skipped tests and their reasons, for make skips (§13.3)
 tools/stress/              the stress tester: model, generator and profiles, runner, checks and faults (§13.4)
+tools/mutate/              mutation testing, for make mutate (§13.5)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
@@ -3492,9 +3495,10 @@ parts work.
   and the totals. Each CI job runs it after `make check`, so that a green job
   also says what it did not test. The job's result stays the result of
   `make check`.
-- **Coverage** comes later. `format`, `crypt` and `codec` need high
-  coverage, because a fault there is silent and permanent. The benchmarks
-  exist: `make bench` and `make compare` (§8.4).
+- **Coverage and mutation testing** measure the tests (§13.5). `format`,
+  `crypt` and `codec` need the strongest tests, because a fault there is
+  silent and permanent. The benchmarks are `make bench` and `make compare`
+  (§8.4).
 
 
 ### 13.4 Stress tester
@@ -3657,7 +3661,8 @@ Longer runs found one more fault, and two faults in the tester:
   level 9, the same command took 0.6 s. This is the cost that §15.2 records.
 - After 4 hours, the generator gave two new entries of one directory the
   same name, and the second one failed. A new entry now gets another name
-  when its name is taken. After this fix, a run of 8 hours passed. `make check` now runs the tests of `tools/` too.
+  when its name is taken. After this fix, a run of 8 hours passed. `make
+  check` now runs the tests of `tools/` too.
 
 A run of ten minutes, over all the profiles, made 146 sequences. They ran
 approximately 14,000 eictar commands, with 256 crashes and 510 damaged
@@ -3665,6 +3670,148 @@ copies. 51 sequences ended with a dictionary, and 124 with shared content.
 With the new steps, a run of five minutes made 106 sequences and 10988
 commands. It ran 207 `--diff` steps, 305 dry runs and 161 extractions with
 `--strip-components`.
+
+### 13.5 Assurance plan
+
+**The goal is evidence that eictar can hold data in a mission-critical
+use.** Tests cannot prove that a program is correct. Thus this plan collects
+evidence of different kinds, and each kind finds faults that the others do
+not find:
+
+- the strength of the tests, measured
+- a second implementation, from the specification only
+- faults of the disk and of the machine, injected on purpose
+- hostile input, generated
+- models of the protocols, checked by a tool
+
+The critical promise is that a user gets back the data that went in, or
+gets an error. Wrong data with exit 0 is the worst failure. Each step below
+tests that promise from a different side.
+
+**Step 1. Measure the strength of the tests.**
+
+- **Coverage of all the tests together.** Unit coverage alone does not
+  count the operational tests, because they run the binary. `make cover`
+  builds the binary with coverage, runs the unit tests and the operational
+  tests, and merges the two results.
+- **Tests as root.** Linux and macOS run the tests as an ordinary user, and
+  the BSD virtual machines run them as root. A CI job runs the tests on
+  Linux as root too. Then each platform family runs the code for the owner,
+  the device nodes and the privileged xattrs at least once.
+- **Mutation testing.** `tools/mutate` makes one small change to the code at
+  a time: a comparison, an operator, or a condition. Then it runs the tests.
+  A change that no test finds is a *survivor*. A survivor in code that the
+  tests run is a check that no test checks. `make mutate` runs it.
+
+The result of step 1 is a list of gaps, in order. That list decides where
+steps 2 to 4 start.
+
+**How `tools/mutate` works.** It parses each file of the package that builds
+on this platform. It makes these changes, one at a time:
+
+- a comparison to its boundary and to its opposite (`<` to `<=` and `>=`)
+- `==` to `!=`, `&&` to `||`, and the reverse of each
+- an arithmetic, bitwise or shift operator to its pair (`+` to `-`, `<<` to
+  `>>`)
+- a `!` removed, and `++` to `--`
+- the condition of each `if` to `false`, so that its check never runs
+
+A run of the tests first gives the coverage. A mutant in code that no test
+runs is *not covered*, and its tests do not run. Each other mutant goes to
+`go test -overlay`, so the source tree never changes, and mutants run in
+parallel. A failed test finds the mutant. A test binary that does not end
+in three times the time of the first run stops, and that also finds the
+mutant. A mutant that does not compile does not count. The score is the
+part of the counted mutants that the tests find. `-test` gives other
+packages whose tests run, so that a run can tell a gap of one package from a
+gap of the whole program.
+
+**The first results, with the tests of the package itself:**
+
+| Package | Mutants | Found | Survived | Not covered | Score |
+|---|---|---|---|---|---|
+| `format` | 396 | 246 | 73 | 70 | 63.2% |
+| `crypt` | 88 | 48 | 35 | 4 | 55.2% |
+| `pipeline` | 179 | 102 | 59 | 12 | 59.0% |
+
+With the tests of `archive` too, `format` gets 68.4% and `pipeline` 70.5%.
+Thus most of the gaps are gaps of the whole program. The coverage of the
+unit and the operational tests together is 90.3%, and the operational tests
+raise `cli` from 86.8% to 95.3%.
+
+The survivors fall into these groups, in order of risk:
+
+1. **Checks of a hostile archive that no test makes fail.** No test of
+   any package finds the removal of these checks of the crypto header: the
+   version, the KDF, the cipher, `recipients`, and the lengths of the salt
+   and the wrapped key. The same is true for these checks of the index: an
+   unknown member type, a field on the wrong type, the chunk table, and a
+   sparse segment that overflows. Fuzzing finds a panic, but it does not
+   find a check that is gone.
+2. **Limits that no test reaches exactly.** `>` to `>=` survives at each
+   limit: `MaxIndexSize`, `MaxIndexMembers`, `MaxDicts`, `MaxXattrs`, the
+   xattr name and value, the chunk size, the KDF time and memory, and the
+   bounds of the trailer.
+3. **The key schedule above generation 255.** `uint64LE` survives with `>>`
+   changed to `<<`, because each test vector uses a generation below 256.
+   An index key of a later generation has no fixed vector.
+4. **Errors of the disk in the pipeline.** No test makes a write, a seek or a
+   spill of a spool fail. The v1.0.8 hang was in this code. Step 3 covers it.
+   A sparse file that changes while it is read is also not tested
+   (`builder.go`).
+5. **Equivalent mutants.** Some changes cannot change the result: the
+   capacity of a `make`, or the error of `rand.Read`. A list of the accepted
+   survivors, each with its reason, is necessary before the release gate can
+   ask for zero survivors.
+
+**Step 2. A second reader, from `doc/format.md` only.** An independent
+program reads an archive with the rules of `doc/format.md` and no code of
+eictar. On the golden archives and on the archives of the stress tester, it
+must give the same members and the same bytes as eictar. Thus the
+specification is complete, the writer obeys it, and a user has a way to
+read an archive that does not depend on eictar.
+
+**Step 3. Faults of the disk and of the machine.** A layer under the writer
+makes a write, an `fsync` or a rename fail, or makes a write short. A
+power-loss mode records the writes, and drops or reorders the writes that
+were not synced. After each fault, the archive must open as the old
+generation or as the new one, or `--repair` must give back one of them. The
+stress tester injects these faults at random.
+
+**Step 4. More fuzzing.** A fuzz target opens, lists, verifies and extracts
+changed copies of the golden archives into a temporary root. Each run must
+end with exit 3, or with the exact content, and never with a panic or a
+write outside the root. More targets cover the chunk opener, the
+configuration parser, the compression spec, and the pattern rules against a
+simple reference matcher. Before a release, each target runs for hours, and
+the corpus is kept.
+
+**Step 5. Models of the protocols.** TLA+ models check three protocols, where
+faults of order and of timing hide:
+
+- the commit of a generation, and `--repair` (§9.1, §9.5)
+- the lock, and the check that the path still names the locked file (§9.6)
+- the rules of the memory budget against a deadlock (§8.1)
+
+The two hangs that the tests found were both in the memory budget.
+
+**Step 6. The release gate.** Before a tag, these must pass:
+
+- `make check` on each platform, as CI does
+- a run of the stress tester of at least 8 hours
+- each fuzz target for at least one hour
+- `make mutate` on `format`, `crypt` and `pipeline`, with no survivor that
+  is not explained
+- `govulncheck` on the modules
+
+| Step | Status |
+|---|---|
+| 1. Strength of the tests | measured; the tests for the survivors are next |
+| 2. Second reader | planned |
+| 3. Faults of the disk and the machine | planned |
+| 4. More fuzzing | planned |
+| 5. Models of the protocols | planned |
+| 6. Release gate | planned |
 
 ## 14. Security considerations
 
