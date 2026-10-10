@@ -1,8 +1,8 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete, and v1.0.8 is the current release. The CI workflow passes
-on Linux, macOS, FreeBSD, NetBSD and OpenBSD (§15.1).
-Date: 2026-10-09
+Status: M1 to M11 are complete, and v1.1.0 is the current release. The CI workflow passes
+on Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows (§15.1).
+Date: 2026-10-10
 Applies to: v1 (format version 1.0)
 
 This document specifies the on-disk format, the concurrency model, the command
@@ -3858,7 +3858,7 @@ archive, with a header flag or a new `format_major` (§3.1, §4.4).
 ### 15.1 Other platforms
 
 **Status: complete in M8** for the five UNIX-like platforms. Windows is
-supported after v1.0.8 (see "Windows" below). The CI workflow passes on all
+supported from v1.1.0 (see "Windows" below). The CI workflow passes on all
 six platforms (see "Testing" below).
 
 The metadata code (`src/internal/meta`) has a part that the five UNIX-like
@@ -3875,7 +3875,7 @@ metadata.
 | xattrs | yes | yes, no namespaces | `user` and `system` | `user` and `system` | none on the platform | not recorded |
 | POSIX ACLs | yes, as xattrs | not recorded (§1.1, row 8) | not recorded | not recorded | none on the platform | none on the platform |
 | pipes and device nodes on extraction | yes | skipped with a notice | yes | yes | yes | skipped with a notice |
-| memory size for the budget | `/proc/meminfo` | `sysctl hw.memsize` | `sysctl hw.physmem` | `sysctl hw.physmem64` | `sysctl hw.physmem64` | `GlobalMemoryStatusEx` |
+| memory size for the budget | `/proc/meminfo` | `sysctl hw.memsize` | `sysctl hw.physmem` | `sysctl hw.physmem64` | `sysctl hw.physmem` | `GlobalMemoryStatusEx` |
 
 "Stored dense" is not a failure. Without hole detection, the reader reads the
 whole file, which is correct.
@@ -4371,6 +4371,40 @@ Other changes:
   saves (§12, §15.1).
 
 The format is still 1.0. v1.0.8 reads every earlier archive, and earlier
+versions read what it writes.
+
+**v1.1.0 makes Windows a supported platform, and fixes one fault on
+OpenBSD.**
+
+Windows:
+
+- Windows is now a supported platform, on amd64 and arm64. The release has a
+  `.zip` file with `eictar.exe` for each. It has no man page. The CI job for
+  Windows now fails the workflow when a test fails (§12, §15.1).
+- On Windows, eictar records no owner, no mode and no extended attributes.
+  It skips named pipes and device nodes on extraction, with a notice. It
+  stores a file with holes dense. §15.1 gives the other differences.
+- The program reads the owner and the ACL of a configuration file and a
+  passphrase file. It refuses a configuration file that another account
+  than you, SYSTEM or the Administrators group owns, or that the ACL lets
+  such an account write. It warns about a passphrase file that such an
+  account owns or can read (§11, §15.1, `doc/Security_Audit.md`,
+  finding 8). Before, the program did not do these checks on Windows.
+- `GlobalMemoryStatusEx` gives the size of the RAM for the budget and for
+  the check of the key derivation (§8.1, §15.1).
+
+The fix:
+
+- On OpenBSD, the program did not get the size of the RAM. It asked for
+  `hw.physmem64`, which `x/sys` does not know on OpenBSD. Thus the budget
+  did not use a quarter of the RAM as its limit, and the check of the key
+  derivation did nothing. On a small machine, Argon2id could then use more
+  memory than the machine has, and the kernel stopped the process with no
+  message. The program now asks for `hw.physmem`, which `x/sys` maps to
+  `HW_PHYSMEM64` (§15.1). `TestTotalMemory` checks that each supported
+  platform gives a size.
+
+The format is still 1.0. v1.1.0 reads every earlier archive, and earlier
 versions read what it writes.
 
 ## Appendix A. Why these primitives, compared with AES

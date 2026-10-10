@@ -5377,9 +5377,10 @@ the usual choices</a></li>
 </ul>
 </nav>
 <h1 id="eictar-design-document">eictar — Design Document</h1>
-<p>Status: M1 to M11 are complete, and v1.0.8 is the current release.
-The CI workflow passes on Linux, macOS, FreeBSD, NetBSD and OpenBSD
-(§15.1). Date: 2026-10-09 Applies to: v1 (format version 1.0)</p>
+<p>Status: M1 to M11 are complete, and v1.1.0 is the current release.
+The CI workflow passes on Linux, macOS, FreeBSD, NetBSD, OpenBSD and
+Windows (§15.1). Date: 2026-10-10 Applies to: v1 (format version
+1.0)</p>
 <p>This document specifies the on-disk format, the concurrency model,
 the command line and the internal package layout of <code>eictar</code>.
 It is the reference for all implementation work. When the code changes,
@@ -10443,7 +10444,7 @@ trailer.</li>
 </ul>
 <h3 id="other-platforms">15.1 Other platforms</h3>
 <p><strong>Status: complete in M8</strong> for the five UNIX-like
-platforms. Windows is supported after v1.0.8 (see “Windows” below). The
+platforms. Windows is supported from v1.1.0 (see “Windows” below). The
 CI workflow passes on all six platforms (see “Testing” below).</p>
 <p>The metadata code (<code>src/internal/meta</code>) has a part that
 the five UNIX-like platforms share, and a small file for each platform.
@@ -10532,7 +10533,7 @@ directories and links, and records no other metadata.</p>
 <td><code>sysctl hw.memsize</code></td>
 <td><code>sysctl hw.physmem</code></td>
 <td><code>sysctl hw.physmem64</code></td>
-<td><code>sysctl hw.physmem64</code></td>
+<td><code>sysctl hw.physmem</code></td>
 <td><code>GlobalMemoryStatusEx</code></td>
 </tr>
 </tbody>
@@ -11110,6 +11111,42 @@ it out, and uses the caches that <code>setup-go</code> saves (§12,
 §15.1).</li>
 </ul>
 <p>The format is still 1.0. v1.0.8 reads every earlier archive, and
+earlier versions read what it writes.</p>
+<p><strong>v1.1.0 makes Windows a supported platform, and fixes one
+fault on OpenBSD.</strong></p>
+<p>Windows:</p>
+<ul>
+<li>Windows is now a supported platform, on amd64 and arm64. The release
+has a <code>.zip</code> file with <code>eictar.exe</code> for each. It
+has no man page. The CI job for Windows now fails the workflow when a
+test fails (§12, §15.1).</li>
+<li>On Windows, eictar records no owner, no mode and no extended
+attributes. It skips named pipes and device nodes on extraction, with a
+notice. It stores a file with holes dense. §15.1 gives the other
+differences.</li>
+<li>The program reads the owner and the ACL of a configuration file and
+a passphrase file. It refuses a configuration file that another account
+than you, SYSTEM or the Administrators group owns, or that the ACL lets
+such an account write. It warns about a passphrase file that such an
+account owns or can read (§11, §15.1,
+<code>doc/Security_Audit.md</code>, finding 8). Before, the program did
+not do these checks on Windows.</li>
+<li><code>GlobalMemoryStatusEx</code> gives the size of the RAM for the
+budget and for the check of the key derivation (§8.1, §15.1).</li>
+</ul>
+<p>The fix:</p>
+<ul>
+<li>On OpenBSD, the program did not get the size of the RAM. It asked
+for <code>hw.physmem64</code>, which <code>x/sys</code> does not know on
+OpenBSD. Thus the budget did not use a quarter of the RAM as its limit,
+and the check of the key derivation did nothing. On a small machine,
+Argon2id could then use more memory than the machine has, and the kernel
+stopped the process with no message. The program now asks for
+<code>hw.physmem</code>, which <code>x/sys</code> maps to
+<code>HW_PHYSMEM64</code> (§15.1). <code>TestTotalMemory</code> checks
+that each supported platform gives a size.</li>
+</ul>
+<p>The format is still 1.0. v1.1.0 reads every earlier archive, and
 earlier versions read what it writes.</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
