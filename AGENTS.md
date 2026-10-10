@@ -24,13 +24,14 @@ written in Go.  The design and the archive format are specified in doc/.
    format.md, the man page eictar.1 and Security_Audit.md, with README.md at
    the top.  Documents here should always be considered when performing code
    changes, and updated with them.
--  Write documentation in the style of ASD-STE100 Simplified Technical
-   English, as the documents in doc/ are: short sentences, one topic for each
-   sentence, simple tenses, the active voice, and one meaning for each word.
+-  When writing documentation make sure to load the simple-english skill.
+   This makes reference to ASD-STE100 Simplified Technical English among
+   other stylistic guides.
 -  The .html files are generated from the .md files with pandoc.  See the
-   exceptions section to see which tool to use to generate them.  Only
-   regenerate if there is an html file corresponding to the md file.  If
-   there is none then don't generate one.
+   exceptions list below to see which tool to use to generate them.  Only
+   regenerate if there is already an html file corresponding to the md file.
+   If there is none then don't generate one (I don't always create an html
+   file).
 -  Do not commit or push; I do that.  When a change is done, suggest a
    one-line commit message for it.
 -  No changes to outside the directory should be done unless explicitly asked
@@ -54,9 +55,7 @@ The exceptions:
 -  tar, zstd, xz and gzip may be run to compare eictar with them in
    benchmarks (bench/compare.sh), on files inside the project.
 -  If you need to generate the html for a .md file, you may execute
-   /home/psm/bin/md2html 'filename'.  If the file has mermaid diagrams then
-   use the --mermaid option, which will include the javascript needed to
-   render the mermaid diagrams.
+   /home/psm/bin/md2html 'filename'.
 
 If a tool call would touch any path outside the project root and these
 exceptions, DO NOT make that tool call. Instead, respond with: "I cannot

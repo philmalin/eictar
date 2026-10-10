@@ -61,8 +61,9 @@ removes it.
 Paths are stored relative. A leading
 .B /
 or
-.B ..
-is removed when a file is added, and the program says so one time. There is
+.BR .. ,
+or on Windows a drive, is removed when a file is added, and the program says
+so one time. There is
 no option to keep an absolute path. Extraction checks each path again, and
 it never writes outside its destination, not even through a symbolic link.
 .SH OPERATIONS
@@ -138,6 +139,8 @@ difference.
 Paths on disk that are not in the archive are found in the directories that
 the archive holds. Give the same
 .BR \-\-exclude ,
+.BR \-\-exclude\-regex ,
+.BR \-R ,
 .BR \-h ,
 .B \-\-one\-file\-system
 and
@@ -185,14 +188,19 @@ stays as it is.
 .BI \-d " dir" "\fR, \fP\-\-destination " dir
 Extract into
 .IR dir ,
-and create it if it does not exist.
+and create it if it does not exist. Only
+.B \-x
+takes this option, and not with
+.B \-C
+or
+.BR \-O .
 .TP
 .BI \-C " dir" "\fR, \fP\-\-directory " dir
 Change to
 .I dir
 first.
 .I dir
-must exist.
+must exist. Give it only one time.
 .TP
 .BI \-T " file" "\fR, \fP\-\-files\-from " file
 Read the paths from
@@ -211,6 +219,9 @@ given more than once.
 .BI \-X " file" "\fR, \fP\-\-exclude\-from " file
 Read one glob from each line of
 .IR file .
+Blank lines are ignored. There are no comments, because a name can start
+with
+.BR # .
 .TP
 .BI \-R " re" "\fR, \fP\-\-regex " re
 Keep only the paths that the regular expression
@@ -296,7 +307,7 @@ The same as
 Compress in chunks of
 .I size
 bytes, from 512 B to 256 MiB. The default is 4 MiB. A size can have a unit:
-KiB, MiB or GiB.
+KiB, MiB, GiB or TiB, also written K, M, G and T.
 .SS Encryption
 .TP
 .BR \-e ", " \-\-encrypt
@@ -313,12 +324,14 @@ Also encrypt the index, which hides the names, sizes and digests.
 .BI \-\-passphrase\-file " file"
 Read the passphrase from the first line of
 .IR file .
-If the archive is not encrypted, the program refuses it with exit 3.
 .TP
 .BI \-\-passphrase\-env " var"
 Read the passphrase from the environment variable
 .IR var .
 Other processes can see the environment, so the program prints a warning.
+.IP
+With either option, the program refuses an archive that is not encrypted,
+with exit 3.
 .TP
 .BI \-\-new\-passphrase\-file " file" "\fR, \fP\-\-new\-passphrase\-env " var
 With
@@ -482,8 +495,10 @@ a word before each path tells what happens to it:
 .B extract
 or
 .BR delete .
-A line on standard error gives the number of paths and the size of their
-content.
+Unless
+.B \-q
+is given, a line on standard error gives the number of paths and the size of
+their content.
 .IP
 A dry run makes no archive, locks no archive, and makes no destination
 directory. It does not read the content of files, except for
@@ -512,6 +527,8 @@ a JSON listing with every field, for programs.
 .TP
 .B \-\-progress
 Show a progress line on standard error, when it is a terminal.
+.B \-q
+turns it off.
 .TP
 .BI \-j " n" "\fR, \fP\-\-workers " n
 Use
@@ -713,7 +730,8 @@ With
 and
 .BR \-u ,
 .B train
-uses the dictionary that the archive already has.
+uses the dictionary that the archive already has, or makes one when the
+archive has none.
 .B "\-\-recompress zstd:train"
 makes a new one from the whole archive. In an encrypted archive, the
 dictionary is encrypted too. When there is too little to learn from, the
@@ -773,14 +791,14 @@ and
 .BR ~/.eictarrc .
 A file in the current directory is never read. The program refuses a
 configuration file that another user owns, or that the group or other users
-can write. On Windows, it refuses one that another account than you, SYSTEM
+can write. On Windows, it refuses one that an account other than you, SYSTEM
 or the Administrators group owns, or that its ACL lets such an account write.
 .PP
 Each line is
 .IB key " = " value\fR,\fP
 where the key is a long option without its dashes. A
 .B #
-at the start of a line, or after a space, starts a comment.
+at the start of a line, or after a space or a tab, starts a comment.
 .B [codec.\fIname\fP]
 sections give default parameters for one codec:
 .PP
