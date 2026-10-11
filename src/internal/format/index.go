@@ -590,8 +590,8 @@ func validatePayload(m *Member) error {
 	}
 
 	// A member of another type has no len, chunks or chunk, and its size is 0
-	// (doc/format.md 8.3). It can have an off: each writer up to now puts one
-	// there, with len 0.
+	// (doc/format.md 8.3). An off is accepted and ignored: eictar 1.1.0 and
+	// earlier wrote one there, with len 0.
 	if !m.Type.HasPayload() {
 		if m.Size != 0 || m.Length != 0 || len(m.Chunks) != 0 || m.ChunkSize != 0 {
 			return corrupt(m, fmt.Sprintf("a %s with content: size %d, blob [%d,+%d), %d chunks of %d",

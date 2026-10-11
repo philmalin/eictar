@@ -413,11 +413,12 @@ func TestIndexValidateAcceptsEdges(t *testing.T) {
 		{"sparse segment that ends at the size", func(ix *Index) {
 			ix.Members[5].Sparse[1].Offset = 1<<30 - 8192
 		}},
-		{"an offset on a directory", func(ix *Index) {
-			// doc/format.md 8.3 says that a member without a blob has no off,
-			// but each writer of eictar up to now puts one there, with len 0.
-			// The archives that hold it must open.
-			ix.Members[1].Offset = 64
+		// A member with no blob has no off, but eictar 1.1.0 and earlier
+		// wrote one there, and a reader accepts it (doc/format.md 8.3).
+		{"an offset on a directory", func(ix *Index) { ix.Members[1].Offset = 64 }},
+		{"an offset on an empty file", func(ix *Index) {
+			m := &ix.Members[7]
+			m.Size, m.Offset, m.Length, m.Chunks, m.ChunkSize, m.Enc = 0, 64, 0, nil, 0, nil
 		}},
 
 		// Each limit at its exact value: the value one more is refused above.

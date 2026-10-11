@@ -383,9 +383,11 @@ func (w *Writer) AppendMember(m *format.Member, payload io.WriterTo) error {
 		}
 	}
 
-	m.Offset = uint64(w.off)
-	if m.Data != 0 {
-		m.Offset = 0
+	// Only a blob has an offset (doc/format.md 8.3). Earlier writers also
+	// put the write position on members with no blob.
+	m.Offset = 0
+	if m.Data == 0 && m.Length > 0 {
+		m.Offset = uint64(w.off)
 	}
 	if payload != nil {
 		n, err := payload.WriteTo(w.f)

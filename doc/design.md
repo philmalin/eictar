@@ -3784,8 +3784,11 @@ The survivors fall into these groups, in order of risk:
    The validator refuses them now. No version of eictar wrote these
    shapes, so each archive that eictar wrote still opens. The work also
    found that the writer does not obey §8.3: it puts `off`, with `len` 0,
-   on a directory, a link, a device and an empty file. The validator accepts
-   this, and a test keeps it so.
+   on a directory, a link, a device and an empty file. After 1.1.0, the
+   writer, compact and recompress do not write it. format.md §8.3 now says
+   that a reader accepts it and ignores it, because the archives of 1.1.0
+   and earlier have it. `TestNoOffsetWithoutABlob` and a validator test
+   keep both rules.
 2. **Limits that no test reaches exactly.** `>` to `>=` survives at each
    limit: `MaxIndexSize`, `MaxIndexMembers`, `MaxDicts`, `MaxXattrs`, the
    xattr name and value, the chunk size, the KDF time and memory, and the

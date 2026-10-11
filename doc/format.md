@@ -330,7 +330,12 @@ A Dict map:
 
 Only `reg` members have content. A member of another type has no `off`,
 `len`, `chunks` or `chunk`, and its `size` is 0. A `reg` member with an empty
-payload has no chunks.
+payload has no chunks and no blob.
+
+A writer does not write `off` on a member with no blob. eictar 1.1.0 and
+earlier wrote one there: the write position at that time, with `len` 0. A
+reader accepts an `off` on such a member, and ignores it. This does not
+apply to a member with `data`, which has no `off` (§8.5).
 
 A reader ignores a map key that it does not know. A writer that adds a key
 that an older reader must not ignore changes `format_minor` or

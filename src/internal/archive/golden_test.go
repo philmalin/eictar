@@ -266,3 +266,77 @@ func TestGoldenSharedContent(t *testing.T) {
 		}
 	}
 }
+
+// strayOffsets counts the members of the archive at path that have an off
+// but no blob of their own (doc/format.md 8.3), and the members with a blob.
+func strayOffsets(t *testing.T, path string, open OpenOptions) (stray, blobs int) {
+	t.Helper()
+	r, err := OpenWith(path, open)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	for _, m := range r.index.Members {
+		switch {
+		case m.Length > 0:
+			blobs++
+		case m.Offset != 0:
+			stray++
+		}
+	}
+	return stray, blobs
+}
+
+// TestNoOffsetWithoutABlob: a member with no blob of its own has no off
+// (doc/format.md 8.3). Earlier writers put the write position there. A
+// reader accepts such an off, and a compact or a recompress removes it.
+func TestNoOffsetWithoutABlob(t *testing.T) {
+	tree := testutil.NewTree(t)
+	tree.Dir("d", 0o755).Dir("d/sub", 0o755)
+	tree.Text("d/a.txt", 0o644, "alpha")
+	tree.Text("d/copy.txt", 0o644, "alpha")
+	tree.Text("d/empty", 0o644, "")
+	tree.Text("d/z.txt", 0o644, "zulu")
+	tree.Symlink("d/link", "a.txt")
+	tree.Hardlink("d/hard", "d/z.txt")
+	for _, enc := range []bool{false, true} {
+		archive := mkArchive(t, tree, enc, "d")
+		if stray, blobs := strayOffsets(t, archive, openFor(enc)); stray != 0 || blobs == 0 {
+			t.Errorf("encrypted=%v: create: %d members with an off and no blob, %d blobs", enc, stray, blobs)
+		}
+		// The empty file comes after blobs, so a compact that gave it the
+		// write position would give it an off.
+		tree.Text("d/a.txt", 0o644, "alpha again")
+		if _, err := appendTo(t, archive, tree, enc, nil, "d/a.txt"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := CompactArchive(CompactConfig{Archive: archive, Open: openFor(enc)}); err != nil {
+			t.Fatal(err)
+		}
+		if stray, blobs := strayOffsets(t, archive, openFor(enc)); stray != 0 || blobs == 0 {
+			t.Errorf("encrypted=%v: compact: %d members with an off and no blob, %d blobs", enc, stray, blobs)
+		}
+		tree.Text("d/a.txt", 0o644, "alpha")
+	}
+
+	for _, rc := range []*RecompressConfig{nil, {Codec: "zstd"}} {
+		for _, tc := range []struct {
+			file      string
+			encrypted bool
+		}{{"plain.ect", false}, {"encrypted.ect", true}} {
+			path := filepath.Join(t.TempDir(), tc.file)
+			if err := os.WriteFile(path, readAll(t, filepath.Join(goldenDir, tc.file)), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if stray, _ := strayOffsets(t, path, goldenOpen(tc.encrypted)); stray == 0 {
+				t.Fatalf("%s has no member with an off and no blob: the test needs one", tc.file)
+			}
+			if _, err := CompactArchive(CompactConfig{Archive: path, Open: goldenOpen(tc.encrypted), Recompress: rc}); err != nil {
+				t.Fatal(err)
+			}
+			if stray, blobs := strayOffsets(t, path, goldenOpen(tc.encrypted)); stray != 0 || blobs == 0 {
+				t.Errorf("%s, recompress %v: %d members with an off and no blob, %d blobs", tc.file, rc != nil, stray, blobs)
+			}
+		}
+	}
+}

@@ -2153,7 +2153,12 @@ bytes, values of at most 65536 bytes, at most 1024 entries.</td>
 <p>Only <code>reg</code> members have content. A member of another type
 has no <code>off</code>, <code>len</code>, <code>chunks</code> or
 <code>chunk</code>, and its <code>size</code> is 0. A <code>reg</code>
-member with an empty payload has no chunks.</p>
+member with an empty payload has no chunks and no blob.</p>
+<p>A writer does not write <code>off</code> on a member with no blob.
+eictar 1.1.0 and earlier wrote one there: the write position at that
+time, with <code>len</code> 0. A reader accepts an <code>off</code> on
+such a member, and ignores it. This does not apply to a member with
+<code>data</code>, which has no <code>off</code> (§8.5).</p>
 <p>A reader ignores a map key that it does not know. A writer that adds
 a key that an older reader must not ignore changes
 <code>format_minor</code> or <code>format_major</code>.</p>

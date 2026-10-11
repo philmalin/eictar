@@ -10353,7 +10353,11 @@ The validator refuses them now. No version of eictar wrote these shapes,
 so each archive that eictar wrote still opens. The work also found that
 the writer does not obey §8.3: it puts <code>off</code>, with
 <code>len</code> 0, on a directory, a link, a device and an empty file.
-The validator accepts this, and a test keeps it so.</li>
+After 1.1.0, the writer, compact and recompress do not write it.
+format.md §8.3 now says that a reader accepts it and ignores it, because
+the archives of 1.1.0 and earlier have it.
+<code>TestNoOffsetWithoutABlob</code> and a validator test keep both
+rules.</li>
 <li><strong>Limits that no test reaches exactly.</strong>
 <code>&gt;</code> to <code>&gt;=</code> survives at each limit:
 <code>MaxIndexSize</code>, <code>MaxIndexMembers</code>,

@@ -571,14 +571,15 @@ func copyBlobs(r *Reader, w *Writer, keep []format.Member, progress Progress) er
 	sort.Slice(keep, func(i, j int) bool { return keep[i].Offset < keep[j].Offset })
 	for i := range keep {
 		m := &keep[i]
-		if !m.Type.HasPayload() || m.Data != 0 {
-			continue // no blob of its own
+		if !m.Type.HasPayload() || m.Data != 0 || m.Length == 0 {
+			// No blob of its own, so no offset (doc/format.md 8.3). This
+			// also removes the offset that earlier writers put there.
+			m.Offset = 0
+			continue
 		}
-		if m.Length > 0 {
-			src := io.NewSectionReader(r.f, int64(m.Offset), int64(m.Length))
-			if _, err := io.Copy(w.f, countReader(src, progress)); err != nil {
-				return fmt.Errorf("copying %q: %w", m.Path, err)
-			}
+		src := io.NewSectionReader(r.f, int64(m.Offset), int64(m.Length))
+		if _, err := io.Copy(w.f, countReader(src, progress)); err != nil {
+			return fmt.Errorf("copying %q: %w", m.Path, err)
 		}
 		m.Offset = uint64(w.off)
 		w.off += int64(m.Length)
