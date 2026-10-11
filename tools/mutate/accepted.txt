@@ -192,3 +192,103 @@ src/internal/pipeline/spool.go: Spool.spill: operator: > → >=
 	Equivalent. Then an empty buffer is written, which writes nothing.
 src/internal/pipeline/spool.go: Spool.Close: operator: > → >=
 	Equivalent. Release(0) has no effect.
+
+# --- archive: the reader's second checks ---
+#
+# The Reader checks again some rules that format.Index.Validate checks first.
+# Every index that a Reader holds passed Validate, in DecodeIndex, so these
+# checks cannot fail. They stay for a caller that builds an index by hand.
+
+src/internal/archive/reader.go: Reader.CodecName: if false: m.Codec < 0 || m.Codec >= len(r.index.Codecs) → false
+	Equivalent. Validate refuses a codec that is not -1 and not a catalog
+	position (doc/format.md 8.4).
+src/internal/archive/reader.go: Reader.CodecName: operator: || → &&
+	Equivalent. See the entry above.
+src/internal/archive/reader.go: Reader.CodecName: operator: >= → >
+	Equivalent. See the entry above.
+src/internal/archive/reader.go: Reader.writeMember: if false: err != nil → false
+	Equivalent. This is the error of CodecName, which cannot fail (see
+	above).
+src/internal/archive/reader.go: Reader.writeMember: operator: < → <=
+	Equivalent. The codec is a catalog position (see above), so it is never
+	equal to the length of the catalog.
+src/internal/archive/reader.go: Reader.writeMember: if false: !m.Type.HasPayload() → false
+	Equivalent. Validate gives a member that is not reg no chunks and no
+	digest, so the rest of writeMember writes nothing and checks nothing.
+src/internal/archive/reader.go: Reader.writeMember: if false: o == nil → false
+	Equivalent. Validate refuses a data that names no member
+	(doc/format.md 8.5).
+src/internal/archive/reader.go: Reader.writeMember: if false: payload != 0 → false
+	Equivalent. Validate refuses a payload with no chunks, and chunks with
+	no chunk size.
+src/internal/archive/reader.go: Reader.writeMember: if false: plainSize == 0 → false
+	Equivalent. Validate refuses a payload that does not need exactly the
+	number of chunks in chunks, so no chunk comes after the payload ends.
+src/internal/archive/reader.go: Reader.writeMember: if false: remaining != 0 → false
+	Equivalent. See the entry above: the chunks cover the payload.
+src/internal/archive/reader.go: Reader.writeMember: operator: - → + #2
+	Equivalent. It is in the message of the check above, which cannot fail.
+src/internal/archive/reader.go: Reader.writeMember: if false: err != nil → false #3
+	Equivalent. Validate refuses a salt that is not 16 bytes, and MemberKey
+	fails only for such a salt.
+src/internal/archive/reader.go: Reader.writeMember: if false: err != nil → false #4
+	Equivalent. NewMemberSealer fails only for a key that is not 32 bytes,
+	and MemberKey always gives 32 bytes.
+src/internal/archive/reader.go: Reader.load: if false: r.keys == nil → false
+	Equivalent. Trailer.ValidateAgainst refuses an encrypted index in an
+	archive that is not encrypted, and the reader of an encrypted archive
+	always has keys before it reads the index.
+
+# --- archive: the reader, other ---
+
+src/internal/archive/reader.go: Reader.load: operator: < → <=
+	Equivalent. A file of exactly a header and a trailer has no index, and
+	the checks of the trailer refuse it. Both errors are damage, with exit 3.
+src/internal/archive/reader.go: Reader.load: operator: > → >=
+	Too costly: an index of exactly 1 GiB, which the reader allocates.
+	TestIndexOverTheLimit gives one byte more.
+src/internal/archive/reader.go: Reader.validateMemberRanges: operator: <= → <
+	Equivalent. When off is indexStart, the length must be 0, and a blob
+	of length 0 is not checked.
+src/internal/archive/reader.go: Reader.writeMember: operator: < → <= #2
+	Equivalent. When remaining equals the chunk size, both give the same
+	plainSize.
+src/internal/archive/reader.go: Reader.writeMember: operator: < → <= #3
+	Equivalent. A buffer of the exact size is made again, with the same
+	size.
+src/internal/archive/reader.go: decoderSet.holds: operator: && → ||
+	Equivalent. take keeps a decoder only as the one it gives, so when the
+	set holds a decoder for the key, it is dec.
+
+# --- archive: the writer ---
+
+src/internal/archive/writer.go: Create: if false: err != nil → false #5
+	Equivalent. crypto/rand.Read does not return an error: it ends the
+	program instead.
+src/internal/archive/writer.go: createTemp: if false: err != nil → false
+	Equivalent. crypto/rand.Read does not return an error (see above).
+src/internal/archive/writer.go: Writer.newSealer: if false: err != nil → false
+	Equivalent. crypto/rand.Read does not return an error (see above).
+src/internal/archive/writer.go: Writer.newSealer: if false: err != nil → false #2
+	Equivalent. MemberKey fails only for a salt that is not 16 bytes, and
+	the salt is made here with 16.
+src/internal/archive/writer.go: Create: if false: err != nil → false #7
+	Equivalent. Header.MarshalBinary fails only when the encrypted flag and
+	the length of the crypto header disagree, and Create sets both together.
+src/internal/archive/writer.go: Create: operator: > → >=
+	Equivalent. A write of 0 bytes writes nothing.
+src/internal/archive/writer.go: Writer.writeIndexAndTrailer: if false: err != nil → false #4
+	Equivalent. Trailer.MarshalBinary never returns an error.
+src/internal/archive/writer.go: Writer.writeIndexAndTrailer: operator: < → <=
+	Equivalent. Validate refuses two members with the same id, so no two
+	are equal.
+src/internal/archive/writer.go: Writer.discard: if false: w.f == nil → false
+	Equivalent. w.f is nil only after Close failed to close the file, and
+	Close has set w.closed then, so discard does not run again.
+src/internal/archive/writer.go: DefaultSpillThreshold: operator: << → >>
+	Equivalent. With a threshold of 0, every member spills to disk. Only
+	the speed changes.
+src/internal/archive/writer.go: Writer.AppendMember: operator: > → >=
+	Equivalent. The pipeline emits a member with an empty payload with no
+	spool, so its payload is nil, and the check stops at payload != nil.
+	TestEmptyFilesAreNotShared keeps the result.

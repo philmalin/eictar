@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -972,6 +973,13 @@ func forgeMemberPath(t *testing.T, path, newPath string) {
 // never uses a key, because an attacker does not have one.
 func forgeMemberPathWith(t *testing.T, path, newPath string, ask PassphraseFunc) {
 	t.Helper()
+	forgeIndex(t, path, ask, func(ix *format.Index) { ix.Members[0].Path = newPath })
+}
+
+// forgeIndex changes the index of an existing archive with forge, and writes
+// it back with a new trailer, with no key, as an attacker would.
+func forgeIndex(t *testing.T, path string, ask PassphraseFunc, forge func(*format.Index)) {
+	t.Helper()
 
 	r, err := Open(path, ask)
 	if err != nil {
@@ -980,42 +988,49 @@ func forgeMemberPathWith(t *testing.T, path, newPath string, ask PassphraseFunc)
 	tr := r.Trailer()
 	hdr := r.Header()
 	index := *r.index
+	index.Members = slices.Clone(index.Members)
+	index.Dicts = slices.Clone(index.Dicts)
 	r.Close()
 
-	index.Members[0].Path = newPath
+	forge(&index)
 
-	// Validate would refuse this, so encode the CBOR directly.
 	enc, err := index.Encode(format.EncodeOptions{Compress: true})
 	if err != nil {
 		// Expected when the forged path fails validation; fall back to
 		// forging only the bytes, which is what a real attacker does.
 		t.Skipf("index validation refused the forged path at encode time: %v", err)
 	}
+	writeForgedIndex(t, path, tr, hdr, enc.Bytes)
+}
 
+// writeForgedIndex writes raw as the index of the archive at path, at the
+// offset that tr gives, with a new trailer and no key.
+func writeForgedIndex(t *testing.T, path string, tr format.Trailer, hdr format.Header, raw []byte) {
+	t.Helper()
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
 		t.Fatalf("opening %s: %v", path, err)
 	}
 	defer f.Close()
 
-	if _, err := f.WriteAt(enc.Bytes, int64(tr.IndexOffset)); err != nil {
+	if _, err := f.WriteAt(raw, int64(tr.IndexOffset)); err != nil {
 		t.Fatalf("writing forged index: %v", err)
 	}
 
-	tr.IndexLength = uint64(len(enc.Bytes))
+	tr.IndexLength = uint64(len(raw))
 	// The digest binds the archive id and the generation, so a forger has to
 	// recompute it the same way. Both are in the plaintext header, so this
 	// costs an attacker nothing on an unencrypted archive - which is the
 	// point of keying it when there is a key.
-	tr.IndexDigest = crypt.IndexDigest(nil, hdr.ArchiveUUID, tr.Generation, enc.Bytes)
+	tr.IndexDigest = crypt.IndexDigest(nil, hdr.ArchiveUUID, tr.Generation, raw)
 	trBytes, err := tr.MarshalBinary()
 	if err != nil {
 		t.Fatalf("marshalling trailer: %v", err)
 	}
-	if _, err := f.WriteAt(trBytes, int64(tr.IndexOffset)+int64(len(enc.Bytes))); err != nil {
+	if _, err := f.WriteAt(trBytes, int64(tr.IndexOffset)+int64(len(raw))); err != nil {
 		t.Fatalf("writing trailer: %v", err)
 	}
-	if err := f.Truncate(int64(tr.IndexOffset) + int64(len(enc.Bytes)) + format.TrailerSize); err != nil {
+	if err := f.Truncate(int64(tr.IndexOffset) + int64(len(raw)) + format.TrailerSize); err != nil {
 		t.Fatalf("truncating: %v", err)
 	}
 }
@@ -1698,10 +1713,11 @@ func TestEncryptedRoundTrip(t *testing.T) {
 				if !r.Encrypted() {
 					t.Error("the archive does not report itself as encrypted")
 				}
-				// Every member with content must carry its own salt.
+				// Every member with a blob must carry its own salt. An empty file has
+				// no blob, and no salt (doc/format.md 8.3).
 				salts := map[string]bool{}
 				for _, m := range r.Members() {
-					if !m.Type.HasPayload() {
+					if !m.Type.HasPayload() || m.Length == 0 {
 						continue
 					}
 					if m.Enc == nil || len(m.Enc.Salt) != crypt.SaltSize {
@@ -2207,5 +2223,64 @@ func TestEncoderSlotsFitTheMemory(t *testing.T) {
 		if got := encoderSlotsOn(tc.opts, tc.workers, tc.limit, tc.ram); got != tc.want {
 			t.Errorf("%s: %d slots, want %d", tc.name, got, tc.want)
 		}
+	}
+}
+
+// TestBlobOutsideTheBody: a blob, of a member or of a dictionary, must lie
+// inside [body start, index_offset) (doc/format.md 8.4). The index validator
+// cannot check this, because it has no file. A reader that did not check it
+// would read the header, the index or another file as content.
+func TestBlobOutsideTheBody(t *testing.T) {
+	tree := mutTree(t)
+	tree.Text("t/big.txt", 0o644, strings.Repeat("several chunks of text. ", 2000))
+	plain := mkArchive(t, tree, false, "t")
+	dicts := dictCreate(t, dictTree(t, "src", 150), false, trainParams, nil, "src")
+
+	// limits gives the body start and the index offset of an archive, and
+	// the position of its first member with a blob.
+	limits := func(path string) (body, index uint64, first int) {
+		r, err := Open(path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Close()
+		first = slices.IndexFunc(r.index.Members, func(m format.Member) bool { return m.Length > 0 })
+		return uint64(r.hdr.BodyOffset()), r.tr.IndexOffset, first
+	}
+	for _, tc := range []struct {
+		name, archive, want string
+		forge               func(ix *format.Index, body, index uint64, m *format.Member)
+	}{
+		{"a member before the body", plain, "outside the archive body", func(_ *format.Index, body, _ uint64, m *format.Member) {
+			m.Offset = body - 1
+		}},
+		{"a member one byte into the index", plain, "outside the archive body", func(_ *format.Index, _, index uint64, m *format.Member) {
+			m.Offset = index - m.Length + 1
+		}},
+		{"a member after the index", plain, "outside the archive body", func(_ *format.Index, _, index uint64, m *format.Member) {
+			m.Offset = index + 1
+		}},
+		{"a dictionary before the body", dicts, "outside the archive body", func(ix *format.Index, body, _ uint64, _ *format.Member) {
+			ix.Dicts[0].Offset = body - 1
+		}},
+		{"a dictionary one byte into the index", dicts, "outside the archive body", func(ix *format.Index, _, index uint64, _ *format.Member) {
+			ix.Dicts[0].Offset = index - ix.Dicts[0].Length + 1
+		}},
+		{"a dictionary one byte longer than its size", dicts, "bytes on disk", func(ix *format.Index, _, _ uint64, _ *format.Member) {
+			ix.Dicts[0].Length++
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "x.ect")
+			if err := os.WriteFile(path, readAll(t, tc.archive), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			body, index, first := limits(path)
+			forgeIndex(t, path, nil, func(ix *format.Index) { tc.forge(ix, body, index, &ix.Members[first]) })
+			_, err := Open(path, nil)
+			if !errors.Is(err, format.ErrCorruptIndex) || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("Open = %v, want %v with %q", err, format.ErrCorruptIndex, tc.want)
+			}
+		})
 	}
 }

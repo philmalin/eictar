@@ -18,7 +18,9 @@ import (
 
 // mixedArchive holds members with three kinds of decoder: zstd with a
 // dictionary in 4 MiB chunks, gzip in 4 KiB chunks, and zstd with no
-// dictionary in 4 KiB chunks.
+// dictionary in 4 MiB chunks. Only the dictionary tells the two kinds of zstd
+// apart, so a pool that left it out of the key would give a member the
+// decoder of the other kind.
 func mixedArchive(t *testing.T) (string, string) {
 	t.Helper()
 	tree := dictTree(t, "src", 90)
@@ -33,7 +35,7 @@ func mixedArchive(t *testing.T) (string, string) {
 	if _, err := appendTo(t, archive, tree, false, func(c *AppendConfig) { c.Options.Codec = "gzip" }, files(50, 70)...); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := appendTo(t, archive, tree, false, nil, files(70, 90)...); err != nil {
+	if _, err := appendTo(t, archive, tree, false, func(c *AppendConfig) { c.Options.ChunkSize = 0 }, files(70, 90)...); err != nil {
 		t.Fatal(err)
 	}
 	return archive, tree.Root

@@ -2159,6 +2159,11 @@ eictar 1.1.0 and earlier wrote one there: the write position at that
 time, with <code>len</code> 0. A reader accepts an <code>off</code> on
 such a member, and ignores it. This does not apply to a member with
 <code>data</code>, which has no <code>off</code> (§8.5).</p>
+<p>The same is true for <code>enc</code>. A writer does not write it on
+an empty file. eictar 1.1.0 and earlier wrote one there, with a salt
+that no key uses. A reader accepts it, and ignores it. A member that is
+not <code>reg</code> never has <code>enc</code>. When <code>enc</code>
+is present, its <code>salt</code> has 16 bytes.</p>
 <p>A reader ignores a map key that it does not know. A writer that adds
 a key that an older reader must not ignore changes
 <code>format_minor</code> or <code>format_major</code>.</p>
@@ -2186,6 +2191,10 @@ and at most <code>chunk × n</code></li>
 <code>[body start, index_offset)</code></li>
 <li>a count of members without <code>dead</code> that is not the
 trailer’s live_member_count</li>
+<li>in an encrypted archive, a member with chunks and no
+<code>enc</code>, or a dictionary with no <code>enc</code>. In a plain
+archive, a reader cannot open a blob that has <code>enc</code>, and
+refuses it when it reads it.</li>
 </ul>
 <h3 id="shared-content">8.5 Shared content</h3>
 <p>A <code>reg</code> member with <code>data</code> has the content of

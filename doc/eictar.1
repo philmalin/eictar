@@ -590,7 +590,8 @@ than a tiny file.
 .B \-tvv
 adds the chunk count,
 .B sealed
-for an encrypted member, and the start of the BLAKE3 digest. A last line
+for a member whose data is encrypted, and the start of the BLAKE3 digest.
+An empty file has no data, so it is not sealed. A last line
 gives the totals, and the files that share another's data.
 .SH PATTERNS
 .BR \-t ,

@@ -337,6 +337,11 @@ earlier wrote one there: the write position at that time, with `len` 0. A
 reader accepts an `off` on such a member, and ignores it. This does not
 apply to a member with `data`, which has no `off` (§8.5).
 
+The same is true for `enc`. A writer does not write it on an empty file.
+eictar 1.1.0 and earlier wrote one there, with a salt that no key uses. A
+reader accepts it, and ignores it. A member that is not `reg` never has
+`enc`. When `enc` is present, its `salt` has 16 bytes.
+
 A reader ignores a map key that it does not know. A writer that adds a key
 that an older reader must not ignore changes `format_minor` or
 `format_major`.
@@ -364,6 +369,9 @@ A reader refuses an index that breaks any of these rules:
   `[body start, index_offset)`
 - a count of members without `dead` that is not the trailer's
   live_member_count
+- in an encrypted archive, a member with chunks and no `enc`, or a
+  dictionary with no `enc`. In a plain archive, a reader cannot open a
+  blob that has `enc`, and refuses it when it reads it.
 
 ### 8.5 Shared content
 

@@ -494,6 +494,8 @@ func (ix *Index) validateDicts() error {
 			return bad(fmt.Sprintf("size %d is outside 1..%d", d.Size, MaxDictSize))
 		case len(d.Digest) != DigestSize:
 			return bad(fmt.Sprintf("has a %d-byte digest", len(d.Digest)))
+		case d.Enc != nil && len(d.Enc.Salt) != CryptoSaltSize:
+			return bad(fmt.Sprintf("an enc salt of %d bytes", len(d.Enc.Salt)))
 		case d.Length < uint64(d.Size) || d.Offset+d.Length < d.Offset:
 			return bad(fmt.Sprintf("blob [%d,+%d) cannot hold %d bytes", d.Offset, d.Length, d.Size))
 		}
@@ -597,6 +599,9 @@ func validatePayload(m *Member) error {
 			return corrupt(m, fmt.Sprintf("a %s with content: size %d, blob [%d,+%d), %d chunks of %d",
 				m.Type, m.Size, m.Offset, m.Length, len(m.Chunks), m.ChunkSize))
 		}
+		if m.Enc != nil {
+			return corrupt(m, fmt.Sprintf("a %s with an enc", m.Type))
+		}
 		return nil
 	}
 
@@ -611,6 +616,12 @@ func validatePayload(m *Member) error {
 			return corrupt(m, "shares the content of another member but has a blob of its own")
 		}
 		return nil
+	}
+
+	// An enc holds a salt of 16 bytes (doc/format.md 8.3). It is accepted
+	// on an empty file: eictar 1.1.0 and earlier wrote one there.
+	if m.Enc != nil && len(m.Enc.Salt) != CryptoSaltSize {
+		return corrupt(m, fmt.Sprintf("an enc salt of %d bytes", len(m.Enc.Salt)))
 	}
 
 	// The chunk table must account for the blob exactly. A mismatch means a

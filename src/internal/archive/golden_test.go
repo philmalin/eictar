@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/philmalin/eictar/src/internal/format"
 	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
@@ -267,8 +268,9 @@ func TestGoldenSharedContent(t *testing.T) {
 	}
 }
 
-// strayOffsets counts the members of the archive at path that have an off
-// but no blob of their own (doc/format.md 8.3), and the members with a blob.
+// strayOffsets counts the members of the archive at path that have an off or
+// an enc but no blob of their own (doc/format.md 8.3), and the members with a
+// blob.
 func strayOffsets(t *testing.T, path string, open OpenOptions) (stray, blobs int) {
 	t.Helper()
 	r, err := OpenWith(path, open)
@@ -280,17 +282,18 @@ func strayOffsets(t *testing.T, path string, open OpenOptions) (stray, blobs int
 		switch {
 		case m.Length > 0:
 			blobs++
-		case m.Offset != 0:
+		case m.Offset != 0 || m.Enc != nil:
 			stray++
 		}
 	}
 	return stray, blobs
 }
 
-// TestNoOffsetWithoutABlob: a member with no blob of its own has no off
-// (doc/format.md 8.3). Earlier writers put the write position there. A
-// reader accepts such an off, and a compact or a recompress removes it.
-func TestNoOffsetWithoutABlob(t *testing.T) {
+// TestNoOffsetOrEncWithoutABlob: a member with no blob of its own has no off
+// and no enc (doc/format.md 8.3). Earlier writers put the write position
+// there, and a salt on an empty file. A reader accepts them, and a compact or
+// a recompress removes them.
+func TestNoOffsetOrEncWithoutABlob(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Dir("d", 0o755).Dir("d/sub", 0o755)
 	tree.Text("d/a.txt", 0o644, "alpha")
@@ -302,7 +305,26 @@ func TestNoOffsetWithoutABlob(t *testing.T) {
 	for _, enc := range []bool{false, true} {
 		archive := mkArchive(t, tree, enc, "d")
 		if stray, blobs := strayOffsets(t, archive, openFor(enc)); stray != 0 || blobs == 0 {
-			t.Errorf("encrypted=%v: create: %d members with an off and no blob, %d blobs", enc, stray, blobs)
+			t.Errorf("encrypted=%v: create: %d members with an off or an enc and no blob, %d blobs", enc, stray, blobs)
+		}
+		if enc {
+			// A generation as 1.1.0 wrote it, with an enc on the empty file.
+			// No golden archive has an empty file.
+			w, err := OpenAppend(archive, Options{Codec: "zstd"}, openFor(true))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := range w.index.Members {
+				if w.index.Members[i].Path == "d/empty" {
+					w.index.Members[i].Enc = &format.EncInfo{Salt: make([]byte, format.CryptoSaltSize)}
+				}
+			}
+			if err := w.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if stray, _ := strayOffsets(t, archive, openFor(true)); stray != 1 {
+				t.Fatalf("%d members with an enc and no blob, want the empty file", stray)
+			}
 		}
 		// The empty file comes after blobs, so a compact that gave it the
 		// write position would give it an off.
@@ -314,7 +336,7 @@ func TestNoOffsetWithoutABlob(t *testing.T) {
 			t.Fatal(err)
 		}
 		if stray, blobs := strayOffsets(t, archive, openFor(enc)); stray != 0 || blobs == 0 {
-			t.Errorf("encrypted=%v: compact: %d members with an off and no blob, %d blobs", enc, stray, blobs)
+			t.Errorf("encrypted=%v: compact: %d members with an off or an enc and no blob, %d blobs", enc, stray, blobs)
 		}
 		tree.Text("d/a.txt", 0o644, "alpha")
 	}
@@ -335,7 +357,7 @@ func TestNoOffsetWithoutABlob(t *testing.T) {
 				t.Fatal(err)
 			}
 			if stray, blobs := strayOffsets(t, path, goldenOpen(tc.encrypted)); stray != 0 || blobs == 0 {
-				t.Errorf("%s, recompress %v: %d members with an off and no blob, %d blobs", tc.file, rc != nil, stray, blobs)
+				t.Errorf("%s, recompress %v: %d members with an off or an enc and no blob, %d blobs", tc.file, rc != nil, stray, blobs)
 			}
 		}
 	}

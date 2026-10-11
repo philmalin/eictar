@@ -238,12 +238,17 @@ func (r *Reader) load(opt OpenOptions) error {
 // that happens to fail later, or worse, one that happens to succeed and return
 // the wrong bytes.
 func (r *Reader) validateMemberRanges() error {
-	body := r.hdr.BodyOffset()
-	indexStart := int64(r.tr.IndexOffset)
+	body := uint64(r.hdr.BodyOffset())
+	indexStart := r.tr.IndexOffset // the trailer check puts it at body or after
+	// inBody reports whether [off,+length) lies inside [body, indexStart).
+	// No sum or difference can wrap: off is at most indexStart before the
+	// subtraction.
+	inBody := func(off, length uint64) bool {
+		return off >= body && off <= indexStart && length <= indexStart-off
+	}
 
 	for _, d := range r.index.Dicts {
-		off, length := int64(d.Offset), int64(d.Length)
-		if off < body || length < 0 || off+length < off || off+length > indexStart {
+		if !inBody(d.Offset, d.Length) {
 			return fmt.Errorf("%s: %w: dictionary %d blob [%d,+%d) lies outside the archive body [%d,%d)",
 				r.path, format.ErrCorruptIndex, d.ID, d.Offset, d.Length, body, indexStart)
 		}
@@ -264,14 +269,7 @@ func (r *Reader) validateMemberRanges() error {
 		if !m.Type.HasPayload() || m.Length == 0 {
 			continue
 		}
-
-		off := int64(m.Offset)
-		length := int64(m.Length)
-		if off < 0 || length < 0 || off+length < off {
-			return fmt.Errorf("%s: %w: member %q has an impossible blob range [%d,+%d)",
-				r.path, format.ErrCorruptIndex, m.Path, m.Offset, m.Length)
-		}
-		if off < body || off+length > indexStart {
+		if !inBody(m.Offset, m.Length) {
 			return fmt.Errorf("%s: %w: member %q blob [%d,+%d) lies outside the archive body [%d,%d)",
 				r.path, format.ErrCorruptIndex, m.Path, m.Offset, m.Length, body, indexStart)
 		}
@@ -441,9 +439,10 @@ func (r *Reader) writeMember(m *format.Member, dst io.Writer, set *decoderSet) e
 		if sealer, err = crypt.NewMemberSealer(memberKey, m.ID); err != nil {
 			return fmt.Errorf("%s: member %q: %w", r.path, m.Path, err)
 		}
-	} else if r.keys != nil && r.hdr.Encrypted() {
+	} else if r.keys != nil && r.hdr.Encrypted() && len(m.Chunks) > 0 {
 		// An encrypted archive whose member claims to be in the clear: the
-		// index says one thing and the header another.
+		// index says one thing and the header another. A member with no chunks
+		// has no blob, and so no enc (doc/format.md 8.3).
 		return fmt.Errorf("%s: %w: member %q is unsealed in an encrypted archive",
 			r.path, format.ErrCorruptIndex, m.Path)
 	}

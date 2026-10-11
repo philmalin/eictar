@@ -389,11 +389,14 @@ func (w *Writer) AppendMember(m *format.Member, payload io.WriterTo) error {
 		}
 	}
 
-	// Only a blob has an offset (doc/format.md 8.3). Earlier writers also
-	// put the write position on members with no blob.
+	// Only a blob has an offset and an enc (doc/format.md 8.3). Earlier
+	// writers also put the write position on members with no blob, and a
+	// salt on an empty file.
 	m.Offset = 0
 	if m.Data == 0 && m.Length > 0 {
 		m.Offset = uint64(w.off)
+	} else {
+		m.Enc = nil
 	}
 	if payload != nil {
 		n, err := payload.WriteTo(w.f)
@@ -603,12 +606,16 @@ func checkLinks(path string) error {
 		if err != nil {
 			return nil // what does not exist is not a link; the caller reports it
 		}
-		if fi.Mode()&os.ModeSymlink != 0 && !meta.MayFollow(prefix, fi) {
+		if fi.Mode()&os.ModeSymlink != 0 && !mayFollowLink(prefix, fi) {
 			return fmt.Errorf("%s: %w; the program does not follow it", prefix, ErrUnsafeLink)
 		}
 	}
 	return nil
 }
+
+// mayFollowLink is the rule of fs.protected_symlinks. A test replaces it, to
+// refuse a link without a link of another user, which only root can make.
+var mayFollowLink = meta.MayFollow
 
 // SameFile reports whether fi is the file this writer is writing. The walk
 // uses it so that an archive is never archived into itself.

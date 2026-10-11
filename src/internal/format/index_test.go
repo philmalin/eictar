@@ -262,6 +262,9 @@ func TestIndexValidateRejects(t *testing.T) {
 		{"codec out of range", "references codec", func(ix *Index) { ix.Members[0].Codec = len(ix.Codecs) }},
 		{"codec below NoCodec", "references codec", func(ix *Index) { ix.Members[0].Codec = -2 }},
 		{"short digest", "3-byte digest", func(ix *Index) { ix.Members[0].Digest = []byte{1, 2, 3} }},
+		{"enc on a directory", "a dir with an enc", func(ix *Index) { ix.Members[1].Enc = &EncInfo{Salt: make([]byte, CryptoSaltSize)} }},
+		{"short enc salt", "an enc salt of 15 bytes", func(ix *Index) { ix.Members[7].Enc.Salt = make([]byte, 15) }},
+		{"long enc salt", "an enc salt of 17 bytes", func(ix *Index) { ix.Members[7].Enc.Salt = make([]byte, 17) }},
 		{"short digest on a directory", "3-byte digest", func(ix *Index) { ix.Members[1].Digest = []byte{1, 2, 3} }},
 		{"rdev with one component", "1 rdev components", func(ix *Index) { ix.Members[4].RDev = []uint32{1} }},
 		{"chunks do not sum to length", "chunks total", func(ix *Index) { ix.Members[0].Chunks[0]++ }},
@@ -419,6 +422,11 @@ func TestIndexValidateAcceptsEdges(t *testing.T) {
 		{"an offset on an empty file", func(ix *Index) {
 			m := &ix.Members[7]
 			m.Size, m.Offset, m.Length, m.Chunks, m.ChunkSize, m.Enc = 0, 64, 0, nil, 0, nil
+		}},
+		{"an enc on an empty file", func(ix *Index) {
+			// eictar 1.1.0 and earlier wrote one there (doc/format.md 8.3).
+			m := &ix.Members[7]
+			m.Size, m.Offset, m.Length, m.Chunks, m.ChunkSize = 0, 0, 0, nil, 0
 		}},
 
 		// Each limit at its exact value: the value one more is refused above.
@@ -651,6 +659,7 @@ func TestIndexValidateRejectsDicts(t *testing.T) {
 		{"short digest", func(ix *Index) { ix.Dicts[0].Digest = []byte{1} }},
 		{"blob shorter than the dictionary", func(ix *Index) { ix.Dicts[0].Length = 10 }},
 		{"blob range overflows", func(ix *Index) { ix.Dicts[0].Offset = ^uint64(0) - 5 }},
+		{"short enc salt", func(ix *Index) { ix.Dicts[0].Enc = &EncInfo{Salt: make([]byte, 15)} }},
 		{"catalog names a missing dictionary", func(ix *Index) { ix.Codecs[2].Dict = 40001 }},
 		{"dictionary on xz", func(ix *Index) { ix.Codecs[1].Dict = 40000 }},
 		{"too many", func(ix *Index) {

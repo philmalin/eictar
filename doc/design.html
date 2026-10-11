@@ -8921,9 +8921,11 @@ the line <code>shared content</code>.</p>
 <p><code>--json</code> always gives every field, including
 <code>stored_size</code>, <code>chunks</code>, <code>encrypted</code>,
 the full <code>digest</code>, and <code>codec</code> as an object with a
-name and the settings. A reference has <code>same_as</code>, the path of
-its owner, and <code>same_as_deleted</code> when the owner is a
-tombstone. A program must not have to ask for detail.</p>
+name and the settings. <code>encrypted</code> is true when the data of
+the member is sealed. An empty file has no data, so it is false. A
+reference has <code>same_as</code>, the path of its owner, and
+<code>same_as_deleted</code> when the owner is a tombstone. A program
+must not have to ask for detail.</p>
 <h3 id="progress-meter">10.10 Progress meter</h3>
 <p><code>--progress</code> draws one status line on stderr, and redraws
 it five times a second. It draws only when stderr is a terminal.
@@ -10398,6 +10400,13 @@ example, a failed seal in <code>Index.Encode</code>,
 <p><strong>The results now, with the tests of the package
 itself:</strong></p>
 <table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
 <thead>
 <tr class="header">
 <th>Package</th>
@@ -10411,7 +10420,7 @@ itself:</strong></p>
 <tr class="odd">
 <td><code>format</code></td>
 <td>63.2%</td>
-<td>93.8%</td>
+<td>94.0%</td>
 <td>24</td>
 <td>0</td>
 </tr>
@@ -10429,20 +10438,54 @@ itself:</strong></p>
 <td>21</td>
 <td>0</td>
 </tr>
+<tr class="even">
+<td><code>archive</code>: <code>writer.go</code>,
+<code>reader.go</code>, <code>fs.go</code></td>
+<td>77.4%</td>
+<td>91.6%</td>
+<td>31</td>
+<td>0</td>
+</tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
-<code>make mutate</code> does not count it, and gives 100% for each of
-the three. Part of the increase in <code>format</code> comes from the
-change to the tool for case expressions: it tests 63 mutants that it
-showed as not covered before. The increase in <code>pipeline</code>
-comes from the fault tests of step 3.</p>
-<p>In <code>archive</code>, the first run covers <code>writer.go</code>,
-<code>reader.go</code> and <code>fs.go</code>: 391 mutants. The tests of
-the package find 77.4%. 85 survive, 32 of them in the checks of
-<code>Reader.writeMember</code> and
-<code>Reader.validateMemberRanges</code>. They are the next work. The
-fault tests alone find 55.4%.</p>
+<code>make mutate</code> does not count it, and gives 100% for each row.
+Part of the increase in <code>format</code> comes from the change to the
+tool for case expressions: it tests 63 mutants that it showed as not
+covered before. The increase in <code>pipeline</code> comes from the
+fault tests of step 3.</p>
+<p>In <code>archive</code>, the work covers <code>writer.go</code>,
+<code>reader.go</code> and <code>fs.go</code>. The first run found
+77.4%, and the fault tests alone 55.4%. The survivors showed these gaps,
+which are now closed:</p>
+<ul>
+<li>The index validator did not check <code>enc</code> as format.md §8.3
+gives it: a salt of 16 bytes, and no <code>enc</code> on a member that
+is not <code>reg</code>. It does now. The writer also put an
+<code>enc</code> on an empty file, which has no blob. As for
+<code>off</code>, the writer and compact no longer write it, and a
+reader accepts it.</li>
+<li>The test of the pool of decoders had two kinds of zstd with
+different chunk sizes, so a key without the dictionary passed. Now only
+the dictionary tells them apart.</li>
+<li><code>validateMemberRanges</code> is one range check in
+<code>uint64</code>, with no sum that can wrap, and a test of each
+bound.</li>
+<li>No test gave the reader a live count that does not match, a trailer
+outside the body, an index of more than 1 GiB, an index that does not
+decode (the reader then crashed), KDF parameters that the machine cannot
+afford, a damaged dictionary, or a member sealed in a plain archive.
+<code>reader_test.go</code> gives each.</li>
+<li>No test refused a planted link through <code>-f</code>, because only
+root can make a link of another user. A test now replaces the rule
+(<code>mayFollowLink</code>). <code>writer_test.go</code> also tests bad
+options to <code>Create</code>, a payload that writes too little,
+<code>Close</code> twice, and an append that writes nothing, which must
+keep the time of the file.</li>
+</ul>
+<p>Of the 31 accepted mutants, 14 are checks of the reader that the
+index validator makes first, and 3 are errors of
+<code>crypto/rand.Read</code>, which ends the program instead.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives

@@ -2555,9 +2555,10 @@ The part about references is there only when a listed member is one.
 
 `--json` always gives every field, including `stored_size`, `chunks`,
 `encrypted`, the full `digest`, and `codec` as an object with a name and the
-settings. A reference has `same_as`, the path of its owner, and
-`same_as_deleted` when the owner is a tombstone. A program must not have to
-ask for detail.
+settings. `encrypted` is true when the data of the member is sealed. An
+empty file has no data, so it is false. A reference has `same_as`, the path
+of its owner, and `same_as_deleted` when the owner is a tombstone. A program
+must not have to ask for detail.
 
 ### 10.10 Progress meter
 
@@ -3825,20 +3826,45 @@ The survivors fall into these groups, in order of risk:
 
 | Package | First score | Raw score now | Accepted | Not explained |
 |---|---|---|---|---|
-| `format` | 63.2% | 93.8% | 24 | 0 |
+| `format` | 63.2% | 94.0% | 24 | 0 |
 | `crypt` | 55.2% | 89.7% | 9 | 0 |
 | `pipeline` | 59.0% | 88.3% | 21 | 0 |
+| `archive`: `writer.go`, `reader.go`, `fs.go` | 77.4% | 91.6% | 31 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
-not count it, and gives 100% for each of the three. Part of the increase
+not count it, and gives 100% for each row. Part of the increase
 in `format` comes from the change to the tool for case expressions: it tests
 63 mutants that it showed as not covered before. The increase in `pipeline`
 comes from the fault tests of step 3.
 
-In `archive`, the first run covers `writer.go`, `reader.go` and `fs.go`:
-391 mutants. The tests of the package find 77.4%. 85 survive, 32 of them
-in the checks of `Reader.writeMember` and `Reader.validateMemberRanges`.
-They are the next work. The fault tests alone find 55.4%.
+In `archive`, the work covers `writer.go`, `reader.go` and `fs.go`. The
+first run found 77.4%, and the fault tests alone 55.4%. The survivors
+showed these gaps, which are now closed:
+
+- The index validator did not check `enc` as format.md §8.3 gives it: a
+  salt of 16 bytes, and no `enc` on a member that is not `reg`. It does
+  now. The writer also put an `enc` on an empty file, which has no blob.
+  As for `off`, the writer and compact no longer write it, and a reader
+  accepts it.
+- The test of the pool of decoders had two kinds of zstd with different
+  chunk sizes, so a key without the dictionary passed. Now only the
+  dictionary tells them apart.
+- `validateMemberRanges` is one range check in `uint64`, with no sum that
+  can wrap, and a test of each bound.
+- No test gave the reader a live count that does not match, a trailer
+  outside the body, an index of more than 1 GiB, an index that does not
+  decode (the reader then crashed), KDF parameters that the machine cannot
+  afford, a damaged dictionary, or a member sealed in a plain archive.
+  `reader_test.go` gives each.
+- No test refused a planted link through `-f`, because only root can make
+  a link of another user. A test now replaces the rule
+  (`mayFollowLink`). `writer_test.go` also tests bad options to `Create`,
+  a payload that writes too little, `Close` twice, and an append that
+  writes nothing, which must keep the time of the file.
+
+Of the 31 accepted mutants, 14 are checks of the reader that the index
+validator makes first, and 3 are errors of `crypto/rand.Read`, which ends
+the program instead.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of

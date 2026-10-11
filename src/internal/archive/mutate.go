@@ -572,9 +572,9 @@ func copyBlobs(r *Reader, w *Writer, keep []format.Member, progress Progress) er
 	for i := range keep {
 		m := &keep[i]
 		if !m.Type.HasPayload() || m.Data != 0 || m.Length == 0 {
-			// No blob of its own, so no offset (doc/format.md 8.3). This
-			// also removes the offset that earlier writers put there.
-			m.Offset = 0
+			// No blob of its own, so no offset and no enc (doc/format.md
+			// 8.3). This also removes those that earlier writers put there.
+			m.Offset, m.Enc = 0, nil
 			continue
 		}
 		src := io.NewSectionReader(r.f, int64(m.Offset), int64(m.Length))

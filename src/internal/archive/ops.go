@@ -383,8 +383,12 @@ func (e *EncryptionConfig) apply(opts *Options) error {
 // explanation. Saying so first is the difference between a diagnostic and a
 // dead process (doc/design.md A.3).
 func checkAffordable(p crypt.KDFParams) error {
-	return checkAffordableOn(p, totalMemory())
+	return checkAffordableOn(p, kdfMemory())
 }
+
+// kdfMemory gives the RAM that checkAffordable compares with. A test sets
+// it, to refuse parameters on a machine that could afford them.
+var kdfMemory = totalMemory
 
 // checkAffordableOn is checkAffordable for a given amount of RAM, so the
 // decision can be tested without owning a small machine.
