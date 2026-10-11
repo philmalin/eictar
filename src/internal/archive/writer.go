@@ -596,11 +596,16 @@ var ErrUnsafeLink = errors.New("a symbolic link that another user planted in a s
 // made a create by root replace /etc/passwd.
 func checkLinks(path string) error {
 	clean := filepath.Clean(path)
-	prefix := ""
-	if filepath.IsAbs(clean) {
-		prefix = string(filepath.Separator)
+	// The walk starts at the root of the path: the volume and a separator on
+	// Windows (C:\), a separator elsewhere. A separator alone made \C: on
+	// Windows, which is no path, and the walk stopped there.
+	prefix := filepath.VolumeName(clean)
+	rest := clean[len(prefix):]
+	if sep := string(filepath.Separator); strings.HasPrefix(rest, sep) {
+		prefix += sep
+		rest = rest[len(sep):]
 	}
-	for _, part := range strings.Split(strings.TrimPrefix(clean, prefix), string(filepath.Separator)) {
+	for _, part := range strings.Split(rest, string(filepath.Separator)) {
 		prefix = filepath.Join(prefix, part)
 		fi, err := os.Lstat(prefix)
 		if err != nil {

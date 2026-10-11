@@ -107,7 +107,10 @@ func TestCreateRefusesAPlantedLink(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("no symbolic links: %v", err)
 	}
-	_, err := Create(link, Options{})
+	w, err := Create(link, Options{})
+	if err == nil {
+		w.Abort() // on Windows, an open file cannot be removed
+	}
 	if !errors.Is(err, ErrUnsafeLink) || !strings.HasPrefix(err.Error(), link+":") {
 		t.Errorf("Create = %v, want %v for %s", err, ErrUnsafeLink, link)
 	}
