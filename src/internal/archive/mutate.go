@@ -1058,9 +1058,7 @@ var trailerMagic = format.TrailerMagic[:]
 // ranges - as if the file ended right after it. Then it cuts the file there.
 // An archive that opens is left alone. A wrong passphrase stops the repair
 // before anything is scanned: that archive is not damaged.
-func RepairArchive(path string, open OpenOptions) (RepairResult, error) {
-	var res RepairResult
-
+func RepairArchive(path string, open OpenOptions) (res RepairResult, err error) {
 	// The passphrase is asked for at most once, although the checks below can
 	// need it more than once.
 	var secret []byte
@@ -1094,7 +1092,13 @@ func RepairArchive(path string, open OpenOptions) (RepairResult, error) {
 	if err != nil {
 		return res, fmt.Errorf("opening %s: %w", path, err)
 	}
-	defer f.Close()
+	// The truncate is synced before the close, but a close can still report
+	// a write error, on NFS for example.
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing %s: %w", path, cerr)
+		}
+	}()
 	// A repair that ran beside an append would cut off what the append is
 	// still writing.
 	if err := lockArchive(f, path); err != nil {

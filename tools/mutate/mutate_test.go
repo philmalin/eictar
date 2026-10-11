@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -119,6 +120,23 @@ func TestClassify(t *testing.T) {
 		if got := classify(tc.err, []byte(tc.out), tc.timeout); got != tc.want {
 			t.Errorf("classify(%v, %q, %v) = %s, want %s", tc.err, tc.out, tc.timeout, outcomeNames[got], outcomeNames[tc.want])
 		}
+	}
+}
+
+// TestConfirmTimeouts: only the mutants that timed out run again, and their
+// second outcome replaces the first. A slow run under -j that passes alone is
+// a survivor, not a hang.
+func TestConfirmTimeouts(t *testing.T) {
+	results := []outcome{killed, timedOut, survived, timedOut, notCovered, timedOut}
+	second := map[int]outcome{1: survived, 3: timedOut, 5: killed}
+	var ran []int
+	n := confirmTimeouts(results, func(i int) outcome {
+		ran = append(ran, i)
+		return second[i]
+	})
+	want := []outcome{killed, survived, survived, timedOut, notCovered, killed}
+	if n != 3 || !slices.Equal(ran, []int{1, 3, 5}) || !slices.Equal(results, want) {
+		t.Errorf("n %d, ran %v, results %v; want 3, [1 3 5], %v", n, ran, results, want)
 	}
 }
 

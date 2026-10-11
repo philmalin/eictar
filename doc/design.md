@@ -3730,7 +3730,10 @@ declaration outside a function always counts as run. Each other mutant goes to
 `go test -overlay`, so the source tree never changes, and mutants run in
 parallel. A failed test finds the mutant. A test binary that does not end
 in three times the time of the first run stops, and that also finds the
-mutant. A mutant that does not compile does not count. The score is the
+mutant. With `-j`, the mutants share the machine, so a slow run can pass
+that limit with no hang. Thus each mutant that stops runs again alone, and
+only a second stop finds it. On `archive`, before this rule, 156 of 388
+mutants stopped under `-j 8`. A mutant that does not compile does not count. The score is the
 part of the counted mutants that the tests find. `-test` gives other
 packages whose tests run, so that a run can tell a gap of one package from a
 gap of the whole program.
@@ -3832,6 +3835,11 @@ in `format` comes from the change to the tool for case expressions: it tests
 63 mutants that it showed as not covered before. The increase in `pipeline`
 comes from the fault tests of step 3.
 
+In `archive`, the first run covers `writer.go`, `reader.go` and `fs.go`:
+391 mutants. The tests of the package find 77.4%. 85 survive, 32 of them
+in the checks of `Reader.writeMember` and `Reader.validateMemberRanges`.
+They are the next work. The fault tests alone find 55.4%.
+
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of
 eictar. On the golden archives and on the archives of the stress tester, it
@@ -3859,12 +3867,25 @@ stress tester injects these faults at random.
   - The archive holds its old state or its new state. Only a fault in the
     truncate that undoes an append can make a repair necessary.
   - A run that reports success made the new state.
+  - A run that reports success had no fault. There are two exceptions: a
+    `chown`, which a user that is not root cannot always do, and a `close`
+    of a file that the run did not write.
   - The error is an I/O error, not damage.
   - No file stays open, and no temporary file stays behind.
 
-  `TestReadFaultsAreNeverSilent` does the same for extract and verify. No
-  fault broke a rule. Three faults put into the writer on purpose were
-  each found. Under `-race`, each run of the dictionary case trains a
+  `TestReadFaultsAreNeverSilent` does the same for extract and verify.
+  Three faults put into the writer on purpose were each found. The rule
+  on success came after a mutation run (below). It found two errors that
+  the program ignored, and both are now fixed:
+  - `Writer.SameFile` did a `stat` of the archive for each file of the
+    walk, and gave "not the same file" when the `stat` failed. If the
+    archive was inside a path to archive, it could then go into itself.
+    The writer now does one `stat` when the archive opens, and a failure
+    stops the run.
+  - Repair ignored the error of its last `close`. After the `fsync`, this
+    error can still report a lost write, on NFS for example.
+
+  Under `-race`, each run of the dictionary case trains a
   dictionary, which is slow. Thus, under `-race`, that case tests one
   fault in seven. The runs without `-race` (`make skips`,
   `make check-norace`) test each fault.

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 
@@ -27,8 +28,18 @@ type faultFS struct {
 	mu     sync.Mutex
 	n      int
 	failAt int
-	failed string                // the operation that failed, if one did
-	open   map[*faultFile]string // the files not closed yet
+	failed string // the operation that failed, if one did
+	// harmless means that a run can ignore the failed operation: a chown,
+	// which a run that is not root cannot always do, or a close of a file
+	// that the run did not write.
+	harmless bool
+	open     map[*faultFile]string // the files not closed yet
+}
+
+func (fs *faultFS) setHarmless() {
+	fs.mu.Lock()
+	fs.harmless = true
+	fs.mu.Unlock()
 }
 
 func (fs *faultFS) step(op, name string) error {
@@ -104,8 +115,9 @@ func (fs *faultFS) SyncDir(dir string) error {
 
 // faultFile is an archive file of a faultFS.
 type faultFile struct {
-	f  archiveFile
-	fs *faultFS
+	f     archiveFile
+	fs    *faultFS
+	wrote atomic.Bool // a write or a truncate came through this file
 }
 
 func (f *faultFile) Read(p []byte) (int, error) {
@@ -116,6 +128,7 @@ func (f *faultFile) Read(p []byte) (int, error) {
 }
 
 func (f *faultFile) Write(p []byte) (int, error) {
+	f.wrote.Store(true)
 	if err := f.fs.step("write", f.f.Name()); err != nil {
 		n, _ := f.f.Write(p[:len(p)/2])
 		return n, err
@@ -145,6 +158,7 @@ func (f *faultFile) Sync() error {
 }
 
 func (f *faultFile) Truncate(size int64) error {
+	f.wrote.Store(true)
 	if err := f.fs.step("truncate", f.f.Name()); err != nil {
 		return err
 	}
@@ -167,6 +181,7 @@ func (f *faultFile) Chmod(mode os.FileMode) error {
 
 func (f *faultFile) Chown(uid, gid int) error {
 	if err := f.fs.step("chown", f.f.Name()); err != nil {
+		f.fs.setHarmless()
 		return err
 	}
 	return f.f.Chown(uid, gid)
@@ -178,6 +193,9 @@ func (f *faultFile) Close() error {
 	delete(f.fs.open, f)
 	f.fs.mu.Unlock()
 	err := f.fs.step("close", f.f.Name())
+	if err != nil && !f.wrote.Load() {
+		f.fs.setHarmless()
+	}
 	if cerr := f.f.Close(); err == nil {
 		err = cerr
 	}
@@ -479,6 +497,10 @@ func checkFault(t *testing.T, ff *faultFS, k int, path string, runErr error, bef
 			return
 		}
 	}
+	// A failed operation must fail the run, unless the run can ignore it.
+	if runErr == nil && ff.failed != "" && !ff.harmless {
+		t.Errorf("fault %s: the run reported success", what)
+	}
 	switch {
 	case runErr == nil && got != after:
 		t.Errorf("fault %s: the run succeeded, but the archive is not the new one:\n%s\nwant:\n%s", what, got, after)
@@ -576,4 +598,25 @@ func checkRead(t *testing.T, ff *faultFS, err error) string {
 		t.Errorf("fault %s: reported as damage: %v", ff.failed, err)
 	}
 	return ff.failed
+}
+
+// TestOSFSGivesNoFileOnError: on an error, each method of osFS gives a nil
+// archiveFile. A nil *os.File inside an archiveFile is not nil, so a caller
+// that tests the file, not the error, would use it.
+func TestOSFSGivesNoFileOnError(t *testing.T) {
+	dir := t.TempDir()
+	exists := filepath.Join(dir, "exists")
+	if err := os.WriteFile(exists, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(dir, "missing", "x")
+	for name, open := range map[string]func() (archiveFile, error){
+		"OpenArchive": func() (archiveFile, error) { return osFS{}.OpenArchive(missing, os.O_RDONLY) },
+		"CreateNew":   func() (archiveFile, error) { return osFS{}.CreateNew(exists, 0o644) },
+		"CreateTemp":  func() (archiveFile, error) { return osFS{}.CreateTemp(missing, "x") },
+	} {
+		if f, err := open(); err == nil || f != nil {
+			t.Errorf("%s: file %v, error %v; want no file and an error", name, f, err)
+		}
+	}
 }

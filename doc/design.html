@@ -10264,8 +10264,12 @@ function always counts as run. Each other mutant goes to
 <code>go test -overlay</code>, so the source tree never changes, and
 mutants run in parallel. A failed test finds the mutant. A test binary
 that does not end in three times the time of the first run stops, and
-that also finds the mutant. A mutant that does not compile does not
-count. The score is the part of the counted mutants that the tests find.
+that also finds the mutant. With <code>-j</code>, the mutants share the
+machine, so a slow run can pass that limit with no hang. Thus each
+mutant that stops runs again alone, and only a second stop finds it. On
+<code>archive</code>, before this rule, 156 of 388 mutants stopped under
+<code>-j 8</code>. A mutant that does not compile does not count. The
+score is the part of the counted mutants that the tests find.
 <code>-test</code> gives other packages whose tests run, so that a run
 can tell a gap of one package from a gap of the whole program.</p>
 <p><strong>The accepted list.</strong> Some mutants cannot be found by
@@ -10433,6 +10437,12 @@ the three. Part of the increase in <code>format</code> comes from the
 change to the tool for case expressions: it tests 63 mutants that it
 showed as not covered before. The increase in <code>pipeline</code>
 comes from the fault tests of step 3.</p>
+<p>In <code>archive</code>, the first run covers <code>writer.go</code>,
+<code>reader.go</code> and <code>fs.go</code>: 391 mutants. The tests of
+the package find 77.4%. 85 survive, 32 of them in the checks of
+<code>Reader.writeMember</code> and
+<code>Reader.validateMemberRanges</code>. They are the next work. The
+fault tests alone find 55.4%.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives
@@ -10462,16 +10472,31 @@ gives <code>EIO</code>. After each fault, these rules apply:
 <li>The archive holds its old state or its new state. Only a fault in
 the truncate that undoes an append can make a repair necessary.</li>
 <li>A run that reports success made the new state.</li>
+<li>A run that reports success had no fault. There are two exceptions: a
+<code>chown</code>, which a user that is not root cannot always do, and
+a <code>close</code> of a file that the run did not write.</li>
 <li>The error is an I/O error, not damage.</li>
 <li>No file stays open, and no temporary file stays behind.</li>
 </ul>
 <code>TestReadFaultsAreNeverSilent</code> does the same for extract and
-verify. No fault broke a rule. Three faults put into the writer on
-purpose were each found. Under <code>-race</code>, each run of the
-dictionary case trains a dictionary, which is slow. Thus, under
-<code>-race</code>, that case tests one fault in seven. The runs without
-<code>-race</code> (<code>make skips</code>,
-<code>make check-norace</code>) test each fault.</li>
+verify. Three faults put into the writer on purpose were each found. The
+rule on success came after a mutation run (below). It found two errors
+that the program ignored, and both are now fixed:
+<ul>
+<li><code>Writer.SameFile</code> did a <code>stat</code> of the archive
+for each file of the walk, and gave “not the same file” when the
+<code>stat</code> failed. If the archive was inside a path to archive,
+it could then go into itself. The writer now does one <code>stat</code>
+when the archive opens, and a failure stops the run.</li>
+<li>Repair ignored the error of its last <code>close</code>. After the
+<code>fsync</code>, this error can still report a lost write, on NFS for
+example.</li>
+</ul>
+Under <code>-race</code>, each run of the dictionary case trains a
+dictionary, which is slow. Thus, under <code>-race</code>, that case
+tests one fault in seven. The runs without <code>-race</code>
+(<code>make skips</code>, <code>make check-norace</code>) test each
+fault.</li>
 <li>In <code>pipeline</code>, each spill file comes from
 <code>newSpillFile</code>. <code>TestPipelineFaults</code> makes each
 operation on a spill file fail in turn, and each call to the encoder, to

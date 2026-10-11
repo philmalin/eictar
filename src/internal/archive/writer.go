@@ -77,6 +77,10 @@ type Options struct {
 type Writer struct {
 	f    archiveFile
 	path string // the archive's final path
+	// self is the identity of f, from one stat when the file opens. The walk
+	// compares each file with it: a stat for each file could fail, and then
+	// the archive could go into itself.
+	self os.FileInfo
 	// tmpPath is where a new archive is written until Close renames it to
 	// path. It is empty for an append, which writes in place.
 	tmpPath string
@@ -148,7 +152,7 @@ func Create(path string, opt Options) (*Writer, error) {
 		enc.Close()
 		return nil, err
 	}
-	f, tmpPath, err := createTemp(target, mode)
+	f, self, tmpPath, err := createTemp(target, mode)
 	if err != nil {
 		enc.Close()
 		if guard != nil {
@@ -159,6 +163,7 @@ func Create(path string, opt Options) (*Writer, error) {
 
 	w := &Writer{
 		f:           f,
+		self:        self,
 		path:        target,
 		tmpPath:     tmpPath,
 		guard:       guard,
@@ -318,6 +323,7 @@ func OpenAppend(path string, opt Options, open OpenOptions) (*Writer, error) {
 
 	w := &Writer{
 		f:               f,
+		self:            fi,
 		path:            path,
 		hdr:             r.hdr,
 		index:           index,
@@ -545,11 +551,11 @@ func guardExisting(target string) (archiveFile, error) {
 
 // createTemp opens a new file beside target. mode 0 means the default for a
 // new file.
-func createTemp(target string, mode os.FileMode) (archiveFile, string, error) {
+func createTemp(target string, mode os.FileMode) (archiveFile, os.FileInfo, string, error) {
 	dir, base := filepath.Split(target)
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return nil, "", fmt.Errorf("generating a temporary name: %w", err)
+		return nil, nil, "", fmt.Errorf("generating a temporary name: %w", err)
 	}
 	tmpPath := filepath.Join(dir, fmt.Sprintf(".%s.create-%x", base, b))
 
@@ -557,16 +563,23 @@ func createTemp(target string, mode os.FileMode) (archiveFile, string, error) {
 	// decides the mode of a new archive exactly as it would for os.Create.
 	f, err := fsys.CreateNew(tmpPath, 0o666)
 	if err != nil {
-		return nil, "", fmt.Errorf("creating %s: %w", target, err)
+		return nil, nil, "", fmt.Errorf("creating %s: %w", target, err)
+	}
+	fail := func(err error) (archiveFile, os.FileInfo, string, error) {
+		f.Close()
+		fsys.Remove(tmpPath)
+		return nil, nil, "", err
 	}
 	if mode != 0 {
 		if err := f.Chmod(mode); err != nil {
-			f.Close()
-			fsys.Remove(tmpPath)
-			return nil, "", fmt.Errorf("setting the mode of %s: %w", target, err)
+			return fail(fmt.Errorf("setting the mode of %s: %w", target, err))
 		}
 	}
-	return f, tmpPath, nil
+	self, err := f.Stat()
+	if err != nil {
+		return fail(fmt.Errorf("stat %s: %w", target, err))
+	}
+	return f, self, tmpPath, nil
 }
 
 // ErrUnsafeLink means -f names a path through a symbolic link that the
@@ -600,8 +613,7 @@ func checkLinks(path string) error {
 // SameFile reports whether fi is the file this writer is writing. The walk
 // uses it so that an archive is never archived into itself.
 func (w *Writer) SameFile(fi os.FileInfo) bool {
-	mine, err := w.f.Stat()
-	return err == nil && os.SameFile(fi, mine)
+	return w.self != nil && os.SameFile(fi, w.self)
 }
 
 // indexEncodeOptions builds the encode settings for this archive's index:

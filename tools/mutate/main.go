@@ -217,6 +217,14 @@ func mutatePackage(cfg config, pkg string) (int, error) {
 	}
 	close(next)
 	wg.Wait()
+	if cfg.jobs > 1 {
+		n := confirmTimeouts(results, func(i int) outcome {
+			return testMutant(cfg, 0, jobs[i].m, jobs[i].src, tests, limit)
+		})
+		if n > 0 {
+			fmt.Fprintf(os.Stderr, "mutate: %d mutants timed out with -j %d, and ran again alone\n", n, cfg.jobs)
+		}
+	}
 
 	// The report: each survivor and each mutant that no test covers, in the
 	// order of the source.
@@ -264,6 +272,22 @@ func mutatePackage(cfg config, pkg string) (int, error) {
 	fmt.Printf("%s: %d mutants: %d killed, %d timed out, %d survived, %d not covered, %d accepted, %d did not compile; score %.1f%%\n",
 		info.ImportPath, len(jobs), counts[killed], counts[timedOut], counts[survived], counts[notCovered], counts[accepted], counts[notCompiled], score)
 	return counts[survived] + counts[notCovered], nil
+}
+
+// confirmTimeouts runs each mutant that timed out again, one at a time, and
+// returns their number. With -j, the tests of each mutant share the machine
+// with the others, so a slow run can pass the limit with no hang. Each such
+// run counted as found, and could hide a survivor. Only a mutant that also
+// times out alone counts as a hang.
+func confirmTimeouts(results []outcome, run func(i int) outcome) int {
+	n := 0
+	for i, r := range results {
+		if r == timedOut {
+			results[i] = run(i)
+			n++
+		}
+	}
+	return n
 }
 
 // testMutant runs the tests with one mutant in place of its file.
