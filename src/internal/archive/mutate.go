@@ -375,7 +375,7 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	if dir == "" {
 		dir = "."
 	}
-	tmp, err := os.CreateTemp(dir, "."+base+".rewrite-*")
+	tmp, err := fsys.CreateTemp(dir, "."+base+".rewrite-*")
 	if err != nil {
 		return res, fmt.Errorf("creating the compacted archive: %w", err)
 	}
@@ -384,7 +384,7 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	defer func() {
 		if !committed {
 			tmp.Close()
-			os.Remove(tmpPath)
+			fsys.Remove(tmpPath)
 		}
 	}()
 
@@ -465,11 +465,11 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	if err := tmp.Close(); err != nil {
 		return res, fmt.Errorf("closing the compacted archive: %w", err)
 	}
-	if err := renameOver(tmpPath, path); err != nil {
+	if err := fsys.Rename(tmpPath, path); err != nil {
 		return res, fmt.Errorf("replacing %s: %w", cfg.Archive, err)
 	}
 	committed = true
-	if err := syncDir(dir); err != nil {
+	if err := fsys.SyncDir(dir); err != nil {
 		return res, err
 	}
 	res.NewSize = w.off
@@ -486,7 +486,7 @@ var testBeforeCompactLock func()
 // and locking after let an append commit in between, and compact then wrote
 // the archive again from the older index and renamed it over the append.
 func openLocked(path string, opt OpenOptions) (*Reader, error) {
-	f, err := openArchiveFile(path, os.O_RDONLY)
+	f, err := fsys.OpenArchive(path, os.O_RDONLY)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", path, err)
 	}
@@ -1089,7 +1089,7 @@ func RepairArchive(path string, open OpenOptions) (RepairResult, error) {
 		return res, err
 	}
 
-	f, err := openArchiveFile(path, os.O_RDWR)
+	f, err := fsys.OpenArchive(path, os.O_RDWR)
 	if err != nil {
 		return res, fmt.Errorf("opening %s: %w", path, err)
 	}

@@ -5,7 +5,6 @@ package archive
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"golang.org/x/sys/windows"
 )
@@ -20,7 +19,7 @@ const lockOffset = 1<<63 - 1
 
 // lockFile takes an exclusive LockFileEx lock on f without waiting. Windows
 // releases it when the handle is closed or the process exits.
-func lockFile(f *os.File) error {
+func lockFile(f archiveFile) error {
 	ol := windows.Overlapped{Offset: uint32(lockOffset & 0xffffffff), OffsetHigh: uint32(lockOffset >> 32)}
 	err := windows.LockFileEx(windows.Handle(f.Fd()),
 		windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY,

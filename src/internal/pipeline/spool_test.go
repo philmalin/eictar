@@ -144,3 +144,23 @@ func TestSpoolLargeSingleWrite(t *testing.T) {
 		t.Error("content did not survive")
 	}
 }
+
+// TestSpoolThresholdIsInclusive: a spool of exactly the threshold stays in
+// memory. Only a byte more moves it to disk.
+func TestSpoolThresholdIsInclusive(t *testing.T) {
+	b := NewBudget(1 << 20)
+	s := NewSpool(b, 1024, t.TempDir())
+	defer s.Close()
+	if _, err := s.Write(make([]byte, 1024)); err != nil {
+		t.Fatal(err)
+	}
+	if s.Spilled() {
+		t.Error("a spool of exactly the threshold spilled")
+	}
+	if _, err := s.Write([]byte{1}); err != nil {
+		t.Fatal(err)
+	}
+	if !s.Spilled() {
+		t.Error("a spool past the threshold did not spill")
+	}
+}

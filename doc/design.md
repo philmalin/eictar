@@ -1430,6 +1430,12 @@ sockets too. This is the one type that is skipped, not refused.
 
   A member whose content the archive holds already becomes a reference, and
   the emitter writes no blob for it (§4.3).
+- **Failures.** A chunk that does not encode fails its member. The member
+  is then complete when its last chunk returns from the workers, and the
+  emitter reports its error. It does not wait for the chunks after the
+  failed one in chunk order: they never come. When the emitter fails, the
+  build stops, and the reader submits no more chunks. A member that the
+  reader reads at that time gets the error, and is not emitted.
 
 The writer gives member ids in **walk order**, not in the order that members
 finish. It sorts the index by id before it writes the index. Thus the byte
@@ -3799,14 +3805,15 @@ The survivors fall into these groups, in order of risk:
    spill of a spool fail. The v1.0.8 hang was in this code. Step 3 covers it.
    A sparse file that changes while it is read is also not tested
    (`builder.go`).
+   *Done* in step 3, with a test of the sparse file.
 5. **Equivalent mutants.** Some changes cannot change the result: the
    capacity of a `make`, or the error of `rand.Read`. A list of the accepted
    survivors, each with its reason, is necessary before the release gate can
    ask for zero survivors.
-   *Done.* The accepted list has 24 entries for `format` and 9 for
-   `crypt`. Before an entry went in, new tests found each mutant that a
-   test can find: for example, a failed seal in `Index.Encode`,
-   `SameCodec`, and a sealed index larger than 40 bytes.
+   *Done.* The accepted list has 24 entries for `format`, 9 for `crypt`
+   and 21 for `pipeline`. Before an entry went in, new tests found each
+   mutant that a test can find: for example, a failed seal in
+   `Index.Encode`, `SameCodec`, and a sealed index larger than 40 bytes.
 
 **The results now, with the tests of the package itself:**
 
@@ -3814,13 +3821,13 @@ The survivors fall into these groups, in order of risk:
 |---|---|---|---|---|
 | `format` | 63.2% | 93.8% | 24 | 0 |
 | `crypt` | 55.2% | 89.7% | 9 | 0 |
-| `pipeline` | 59.0% | 59.0% | 0 | 71 |
+| `pipeline` | 59.0% | 88.3% | 21 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
-not count it, and gives 100% for `format` and `crypt`. Part of the increase
+not count it, and gives 100% for each of the three. Part of the increase
 in `format` comes from the change to the tool for case expressions: it tests
-63 mutants that it showed as not covered before. The gaps of `pipeline` are
-mostly errors of the disk (group 4), which step 3 covers.
+63 mutants that it showed as not covered before. The increase in `pipeline`
+comes from the fault tests of step 3.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of
@@ -3835,6 +3842,47 @@ power-loss mode records the writes, and drops or reorders the writes that
 were not synced. After each fault, the archive must open as the old
 generation or as the new one, or `--repair` must give back one of them. The
 stress tester injects these faults at random.
+
+*Part 1, faults that the program sees, is done:*
+
+- In `archive`, each operation on an archive file and on its directory goes
+  through a `fileSystem` (`fs.go`). In production, it is the operating
+  system. `TestFaultsLeaveTheOldOrTheNewArchive` makes each of these
+  operations fail in turn. It does this for create, create over an
+  archive, append, delete, compact, recompress, a dictionary, repair and a
+  change of passphrase, plain and encrypted. A write that fails writes half
+  of its bytes and gives `ENOSPC`. Each other operation gives `EIO`. After
+  each fault, these rules apply:
+  - The archive holds its old state or its new state. Only a fault in the
+    truncate that undoes an append can make a repair necessary.
+  - A run that reports success made the new state.
+  - The error is an I/O error, not damage.
+  - No file stays open, and no temporary file stays behind.
+
+  `TestReadFaultsAreNeverSilent` does the same for extract and verify. No
+  fault broke a rule. Three faults put into the writer on purpose were
+  each found. Under `-race`, each run of the dictionary case trains a
+  dictionary, which is slow. Thus, under `-race`, that case tests one
+  fault in seven. The runs without `-race` (`make skips`,
+  `make check-norace`) test each fault.
+- In `pipeline`, each spill file comes from `newSpillFile`.
+  `TestPipelineFaults` makes each operation on a spill file fail in turn,
+  and each call to the encoder, to `NewSealer` and to `Emit`. It does this
+  with a small budget and with a large one, and with a disk that stays
+  full. It found two faults, which are now fixed (§8), each with a test
+  that fails without the fix:
+  - When the encoder failed on a chunk that was not the last to return,
+    the chunks after it waited for it for ever. The member never became
+    complete, so the build left it out with no error, and its spill file
+    and its budget stayed held. No codec of eictar gives such an error
+    now: zstd and s2 give none, and deflate and xz fail on every chunk or
+    on none.
+  - After the build stopped, a member that the reader read at that time
+    could still submit its chunks, because `select` chooses at random. Its
+    `AddFile` then gave no error, and it was emitted after the failure.
+    `Finish` gave the error, so no archive was wrong.
+
+*Next:* power loss, and the faults in the stress tester.
 
 **Step 4. More fuzzing.** A fuzz target opens, lists, verifies and extracts
 changed copies of the golden archives into a temporary root. Each run must
@@ -3864,9 +3912,9 @@ The two hangs that the tests found were both in the memory budget.
 
 | Step | Status |
 |---|---|
-| 1. Strength of the tests | `format` and `crypt` have no survivor that is not explained; `pipeline` waits for step 3 |
+| 1. Strength of the tests | done: `format`, `crypt` and `pipeline` have no survivor that is not explained |
 | 2. Second reader | planned |
-| 3. Faults of the disk and the machine | planned |
+| 3. Faults of the disk and the machine | faults that the program sees: done; power loss and the stress tester are next |
 | 4. More fuzzing | planned |
 | 5. Models of the protocols | planned |
 | 6. Release gate | planned |

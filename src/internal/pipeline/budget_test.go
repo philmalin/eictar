@@ -189,3 +189,69 @@ func TestBudgetOverRelease(t *testing.T) {
 	b.Acquire(10)
 	b.Release(20)
 }
+
+// TestBudgetEdges: the cases at the edge of each rule of the budget.
+func TestBudgetEdges(t *testing.T) {
+	// An unlimited budget counts nothing, so a release must not count down
+	// below zero and panic.
+	u := NewBudget(0)
+	u.Acquire(100)
+	if !u.TryAcquire(100) {
+		t.Error("an unlimited budget refused a TryAcquire")
+	}
+	u.Release(100)
+	u.Release(100)
+
+	// atLeast raises a limit that is lower, and only that: it does not set a
+	// limit on an unlimited budget, and it does not lower one.
+	u.atLeast(1 << 20)
+	if u.limit != 0 {
+		t.Errorf("atLeast set a limit of %d on an unlimited budget", u.limit)
+	}
+	b := NewBudget(5000)
+	b.atLeast(100)
+	if b.limit != 5000 {
+		t.Errorf("atLeast lowered the limit to %d", b.limit)
+	}
+	b.atLeast(6000)
+	if b.limit != 6000 {
+		t.Errorf("atLeast gave %d, want 6000", b.limit)
+	}
+
+	// A request of exactly the limit fits the budget, so it waits for the
+	// bytes that others hold. Only a larger one goes through at once.
+	b = NewBudget(1000)
+	b.Acquire(1)
+	got := make(chan struct{})
+	go func() {
+		b.Acquire(1000)
+		close(got)
+	}()
+	select {
+	case <-got:
+		t.Fatal("a request of exactly the limit did not wait for the byte in use")
+	case <-time.After(50 * time.Millisecond):
+	}
+	b.Release(1)
+	<-got
+	b.Release(1000)
+
+	// After a request larger than the limit, the budget is over its limit.
+	// A request of zero bytes still does not wait, and TryAcquire of zero
+	// succeeds.
+	b.Acquire(5000)
+	zero := make(chan struct{})
+	go func() {
+		b.Acquire(0)
+		close(zero)
+	}()
+	select {
+	case <-zero:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Acquire(0) waited")
+	}
+	if !b.TryAcquire(0) {
+		t.Error("TryAcquire(0) failed on a budget over its limit")
+	}
+	b.Release(5000)
+}

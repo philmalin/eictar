@@ -7190,6 +7190,13 @@ Member order in the archive has no meaning, so the emitter never waits
 for a specific member. One large file does not block the others.</p>
 <p>A member whose content the archive holds already becomes a reference,
 and the emitter writes no blob for it (§4.3).</p></li>
+<li><p><strong>Failures.</strong> A chunk that does not encode fails its
+member. The member is then complete when its last chunk returns from the
+workers, and the emitter reports its error. It does not wait for the
+chunks after the failed one in chunk order: they never come. When the
+emitter fails, the build stops, and the reader submits no more chunks. A
+member that the reader reads at that time gets the error, and is not
+emitted.</p></li>
 </ul>
 <p>The writer gives member ids in <strong>walk order</strong>, not in
 the order that members finish. It sorts the index by id before it writes
@@ -10368,16 +10375,17 @@ generations whose eight bytes are all in use. A vector pins generation
 <li><strong>Errors of the disk in the pipeline.</strong> No test makes a
 write, a seek or a spill of a spool fail. The v1.0.8 hang was in this
 code. Step 3 covers it. A sparse file that changes while it is read is
-also not tested (<code>builder.go</code>).</li>
+also not tested (<code>builder.go</code>). <em>Done</em> in step 3, with
+a test of the sparse file.</li>
 <li><strong>Equivalent mutants.</strong> Some changes cannot change the
 result: the capacity of a <code>make</code>, or the error of
 <code>rand.Read</code>. A list of the accepted survivors, each with its
 reason, is necessary before the release gate can ask for zero survivors.
-<em>Done.</em> The accepted list has 24 entries for <code>format</code>
-and 9 for <code>crypt</code>. Before an entry went in, new tests found
-each mutant that a test can find: for example, a failed seal in
-<code>Index.Encode</code>, <code>SameCodec</code>, and a sealed index
-larger than 40 bytes.</li>
+<em>Done.</em> The accepted list has 24 entries for <code>format</code>,
+9 for <code>crypt</code> and 21 for <code>pipeline</code>. Before an
+entry went in, new tests found each mutant that a test can find: for
+example, a failed seal in <code>Index.Encode</code>,
+<code>SameCodec</code>, and a sealed index larger than 40 bytes.</li>
 </ol>
 <p><strong>The results now, with the tests of the package
 itself:</strong></p>
@@ -10409,19 +10417,18 @@ itself:</strong></p>
 <tr class="odd">
 <td><code>pipeline</code></td>
 <td>59.0%</td>
-<td>59.0%</td>
+<td>88.3%</td>
+<td>21</td>
 <td>0</td>
-<td>71</td>
 </tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
-<code>make mutate</code> does not count it, and gives 100% for
-<code>format</code> and <code>crypt</code>. Part of the increase in
-<code>format</code> comes from the change to the tool for case
-expressions: it tests 63 mutants that it showed as not covered before.
-The gaps of <code>pipeline</code> are mostly errors of the disk (group
-4), which step 3 covers.</p>
+<code>make mutate</code> does not count it, and gives 100% for each of
+the three. Part of the increase in <code>format</code> comes from the
+change to the tool for case expressions: it tests 63 mutants that it
+showed as not covered before. The increase in <code>pipeline</code>
+comes from the fault tests of step 3.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives
@@ -10436,6 +10443,53 @@ drops or reorders the writes that were not synced. After each fault, the
 archive must open as the old generation or as the new one, or
 <code>--repair</code> must give back one of them. The stress tester
 injects these faults at random.</p>
+<p><em>Part 1, faults that the program sees, is done:</em></p>
+<ul>
+<li>In <code>archive</code>, each operation on an archive file and on
+its directory goes through a <code>fileSystem</code>
+(<code>fs.go</code>). In production, it is the operating system.
+<code>TestFaultsLeaveTheOldOrTheNewArchive</code> makes each of these
+operations fail in turn. It does this for create, create over an
+archive, append, delete, compact, recompress, a dictionary, repair and a
+change of passphrase, plain and encrypted. A write that fails writes
+half of its bytes and gives <code>ENOSPC</code>. Each other operation
+gives <code>EIO</code>. After each fault, these rules apply:
+<ul>
+<li>The archive holds its old state or its new state. Only a fault in
+the truncate that undoes an append can make a repair necessary.</li>
+<li>A run that reports success made the new state.</li>
+<li>The error is an I/O error, not damage.</li>
+<li>No file stays open, and no temporary file stays behind.</li>
+</ul>
+<code>TestReadFaultsAreNeverSilent</code> does the same for extract and
+verify. No fault broke a rule. Three faults put into the writer on
+purpose were each found. Under <code>-race</code>, each run of the
+dictionary case trains a dictionary, which is slow. Thus, under
+<code>-race</code>, that case tests one fault in seven. The runs without
+<code>-race</code> (<code>make skips</code>,
+<code>make check-norace</code>) test each fault.</li>
+<li>In <code>pipeline</code>, each spill file comes from
+<code>newSpillFile</code>. <code>TestPipelineFaults</code> makes each
+operation on a spill file fail in turn, and each call to the encoder, to
+<code>NewSealer</code> and to <code>Emit</code>. It does this with a
+small budget and with a large one, and with a disk that stays full. It
+found two faults, which are now fixed (§8), each with a test that fails
+without the fix:
+<ul>
+<li>When the encoder failed on a chunk that was not the last to return,
+the chunks after it waited for it for ever. The member never became
+complete, so the build left it out with no error, and its spill file and
+its budget stayed held. No codec of eictar gives such an error now: zstd
+and s2 give none, and deflate and xz fail on every chunk or on
+none.</li>
+<li>After the build stopped, a member that the reader read at that time
+could still submit its chunks, because <code>select</code> chooses at
+random. Its <code>AddFile</code> then gave no error, and it was emitted
+after the failure. <code>Finish</code> gave the error, so no archive was
+wrong.</li>
+</ul></li>
+</ul>
+<p><em>Next:</em> power loss, and the faults in the stress tester.</p>
 <p><strong>Step 4. More fuzzing.</strong> A fuzz target opens, lists,
 verifies and extracts changed copies of the golden archives into a
 temporary root. Each run must end with exit 3, or with the exact
@@ -10479,8 +10533,8 @@ and <code>pipeline</code>, with no survivor that is not explained</li>
 <tbody>
 <tr class="odd">
 <td>1. Strength of the tests</td>
-<td><code>format</code> and <code>crypt</code> have no survivor that is
-not explained; <code>pipeline</code> waits for step 3</td>
+<td>done: <code>format</code>, <code>crypt</code> and
+<code>pipeline</code> have no survivor that is not explained</td>
 </tr>
 <tr class="even">
 <td>2. Second reader</td>
@@ -10488,7 +10542,8 @@ not explained; <code>pipeline</code> waits for step 3</td>
 </tr>
 <tr class="odd">
 <td>3. Faults of the disk and the machine</td>
-<td>planned</td>
+<td>faults that the program sees: done; power loss and the stress tester
+are next</td>
 </tr>
 <tr class="even">
 <td>4. More fuzzing</td>

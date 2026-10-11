@@ -75,14 +75,14 @@ type Options struct {
 // Writer builds an archive. Members are added one at a time and the index is
 // written by Close, which is the point at which the archive becomes readable.
 type Writer struct {
-	f    *os.File
+	f    archiveFile
 	path string // the archive's final path
 	// tmpPath is where a new archive is written until Close renames it to
 	// path. It is empty for an append, which writes in place.
 	tmpPath string
 	// guard is the file a create replaces, held open to keep its lock until
 	// the rename (doc/design.md 9.6). It is nil when nothing was there.
-	guard *os.File
+	guard archiveFile
 
 	hdr   format.Header
 	index format.Index
@@ -260,7 +260,7 @@ func Create(path string, opt Options) (*Writer, error) {
 // the file. Until Close writes the new trailer, the old one still describes
 // the old generation, in place (doc/design.md 9.1).
 func OpenAppend(path string, opt Options, open OpenOptions) (*Writer, error) {
-	f, err := openArchiveFile(path, os.O_RDWR)
+	f, err := fsys.OpenArchive(path, os.O_RDWR)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", path, err)
 	}
@@ -477,7 +477,7 @@ func (w *Writer) Close() error {
 	if err := w.f.Close(); err != nil {
 		w.f = nil
 		if w.tmpPath != "" {
-			os.Remove(w.tmpPath)
+			fsys.Remove(w.tmpPath)
 		}
 		return fmt.Errorf("closing %s: %w", w.path, err)
 	}
@@ -487,11 +487,11 @@ func (w *Writer) Close() error {
 
 	// The rename is the commit for a new archive: before it, any old file at
 	// the path is intact, and after it the new one is complete.
-	if err := renameOver(w.tmpPath, w.path); err != nil {
-		os.Remove(w.tmpPath)
+	if err := fsys.Rename(w.tmpPath, w.path); err != nil {
+		fsys.Remove(w.tmpPath)
 		return fmt.Errorf("replacing %s: %w", w.path, err)
 	}
-	return syncDir(filepath.Dir(w.path))
+	return fsys.SyncDir(filepath.Dir(w.path))
 }
 
 // createTarget resolves where a new archive goes, and the mode it gets.
@@ -526,8 +526,8 @@ func createTarget(path string) (string, os.FileMode, error) {
 // guardExisting locks the archive that a create will replace, so that the
 // create cannot rename over a file that another run is appending to. It
 // returns nil when there is no file at target yet.
-func guardExisting(target string) (*os.File, error) {
-	f, err := openArchiveFile(target, os.O_RDONLY)
+func guardExisting(target string) (archiveFile, error) {
+	f, err := fsys.OpenArchive(target, os.O_RDONLY)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -543,7 +543,7 @@ func guardExisting(target string) (*os.File, error) {
 
 // createTemp opens a new file beside target. mode 0 means the default for a
 // new file.
-func createTemp(target string, mode os.FileMode) (*os.File, string, error) {
+func createTemp(target string, mode os.FileMode) (archiveFile, string, error) {
 	dir, base := filepath.Split(target)
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -553,14 +553,14 @@ func createTemp(target string, mode os.FileMode) (*os.File, string, error) {
 
 	// 0666 through open(2), not os.CreateTemp's 0600, so that the umask
 	// decides the mode of a new archive exactly as it would for os.Create.
-	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o666)
+	f, err := fsys.CreateNew(tmpPath, 0o666)
 	if err != nil {
 		return nil, "", fmt.Errorf("creating %s: %w", target, err)
 	}
 	if mode != 0 {
 		if err := f.Chmod(mode); err != nil {
 			f.Close()
-			os.Remove(tmpPath)
+			fsys.Remove(tmpPath)
 			return nil, "", fmt.Errorf("setting the mode of %s: %w", target, err)
 		}
 	}
@@ -719,7 +719,7 @@ func (w *Writer) discard() {
 	w.f.Close()
 	w.f = nil
 	// Only the temporary file: whatever was at the path before stays.
-	os.Remove(w.tmpPath)
+	fsys.Remove(w.tmpPath)
 }
 
 // releaseGuard drops the lock on the file a create replaced.

@@ -7,6 +7,9 @@ import (
 	"os"
 )
 
+// removeSpillFile unlinks a spill file. Only a test changes it.
+var removeSpillFile = os.Remove
+
 // createSpillFile creates a temporary file in dir and unlinks it at once.
 // The file stays usable through the descriptor, and a crash cannot leave it
 // behind.
@@ -15,7 +18,7 @@ func createSpillFile(dir string) (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("pipeline: creating spill file: %w", err)
 	}
-	if err := os.Remove(f.Name()); err != nil {
+	if err := removeSpillFile(f.Name()); err != nil {
 		f.Close()
 		return nil, fmt.Errorf("pipeline: unlinking spill file: %w", err)
 	}

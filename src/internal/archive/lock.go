@@ -20,7 +20,7 @@ var ErrLocked = errors.New("another eictar is changing this archive; try again w
 // a rename would lock the old, unlinked file, and whatever it wrote there
 // would be lost. So once the lock is held, the path must still name the file
 // that was locked.
-func lockArchive(f *os.File, path string) error {
+func lockArchive(f archiveFile, path string) error {
 	if err := lockFile(f); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}

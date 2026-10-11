@@ -3,7 +3,6 @@ package pipeline
 import (
 	"fmt"
 	"io"
-	"os"
 )
 
 // Spool accumulates one member's encoded payload until the writer is ready
@@ -22,9 +21,28 @@ type Spool struct {
 	dir       string
 
 	buf      []byte
-	file     *os.File
+	file     spillFile
 	reserved int64 // bytes currently held against the budget
 	size     int64
+}
+
+// spillFile is the temporary file of a spool that moved to disk. It is an
+// *os.File, except in the fault tests (doc/design.md 13.5, step 3).
+type spillFile interface {
+	io.Reader
+	io.Writer
+	io.Seeker
+	Close() error
+}
+
+// newSpillFile makes the spill file of a spool. Only the fault tests change
+// it.
+var newSpillFile = func(dir string) (spillFile, error) {
+	f, err := createSpillFile(dir)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
 // NewSpool returns a spool that spills into dir past threshold bytes.
@@ -62,7 +80,7 @@ func (s *Spool) Write(p []byte) (int, error) {
 // spill moves what is buffered into a temporary file and hands the memory
 // back to the budget.
 func (s *Spool) spill() error {
-	f, err := createSpillFile(s.dir)
+	f, err := newSpillFile(s.dir)
 	if err != nil {
 		return err
 	}

@@ -19,7 +19,7 @@ import (
 // touches only the tail of the file, and extracting one member reads only
 // that member's bytes.
 type Reader struct {
-	f    *os.File
+	f    archiveFile
 	path string
 	size int64
 
@@ -107,7 +107,7 @@ func Open(path string, ask PassphraseFunc) (*Reader, error) {
 
 // OpenWith is Open with options.
 func OpenWith(path string, opt OpenOptions) (*Reader, error) {
-	f, err := openArchiveFile(path, os.O_RDONLY)
+	f, err := fsys.OpenArchive(path, os.O_RDONLY)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", path, err)
 	}

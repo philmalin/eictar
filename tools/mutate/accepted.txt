@@ -124,3 +124,71 @@ src/internal/crypt/keys.go: Keys.derive: operator: + → - #2
 src/internal/crypt/aead.go: sealIndexWithNonce: operator: + → - #2
 	Equivalent. The expression is the capacity of a buffer that append
 	grows. 24 + n - 16 is never negative.
+
+# --- pipeline ---
+
+src/internal/pipeline/budget.go: Budget.Release: operator: <= → < #2
+	Equivalent. Release(0) subtracts 0 and wakes the waiters, which then
+	wait again.
+src/internal/pipeline/budget.go: Budget.atLeast: operator: < → <=
+	Equivalent. When the limit is equal to n, it is set to the same value.
+src/internal/pipeline/builder.go: New: operator: < → <=
+	Equivalent. One worker is set to one worker.
+src/internal/pipeline/builder.go: Builder.AddFile: if false: n == len(b.scratch) → false
+	Equivalent. A full chunk is then copied out of the read buffer, as a
+	short one is. The content is the same, and only the speed changes.
+src/internal/pipeline/builder.go: Builder.AddFile: operator: == → != #2
+	Equivalent. A full chunk is copied, and a short one takes the read
+	buffer and is cut to its length. The content is the same.
+src/internal/pipeline/builder.go: Builder.AddFile: operator: > → >=
+	Equivalent. A read of 0 bytes makes an empty buffer that nothing uses.
+src/internal/pipeline/builder.go: Builder.acquireFor: if false: b.cfg.Budget.TryAcquire(n) → false
+	Equivalent. Each chunk then spills the spool before it waits for the
+	budget. The content is the same, and only the speed changes.
+src/internal/pipeline/builder.go: Builder.acquireFor: if false: err != nil → false
+	Equivalent. The wait for the budget does not hang without the check:
+	when the budget is full, the spool's own Write spills or fails, so the
+	spool cannot hold the budget that the reader waits for. The member
+	still fails, at the failed spool write. The check gives the error
+	sooner. TestPipelineFaults (sticky) and TestFailedSpillDoesNotHang
+	show no hang.
+src/internal/pipeline/builder.go: Builder.AddFile: if false: serr != nil → false
+	Equivalent. submit fails only after the build stopped with an error.
+	The reader then reads on, each later submit fails too and gives back
+	its budget, and the last submit returns the error. Finish returns the
+	error of the build.
+src/internal/pipeline/builder.go: Builder.AddFile: if false: err != nil → false #5
+	Equivalent. The last submit fails only after the build stopped with an
+	error, so Finish returns that error, and the archive is discarded. The
+	member that the mutant emits has no payload.
+src/internal/pipeline/builder.go: Builder.AddFile: if false: err != nil → false
+	Equivalent. After an error, submit refuses the first chunk of the
+	member with the error of the build. An empty file submits no chunk
+	and goes to Emit, but the build has stopped: Finish returns the error,
+	and the archive is discarded.
+src/internal/pipeline/builder.go: Builder.AddMeta: if false: err != nil → false
+	Equivalent. After an error, the member goes to Emit, but the build has
+	stopped: Finish returns the error, and the archive is discarded.
+src/internal/pipeline/builder.go: memberBuild.settle: operator: && → || #3
+	Equivalent. The mutant keeps the last error of a failed member in
+	place of the first. The member fails either way.
+src/internal/pipeline/builder.go: memberBuild.spill: if false: mb.spool == nil → false
+	Equivalent. The spool is nil only after the reader gave up the member,
+	and the reader then calls acquireFor no more.
+src/internal/pipeline/builder.go: memberBuild.spill: if false: err != nil && mb.failed == nil → false
+	Equivalent. When the spill fails, acquireFor returns the error, and
+	AddFile gives up the member and never emits it. The member's own
+	record of the failure has no further use.
+src/internal/pipeline/builder.go: memberBuild.spill: operator: != → ==
+	Equivalent. See the entry above: the record of the failure has no use.
+src/internal/pipeline/builder.go: memberBuild.spill: operator: && → ||
+	Equivalent. See the entry above: the record of the failure has no use.
+src/internal/pipeline/builder.go: memberBuild.spill: operator: == → != #2
+	Equivalent. See the entry above: the record of the failure has no use.
+src/internal/pipeline/spool.go: newSpillFile: if false: err != nil → false
+	Equivalent. The caller tests the error first, so it never uses the
+	file that comes with an error.
+src/internal/pipeline/spool.go: Spool.spill: operator: > → >=
+	Equivalent. Then an empty buffer is written, which writes nothing.
+src/internal/pipeline/spool.go: Spool.Close: operator: > → >=
+	Equivalent. Release(0) has no effect.

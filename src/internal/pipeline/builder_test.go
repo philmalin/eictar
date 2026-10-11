@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"path/filepath"
@@ -193,5 +194,85 @@ func TestBudgetBelowTwoChunks(t *testing.T) {
 	addWithin(t, b, &pacedReader{chunk: chunk, left: 5})
 	if n := budget.InUse(); n != 0 {
 		t.Errorf("%d bytes of budget still held", n)
+	}
+}
+
+// sameLengthEncoder gives an output as long as its input.
+type sameLengthEncoder struct{ codec.Encoder }
+
+func (sameLengthEncoder) Encode(dst, src []byte) ([]byte, error) {
+	return append(dst, bytes.Repeat([]byte{0xff}, len(src))...), nil
+}
+
+// TestCompressionMustBeShorter: a reader takes a chunk of the length of its
+// plaintext as stored (doc/format.md 5). So a compressed chunk that is not
+// shorter must not be kept: the plaintext goes in its place.
+func TestCompressionMustBeShorter(t *testing.T) {
+	plain := []byte(strings.Repeat("x", 1000))
+	var got bytes.Buffer
+	b := New(Config{
+		ChunkSize: 1024, Encoder: sameLengthEncoder{},
+		Emit: func(_ *format.Member, payload io.WriterTo) error {
+			_, err := payload.WriteTo(&got)
+			return err
+		},
+	})
+	b.Start()
+	if err := b.AddFile(format.Member{Path: "f"}, bytes.NewReader(plain), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Finish(); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got.Bytes(), plain) {
+		t.Error("a compressed chunk as long as its plaintext was kept")
+	}
+}
+
+// TestNewDefaults: no workers means one, and no budget means an unlimited
+// one.
+func TestNewDefaults(t *testing.T) {
+	var n int
+	b := New(Config{ChunkSize: 512, Stored: true, Emit: func(m *format.Member, _ io.WriterTo) error {
+		n++
+		return nil
+	}})
+	if b.cfg.Workers != 1 || b.cfg.Budget == nil {
+		t.Fatalf("workers %d, budget %v", b.cfg.Workers, b.cfg.Budget)
+	}
+	b.Start()
+	if err := b.AddFile(format.Member{Path: "f"}, strings.NewReader("content"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Finish(); err != nil || n != 1 {
+		t.Fatalf("Finish: %v, %d members", err, n)
+	}
+}
+
+// TestSparseFileThatChanged: the data map of a sparse file says how many
+// bytes the read gives. Another number means that the file changed while it
+// was read, and the member is refused, not stored with a map that does not
+// describe it.
+func TestSparseFileThatChanged(t *testing.T) {
+	for _, data := range []string{"short", strings.Repeat("too long ", 200)} {
+		emitted := 0
+		budget := NewBudget(1 << 20)
+		b := New(Config{
+			Workers: 2, ChunkSize: 512, Budget: budget, Stored: true,
+			Emit: func(*format.Member, io.WriterTo) error { emitted++; return nil },
+		})
+		b.Start()
+		m := format.Member{Path: "sparse", Size: 1 << 20,
+			Sparse: []format.SparseSegment{{Offset: 0, Length: 100}, {Offset: 1 << 19, Length: 100}}}
+		err := b.AddFile(m, strings.NewReader(data), nil)
+		if err == nil || !strings.Contains(err.Error(), "changed while it was read") {
+			t.Errorf("%d bytes for a map of 200: got %v", len(data), err)
+		}
+		if err := b.Finish(); err != nil {
+			t.Errorf("Finish: %v; a refused member is the caller's to report", err)
+		}
+		if emitted != 0 || budget.InUse() != 0 {
+			t.Errorf("%d members emitted, %d bytes of budget held", emitted, budget.InUse())
+		}
 	}
 }

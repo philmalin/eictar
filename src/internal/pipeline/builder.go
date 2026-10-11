@@ -233,6 +233,17 @@ func (b *Builder) AddFile(m format.Member, r io.Reader, digest io.Writer) error 
 		mb.left++
 		mb.mu.Unlock()
 
+		// A select picks at random when both cases are ready. Without this
+		// test first, a member read while the build failed could have all
+		// its later chunks accepted: its AddFile then returned no error, and
+		// it was emitted after the failure.
+		select {
+		case <-b.stop:
+			b.cfg.Budget.Release(int64(b.cfg.ChunkSize))
+			mb.close()
+			return b.Err()
+		default:
+		}
 		select {
 		case b.chunks <- chunkJob{
 			member: mb, index: index, final: final,
@@ -420,7 +431,7 @@ func (mb *memberBuild) settle(index int, data []byte, done chan<- *memberBuild) 
 	// A member whose reader gave up has no spool: close set it to nil while
 	// this chunk was in a worker. The member is never emitted, because the
 	// reader never drops its claim, so the chunk is dropped here.
-	if data != nil && mb.spool != nil {
+	if data != nil && mb.spool != nil && mb.failed == nil {
 		mb.pending[index] = data
 		for {
 			next, ok := mb.pending[mb.next]
@@ -435,6 +446,13 @@ func (mb *memberBuild) settle(index int, data []byte, done chan<- *memberBuild) 
 			mb.lengths = append(mb.lengths, uint32(len(next)))
 			mb.next++
 		}
+	}
+	// A failed member is never written. The chunks after one that failed to
+	// encode wait for it, and it never comes: without this, the member never
+	// completed, its error never reached Finish, and the build left it out
+	// with no error.
+	if mb.failed != nil {
+		clear(mb.pending)
 	}
 
 	mb.left--

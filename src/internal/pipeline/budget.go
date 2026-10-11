@@ -94,7 +94,6 @@ func (b *Budget) Release(n int64) {
 	b.cond.Broadcast()
 }
 
-// InUse reports the bytes currently reserved. It is for tests and diagnostics.
 // atLeast raises the limit to n if it is lower. The builder uses it: the
 // reader holds one chunk while it waits for the next, so a budget below two
 // chunks can never be met (doc/design.md 8.1).
@@ -106,6 +105,7 @@ func (b *Budget) atLeast(n int64) {
 	}
 }
 
+// InUse reports the bytes currently reserved. It is for tests and diagnostics.
 func (b *Budget) InUse() int64 {
 	b.mu.Lock()
 	defer b.mu.Unlock()
