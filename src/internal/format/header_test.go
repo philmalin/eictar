@@ -1,8 +1,10 @@
 package format
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -174,14 +176,16 @@ func TestCryptoHeaderLenIsCapped(t *testing.T) {
 	}
 }
 
-func TestCryptoHeaderRefusesCostlyParameters(t *testing.T) {
-	base := func() *CryptoHeader {
-		return &CryptoHeader{
-			Version: CryptoHeaderVersion, KDF: KDFArgon2id,
-			Salt: make([]byte, CryptoSaltSize), Time: 3, Memory: 256 * 1024, Threads: 4,
-			AEAD: AEADXChaCha20, Key: make([]byte, CryptoWrappedKeySize),
-		}
+func sampleCryptoHeader() *CryptoHeader {
+	return &CryptoHeader{
+		Version: CryptoHeaderVersion, KDF: KDFArgon2id,
+		Salt: bytes.Repeat([]byte{0x5a}, CryptoSaltSize), Time: 3, Memory: 256 * 1024, Threads: 4,
+		AEAD: AEADXChaCha20, Key: bytes.Repeat([]byte{0xa5}, CryptoWrappedKeySize),
 	}
+}
+
+func TestCryptoHeaderRefusesCostlyParameters(t *testing.T) {
+	base := sampleCryptoHeader
 	for _, tc := range []struct {
 		name   string
 		mutate func(c *CryptoHeader)
@@ -206,5 +210,85 @@ func TestCryptoHeaderRefusesCostlyParameters(t *testing.T) {
 	}
 	if err := base().Validate(); err != nil {
 		t.Errorf("the defaults were refused: %v", err)
+	}
+}
+
+// TestCryptoHeaderRoundTrip: a reader gets back what the writer put in, from
+// a block of exactly the length that the block gives.
+func TestCryptoHeaderRoundTrip(t *testing.T) {
+	want := sampleCryptoHeader()
+	b, err := want.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if n := binary.LittleEndian.Uint32(b[0:4]); int(n) != len(b)-4 {
+		t.Fatalf("the length is %d, the body %d bytes", n, len(b)-4)
+	}
+	got, err := UnmarshalCryptoHeader(b)
+	if err != nil {
+		t.Fatalf("UnmarshalCryptoHeader: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("round trip:\n got %+v\nwant %+v", got, want)
+	}
+}
+
+// rawCryptoHeader encodes c as Marshal does, but without its checks: what a
+// hostile or damaged archive can hold.
+func rawCryptoHeader(t *testing.T, c *CryptoHeader) []byte {
+	t.Helper()
+	body, err := encMode.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return append(binary.LittleEndian.AppendUint32(nil, uint32(len(body))), body...)
+}
+
+// TestCryptoHeaderRefusesUnknown: each case changes one field, so that only
+// the check of that field can refuse it. A name that this build does not know
+// is ErrUnsupportedVersion (exit 4): a newer build can read the archive. A
+// wrong length is ErrCorruptIndex (exit 3). The reader and the writer refuse
+// alike.
+func TestCryptoHeaderRefusesUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		want   error
+		mutate func(c *CryptoHeader)
+	}{
+		{"version 0", ErrUnsupportedVersion, func(c *CryptoHeader) { c.Version = 0 }},
+		{"version 2", ErrUnsupportedVersion, func(c *CryptoHeader) { c.Version = 2 }},
+		{"another KDF", ErrUnsupportedVersion, func(c *CryptoHeader) { c.KDF = "scrypt" }},
+		{"no KDF", ErrUnsupportedVersion, func(c *CryptoHeader) { c.KDF = "" }},
+		{"another cipher", ErrUnsupportedVersion, func(c *CryptoHeader) { c.AEAD = "aes-256-gcm" }},
+		{"recipients", ErrUnsupportedVersion, func(c *CryptoHeader) { c.Recipients = []string{"age1example"} }},
+		{"no salt", ErrCorruptIndex, func(c *CryptoHeader) { c.Salt = nil }},
+		{"short salt", ErrCorruptIndex, func(c *CryptoHeader) { c.Salt = c.Salt[:CryptoSaltSize-1] }},
+		{"long salt", ErrCorruptIndex, func(c *CryptoHeader) { c.Salt = append(c.Salt, 0) }},
+		{"no wrapped key", ErrCorruptIndex, func(c *CryptoHeader) { c.Key = nil }},
+		{"short wrapped key", ErrCorruptIndex, func(c *CryptoHeader) { c.Key = c.Key[:CryptoWrappedKeySize-1] }},
+		{"long wrapped key", ErrCorruptIndex, func(c *CryptoHeader) { c.Key = append(c.Key, 0) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := sampleCryptoHeader()
+			tc.mutate(c)
+			if _, err := UnmarshalCryptoHeader(rawCryptoHeader(t, c)); !errors.Is(err, tc.want) {
+				t.Errorf("UnmarshalCryptoHeader: got %v, want %v", err, tc.want)
+			}
+			if _, err := c.Marshal(); !errors.Is(err, tc.want) {
+				t.Errorf("Marshal: got %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestCryptoHeaderRefusesExtraBytes: bytes after the CBOR map, inside the
+// length that the block gives, are damage. A decoder that stops at the end of
+// the map and returns what it has hides it.
+func TestCryptoHeaderRefusesExtraBytes(t *testing.T) {
+	b := rawCryptoHeader(t, sampleCryptoHeader())
+	b = append(b, 0x00)
+	binary.LittleEndian.PutUint32(b[0:4], uint32(len(b)-4))
+	if _, err := UnmarshalCryptoHeader(b); !errors.Is(err, ErrCorruptIndex) {
+		t.Errorf("got %v, want ErrCorruptIndex", err)
 	}
 }

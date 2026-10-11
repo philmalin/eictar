@@ -173,7 +173,7 @@ func mutatePackage(cfg config, pkg string) (int, error) {
 			defer wg.Done()
 			for i := range next {
 				j := jobs[i]
-				if !cov.has(filepath.Base(j.m.file), j.m.line, j.m.col) {
+				if !j.m.always && !cov.has(filepath.Base(j.m.file), j.m.covLine, j.m.covCol) {
 					results[i] = notCovered
 					continue
 				}

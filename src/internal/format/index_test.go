@@ -246,83 +246,185 @@ func TestIndexLiveAndCount(t *testing.T) {
 	}
 }
 
+// TestIndexValidateRejects: each case breaks one rule, and the error must
+// name that rule. Without the name, a later check that refuses the same index
+// for another reason hides a check that is gone (doc/design.md 13.5).
 func TestIndexValidateRejects(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
+		want   string // a part of the error message
 		mutate func(ix *Index)
 	}{
-		{"duplicate id", func(ix *Index) { ix.Members[1].ID = ix.Members[0].ID }},
-		{"empty path", func(ix *Index) { ix.Members[0].Path = "" }},
-		{"unknown type", func(ix *Index) { ix.Members[0].Type = MemberType("wormhole") }},
-		{"codec out of range", func(ix *Index) { ix.Members[0].Codec = len(ix.Codecs) }},
-		{"codec below NoCodec", func(ix *Index) { ix.Members[0].Codec = -2 }},
-		{"short digest", func(ix *Index) { ix.Members[0].Digest = []byte{1, 2, 3} }},
-		{"rdev with one component", func(ix *Index) { ix.Members[4].RDev = []uint32{1} }},
-		{"chunks do not sum to length", func(ix *Index) { ix.Members[0].Chunks[0]++ }},
-		{"chunk table with no chunk size", func(ix *Index) { ix.Members[0].ChunkSize = 0 }},
-		{"chunks too few for the size", func(ix *Index) { ix.Members[0].ChunkSize = 4 }},
-		{"chunks too many for the size", func(ix *Index) { ix.Members[0].ChunkSize = 1 << 20 }},
-		{"size with no chunks", func(ix *Index) {
+		{"duplicate id", "duplicate member id", func(ix *Index) { ix.Members[1].ID = ix.Members[0].ID }},
+		{"empty path", "empty path", func(ix *Index) { ix.Members[0].Path = "" }},
+		{"unknown type", "unknown type", func(ix *Index) { ix.Members[0].Type = MemberType("wormhole") }},
+		{"unknown type with no content", "unknown type", func(ix *Index) { ix.Members[1].Type = MemberType("wormhole") }},
+		{"codec out of range", "references codec", func(ix *Index) { ix.Members[0].Codec = len(ix.Codecs) }},
+		{"codec below NoCodec", "references codec", func(ix *Index) { ix.Members[0].Codec = -2 }},
+		{"short digest", "3-byte digest", func(ix *Index) { ix.Members[0].Digest = []byte{1, 2, 3} }},
+		{"short digest on a directory", "3-byte digest", func(ix *Index) { ix.Members[1].Digest = []byte{1, 2, 3} }},
+		{"rdev with one component", "1 rdev components", func(ix *Index) { ix.Members[4].RDev = []uint32{1} }},
+		{"chunks do not sum to length", "chunks total", func(ix *Index) { ix.Members[0].Chunks[0]++ }},
+		{"chunk table with no chunk size", "no chunk size", func(ix *Index) { ix.Members[0].ChunkSize = 0 }},
+		{"chunks too few for the size", "cannot fill", func(ix *Index) { ix.Members[0].ChunkSize = 4 }},
+		{"chunks too many for the size", "cannot fill", func(ix *Index) { ix.Members[0].ChunkSize = 1 << 20 }},
+		{"empty last chunk", "cannot fill", func(ix *Index) {
+			// 4096 bytes need two chunks of 2048, not three.
+			ix.Members[0].Chunks = append(ix.Members[0].Chunks, 0)
+		}},
+		{"payload of exactly n-1 chunks, of three", "cannot fill", func(ix *Index) {
+			ix.Members[0].Chunks = []uint32{1000, 100, 100}
+		}},
+		{"one chunk for an empty payload", "cannot fill", func(ix *Index) {
+			m := &ix.Members[7]
+			m.Size, m.Digest, m.Chunks, m.Length = 0, bytes.Repeat([]byte{0x33}, DigestSize), []uint32{16}, 16
+		}},
+		{"chunk size and no chunks", "a chunk size of 4194304 but no chunks", func(ix *Index) {
+			m := &ix.Members[7]
+			m.Size, m.Chunks, m.Length = 0, nil, 0
+		}},
+		{"size with no chunks", "payload of 4096 bytes but no chunks", func(ix *Index) {
 			ix.Members[0].Chunks = nil
 			ix.Members[0].Length = 0
 		}},
-		{"blob range overflows", func(ix *Index) {
+		{"blob range overflows", "overflows", func(ix *Index) {
 			ix.Members[0].Offset = ^uint64(0) - 1
 			ix.Members[0].Length = 1200
 		}},
-		{"symlink claiming content", func(ix *Index) { ix.Members[2].Size = 10 }},
-		{"chunk size above the limit", func(ix *Index) { ix.Members[0].ChunkSize = MaxChunkSize + 1 }},
+		{"chunk size above the limit", "claims a chunk size", func(ix *Index) { ix.Members[0].ChunkSize = MaxChunkSize + 1 }},
+		{"chunk size above the limit, one chunk", "claims a chunk size", func(ix *Index) {
+			// One chunk of 10 bytes fits any chunk size: only the limit refuses it.
+			ix.Members[7].ChunkSize = MaxChunkSize + 1
+		}},
 
-		// M5: each field belongs to its type.
-		{"mode with file-type bits", func(ix *Index) { ix.Members[0].Mode = 0o100644 }},
-		{"hardlink with no target", func(ix *Index) { ix.Members[3].HardlinkTo = 0 }},
-		{"hardlink to a missing member", func(ix *Index) { ix.Members[3].HardlinkTo = 999 }},
-		{"hardlink to a directory", func(ix *Index) { ix.Members[3].HardlinkTo = 2 }},
-		{"hardlink to a hardlink", func(ix *Index) { ix.Members[3].HardlinkTo = 4 }},
-		{"hardlink target on a file", func(ix *Index) { ix.Members[0].HardlinkTo = 1 }},
-		{"symlink with no target", func(ix *Index) { ix.Members[2].LinkTarget = "" }},
-		{"link target on a file", func(ix *Index) { ix.Members[0].LinkTarget = "/etc/passwd" }},
-		{"device with no rdev", func(ix *Index) { ix.Members[4].RDev = nil }},
-		{"rdev on a directory", func(ix *Index) { ix.Members[1].RDev = []uint32{1, 3} }},
-		{"sparse map on a directory", func(ix *Index) {
-			ix.Members[1].Sparse = []SparseSegment{{Offset: 0, Length: 1}}
-		}},
-		{"sparse segment past the end", func(ix *Index) {
-			ix.Members[5].Sparse[1].Offset = 1 << 30
-		}},
-		{"sparse segments overlapping", func(ix *Index) {
-			ix.Members[5].Sparse[1].Offset = 100
-		}},
-		{"sparse segments out of order", func(ix *Index) {
-			ix.Members[5].Sparse[0], ix.Members[5].Sparse[1] = ix.Members[5].Sparse[1], ix.Members[5].Sparse[0]
-		}},
-		{"empty sparse segment", func(ix *Index) { ix.Members[5].Sparse[0].Length = 0 }},
-		{"sparse payload the chunks cannot hold", func(ix *Index) {
-			ix.Members[5].Sparse[1].Length = 4 << 20
-		}},
-		{"xattr name too long", func(ix *Index) {
-			ix.Members[5].Xattrs[strings.Repeat("u", MaxXattrName+1)] = []byte("x")
-		}},
-		{"xattr value too large", func(ix *Index) {
-			ix.Members[5].Xattrs["user.big"] = make([]byte, MaxXattrValue+1)
-		}},
-		{"empty xattr name", func(ix *Index) { ix.Members[5].Xattrs[""] = []byte("x") }},
-		{"regular file with no digest", func(ix *Index) { ix.Members[0].Digest = nil }},
-		{"directory with a payload", func(ix *Index) {
+		// Only a regular file has content (doc/format.md 8.3).
+		{"symlink claiming content", "a symlink with content", func(ix *Index) { ix.Members[2].Size = 10 }},
+		{"directory with a payload", "a dir with content", func(ix *Index) {
 			ix.Members[1].Length = 10
 			ix.Members[1].Chunks = []uint32{10}
 		}},
+		{"directory with a blob and a chunk size", "a dir with content", func(ix *Index) {
+			ix.Members[1].Length, ix.Members[1].Chunks, ix.Members[1].ChunkSize = 10, []uint32{10}, 16
+		}},
+		{"directory with only a size", "a dir with content", func(ix *Index) { ix.Members[1].Size = 10 }},
+		{"directory with only a length", "a dir with content", func(ix *Index) { ix.Members[1].Length = 10 }},
+		{"directory with only chunks", "a dir with content", func(ix *Index) { ix.Members[1].Chunks = []uint32{10} }},
+		{"directory with only a chunk size", "a dir with content", func(ix *Index) { ix.Members[1].ChunkSize = 4096 }},
+
+		// M5: each field belongs to its type.
+		{"mode with file-type bits", "carries bits", func(ix *Index) { ix.Members[0].Mode = 0o100644 }},
+		{"hardlink with no target", "hardlink with no target member", func(ix *Index) { ix.Members[3].HardlinkTo = 0 }},
+		{"hardlink to a missing member", "which does not exist", func(ix *Index) { ix.Members[3].HardlinkTo = 999 }},
+		{"hardlink to a directory", "which is a dir", func(ix *Index) { ix.Members[3].HardlinkTo = 2 }},
+		{"hardlink to a hardlink", "which is a hardlink", func(ix *Index) { ix.Members[3].HardlinkTo = 4 }},
+		{"hardlink target on a file", "hardlink target on a member", func(ix *Index) { ix.Members[0].HardlinkTo = 1 }},
+		{"symlink with no target", "symlink with no target", func(ix *Index) { ix.Members[2].LinkTarget = "" }},
+		{"link target on a file", "link target on a member", func(ix *Index) { ix.Members[0].LinkTarget = "/etc/passwd" }},
+		{"device with no rdev", "0 rdev components", func(ix *Index) { ix.Members[4].RDev = nil }},
+		{"rdev on a directory", "device number on a member", func(ix *Index) { ix.Members[1].RDev = []uint32{1, 3} }},
+		{"sparse map on a directory", "sparse map on a member", func(ix *Index) {
+			ix.Members[1].Sparse = []SparseSegment{{Offset: 0, Length: 1}}
+		}},
+		{"sparse segment past the end", "past the file size", func(ix *Index) {
+			ix.Members[5].Sparse[1].Offset = 1 << 30
+		}},
+		{"sparse segments overlapping", "overlaps", func(ix *Index) {
+			ix.Members[5].Sparse[1].Offset = 100
+		}},
+		{"sparse segments out of order", "out of order", func(ix *Index) {
+			ix.Members[5].Sparse[0], ix.Members[5].Sparse[1] = ix.Members[5].Sparse[1], ix.Members[5].Sparse[0]
+		}},
+		{"sparse segment overflows", "sparse segment 1 overflows", func(ix *Index) {
+			// The end wraps round to 4096, inside the file: only the overflow
+			// check refuses it. The payload stays 12 KiB, as the chunks say.
+			ix.Members[5].Sparse[1].Offset = ^uint64(0) - 4095
+		}},
+		{"empty sparse segment", "is empty", func(ix *Index) { ix.Members[5].Sparse[0].Length = 0 }},
+		{"sparse payload the chunks cannot hold", "cannot fill", func(ix *Index) {
+			ix.Members[5].Sparse[1].Length = 4 << 20
+		}},
+		{"too many xattrs", "extended attributes, above", func(ix *Index) {
+			for i := range MaxXattrs + 1 {
+				ix.Members[5].Xattrs[fmt.Sprintf("user.%d", i)] = nil
+			}
+		}},
+		{"xattr name too long", "256-byte name", func(ix *Index) {
+			ix.Members[5].Xattrs[strings.Repeat("u", MaxXattrName+1)] = []byte("x")
+		}},
+		{"xattr value too large", "is 65537 bytes", func(ix *Index) {
+			ix.Members[5].Xattrs["user.big"] = make([]byte, MaxXattrValue+1)
+		}},
+		{"empty xattr name", "0-byte name", func(ix *Index) { ix.Members[5].Xattrs[""] = []byte("x") }},
+		{"regular file with no digest", "regular file with no digest", func(ix *Index) { ix.Members[0].Digest = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ix := sampleIndex()
 			tc.mutate(ix)
 
-			if err := ix.Validate(); !errors.Is(err, ErrCorruptIndex) {
-				t.Errorf("Validate error = %v, want ErrCorruptIndex", err)
+			err := ix.Validate()
+			if !errors.Is(err, ErrCorruptIndex) {
+				t.Fatalf("Validate error = %v, want ErrCorruptIndex", err)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("Validate error = %v, want one that says %q", err, tc.want)
 			}
 			// Encode must refuse too: our own bug should never reach the disk.
 			if _, err := ix.Encode(EncodeOptions{Compress: true}); err == nil {
 				t.Error("Encode accepted an invalid index")
+			}
+			// And a reader must refuse it when an archive holds it.
+			raw, err := encMode.Marshal(ix)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := DecodeIndex(raw, 0, nil); !errors.Is(err, ErrCorruptIndex) {
+				t.Errorf("DecodeIndex error = %v, want ErrCorruptIndex", err)
+			}
+		})
+	}
+}
+
+// TestIndexValidateAcceptsEdges: shapes at the edge of each rule that a
+// writer makes, and that a reader must accept. A refused archive is lost data
+// too.
+func TestIndexValidateAcceptsEdges(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(ix *Index)
+	}{
+		{"empty file", func(ix *Index) {
+			m := &ix.Members[7]
+			m.Size, m.Offset, m.Length, m.Chunks, m.ChunkSize, m.Enc = 0, 0, 0, nil, 0, nil
+		}},
+		{"payload one byte into its last chunk", func(ix *Index) {
+			// 2049 bytes in chunks of 2048: the second chunk has one byte.
+			ix.Members[0].Size, ix.Members[8].Size = 2049, 2049
+		}},
+		{"payload of exactly n chunks", func(ix *Index) {
+			ix.Members[0].Size, ix.Members[8].Size = 4096, 4096
+		}},
+		{"one-byte file", func(ix *Index) {
+			m := &ix.Members[7]
+			m.Size, m.Length, m.Chunks = 1, 17, []uint32{17}
+		}},
+		{"sparse segments that touch", func(ix *Index) {
+			ix.Members[5].Sparse[1].Offset = 4096
+		}},
+		{"sparse segment that ends at the size", func(ix *Index) {
+			ix.Members[5].Sparse[1].Offset = 1<<30 - 8192
+		}},
+		{"an offset on a directory", func(ix *Index) {
+			// doc/format.md 8.3 says that a member without a blob has no off,
+			// but each writer of eictar up to now puts one there, with len 0.
+			// The archives that hold it must open.
+			ix.Members[1].Offset = 64
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ix := sampleIndex()
+			tc.mutate(ix)
+			if err := ix.Validate(); err != nil {
+				t.Errorf("Validate refused a valid index: %v", err)
 			}
 		})
 	}
@@ -354,6 +456,16 @@ func TestIndexDecodeRejectsCorruptBytes(t *testing.T) {
 				t.Error("decode accepted corrupt input")
 			}
 		})
+	}
+
+	// Bytes after the CBOR map are damage too. A decoder that stops at the
+	// end of the map and returns what it has hides it.
+	plain, err := sampleIndex().Encode(EncodeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DecodeIndex(append(plain.Bytes, 0x00), 0, nil); !errors.Is(err, ErrCorruptIndex) {
+		t.Errorf("extra bytes after the index: got %v, want ErrCorruptIndex", err)
 	}
 }
 
@@ -559,7 +671,24 @@ func TestIndexValidateRejectsSharing(t *testing.T) {
 		{"another size", func(ix *Index) { sharer(ix).Size = 4097 }},
 		{"another digest", func(ix *Index) { sharer(ix).Digest = bytes.Repeat([]byte{1}, DigestSize) }},
 		{"another sparse map", func(ix *Index) { sharer(ix).Sparse = []SparseSegment{{0, 10}} }},
+		{"another sparse map of the same length", func(ix *Index) {
+			// The holes are in other places, so the member reads other content.
+			ix.Members[0].Sparse = []SparseSegment{{0, 4096}}
+			sharer(ix).Sparse = []SparseSegment{{1, 4095}}
+		}},
+		{"an empty owner", func(ix *Index) {
+			// The owner is a regular file without a blob: an empty file.
+			o := &ix.Members[7]
+			o.Size, o.Offset, o.Length, o.Chunks, o.ChunkSize, o.Enc = 0, 0, 0, nil, 0, nil
+			s := sharer(ix)
+			s.Data, s.Size, s.Digest = o.ID, 0, o.Digest
+		}},
 		{"a blob of its own", func(ix *Index) { sharer(ix).Offset, sharer(ix).Length, sharer(ix).Chunks = 64, 10, []uint32{10} }},
+		// Each field of a blob alone, so that no other check refuses it.
+		{"an offset", func(ix *Index) { sharer(ix).Offset = 64 }},
+		{"a length", func(ix *Index) { sharer(ix).Length = 10 }},
+		{"chunks", func(ix *Index) { sharer(ix).Chunks = []uint32{0} }},
+		{"a chunk size", func(ix *Index) { sharer(ix).ChunkSize = 2048 }},
 		{"a codec", func(ix *Index) { sharer(ix).Codec = 0 }},
 		{"a key", func(ix *Index) { sharer(ix).Enc = &EncInfo{Salt: make([]byte, 16)} }},
 		{"on a directory", func(ix *Index) { ix.Members[1].Data = 1 }},
@@ -593,5 +722,39 @@ func TestIndexExpansionIsBounded(t *testing.T) {
 	}
 	if got := indexLimit(100 << 20); got != MaxIndexSize {
 		t.Errorf("the limit of a 100 MiB index is %d, want the 1 GiB cap", got)
+	}
+}
+
+// TestIndexDigestUsesTheKey: the digest that the trailer records comes from
+// the caller's function when there is one. That is the keyed digest of an
+// encrypted archive (doc/design.md 6.4). The plain hash in its place lets an
+// attacker rewrite the metadata and compute a new digest.
+func TestIndexDigestUsesTheKey(t *testing.T) {
+	mark := [DigestSize]byte{0x6b, 0x65, 0x79}
+	var seen []byte
+	keyed := func(b []byte) [DigestSize]byte {
+		seen = bytes.Clone(b)
+		return mark
+	}
+	enc, err := sampleIndex().Encode(EncodeOptions{Compress: true, Digest: keyed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enc.Digest != mark {
+		t.Errorf("the digest is %x, not the one of the caller's function", enc.Digest)
+	}
+	if !bytes.Equal(seen, enc.Bytes) {
+		t.Error("the caller's function did not get the bytes on disk")
+	}
+}
+
+// TestIndexDecodeKeepsTheOpenerError: the error of the opener reaches the
+// caller. It tells a wrong key from a damaged index, and the two have
+// different exit codes.
+func TestIndexDecodeKeepsTheOpenerError(t *testing.T) {
+	wrongKey := errors.New("wrong key")
+	open := func([]byte) ([]byte, error) { return nil, wrongKey }
+	if _, err := DecodeIndex([]byte("sealed"), FlagIndexEncrypted, open); !errors.Is(err, wrongKey) {
+		t.Errorf("got %v, want the opener's error", err)
 	}
 }

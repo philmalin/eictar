@@ -16,6 +16,13 @@ type mutant struct {
 	start, end int    // byte offsets of the replaced text
 	orig, repl string
 	kind       string // the operator, for the report
+
+	// covLine and covCol give the place whose coverage tells whether the
+	// tests run the change. It is the change itself, except where the
+	// coverage profile has no block (see anchors). always is true for a
+	// change that is not in a function: the tests always use it.
+	covLine, covCol int
+	always          bool
 }
 
 func (m mutant) String() string {
@@ -64,11 +71,23 @@ func mutants(path string, src []byte) ([]mutant, error) {
 	if err != nil {
 		return nil, err
 	}
+	spans := anchors(f)
 	var out []mutant
 	add := func(pos, end token.Pos, repl, kind string) {
 		p, e := fset.Position(pos), fset.Position(end)
+		c, always := p, false
+		for _, s := range spans {
+			if pos >= s.start && pos < s.end {
+				if s.anchor == token.NoPos {
+					always = true
+				} else {
+					c = fset.Position(s.anchor)
+				}
+			}
+		}
 		out = append(out, mutant{
 			file: path, line: p.Line, col: p.Column,
+			covLine: c.Line, covCol: c.Column, always: always,
 			start: p.Offset, end: e.Offset,
 			orig: string(src[p.Offset:e.Offset]), repl: repl, kind: kind,
 		})
@@ -115,4 +134,46 @@ func lineOf(src []byte, offset int) string {
 		end = len(src) - offset
 	}
 	return string(bytes.TrimSpace(src[start : offset+end]))
+}
+
+// span is a part of a file whose coverage the profile does not give.
+type span struct {
+	start, end token.Pos
+	anchor     token.Pos // the place to look up in its stead; NoPos: always run
+}
+
+// anchors finds the parts of a file that have no block in a coverage
+// profile:
+//
+//   - The expressions of a case clause. A block of go test -cover starts after
+//     the colon of a case, so its expressions are in no block. The switch
+//     statement is in the block before it, and the tests that run the switch
+//     run its case expressions too, up to the case that matches.
+//   - A declaration outside a function, such as a constant. The compiler
+//     uses it, so each test that builds uses it.
+func anchors(f *ast.File) []span {
+	var out []span
+	for _, d := range f.Decls {
+		if g, ok := d.(*ast.GenDecl); ok {
+			out = append(out, span{g.Pos(), g.End(), token.NoPos})
+		}
+	}
+	ast.Inspect(f, func(n ast.Node) bool {
+		var body *ast.BlockStmt
+		switch s := n.(type) {
+		case *ast.SwitchStmt:
+			body = s.Body
+		case *ast.TypeSwitchStmt:
+			body = s.Body
+		default:
+			return true
+		}
+		for _, st := range body.List {
+			if cc, ok := st.(*ast.CaseClause); ok && len(cc.List) > 0 {
+				out = append(out, span{cc.List[0].Pos(), cc.Colon, n.Pos()})
+			}
+		}
+		return true
+	})
+	return out
 }

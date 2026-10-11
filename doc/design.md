@@ -3717,7 +3717,10 @@ on this platform. It makes these changes, one at a time:
 - the condition of each `if` to `false`, so that its check never runs
 
 A run of the tests first gives the coverage. A mutant in code that no test
-runs is *not covered*, and its tests do not run. Each other mutant goes to
+runs is *not covered*, and its tests do not run. A coverage profile has no
+block for the expressions of a `case`, or for a declaration outside a
+function. Thus a case expression takes the coverage of its `switch`, and a
+declaration outside a function always counts as run. Each other mutant goes to
 `go test -overlay`, so the source tree never changes, and mutants run in
 parallel. A failed test finds the mutant. A test binary that does not end
 in three times the time of the first run stops, and that also finds the
@@ -3748,6 +3751,21 @@ The survivors fall into these groups, in order of risk:
    unknown member type, a field on the wrong type, the chunk table, and a
    sparse segment that overflows. Fuzzing finds a panic, but it does not
    find a check that is gone.
+   *Done.* Each case of the index tests now names the check that must
+   refuse it, so that a later check cannot hide a check that is gone. A
+   reader also decodes each bad index, and a test of each crypto header
+   field changes that field only. This work found two rules of
+   `doc/format.md` that the validator did not apply:
+   - one chunk for an empty payload. §5 says that the last chunk is never
+     empty.
+   - `chunk` on a member that is not `reg`, or on an empty payload (§5,
+     §8.3).
+
+   The validator refuses them now. No version of eictar wrote these
+   shapes, so each archive that eictar wrote still opens. The work also
+   found that the writer does not obey §8.3: it puts `off`, with `len` 0,
+   on a directory, a link, a device and an empty file. The validator accepts
+   this, and a test keeps it so.
 2. **Limits that no test reaches exactly.** `>` to `>=` survives at each
    limit: `MaxIndexSize`, `MaxIndexMembers`, `MaxDicts`, `MaxXattrs`, the
    xattr name and value, the chunk size, the KDF time and memory, and the
@@ -3755,6 +3773,9 @@ The survivors fall into these groups, in order of risk:
 3. **The key schedule above generation 255.** `uint64LE` survives with `>>`
    changed to `<<`, because each test vector uses a generation below 256.
    An index key of a later generation has no fixed vector.
+   *Done.* A test computes each key of `doc/format.md` §7.1, and the index
+   digest, with the standard library only. It uses generations whose eight
+   bytes are all in use. A vector pins generation `0x0102030405060708`.
 4. **Errors of the disk in the pipeline.** No test makes a write, a seek or a
    spill of a spool fail. The v1.0.8 hang was in this code. Step 3 covers it.
    A sparse file that changes while it is read is also not tested
@@ -3763,6 +3784,21 @@ The survivors fall into these groups, in order of risk:
    capacity of a `make`, or the error of `rand.Read`. A list of the accepted
    survivors, each with its reason, is necessary before the release gate can
    ask for zero survivors.
+
+**The results after groups 1 and 3, with the tests of the package itself:**
+
+| Package | First score | Score now | Survived | Not covered |
+|---|---|---|---|---|
+| `format` | 63.2% | 88.2% | 41 | 5 |
+| `crypt` | 55.2% | 86.2% | 11 | 1 |
+| `pipeline` | 59.0% | 59.0% | 59 | 12 |
+
+Part of the increase in `format` comes from the change to the tool for case
+expressions: it tests 63 mutants that it showed as not covered before. The
+survivors that stay in `format` and `crypt` are limits (group 2) and
+equivalent mutants (group 5). Two functions are also not checked by the tests
+of `format`: `SameCodec`, and `CodecSpec.String` for a codec without
+parameters. The tests of other packages check them.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of
@@ -3806,7 +3842,7 @@ The two hangs that the tests found were both in the memory budget.
 
 | Step | Status |
 |---|---|
-| 1. Strength of the tests | measured; the tests for the survivors are next |
+| 1. Strength of the tests | measured; groups 1 and 3 done; group 2 and the list of accepted survivors are next |
 | 2. Second reader | planned |
 | 3. Faults of the disk and the machine | planned |
 | 4. More fuzzing | planned |

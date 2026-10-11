@@ -589,9 +589,13 @@ func validatePayload(m *Member) error {
 		return corrupt(m, "regular file with no digest")
 	}
 
+	// A member of another type has no len, chunks or chunk, and its size is 0
+	// (doc/format.md 8.3). It can have an off: each writer up to now puts one
+	// there, with len 0.
 	if !m.Type.HasPayload() {
-		if m.Length != 0 || len(m.Chunks) != 0 || m.Size != 0 {
-			return corrupt(m, fmt.Sprintf("a %s claiming %d bytes of content", m.Type, m.Size))
+		if m.Size != 0 || m.Length != 0 || len(m.Chunks) != 0 || m.ChunkSize != 0 {
+			return corrupt(m, fmt.Sprintf("a %s with content: size %d, blob [%d,+%d), %d chunks of %d",
+				m.Type, m.Size, m.Offset, m.Length, len(m.Chunks), m.ChunkSize))
 		}
 		return nil
 	}
@@ -626,17 +630,21 @@ func validatePayload(m *Member) error {
 	// how much each chunk should decode to, and a crafted table becomes a
 	// decompression bomb with no expected size to check against. For a
 	// sparse file the payload is the data segments, not the logical size.
+	// The last chunk is never empty, so one chunk needs at least one byte,
+	// and an empty payload has no chunks and no chunk size (doc/format.md 5).
 	payload := m.PayloadSize()
 	if n := uint64(len(m.Chunks)); n > 0 {
 		if m.ChunkSize == 0 {
 			return corrupt(m, fmt.Sprintf("has %d chunks but no chunk size", n))
 		}
 		cs := uint64(m.ChunkSize)
-		if payload > cs*n || (n > 1 && payload <= cs*(n-1)) {
+		if payload > cs*n || payload <= cs*(n-1) {
 			return corrupt(m, fmt.Sprintf("payload of %d bytes cannot fill %d chunks of %d", payload, n, cs))
 		}
 	} else if payload != 0 {
 		return corrupt(m, fmt.Sprintf("payload of %d bytes but no chunks", payload))
+	} else if m.ChunkSize != 0 {
+		return corrupt(m, fmt.Sprintf("a chunk size of %d but no chunks", m.ChunkSize))
 	}
 	return nil
 }

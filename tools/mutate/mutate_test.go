@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -117,6 +118,41 @@ func TestClassify(t *testing.T) {
 	} {
 		if got := classify(tc.err, []byte(tc.out), tc.timeout); got != tc.want {
 			t.Errorf("classify(%v, %q, %v) = %s, want %s", tc.err, tc.out, tc.timeout, outcomeNames[got], outcomeNames[tc.want])
+		}
+	}
+}
+
+// TestAnchors: a case expression takes the coverage of its switch, and a
+// declaration outside a function always counts as run.
+func TestAnchors(t *testing.T) {
+	src := `package p
+
+const big = 1 << 20
+
+func f(a int) int {
+	switch {
+	case a > 1:
+		return a + 1
+	}
+	return a - 1
+}
+`
+	ms, err := mutants("p.go", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, m := range ms {
+		got[m.orig] = fmt.Sprintf("%d:%d always=%v", m.covLine, m.covCol, m.always)
+	}
+	for orig, want := range map[string]string{
+		"<<": "3:15 always=true", // a constant: no block
+		">":  "6:2 always=false", // the switch keyword
+		"+":  "8:12 always=false",
+		"-":  "10:11 always=false",
+	} {
+		if got[orig] != want {
+			t.Errorf("%s: %s, want %s", orig, got[orig], want)
 		}
 	}
 }

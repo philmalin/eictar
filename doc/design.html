@@ -10249,15 +10249,18 @@ to <code>-</code>, <code>&lt;&lt;</code> to <code>&gt;&gt;</code>)</li>
 its check never runs</li>
 </ul>
 <p>A run of the tests first gives the coverage. A mutant in code that no
-test runs is <em>not covered</em>, and its tests do not run. Each other
-mutant goes to <code>go test -overlay</code>, so the source tree never
-changes, and mutants run in parallel. A failed test finds the mutant. A
-test binary that does not end in three times the time of the first run
-stops, and that also finds the mutant. A mutant that does not compile
-does not count. The score is the part of the counted mutants that the
-tests find. <code>-test</code> gives other packages whose tests run, so
-that a run can tell a gap of one package from a gap of the whole
-program.</p>
+test runs is <em>not covered</em>, and its tests do not run. A coverage
+profile has no block for the expressions of a <code>case</code>, or for
+a declaration outside a function. Thus a case expression takes the
+coverage of its <code>switch</code>, and a declaration outside a
+function always counts as run. Each other mutant goes to
+<code>go test -overlay</code>, so the source tree never changes, and
+mutants run in parallel. A failed test finds the mutant. A test binary
+that does not end in three times the time of the first run stops, and
+that also finds the mutant. A mutant that does not compile does not
+count. The score is the part of the counted mutants that the tests find.
+<code>-test</code> gives other packages whose tests run, so that a run
+can tell a gap of one package from a gap of the whole program.</p>
 <p><strong>The first results, with the tests of the package
 itself:</strong></p>
 <table>
@@ -10312,7 +10315,22 @@ of the crypto header: the version, the KDF, the cipher,
 key. The same is true for these checks of the index: an unknown member
 type, a field on the wrong type, the chunk table, and a sparse segment
 that overflows. Fuzzing finds a panic, but it does not find a check that
-is gone.</li>
+is gone. <em>Done.</em> Each case of the index tests now names the check
+that must refuse it, so that a later check cannot hide a check that is
+gone. A reader also decodes each bad index, and a test of each crypto
+header field changes that field only. This work found two rules of
+<code>doc/format.md</code> that the validator did not apply:
+<ul>
+<li>one chunk for an empty payload. §5 says that the last chunk is never
+empty.</li>
+<li><code>chunk</code> on a member that is not <code>reg</code>, or on
+an empty payload (§5, §8.3).</li>
+</ul>
+The validator refuses them now. No version of eictar wrote these shapes,
+so each archive that eictar wrote still opens. The work also found that
+the writer does not obey §8.3: it puts <code>off</code>, with
+<code>len</code> 0, on a directory, a link, a device and an empty file.
+The validator accepts this, and a test keeps it so.</li>
 <li><strong>Limits that no test reaches exactly.</strong>
 <code>&gt;</code> to <code>&gt;=</code> survives at each limit:
 <code>MaxIndexSize</code>, <code>MaxIndexMembers</code>,
@@ -10322,7 +10340,11 @@ trailer.</li>
 <li><strong>The key schedule above generation 255.</strong>
 <code>uint64LE</code> survives with <code>&gt;&gt;</code> changed to
 <code>&lt;&lt;</code>, because each test vector uses a generation below
-256. An index key of a later generation has no fixed vector.</li>
+256. An index key of a later generation has no fixed vector.
+<em>Done.</em> A test computes each key of <code>doc/format.md</code>
+§7.1, and the index digest, with the standard library only. It uses
+generations whose eight bytes are all in use. A vector pins generation
+<code>0x0102030405060708</code>.</li>
 <li><strong>Errors of the disk in the pipeline.</strong> No test makes a
 write, a seek or a spill of a spool fail. The v1.0.8 hang was in this
 code. Step 3 covers it. A sparse file that changes while it is read is
@@ -10333,6 +10355,50 @@ result: the capacity of a <code>make</code>, or the error of
 reason, is necessary before the release gate can ask for zero
 survivors.</li>
 </ol>
+<p><strong>The results after groups 1 and 3, with the tests of the
+package itself:</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>Package</th>
+<th>First score</th>
+<th>Score now</th>
+<th>Survived</th>
+<th>Not covered</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>format</code></td>
+<td>63.2%</td>
+<td>88.2%</td>
+<td>41</td>
+<td>5</td>
+</tr>
+<tr class="even">
+<td><code>crypt</code></td>
+<td>55.2%</td>
+<td>86.2%</td>
+<td>11</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td><code>pipeline</code></td>
+<td>59.0%</td>
+<td>59.0%</td>
+<td>59</td>
+<td>12</td>
+</tr>
+</tbody>
+</table>
+<p>Part of the increase in <code>format</code> comes from the change to
+the tool for case expressions: it tests 63 mutants that it showed as not
+covered before. The survivors that stay in <code>format</code> and
+<code>crypt</code> are limits (group 2) and equivalent mutants (group
+5). Two functions are also not checked by the tests of
+<code>format</code>: <code>SameCodec</code>, and
+<code>CodecSpec.String</code> for a codec without parameters. The tests
+of other packages check them.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives
@@ -10390,7 +10456,8 @@ and <code>pipeline</code>, with no survivor that is not explained</li>
 <tbody>
 <tr class="odd">
 <td>1. Strength of the tests</td>
-<td>measured; the tests for the survivors are next</td>
+<td>measured; groups 1 and 3 done; group 2 and the list of accepted
+survivors are next</td>
 </tr>
 <tr class="even">
 <td>2. Second reader</td>
