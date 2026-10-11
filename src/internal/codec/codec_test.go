@@ -2,6 +2,7 @@ package codec
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -439,23 +440,61 @@ func TestSharedEncoderRunsInParallel(t *testing.T) {
 	}
 
 	// A generous bound: on four cores the parallel run should be far faster.
-	// A serial encoder takes as long as one goroutine, in every attempt. A
-	// loaded machine can miss the bound once: the virtual machine of the
-	// OpenBSD job took 0.83 of the serial time in one run. Thus the test
-	// passes when one of three attempts meets the bound.
+	// A serial encoder takes as long as one goroutine, in every attempt.
+	//
+	// A virtual machine can report four CPUs and not run four goroutines at
+	// once: in the OpenBSD job, the parallel run took up to 1.5 times the
+	// serial one. Thus each attempt first measures the machine with plain
+	// work, and counts only when the machine ran in parallel then. The test
+	// passes when one counted attempt meets the bound, and skips when no
+	// attempt counted.
 	var tries []string
-	for range 3 {
+	counted := 0
+	for range 5 {
+		machine := parallelism(callers)
 		serial := timeWith(1, 1)
 		parallel := timeWith(callers, callers)
-		t.Logf("serial %v, parallel %v", serial, parallel)
+		t.Logf("machine %.2f; serial %v, parallel %v", machine, serial, parallel)
+		if machine > 0.6 {
+			continue // the machine did not run the goroutines in parallel
+		}
+		counted++
 		if parallel <= serial*3/4 {
 			return
 		}
 		tries = append(tries, fmt.Sprintf("%v against %v", parallel, serial))
 	}
-	t.Errorf("sharing an encoder across %d goroutines took %s serial, in each attempt; "+
-		"the encoder is probably serialising on a state pool of one",
+	if counted == 0 {
+		t.Skipf("the machine reports %d CPUs, but did not run %d goroutines in parallel", runtime.NumCPU(), callers)
+	}
+	t.Errorf("sharing an encoder across %d goroutines took %s serial, in each attempt "+
+		"in which the machine ran in parallel; the encoder is probably serialising on a state pool of one",
 		callers, strings.Join(tries, ", "))
+}
+
+// parallelism gives the time that n goroutines take for n units of plain CPU
+// work, as a part of the time that one goroutine takes for them. It is about
+// 1/n on n free cores, and 1 on one core.
+func parallelism(n int) float64 {
+	buf := make([]byte, 1<<20)
+	unit := func() {
+		for range 16 {
+			sha256.Sum256(buf)
+		}
+	}
+	start := time.Now()
+	for range n {
+		unit()
+	}
+	serial := time.Since(start)
+	start = time.Now()
+	var wg sync.WaitGroup
+	for range n {
+		wg.Add(1)
+		go func() { defer wg.Done(); unit() }()
+	}
+	wg.Wait()
+	return float64(time.Since(start)) / float64(serial)
 }
 
 // TestRepetitiveInputIsFast: a chunk of one repeated byte is the worst case
