@@ -3932,7 +3932,43 @@ stress tester injects these faults at random.
     `AddFile` then gave no error, and it was emitted after the failure.
     `Finish` gave the error, so no archive was wrong.
 
-*Next:* power loss, and the faults in the stress tester.
+*Part 2, power loss, is done.* `crash_test.go` puts a model of the disk
+behind the same `fileSystem`. The operations reach the disk as in
+production. Beside them, the model keeps the content of each file at its
+last `fsync`, each write since then, and the names of the directory at
+its last directory `fsync`. After each change, it records what the path of
+the archive can hold if the power fails then:
+
+- the names of the last directory `fsync`, or the current names;
+- for the file at that name: its content at its last `fsync`; its current
+  content; the content at its last `fsync` with half of what came after
+  (a torn write); or its current content with one write since the last
+  `fsync` lost (writes that reach the disk out of order).
+
+`TestPowerLossLeavesTheOldOrTheNewArchive` runs the operations of part 1,
+and checks each state that the model recorded. These rules apply:
+
+- The archive holds its old state or its new state.
+- An operation that writes in place (append, delete, repair) can need
+  `--repair` to give one of them back. An operation that commits with a
+  rename (create, compact, recompress, a change of passphrase) must never
+  need it.
+- When the operation has reported success, the state that the `fsync`
+  calls put on the disk is the new one.
+
+No operation broke a rule. Five faults put in on purpose were each found:
+no `fsync` of a new archive before its rename, no `fsync` of the directory
+after the rename, no `fsync` of a compacted archive, no `fsync` of the
+index before the trailer, and no `fsync` after repair cuts the file. The
+fourth one needs the model of lost writes. The index and the trailer
+reach the disk, but a write of a blob before them does not, so the
+archive opens as the new generation, and its members fail their digest.
+
+The model takes a file system that keeps a rename in order with the other
+changes to the directory, and that does not change bytes that no write
+touched. It does not model a disk that lies about `fsync`.
+
+*Next:* the faults in the stress tester.
 
 **Step 4. More fuzzing.** A fuzz target opens, lists, verifies and extracts
 changed copies of the golden archives into a temporary root. Each run must
@@ -3964,7 +4000,7 @@ The two hangs that the tests found were both in the memory budget.
 |---|---|
 | 1. Strength of the tests | done: `format`, `crypt` and `pipeline` have no survivor that is not explained |
 | 2. Second reader | planned |
-| 3. Faults of the disk and the machine | faults that the program sees: done; power loss and the stress tester are next |
+| 3. Faults of the disk and the machine | faults that the program sees, and power loss: done; the stress tester is next |
 | 4. More fuzzing | planned |
 | 5. Models of the protocols | planned |
 | 6. Release gate | planned |

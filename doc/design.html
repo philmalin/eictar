@@ -10561,7 +10561,48 @@ after the failure. <code>Finish</code> gave the error, so no archive was
 wrong.</li>
 </ul></li>
 </ul>
-<p><em>Next:</em> power loss, and the faults in the stress tester.</p>
+<p><em>Part 2, power loss, is done.</em> <code>crash_test.go</code> puts
+a model of the disk behind the same <code>fileSystem</code>. The
+operations reach the disk as in production. Beside them, the model keeps
+the content of each file at its last <code>fsync</code>, each write
+since then, and the names of the directory at its last directory
+<code>fsync</code>. After each change, it records what the path of the
+archive can hold if the power fails then:</p>
+<ul>
+<li>the names of the last directory <code>fsync</code>, or the current
+names;</li>
+<li>for the file at that name: its content at its last
+<code>fsync</code>; its current content; the content at its last
+<code>fsync</code> with half of what came after (a torn write); or its
+current content with one write since the last <code>fsync</code> lost
+(writes that reach the disk out of order).</li>
+</ul>
+<p><code>TestPowerLossLeavesTheOldOrTheNewArchive</code> runs the
+operations of part 1, and checks each state that the model recorded.
+These rules apply:</p>
+<ul>
+<li>The archive holds its old state or its new state.</li>
+<li>An operation that writes in place (append, delete, repair) can need
+<code>--repair</code> to give one of them back. An operation that
+commits with a rename (create, compact, recompress, a change of
+passphrase) must never need it.</li>
+<li>When the operation has reported success, the state that the
+<code>fsync</code> calls put on the disk is the new one.</li>
+</ul>
+<p>No operation broke a rule. Five faults put in on purpose were each
+found: no <code>fsync</code> of a new archive before its rename, no
+<code>fsync</code> of the directory after the rename, no
+<code>fsync</code> of a compacted archive, no <code>fsync</code> of the
+index before the trailer, and no <code>fsync</code> after repair cuts
+the file. The fourth one needs the model of lost writes. The index and
+the trailer reach the disk, but a write of a blob before them does not,
+so the archive opens as the new generation, and its members fail their
+digest.</p>
+<p>The model takes a file system that keeps a rename in order with the
+other changes to the directory, and that does not change bytes that no
+write touched. It does not model a disk that lies about
+<code>fsync</code>.</p>
+<p><em>Next:</em> the faults in the stress tester.</p>
 <p><strong>Step 4. More fuzzing.</strong> A fuzz target opens, lists,
 verifies and extracts changed copies of the golden archives into a
 temporary root. Each run must end with exit 3, or with the exact
@@ -10614,8 +10655,8 @@ and <code>pipeline</code>, with no survivor that is not explained</li>
 </tr>
 <tr class="odd">
 <td>3. Faults of the disk and the machine</td>
-<td>faults that the program sees: done; power loss and the stress tester
-are next</td>
+<td>faults that the program sees, and power loss: done; the stress
+tester is next</td>
 </tr>
 <tr class="even">
 <td>4. More fuzzing</td>

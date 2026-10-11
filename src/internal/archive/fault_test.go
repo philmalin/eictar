@@ -296,13 +296,10 @@ type faultCase struct {
 	opens []OpenOptions
 }
 
-// TestFaultsLeaveTheOldOrTheNewArchive makes each operation on an archive
-// file fail in turn, for each operation that writes an archive. After each
-// fault, the archive must hold its old state or its new state, or --repair
-// must give one of them back (doc/design.md 13.5, step 3). An operation that
-// reports success must have made the new state. No file stays open, and no
-// temporary file stays behind unless its removal was what failed.
-func TestFaultsLeaveTheOldOrTheNewArchive(t *testing.T) {
+// writeCases are the operations that write an archive, each from its state
+// before. The fault tests and the power-loss tests run each one.
+func writeCases(t *testing.T) []faultCase {
+	t.Helper()
 	tree := mutTree(t)
 	tree.Text("t/big.txt", 0o644, strings.Repeat("several chunks of text. ", 2000))
 	tree.Hardlink("t/link.txt", "t/a.txt")
@@ -401,7 +398,17 @@ func TestFaultsLeaveTheOldOrTheNewArchive(t *testing.T) {
 			Rewrap: &RewrapConfig{Passphrase: passphrase("battery staple"), Params: crypt.KDFParams{Time: 2}}})
 		return err
 	}, both})
+	return cases
+}
 
+// TestFaultsLeaveTheOldOrTheNewArchive makes each operation on an archive
+// file fail in turn, for each operation that writes an archive. After each
+// fault, the archive must hold its old state or its new state, or --repair
+// must give one of them back (doc/design.md 13.5, step 3). An operation that
+// reports success must have made the new state. No file stays open, and no
+// temporary file stays behind unless its removal was what failed.
+func TestFaultsLeaveTheOldOrTheNewArchive(t *testing.T) {
+	cases := writeCases(t)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			template := t.TempDir()
