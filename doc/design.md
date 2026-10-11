@@ -2973,7 +2973,7 @@ bare `go` command:
 | `make crossvet` | run `vet` for each platform of the CI workflow: Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows (§15.1). A cross-compile finds a name that one platform does not have, before a push. |
 | `make check` | `fmt`, `vet`, `crossvet`, `test-race` and `operational`. `CROSSVET=` leaves out `crossvet`, as CI does. |
 | `make check-norace` | `make check` with `test` for `test-race`, for NetBSD and OpenBSD |
-| `make skips` | list each test that this platform skips, with its reason, and the totals |
+| `make skips` | list each test that this platform skips, with its reason, each test that fails, with its output, and the totals |
 | `make cover` | the coverage of the unit tests and the operational tests together, in `.tmp/cover/` (§13.5) |
 | `make mutate` | mutation testing of the packages in `MUTATE` (default `format`, `crypt` and `pipeline`). `MUTATE_FLAGS` gives options to `tools/mutate`, and `MUTATE_ACCEPTED` the accepted list (§13.5). |
 | `make stress` | random end-to-end tests against a model (§13.4). `STRESS="-duration 30m"` runs longer, and `STRESS="-seed N -sequences 1"` replays a failure. |
@@ -2992,7 +2992,7 @@ THIRD_PARTY.md             the modules in the binary, and their license texts
 doc/                       design.md; format.md, the format reference; eictar.1, the man page;
                            Security_Audit.md, the security review (§14.6)
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
-tools/testskips/           lists the skipped tests and their reasons, for make skips (§13.3)
+tools/testskips/           lists the skipped and the failed tests, for make skips (§13.3)
 tools/stress/              the stress tester: model, generator and profiles, runner, checks and faults (§13.4)
 tools/mutate/              mutation testing, for make mutate (§13.5)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
@@ -3499,9 +3499,11 @@ parts work.
 - **A skip passes quietly.** `go test` does not show it without `-v`, and a
   platform avoids a test by skipping it. Thus `make skips` runs the tests
   with `-json`, and `tools/testskips` lists each skipped test with its reason,
-  and the totals. Each CI job runs it after `make check`, so that a green job
-  also says what it did not test. The job's result stays the result of
-  `make check`.
+  each failed test with its output, and the totals. A package that fails
+  outside a test, as after a time-out, is listed with its output. Each CI
+  job runs it after `make check`, so that a green job also says what it did
+  not test, and a red job says which test failed, when it fails again in
+  this second run. The job's result stays the result of `make check`.
 - **Coverage and mutation testing** measure the tests (§13.5). `format`,
   `crypt` and `codec` need the strongest tests, because a fault there is
   silent and permanent. The benchmarks are `make bench` and `make compare`

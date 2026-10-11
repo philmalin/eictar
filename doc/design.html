@@ -9431,8 +9431,8 @@ does.</td>
 </tr>
 <tr class="odd">
 <td><code>make skips</code></td>
-<td>list each test that this platform skips, with its reason, and the
-totals</td>
+<td>list each test that this platform skips, with its reason, each test
+that fails, with its output, and the totals</td>
 </tr>
 <tr class="even">
 <td><code>make cover</code></td>
@@ -9470,7 +9470,7 @@ THIRD_PARTY.md             the modules in the binary, and their license texts
 doc/                       design.md; format.md, the format reference; eictar.1, the man page;
                            Security_Audit.md, the security review (§14.6)
 bench/                     compare.sh: eictar against tar and a compressor (§8.4)
-tools/testskips/           lists the skipped tests and their reasons, for make skips (§13.3)
+tools/testskips/           lists the skipped and the failed tests, for make skips (§13.3)
 tools/stress/              the stress tester: model, generator and profiles, runner, checks and faults (§13.4)
 tools/mutate/              mutation testing, for make mutate (§13.5)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
@@ -9994,9 +9994,12 @@ run them.</li>
 not show it without <code>-v</code>, and a platform avoids a test by
 skipping it. Thus <code>make skips</code> runs the tests with
 <code>-json</code>, and <code>tools/testskips</code> lists each skipped
-test with its reason, and the totals. Each CI job runs it after
-<code>make check</code>, so that a green job also says what it did not
-test. The job’s result stays the result of <code>make check</code>.</li>
+test with its reason, each failed test with its output, and the totals.
+A package that fails outside a test, as after a time-out, is listed with
+its output. Each CI job runs it after <code>make check</code>, so that a
+green job also says what it did not test, and a red job says which test
+failed, when it fails again in this second run. The job’s result stays
+the result of <code>make check</code>.</li>
 <li><strong>Coverage and mutation testing</strong> measure the tests
 (§13.5). <code>format</code>, <code>crypt</code> and <code>codec</code>
 need the strongest tests, because a fault there is silent and permanent.

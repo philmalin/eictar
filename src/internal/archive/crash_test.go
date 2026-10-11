@@ -30,17 +30,19 @@ import (
 //
 // Each state is kept once, with the first operation that gives it.
 type crashFS struct {
-	t       *testing.T
-	mu      sync.Mutex
-	dir     string // the directory of the archive
-	target  string // the base name of the archive
-	ops     int
-	nextID  int
-	cur     map[string]int   // name to file, now
-	dur     map[string]int   // name to file, at the last SyncDir
-	synced  map[int][]byte   // file to content, at its last Sync
-	pending map[int][]extent // file to the writes since its last Sync
-	states  map[[32]byte]crashState
+	t   *testing.T
+	mu  sync.Mutex
+	dir string // the directory of the archive
+	// resolved is dir with its links resolved, as the writer resolves it.
+	resolved string
+	target   string // the base name of the archive
+	ops      int
+	nextID   int
+	cur      map[string]int   // name to file, now
+	dur      map[string]int   // name to file, at the last SyncDir
+	synced   map[int][]byte   // file to content, at its last Sync
+	pending  map[int][]extent // file to the writes since its last Sync
+	states   map[[32]byte]crashState
 	// renamed means that the operation renamed a file: it commits with a
 	// rename, and must never need a repair.
 	renamed bool
@@ -60,6 +62,11 @@ type crashState struct {
 func newCrashFS(t *testing.T, dir, target string) *crashFS {
 	fs := &crashFS{t: t, dir: dir, target: target, cur: map[string]int{}, synced: map[int][]byte{}, pending: map[int][]extent{},
 		states: map[[32]byte]crashState{}}
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs.resolved = resolved
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -145,7 +152,10 @@ func (fs *crashFS) current(id int) ([]byte, bool) {
 // name gives the base name of path, which must be in the directory of the
 // archive.
 func (fs *crashFS) name(path string) string {
-	if filepath.Dir(path) != filepath.Clean(fs.dir) {
+	// The writer resolves the path of the archive, and on Windows that also
+	// gives the long form of a short name (RUNNER~1 to runneradmin).
+	dir := filepath.Dir(path)
+	if dir != filepath.Clean(fs.dir) && dir != fs.resolved {
 		fs.t.Errorf("crashFS: %s is not in %s", path, fs.dir)
 	}
 	return filepath.Base(path)

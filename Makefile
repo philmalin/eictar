@@ -140,8 +140,9 @@ bench: | $(TMPDIR)
 compare: build
 	bench/compare.sh $(DIR)
 
-# List the tests that this platform skips, with their reasons. CI runs it
-# after check, so that a green job also says what it did not test.
+# List the tests that this platform skips, with their reasons, and the tests
+# that fail, with their output. CI runs it after check, so that a green job
+# also says what it did not test, and a red one says which test failed.
 skips: | $(TMPDIR)
 	@echo "=== unit tests"
 	@$(GO) test -count=1 -json ./src/... | $(GO) run ./tools/testskips
