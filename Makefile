@@ -111,12 +111,15 @@ cover: | $(TMPDIR)
 # code of each package in MUTATE, and its tests. A change that no test finds
 # is a survivor. MUTATE_FLAGS passes options, for example:
 #   make mutate MUTATE=./src/internal/archive MUTATE_FLAGS="-files '^dict' -j 8"
-# go run ./tools/mutate -h lists the options.
-MUTATE       ?= ./src/internal/format ./src/internal/crypt ./src/internal/pipeline
-MUTATE_FLAGS ?=
+# go run ./tools/mutate -h lists the options. A survivor in MUTATE_ACCEPTED,
+# the list of mutants that no test can find, does not count, and each entry
+# gives its reason.
+MUTATE          ?= ./src/internal/format ./src/internal/crypt ./src/internal/pipeline
+MUTATE_FLAGS    ?=
+MUTATE_ACCEPTED ?= tools/mutate/accepted.txt
 
 mutate: | $(TMPDIR)
-	$(GO) run ./tools/mutate $(MUTATE_FLAGS) $(MUTATE)
+	$(GO) run ./tools/mutate -accepted $(MUTATE_ACCEPTED) $(MUTATE_FLAGS) $(MUTATE)
 
 fuzz: | $(TMPDIR)
 	@for t in FuzzHeaderUnmarshal FuzzTrailerUnmarshal FuzzDecodeIndex FuzzUnmarshalCryptoHeader; do \

@@ -208,3 +208,27 @@ func TestBadKeysAndParamsAreErrors(t *testing.T) {
 		t.Error("Wrap: zero time accepted")
 	}
 }
+
+// TestLargeIndexRoundTrip: an index of a realistic size seals and opens. The
+// other tests seal indexes of a few bytes only.
+func TestLargeIndexRoundTrip(t *testing.T) {
+	key := make([]byte, 32)
+	plain := bytes.Repeat([]byte("member "), 1<<12)
+	sealed, err := SealIndex(key, 9, plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sealed) != 24+len(plain)+Overhead {
+		t.Errorf("sealed to %d bytes", len(sealed))
+	}
+	if got, err := OpenIndex(key, 9, sealed); err != nil || !bytes.Equal(got, plain) {
+		t.Errorf("OpenIndex: %d bytes, %v", len(got), err)
+	}
+}
+
+// TestMemoryBytes: Memory is in KiB, and the budget counts bytes.
+func TestMemoryBytes(t *testing.T) {
+	if got := (KDFParams{Memory: 256 * 1024}).MemoryBytes(); got != 256<<20 {
+		t.Errorf("MemoryBytes = %d, want %d", got, 256<<20)
+	}
+}

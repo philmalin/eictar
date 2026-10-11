@@ -286,6 +286,10 @@ func TestKDFParamsValidate(t *testing.T) {
 			t.Errorf("%+v was accepted", p)
 		}
 	}
+	// The least that each check accepts.
+	if err := (KDFParams{Time: 1, Memory: 8 * 4, Threads: 4}).Validate(); err != nil {
+		t.Errorf("8 KiB a lane, one pass: %v", err)
+	}
 }
 
 // TestChunkSealRoundTrip and the tamper tests below are the integrity story

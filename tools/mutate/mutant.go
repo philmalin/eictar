@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"strings"
 )
 
 // mutant is one small change to one file: the bytes from start to end are
@@ -16,6 +17,7 @@ type mutant struct {
 	start, end int    // byte offsets of the replaced text
 	orig, repl string
 	kind       string // the operator, for the report
+	fn         string // the function that holds the change, for the accepted list
 
 	// covLine and covCol give the place whose coverage tells whether the
 	// tests run the change. It is the change itself, except where the
@@ -72,6 +74,7 @@ func mutants(path string, src []byte) ([]mutant, error) {
 		return nil, err
 	}
 	spans := anchors(f)
+	decls := declNames(f)
 	var out []mutant
 	add := func(pos, end token.Pos, repl, kind string) {
 		p, e := fset.Position(pos), fset.Position(end)
@@ -85,8 +88,14 @@ func mutants(path string, src []byte) ([]mutant, error) {
 				}
 			}
 		}
+		fn := "-"
+		for _, d := range decls {
+			if pos >= d.start && pos < d.end {
+				fn = d.name
+			}
+		}
 		out = append(out, mutant{
-			file: path, line: p.Line, col: p.Column,
+			file: path, line: p.Line, col: p.Column, fn: fn,
 			covLine: c.Line, covCol: c.Column, always: always,
 			start: p.Offset, end: e.Offset,
 			orig: string(src[p.Offset:e.Offset]), repl: repl, kind: kind,
@@ -176,4 +185,54 @@ func anchors(f *ast.File) []span {
 		return true
 	})
 	return out
+}
+
+// named is a declaration outside a function and its name.
+type named struct {
+	start, end token.Pos
+	name       string
+}
+
+// declNames gives the name of each declaration of a file: Func, or
+// Type.Method for a method, and the first name of a var or const group.
+func declNames(f *ast.File) []named {
+	var out []named
+	for _, d := range f.Decls {
+		switch d := d.(type) {
+		case *ast.FuncDecl:
+			name := d.Name.Name
+			if d.Recv != nil && len(d.Recv.List) > 0 {
+				name = recvType(d.Recv.List[0].Type) + "." + name
+			}
+			out = append(out, named{d.Pos(), d.End(), name})
+		case *ast.GenDecl:
+			for _, s := range d.Specs {
+				if v, ok := s.(*ast.ValueSpec); ok && len(v.Names) > 0 {
+					out = append(out, named{v.Pos(), v.End(), v.Names[0].Name})
+				}
+			}
+		}
+	}
+	return out
+}
+
+// recvType gives the name of a receiver type, without * or type parameters.
+func recvType(e ast.Expr) string {
+	switch t := e.(type) {
+	case *ast.StarExpr:
+		return recvType(t.X)
+	case *ast.IndexExpr:
+		return recvType(t.X)
+	case *ast.IndexListExpr:
+		return recvType(t.X)
+	case *ast.Ident:
+		return t.Name
+	}
+	return "?"
+}
+
+// mutation gives the change as the accepted list names it, with the white
+// space of a condition that spans lines made into single spaces.
+func (m mutant) mutation() string {
+	return m.kind + ": " + strings.Join(strings.Fields(m.orig), " ") + " → " + m.repl
 }

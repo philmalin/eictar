@@ -9434,8 +9434,8 @@ in <code>.tmp/cover/</code> (§13.5)</td>
 <td><code>make mutate</code></td>
 <td>mutation testing of the packages in <code>MUTATE</code> (default
 <code>format</code>, <code>crypt</code> and <code>pipeline</code>).
-<code>MUTATE_FLAGS</code> gives options to <code>tools/mutate</code>
-(§13.5).</td>
+<code>MUTATE_FLAGS</code> gives options to <code>tools/mutate</code>,
+and <code>MUTATE_ACCEPTED</code> the accepted list (§13.5).</td>
 </tr>
 <tr class="even">
 <td><code>make stress</code></td>
@@ -10261,6 +10261,22 @@ that also finds the mutant. A mutant that does not compile does not
 count. The score is the part of the counted mutants that the tests find.
 <code>-test</code> gives other packages whose tests run, so that a run
 can tell a gap of one package from a gap of the whole program.</p>
+<p><strong>The accepted list.</strong> Some mutants cannot be found by
+any test. <code>tools/mutate/accepted.txt</code> lists them, and
+<code>make mutate</code> does not count them. An entry names the file,
+the function and the change, in the form that the report prints. Thus an
+entry stays correct when lines move. Each entry must give one of two
+reasons:</p>
+<ul>
+<li><em>Equivalent:</em> the change cannot change what eictar does, for
+example the error of <code>crypto/rand.Read</code>, which never returns
+one.</li>
+<li><em>Too costly:</em> a test needs more memory than a test can use.
+The entry names the check that stops the same input before it gets
+there.</li>
+</ul>
+<p>An entry whose mutant the tests find, or that names no mutant, fails
+the run. Thus the list cannot keep an entry that is no longer true.</p>
 <p><strong>The first results, with the tests of the package
 itself:</strong></p>
 <table>
@@ -10335,8 +10351,12 @@ The validator accepts this, and a test keeps it so.</li>
 <code>&gt;</code> to <code>&gt;=</code> survives at each limit:
 <code>MaxIndexSize</code>, <code>MaxIndexMembers</code>,
 <code>MaxDicts</code>, <code>MaxXattrs</code>, the xattr name and value,
-the chunk size, the KDF time and memory, and the bounds of the
-trailer.</li>
+the chunk size, the KDF time and memory, and the bounds of the trailer.
+<em>Done.</em> A test accepts each limit at its exact value, and an
+earlier test refuses the value one past it. The cap on the pairs of a
+CBOR map has a test too. <code>MaxIndexSize</code> and
+<code>MaxIndexMembers</code> are in the accepted list: a test needs more
+than 1 GiB, and another check stops the same input first.</li>
 <li><strong>The key schedule above generation 255.</strong>
 <code>uint64LE</code> survives with <code>&gt;&gt;</code> changed to
 <code>&lt;&lt;</code>, because each test vector uses a generation below
@@ -10352,53 +10372,56 @@ also not tested (<code>builder.go</code>).</li>
 <li><strong>Equivalent mutants.</strong> Some changes cannot change the
 result: the capacity of a <code>make</code>, or the error of
 <code>rand.Read</code>. A list of the accepted survivors, each with its
-reason, is necessary before the release gate can ask for zero
-survivors.</li>
+reason, is necessary before the release gate can ask for zero survivors.
+<em>Done.</em> The accepted list has 24 entries for <code>format</code>
+and 9 for <code>crypt</code>. Before an entry went in, new tests found
+each mutant that a test can find: for example, a failed seal in
+<code>Index.Encode</code>, <code>SameCodec</code>, and a sealed index
+larger than 40 bytes.</li>
 </ol>
-<p><strong>The results after groups 1 and 3, with the tests of the
-package itself:</strong></p>
+<p><strong>The results now, with the tests of the package
+itself:</strong></p>
 <table>
 <thead>
 <tr class="header">
 <th>Package</th>
 <th>First score</th>
-<th>Score now</th>
-<th>Survived</th>
-<th>Not covered</th>
+<th>Raw score now</th>
+<th>Accepted</th>
+<th>Not explained</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td><code>format</code></td>
 <td>63.2%</td>
-<td>88.2%</td>
-<td>41</td>
-<td>5</td>
+<td>93.8%</td>
+<td>24</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td><code>crypt</code></td>
 <td>55.2%</td>
-<td>86.2%</td>
-<td>11</td>
-<td>1</td>
+<td>89.7%</td>
+<td>9</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td><code>pipeline</code></td>
 <td>59.0%</td>
 <td>59.0%</td>
-<td>59</td>
-<td>12</td>
+<td>0</td>
+<td>71</td>
 </tr>
 </tbody>
 </table>
-<p>Part of the increase in <code>format</code> comes from the change to
-the tool for case expressions: it tests 63 mutants that it showed as not
-covered before. The survivors that stay in <code>format</code> and
-<code>crypt</code> are limits (group 2) and equivalent mutants (group
-5). Two functions are also not checked by the tests of
-<code>format</code>: <code>SameCodec</code>, and
-<code>CodecSpec.String</code> for a codec without parameters. The tests
-of other packages check them.</p>
+<p>The raw score counts an accepted mutant as a survivor.
+<code>make mutate</code> does not count it, and gives 100% for
+<code>format</code> and <code>crypt</code>. Part of the increase in
+<code>format</code> comes from the change to the tool for case
+expressions: it tests 63 mutants that it showed as not covered before.
+The gaps of <code>pipeline</code> are mostly errors of the disk (group
+4), which step 3 covers.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives
@@ -10456,8 +10479,8 @@ and <code>pipeline</code>, with no survivor that is not explained</li>
 <tbody>
 <tr class="odd">
 <td>1. Strength of the tests</td>
-<td>measured; groups 1 and 3 done; group 2 and the list of accepted
-survivors are next</td>
+<td><code>format</code> and <code>crypt</code> have no survivor that is
+not explained; <code>pipeline</code> waits for step 3</td>
 </tr>
 <tr class="even">
 <td>2. Second reader</td>

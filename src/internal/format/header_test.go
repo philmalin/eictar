@@ -201,8 +201,8 @@ func TestCryptoHeaderRefusesCostlyParameters(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c := base()
 			tc.mutate(c)
-			// A damaged header is ErrCorruptIndex, which is exit 3, and not an
-			// error of this build (exit 4).
+			// A damaged header is ErrCorruptIndex: damage, which --repair
+			// acts on, and not a header that only a newer build reads.
 			if err := c.Validate(); !errors.Is(err, ErrCorruptIndex) {
 				t.Errorf("got %v, want ErrCorruptIndex", err)
 			}
@@ -246,9 +246,9 @@ func rawCryptoHeader(t *testing.T, c *CryptoHeader) []byte {
 
 // TestCryptoHeaderRefusesUnknown: each case changes one field, so that only
 // the check of that field can refuse it. A name that this build does not know
-// is ErrUnsupportedVersion (exit 4): a newer build can read the archive. A
-// wrong length is ErrCorruptIndex (exit 3). The reader and the writer refuse
-// alike.
+// is ErrUnsupportedVersion: a newer build can read the archive, so it is not
+// damage. A wrong length is ErrCorruptIndex: damage, which --repair acts on.
+// Both give exit 3. The reader and the writer refuse alike.
 func TestCryptoHeaderRefusesUnknown(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -290,5 +290,26 @@ func TestCryptoHeaderRefusesExtraBytes(t *testing.T) {
 	binary.LittleEndian.PutUint32(b[0:4], uint32(len(b)-4))
 	if _, err := UnmarshalCryptoHeader(b); !errors.Is(err, ErrCorruptIndex) {
 		t.Errorf("got %v, want ErrCorruptIndex", err)
+	}
+}
+
+// TestCryptoHeaderAcceptsLimits: each limit of the key derivation at its
+// exact value is accepted. TestCryptoHeaderRefusesCostlyParameters refuses
+// the value one past it.
+func TestCryptoHeaderAcceptsLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(c *CryptoHeader)
+	}{
+		{"memory at the cap", func(c *CryptoHeader) { c.Memory = MaxKDFMemoryKiB }},
+		{"time at the cap", func(c *CryptoHeader) { c.Time = MaxKDFTime }},
+		{"memory of 8 KiB a thread", func(c *CryptoHeader) { c.Memory = 8 * 4 }},
+		{"one pass", func(c *CryptoHeader) { c.Time = 1 }},
+	} {
+		c := sampleCryptoHeader()
+		tc.mutate(c)
+		if err := c.Validate(); err != nil {
+			t.Errorf("%s: refused: %v", tc.name, err)
+		}
 	}
 }

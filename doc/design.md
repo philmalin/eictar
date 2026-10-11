@@ -2968,7 +2968,7 @@ bare `go` command:
 | `make check-norace` | `make check` with `test` for `test-race`, for NetBSD and OpenBSD |
 | `make skips` | list each test that this platform skips, with its reason, and the totals |
 | `make cover` | the coverage of the unit tests and the operational tests together, in `.tmp/cover/` (§13.5) |
-| `make mutate` | mutation testing of the packages in `MUTATE` (default `format`, `crypt` and `pipeline`). `MUTATE_FLAGS` gives options to `tools/mutate` (§13.5). |
+| `make mutate` | mutation testing of the packages in `MUTATE` (default `format`, `crypt` and `pipeline`). `MUTATE_FLAGS` gives options to `tools/mutate`, and `MUTATE_ACCEPTED` the accepted list (§13.5). |
 | `make stress` | random end-to-end tests against a model (§13.4). `STRESS="-duration 30m"` runs longer, and `STRESS="-seed N -sequences 1"` replays a failure. |
 | `make stress-build` | build the stress tester alone, as `.build/stress` |
 
@@ -3729,6 +3729,20 @@ part of the counted mutants that the tests find. `-test` gives other
 packages whose tests run, so that a run can tell a gap of one package from a
 gap of the whole program.
 
+**The accepted list.** Some mutants cannot be found by any test.
+`tools/mutate/accepted.txt` lists them, and `make mutate` does not count
+them. An entry names the file, the function and the change, in the form
+that the report prints. Thus an entry stays correct when lines move. Each
+entry must give one of two reasons:
+
+- *Equivalent:* the change cannot change what eictar does, for example the
+  error of `crypto/rand.Read`, which never returns one.
+- *Too costly:* a test needs more memory than a test can use. The entry
+  names the check that stops the same input before it gets there.
+
+An entry whose mutant the tests find, or that names no mutant, fails the
+run. Thus the list cannot keep an entry that is no longer true.
+
 **The first results, with the tests of the package itself:**
 
 | Package | Mutants | Found | Survived | Not covered | Score |
@@ -3770,6 +3784,11 @@ The survivors fall into these groups, in order of risk:
    limit: `MaxIndexSize`, `MaxIndexMembers`, `MaxDicts`, `MaxXattrs`, the
    xattr name and value, the chunk size, the KDF time and memory, and the
    bounds of the trailer.
+   *Done.* A test accepts each limit at its exact value, and an earlier
+   test refuses the value one past it. The cap on the pairs of a CBOR map
+   has a test too. `MaxIndexSize` and `MaxIndexMembers` are in the
+   accepted list: a test needs more than 1 GiB, and another check stops
+   the same input first.
 3. **The key schedule above generation 255.** `uint64LE` survives with `>>`
    changed to `<<`, because each test vector uses a generation below 256.
    An index key of a later generation has no fixed vector.
@@ -3784,21 +3803,24 @@ The survivors fall into these groups, in order of risk:
    capacity of a `make`, or the error of `rand.Read`. A list of the accepted
    survivors, each with its reason, is necessary before the release gate can
    ask for zero survivors.
+   *Done.* The accepted list has 24 entries for `format` and 9 for
+   `crypt`. Before an entry went in, new tests found each mutant that a
+   test can find: for example, a failed seal in `Index.Encode`,
+   `SameCodec`, and a sealed index larger than 40 bytes.
 
-**The results after groups 1 and 3, with the tests of the package itself:**
+**The results now, with the tests of the package itself:**
 
-| Package | First score | Score now | Survived | Not covered |
+| Package | First score | Raw score now | Accepted | Not explained |
 |---|---|---|---|---|
-| `format` | 63.2% | 88.2% | 41 | 5 |
-| `crypt` | 55.2% | 86.2% | 11 | 1 |
-| `pipeline` | 59.0% | 59.0% | 59 | 12 |
+| `format` | 63.2% | 93.8% | 24 | 0 |
+| `crypt` | 55.2% | 89.7% | 9 | 0 |
+| `pipeline` | 59.0% | 59.0% | 0 | 71 |
 
-Part of the increase in `format` comes from the change to the tool for case
-expressions: it tests 63 mutants that it showed as not covered before. The
-survivors that stay in `format` and `crypt` are limits (group 2) and
-equivalent mutants (group 5). Two functions are also not checked by the tests
-of `format`: `SameCodec`, and `CodecSpec.String` for a codec without
-parameters. The tests of other packages check them.
+The raw score counts an accepted mutant as a survivor. `make mutate` does
+not count it, and gives 100% for `format` and `crypt`. Part of the increase
+in `format` comes from the change to the tool for case expressions: it tests
+63 mutants that it showed as not covered before. The gaps of `pipeline` are
+mostly errors of the disk (group 4), which step 3 covers.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of
@@ -3842,7 +3864,7 @@ The two hangs that the tests found were both in the memory budget.
 
 | Step | Status |
 |---|---|
-| 1. Strength of the tests | measured; groups 1 and 3 done; group 2 and the list of accepted survivors are next |
+| 1. Strength of the tests | `format` and `crypt` have no survivor that is not explained; `pipeline` waits for step 3 |
 | 2. Second reader | planned |
 | 3. Faults of the disk and the machine | planned |
 | 4. More fuzzing | planned |

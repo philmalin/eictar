@@ -156,3 +156,92 @@ func f(a int) int {
 		}
 	}
 }
+
+// TestReadAccepted: an entry is a name and an indented reason, and a name
+// without a reason, a reason without a name, or a name given two times is an
+// error.
+func TestReadAccepted(t *testing.T) {
+	list, err := readAccepted(strings.NewReader(`# comment
+
+src/p/p.go: f: operator: + → -
+	the first line
+	and the second line
+src/p/p.go: T.m: if false: err != nil → false #2
+    a reason
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := list["src/p/p.go: f: operator: + → -"]
+	if e == nil || e.reason != "the first line and the second line" || e.line != 3 {
+		t.Errorf("entry: %+v", e)
+	}
+	if list["src/p/p.go: T.m: if false: err != nil → false #2"] == nil || len(list) != 2 {
+		t.Errorf("list: %v", list)
+	}
+
+	for name, bad := range map[string]string{
+		"no reason":         "src/p/p.go: f: operator: + → -\n",
+		"no reason, middle": "src/p/p.go: f: operator: + → -\nsrc/p/p.go: g: operator: + → -\n\tr\n",
+		"reason first":      "\ta reason\n",
+		"two times":         "a.go: f: x\n\tr\na.go: f: x\n\tr\n",
+		"not three parts":   "a.go: x\n\tr\n",
+	} {
+		if _, err := readAccepted(strings.NewReader(bad)); err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+}
+
+// TestKeys: a name holds the file, the function and the mutation, and the
+// second of two same mutations in one function gets #2.
+func TestKeys(t *testing.T) {
+	src := `package p
+
+type T struct{}
+
+func (t *T) m(a, b int) bool {
+	if a <
+		b {
+		return a < b
+	}
+	return false
+}
+
+var v = func() int { return 1 + 2 }()
+`
+	ms, err := mutants("/x/p.go", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := keys(ms, map[string]string{"/x/p.go": "src/p/p.go"})
+	want := []string{
+		"src/p/p.go: T.m: if false: a < b → false",
+		"src/p/p.go: T.m: operator: < → <=",
+		"src/p/p.go: T.m: operator: < → >=",
+		"src/p/p.go: T.m: operator: < → <= #2",
+		"src/p/p.go: T.m: operator: < → >= #2",
+		"src/p/p.go: v: operator: + → -",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("keys:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// TestStaleEntries: an entry whose mutant the tests find, or that names no
+// mutant of a file of the run, is stale. An entry of a file that the run
+// does not change is not.
+func TestStaleEntries(t *testing.T) {
+	cfg := config{
+		accepted: map[string]*entry{
+			"a.go: f: x": {key: "a.go: f: x", used: true},
+			"a.go: f: y": {key: "a.go: f: y", found: true},
+			"a.go: f: z": {key: "a.go: f: z"},
+			"b.go: f: z": {key: "b.go: f: z"},
+		},
+		mutated: map[string]bool{"a.go": true},
+	}
+	if n := staleEntries(cfg, "accepted.txt"); n != 2 {
+		t.Errorf("%d stale entries, want 2", n)
+	}
+}

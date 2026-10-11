@@ -173,6 +173,18 @@ func TestTrailerValidateAgainst(t *testing.T) {
 			tr.IndexOffset = HeaderSize
 			tr.IndexLength = 0
 		}, nil},
+		{"empty index at the trailer", plainHeader, func(tr *Trailer) {
+			tr.IndexOffset = fileSize - TrailerSize
+			tr.IndexLength = 0
+		}, nil},
+		{"prev index at body start", plainHeader, func(tr *Trailer) {
+			// The generation before had no members: its index was the first
+			// thing in the body.
+			tr.PrevIndexOffset = HeaderSize
+		}, nil},
+		{"prev index inside the body", plainHeader, func(tr *Trailer) {
+			tr.PrevIndexOffset = 512
+		}, nil},
 
 		{"minor version mismatch", plainHeader, func(tr *Trailer) {
 			tr.VersionMinor = VersionMinor + 1
@@ -196,6 +208,9 @@ func TestTrailerValidateAgainst(t *testing.T) {
 		}, ErrCorruptIndex},
 		{"prev index past end", plainHeader, func(tr *Trailer) {
 			tr.PrevIndexOffset = fileSize * 4
+		}, ErrCorruptIndex},
+		{"prev index before the body", plainHeader, func(tr *Trailer) {
+			tr.PrevIndexOffset = HeaderSize - 1
 		}, ErrCorruptIndex},
 		{"encrypted index in a plaintext archive", plainHeader, func(tr *Trailer) {
 			tr.Flags = FlagIndexEncrypted

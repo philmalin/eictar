@@ -1,0 +1,126 @@
+# Mutants that no test can find, because they cannot change what eictar
+# does (doc/design.md 13.5). make mutate does not count them.
+#
+# Each entry is the name that make mutate prints for the mutant, then one or
+# more indented lines with the reason. An entry that the tests find, or that
+# names no mutant, fails the run.
+#
+# Two kinds of reason are accepted:
+# - Equivalent: the change cannot change what eictar does.
+# - Too costly: a test needs more memory than a test can use. Each such entry
+#   names the check that stops the same input before it gets there.
+
+# --- format: errors that cannot occur ---
+
+src/internal/format/cbor.go: encMode: if false: err != nil → false
+	Equivalent. The encoder options are constants that the library accepts,
+	so EncMode cannot fail.
+src/internal/format/cbor.go: decModeFor: if false: err != nil → false
+	Equivalent. The options are in the ranges that the library accepts:
+	MaxArrayElements is from 16 to MaxIndexMembers, and MaxMapPairs is
+	maxIndexMapPairs. DecMode cannot fail.
+src/internal/format/crypto.go: UnmarshalCryptoHeader: if false: err != nil → false
+	Equivalent. decModeFor cannot fail (see above).
+src/internal/format/index.go: DecodeIndex: if false: err != nil → false #4
+	Equivalent. decModeFor cannot fail (see above).
+src/internal/format/crypto.go: CryptoHeader.Marshal: if false: err != nil → false #2
+	Equivalent. The crypto header has only integers, strings and byte
+	strings, which CBOR always encodes.
+src/internal/format/index.go: Index.Encode: if false: err != nil → false #3
+	Equivalent. zstd.NewWriter fails only for options that are not valid,
+	and these are constants.
+src/internal/format/index.go: Index.Encode: if false: err != nil → false #4
+	Equivalent. The encoder has no writer and only EncodeAll uses it, so it
+	has no stream state, and zstd's Encoder.Close returns nil.
+src/internal/format/index.go: DecodeIndex: if false: err != nil → false #2
+	Equivalent. zstd.NewReader fails only for a memory limit of 0 or more
+	than 1<<63. indexLimit is from MinIndexLimit to MaxIndexSize.
+
+# --- format: changes with no effect ---
+
+src/internal/format/cbor.go: decModeFor: operator: / → *
+	Equivalent. minBytesPerElement is 1, so inputLen / 1 and inputLen * 1
+	are the same.
+src/internal/format/format.go: FlagEncrypted: operator: << → >>
+	Equivalent. 1 << 0 and 1 >> 0 are both 1.
+src/internal/format/format.go: FlagIndexEncrypted: operator: << → >>
+	Equivalent. 1 << 0 and 1 >> 0 are both 1.
+src/internal/format/crypto.go: UnmarshalCryptoHeader: operator: - → +
+	Equivalent. The change is in an error message only.
+src/internal/format/crypto.go: UnmarshalCryptoHeader: operator: < → <=
+	Equivalent. A block of exactly 4 bytes has a body of 0 bytes, which
+	the decoder refuses. The mutant gives ErrTruncated in place of
+	ErrCorruptIndex. Both are damage, with exit 3.
+src/internal/format/crypto.go: UnmarshalCryptoHeader: operator: < → <= #2
+	Equivalent. A length of 0 gives a body of 0 bytes, which the decoder
+	refuses with ErrCorruptIndex. The mutant refuses it with the same error.
+src/internal/format/index.go: DecodeIndex: operator: >= → >
+	Equivalent. zstd gives ErrDecoderSizeExceeded when the output is more
+	than the limit. The change has an effect only for another error with
+	exactly limit bytes of output. Then the index is ErrCorruptIndex in
+	place of ErrIndexTooLarge. Both are damage, with exit 3.
+src/internal/format/index.go: Index.validateData: operator: || → &&
+	Equivalent. An owner with data is a member that shares content, and
+	validatePayload gives such a member no blob. Thus its len is 0, and the
+	clause len == 0 refuses it.
+src/internal/format/index.go: Index.validateDicts: operator: < → <= #2
+	Equivalent. off + len == off only when len is 0. A dictionary of len 0
+	is refused before this, because len must be at least its size, and its
+	size is at least 1.
+src/internal/format/index.go: validateSparse: operator: < → <=
+	Equivalent. off + len == off only when len is 0, and the check before
+	it refuses an empty segment.
+src/internal/format/index.go: validateSparse: operator: > → >=
+	Equivalent. For the first segment, end is 0, and an offset is never
+	less than 0.
+src/internal/format/trailer.go: Trailer.ValidateAgainst: operator: > → >= #3
+	Equivalent. No reader uses prev_index_offset: only the writer sets it.
+	A value equal to the start of the trailer has no effect.
+
+# --- format: limits that need too much memory to test ---
+
+src/internal/format/index.go: DecodeIndex: if false: len(b) > MaxIndexSize → false
+	Too costly: a test needs an index of more than 1 GiB. The reader
+	refuses a trailer with an index longer than MaxIndexSize before it
+	reads it (archive/reader.go), and zstd stops a compressed index at
+	indexLimit, which is at most MaxIndexSize.
+src/internal/format/index.go: DecodeIndex: operator: > → >=
+	Too costly: an index of exactly 1 GiB. See the entry above.
+src/internal/format/index.go: Index.Validate: if false: len(ix.Members) > MaxIndexMembers → false
+	Too costly: a test needs 4,194,305 members, about 1.5 GB. The decoder
+	refuses an array of more than MaxIndexMembers elements (decModeFor), so
+	a reader never gets here with more. On create the check stops an index
+	that no reader can open.
+src/internal/format/index.go: Index.Validate: operator: > → >=
+	Too costly: an index of exactly MaxIndexMembers members. See the entry
+	above.
+
+# --- crypt ---
+
+src/internal/crypt/aead.go: SealIndex: if false: err != nil → false
+	Equivalent. Since Go 1.24, crypto/rand.Read never returns an error: if
+	it cannot read, it stops the program.
+src/internal/crypt/keys.go: NewDataKey: if false: err != nil → false
+	Equivalent. crypto/rand.Read never returns an error (see SealIndex).
+src/internal/crypt/keys.go: WrapKey: if false: err != nil → false
+	Equivalent. crypto/rand.Read never returns an error (see SealIndex).
+src/internal/crypt/keys.go: Keys.Wrap: if false: err != nil → false
+	Equivalent. crypto/rand.Read never returns an error (see SealIndex).
+src/internal/crypt/keys.go: Keys.Wrap: if false: err != nil → false #2
+	Equivalent. When DeriveKEK fails, the KEK is nil, and WrapKey then
+	fails because a nil key has the wrong length. Wrap still returns an
+	error.
+src/internal/crypt/keys.go: Unlock: if false: err != nil → false
+	Equivalent. When DeriveKEK fails, the KEK is nil, and UnwrapKey then
+	fails because a nil key has the wrong length. Unlock still returns an
+	error.
+src/internal/crypt/keys.go: Keys.derive: if false: err != nil → false
+	Equivalent. HKDF-SHA-256 gives up to 8160 bytes, and derive asks for
+	32. ReadFull cannot fail.
+src/internal/crypt/keys.go: Keys.derive: operator: + → - #2
+	Equivalent. The expression is the capacity of a buffer that append
+	grows. The info string and the uuid are at least 30 bytes and extra is
+	at most 8, so the capacity is never negative.
+src/internal/crypt/aead.go: sealIndexWithNonce: operator: + → - #2
+	Equivalent. The expression is the capacity of a buffer that append
+	grows. 24 + n - 16 is never negative.

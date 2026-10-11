@@ -39,16 +39,22 @@ type config struct {
 	files   *regexp.Regexp
 	verbose bool
 	tmp     string
+
+	// accepted is the list of mutants that no test can find, by name.
+	accepted map[string]*entry
+	// mutated holds each file that this run changes, as the list names it.
+	mutated map[string]bool
 }
 
 func main() {
 	var cfg config
-	var tests, files string
+	var tests, files, acceptedList string
 	flag.IntVar(&cfg.jobs, "j", max(1, runtime.NumCPU()/4), "mutants to test at the same time")
 	flag.StringVar(&cfg.run, "run", "", "run only the tests that match this regular expression")
 	flag.StringVar(&tests, "test", "", "the packages whose tests run, separated by commas; default: the package itself")
 	flag.StringVar(&files, "files", "", "mutate only the files whose base name matches this regular expression")
 	flag.BoolVar(&cfg.verbose, "v", false, "also list the mutants that the tests found")
+	flag.StringVar(&acceptedList, "accepted", "", "the list of mutants that no test can find, each with its reason")
 	flag.Parse()
 	if flag.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "usage: mutate [flags] PKG...")
@@ -65,6 +71,18 @@ func main() {
 			os.Exit(2)
 		}
 		cfg.files = re
+	}
+	cfg.accepted, cfg.mutated = map[string]*entry{}, map[string]bool{}
+	if acceptedList != "" {
+		f, err := os.Open(acceptedList)
+		if err == nil {
+			cfg.accepted, err = readAccepted(f)
+			f.Close()
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "mutate: %s: %v\n", acceptedList, err)
+			os.Exit(2)
+		}
 	}
 	cfg.goTool = os.Getenv("GOTOOL")
 	if cfg.goTool == "" {
@@ -88,6 +106,7 @@ func main() {
 		}
 		survivors += s
 	}
+	survivors += staleEntries(cfg, acceptedList)
 	if survivors > 0 {
 		os.RemoveAll(tmp)
 		os.Exit(1)
@@ -103,9 +122,10 @@ const (
 	survived                   // every test passed
 	notCovered                 // no test runs the code
 	notCompiled                // the change does not compile, and does not count
+	accepted                   // in the accepted list: no test can find it, and it does not count
 )
 
-var outcomeNames = [...]string{"killed", "timed out", "SURVIVED", "not covered", "did not compile"}
+var outcomeNames = [...]string{"killed", "timed out", "SURVIVED", "not covered", "did not compile", "accepted"}
 
 // mutatePackage tests each mutant of one package, prints the report, and
 // returns the number of survivors and mutants that no test covers.
@@ -142,12 +162,23 @@ func mutatePackage(cfg config, pkg string) (int, error) {
 		src  []byte
 		line string
 	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return 0, err
+	}
+	rel := map[string]string{}
 	var jobs []job
 	for _, name := range info.GoFiles {
 		if cfg.files != nil && !cfg.files.MatchString(name) {
 			continue
 		}
 		file := filepath.Join(info.Dir, name)
+		if r, err := filepath.Rel(cwd, file); err == nil {
+			rel[file] = filepath.ToSlash(r)
+		} else {
+			rel[file] = file
+		}
+		cfg.mutated[rel[file]] = true
 		src, err := os.ReadFile(file)
 		if err != nil {
 			return 0, err
@@ -200,14 +231,28 @@ func mutatePackage(cfg config, pkg string) (int, error) {
 		}
 		return ma.start < mb.start
 	})
+	ordered := make([]mutant, len(order))
+	for n, i := range order {
+		ordered[n] = jobs[i].m
+	}
+	names := keys(ordered, rel)
+
 	var counts [len(outcomeNames)]int
 	fmt.Printf("=== %s\n", info.ImportPath)
-	for _, i := range order {
+	for n, i := range order {
 		r := results[i]
+		if e := cfg.accepted[names[n]]; e != nil {
+			switch r {
+			case survived, notCovered:
+				r, e.used = accepted, true
+			case killed, timedOut:
+				e.found = true
+			}
+		}
 		counts[r]++
 		if r == survived || r == notCovered || cfg.verbose && r != notCompiled {
 			j := jobs[i]
-			fmt.Printf("%s:%s  [%s]\n    %s\n", filepath.Base(j.m.file), j.m, outcomeNames[r], j.line)
+			fmt.Printf("%s:%s  [%s]\n    %s\n    name: %s\n", filepath.Base(j.m.file), j.m, outcomeNames[r], j.line, names[n])
 		}
 	}
 	found := counts[killed] + counts[timedOut]
@@ -216,8 +261,8 @@ func mutatePackage(cfg config, pkg string) (int, error) {
 	if scored > 0 {
 		score = 100 * float64(found) / float64(scored)
 	}
-	fmt.Printf("%s: %d mutants: %d killed, %d timed out, %d survived, %d not covered, %d did not compile; score %.1f%%\n",
-		info.ImportPath, len(jobs), counts[killed], counts[timedOut], counts[survived], counts[notCovered], counts[notCompiled], score)
+	fmt.Printf("%s: %d mutants: %d killed, %d timed out, %d survived, %d not covered, %d accepted, %d did not compile; score %.1f%%\n",
+		info.ImportPath, len(jobs), counts[killed], counts[timedOut], counts[survived], counts[notCovered], counts[accepted], counts[notCompiled], score)
 	return counts[survived] + counts[notCovered], nil
 }
 
@@ -292,4 +337,27 @@ func listPackage(cfg config, pkg string) (pkgInfo, error) {
 		return pkgInfo{}, errors.New("give one package at a time, not a pattern")
 	}
 	return info, nil
+}
+
+// staleEntries reports each entry of the accepted list that is wrong for a
+// file of this run: the tests find its mutant, or no mutant has its name
+// because the code changed. It returns their number. A stale entry fails the
+// run, so that the list stays true.
+func staleEntries(cfg config, list string) int {
+	var stale []*entry
+	for _, e := range cfg.accepted {
+		file, _, _ := strings.Cut(e.key, ": ")
+		if e.found || !e.used && cfg.mutated[file] {
+			stale = append(stale, e)
+		}
+	}
+	sort.Slice(stale, func(a, b int) bool { return stale[a].line < stale[b].line })
+	for _, e := range stale {
+		why := "no mutant has this name now: the code changed"
+		if e.found {
+			why = "the tests find this mutant now: remove the entry"
+		}
+		fmt.Printf("%s:%d: %s\n    %s\n", list, e.line, why, e.key)
+	}
+	return len(stale)
 }

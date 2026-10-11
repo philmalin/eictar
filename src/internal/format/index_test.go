@@ -419,6 +419,30 @@ func TestIndexValidateAcceptsEdges(t *testing.T) {
 			// The archives that hold it must open.
 			ix.Members[1].Offset = 64
 		}},
+
+		// Each limit at its exact value: the value one more is refused above.
+		{"chunk size at the limit", func(ix *Index) { ix.Members[7].ChunkSize = MaxChunkSize }},
+		{"xattrs at the limit", func(ix *Index) {
+			for i := len(ix.Members[5].Xattrs); i < MaxXattrs; i++ {
+				ix.Members[5].Xattrs[fmt.Sprintf("user.%d", i)] = nil
+			}
+		}},
+		{"xattr name at the limit", func(ix *Index) {
+			ix.Members[5].Xattrs[strings.Repeat("u", MaxXattrName)] = []byte("x")
+		}},
+		{"xattr value at the limit", func(ix *Index) {
+			ix.Members[5].Xattrs["user.big"] = make([]byte, MaxXattrValue)
+		}},
+		{"dictionaries at the limit", func(ix *Index) {
+			for i := len(ix.Dicts); i < MaxDicts; i++ {
+				d := ix.Dicts[0]
+				d.ID = uint32(50000 + i)
+				ix.Dicts = append(ix.Dicts, d)
+			}
+		}},
+		{"dictionary at the size limit", func(ix *Index) {
+			ix.Dicts[0].Size, ix.Dicts[0].Length = MaxDictSize, MaxDictSize
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ix := sampleIndex()
@@ -452,8 +476,10 @@ func TestIndexDecodeRejectsCorruptBytes(t *testing.T) {
 		{"random", bytes.Repeat([]byte{0x5a}, 128)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := DecodeIndex(tc.in, FlagIndexCompressed, nil); err == nil {
-				t.Error("decode accepted corrupt input")
+			if _, err := DecodeIndex(tc.in, FlagIndexCompressed, nil); !errors.Is(err, ErrCorruptIndex) {
+				// Damage is not ErrIndexTooLarge: that error is for an index
+				// that expands too far.
+				t.Errorf("decode error = %v, want ErrCorruptIndex", err)
 			}
 		})
 	}
@@ -648,6 +674,9 @@ func TestIndexValidateRejectsDicts(t *testing.T) {
 	if s := (CodecSpec{Name: "zstd", Dict: 5}).String(); s != "zstd:dict" {
 		t.Errorf("String() = %q", s)
 	}
+	if s := (CodecSpec{Name: "none"}).String(); s != "none" {
+		t.Errorf("String() = %q, want the name alone", s)
+	}
 }
 
 // TestIndexValidateRejectsSharing: a member that shares content must name an
@@ -756,5 +785,79 @@ func TestIndexDecodeKeepsTheOpenerError(t *testing.T) {
 	open := func([]byte) ([]byte, error) { return nil, wrongKey }
 	if _, err := DecodeIndex([]byte("sealed"), FlagIndexEncrypted, open); !errors.Is(err, wrongKey) {
 		t.Errorf("got %v, want the opener's error", err)
+	}
+}
+
+// TestSameCodec: two entries are the same codec when their encodings are the
+// same. A parameter decoded from an index is a uint64, and one from the
+// command line is an int: they are the same value.
+func TestSameCodec(t *testing.T) {
+	a := CodecSpec{Name: "zstd", Params: map[string]any{"level": uint64(19)}}
+	for _, tc := range []struct {
+		b    CodecSpec
+		want bool
+	}{
+		{CodecSpec{Name: "zstd", Params: map[string]any{"level": 19}}, true},
+		{CodecSpec{Name: "zstd", Params: map[string]any{"level": 3}}, false},
+		{CodecSpec{Name: "xz", Params: map[string]any{"level": 19}}, false},
+		{CodecSpec{Name: "zstd", Params: map[string]any{"level": 19}, Dict: 7}, false},
+		{CodecSpec{Name: "zstd"}, false},
+		// A value that CBOR cannot encode is never the same as another.
+		{CodecSpec{Name: "zstd", Params: map[string]any{"level": make(chan int)}}, false},
+	} {
+		if got := SameCodec(a, tc.b); got != tc.want {
+			t.Errorf("SameCodec(%v, %v) = %v, want %v", a, tc.b, got, tc.want)
+		}
+	}
+	bad := CodecSpec{Name: "zstd", Params: map[string]any{"x": make(chan int)}}
+	if SameCodec(bad, bad) {
+		t.Error("an entry that does not encode is the same as itself")
+	}
+}
+
+// TestIndexEncodeErrors: when encoding or sealing fails, Encode returns the
+// error and no bytes. A seal that fails must never let the index reach the
+// disk as plaintext.
+func TestIndexEncodeErrors(t *testing.T) {
+	ix := sampleIndex()
+	ix.Codecs[0].Params["bad"] = make(chan int)
+	if enc, err := ix.Encode(EncodeOptions{}); err == nil {
+		t.Errorf("a parameter that CBOR cannot encode gave %d bytes", len(enc.Bytes))
+	}
+
+	failed := errors.New("seal failed")
+	seal := func([]byte) ([]byte, error) { return nil, failed }
+	if enc, err := sampleIndex().Encode(EncodeOptions{Compress: true, Seal: seal}); !errors.Is(err, failed) {
+		t.Errorf("a failed seal: %v, %v; want the seal's error", enc, err)
+	}
+}
+
+// TestIndexMapPairsAreCapped: the decoder takes a map of up to
+// maxIndexMapPairs pairs, and refuses a larger one. The codec parameters
+// have no other limit.
+func TestIndexMapPairsAreCapped(t *testing.T) {
+	for _, tc := range []struct {
+		pairs int
+		ok    bool
+	}{
+		{maxIndexMapPairs, true},
+		{maxIndexMapPairs + 1, false},
+	} {
+		ix := sampleIndex()
+		ix.Codecs[1].Params = map[string]any{}
+		for i := range tc.pairs {
+			ix.Codecs[1].Params[fmt.Sprint(i)] = uint64(1)
+		}
+		raw, err := encMode.Marshal(ix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = DecodeIndex(raw, 0, nil)
+		if tc.ok && err != nil {
+			t.Errorf("%d pairs: %v", tc.pairs, err)
+		}
+		if !tc.ok && !errors.Is(err, ErrCorruptIndex) {
+			t.Errorf("%d pairs: got %v, want ErrCorruptIndex", tc.pairs, err)
+		}
 	}
 }
