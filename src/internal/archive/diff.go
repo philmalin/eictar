@@ -328,7 +328,7 @@ type differ struct {
 type contentJob struct {
 	content *format.Member
 	e       entry
-	f       *os.File
+	f       srcFile
 }
 
 // linkCheck is a hardlink member found on disk, whose target is checked after
@@ -408,7 +408,7 @@ func (d *differ) stopWorkers() {
 // disk is not walked: its members are then reported as missing.
 func (d *differ) walk(roots []string) error {
 	opt := walkOptions{
-		root:          d.root,
+		root:          osSrc{d.root},
 		baseDir:       d.cfg.BaseDir,
 		dereference:   d.cfg.Dereference,
 		exclude:       d.cfg.Exclude,
@@ -523,7 +523,7 @@ func (d *differ) visit(e entry) error {
 	// A file is opened here, while the walk holds its directory, and not by
 	// its path in a worker later (doc/Security_Audit.md, finding 11). Its
 	// attributes and its content come from what this opens.
-	var f *os.File
+	var f srcFile
 	var openErr error
 	if e.Kind == kindFile && (m.Type == format.TypeReg || m.Type == format.TypeHardlink) {
 		f, openErr = openWalked(e)
@@ -593,7 +593,7 @@ func (d *differ) checkHardlinks() {
 // the caller reads the file. f is e open, for its attributes: a file that the
 // caller opened, or the directory that the walk opened. For a file that did
 // not open, f is nil and openErr says why.
-func compareEntry(m, content *format.Member, e entry, opt MetadataOptions, f *os.File, openErr error) ([]Difference, *format.Member, error) {
+func compareEntry(m, content *format.Member, e entry, opt MetadataOptions, f srcFile, openErr error) ([]Difference, *format.Member, error) {
 	var diffs []Difference
 	add := func(kind, archive, disk string) {
 		diffs = append(diffs, Difference{Path: m.Path, Kind: kind, Archive: archive, Disk: disk})

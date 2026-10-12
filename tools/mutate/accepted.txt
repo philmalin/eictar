@@ -476,3 +476,65 @@ src/internal/archive/mutate.go: RepairArchive: operator: + → - #4
 	Equivalent. The magic EICTRAIL has no start that is also its end, so
 	two of them cannot overlap, and the part that the search keeps is not
 	needed.
+
+# --- archive: the walk and the capture (walk.go, capture.go) ---
+
+src/internal/archive/capture.go: capturer.decide: if false: !replacing → false
+	Equivalent. When the path is not live, old is nil, which is what the
+	early return gives.
+src/internal/archive/capture.go: capturer.submitFile: operator: && → ||
+	Equivalent. A platform with no identity of a file has no count of its
+	names either, so the count is 0. Where there is an identity, the result
+	is the same.
+src/internal/archive/capture.go: capturer.submitFile: operator: > → >=
+	Equivalent. Each file then counts as one of several names. Only a file
+	with another name has the same identity, so the map of first names
+	gets entries that no second name finds.
+src/internal/archive/capture.go: capturer.shareIfCopy: if false: uint64(n) != payload → false
+	Equivalent. A short read gives the digest of fewer bytes, which no
+	member with the size of the payload has, but by a collision of BLAKE3.
+	The full read that follows then decides.
+src/internal/archive/capture.go: capturer.shareIfCopy: if false: err != nil → false #3
+	Equivalent. AddMeta fails only after the build stopped, and Finish then
+	gives the same error.
+src/internal/archive/capture.go: sameContent: if false: uint64(e.Info.Size()) != old.Size → false
+	Equivalent. sameContentOf compares the size again.
+src/internal/archive/capture.go: sameContentOf: if false: uint64(size) != old.Size → false
+	Equivalent. Each caller compares the size first: sameContent for -u,
+	and compareEntry for --diff.
+src/internal/archive/capture.go: outside: operator: <= → <
+	Equivalent. A segment that ends at pos adds no part, and leaves pos
+	where it is.
+src/internal/archive/capture.go: outside: operator: >= → >
+	Equivalent. A segment that starts at end adds the part up to end, which
+	the code after the loop adds otherwise.
+src/internal/archive/walk.go: walker.Walk: if false: w.opt.root != nil → false
+	Equivalent. Only --diff gives a root, and rootThere has refused a
+	requested path that leaves it through a link. Inside it, the path and
+	the root name the same file.
+src/internal/archive/walk.go: walker.openParent: if false: w.opt.root != nil → false
+	Equivalent. See the entry for walker.Walk.
+src/internal/archive/walk.go: walker.openParent: if false: err != nil → false
+	Equivalent. See the entry for walker.Walk: rootThere has lstat'ed the
+	path through the same root, so its parent opens.
+src/internal/archive/walk.go: walker.openParent: operator: != → == #2
+	Equivalent. See the entry above.
+src/internal/archive/walk.go: walker.openParent: operator: == → !=
+	Equivalent. Each requested path is then walked by its path, which finds
+	the same entries: the walk holds the directories below it either way.
+src/internal/archive/walk.go: atPathErr: if false: err == nil → false
+	Equivalent. atPath gives nil for nil.
+src/internal/archive/walk.go: walker.walk: if false: err != nil → false
+	Equivalent. The writer refuses a path that is not in stored form with
+	the same error (Writer.checkPath).
+src/internal/archive/walk.go: walker.openDir: if false: e.dir != nil → false
+	Equivalent. The directory is then opened by its path, and the check
+	of its identity that follows refuses another one.
+src/internal/archive/walk.go: pinIdentity: if false: fi != nil → false
+	Another platform: Windows, where a FileInfo gets its identity from the
+	path when it is first needed. Elsewhere the identity is in it.
+src/internal/archive/walk.go: pinIdentity: operator: != → ==
+	Another platform: Windows. See the entry above.
+src/internal/archive/walk.go: classify: operator: & → | #4
+	Equivalent. No mode has the character-device bit without the device
+	bit, so the first clause adds nothing to the second.

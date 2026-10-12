@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"syscall"
 
 	"github.com/philmalin/eictar/src/internal/fsutil"
 	"github.com/philmalin/eictar/src/internal/meta"
@@ -47,12 +48,12 @@ type entry struct {
 	// walk reached by its path: a requested path whose parent cannot be
 	// opened, and a link that -h follows. Both are valid during the visit
 	// only.
-	dir  *os.Root
+	dir  srcDir
 	name string
 	// self is the directory itself, open, for a directory entry: its
 	// attributes come from it. It is nil when the directory cannot be
 	// opened for want of permission; the attributes then come from the path.
-	self *os.File
+	self srcFile
 }
 
 // walkOptions controls what the walker includes.
@@ -66,7 +67,7 @@ type walkOptions struct {
 	// root, when set, holds the requested paths: each one is a name inside
 	// it, and the walk does not leave it. --diff walks the paths that the
 	// archive names this way.
-	root *os.Root
+	root srcDir
 	// afterLstat, when set, runs after each lstat of the walk. Tests use it
 	// to change the tree at that moment (doc/Security_Audit.md, finding 11).
 	afterLstat func(src string)
@@ -120,13 +121,23 @@ func (w *walker) Walk(requested string) error {
 	}
 
 	// --one-file-system is relative to where each requested path lives, as
-	// in tar: naming /home and /home/other-mount walks both.
-	stat := os.Stat
-	if w.opt.root != nil {
-		stat = func(string) (os.FileInfo, error) { return w.opt.root.Stat(requested) }
-	}
-	if fi, err := stat(src); err == nil {
-		w.rootDev = meta.StatPath(src, fi).Dev
+	// in tar: naming /home and /home/other-mount walks both. Without the
+	// device, each directory would count as another file system, and the
+	// walk would enter none, so a stat that fails stops the walk. A path that
+	// does not exist, or a link that leads nowhere, has nothing to enter: the
+	// walk reports the one, and archives the other.
+	if w.opt.oneFileSystem {
+		stat := srcPaths.Stat
+		if w.opt.root != nil {
+			stat = func(string) (os.FileInfo, error) { return w.opt.root.Stat(requested) }
+		}
+		fi, err := stat(src)
+		switch {
+		case err == nil:
+			w.rootDev = meta.StatPath(src, fi).Dev
+		case !errors.Is(err, fs.ErrNotExist):
+			return atPath(err, src)
+		}
 	}
 
 	parent, name, err := w.openParent(requested, src)
@@ -145,7 +156,7 @@ func (w *walker) Walk(requested string) error {
 // ("/", ".", "..") or a parent that cannot be opened is walked by its path,
 // as before. Inside opt.root, the parent must open: the path came from an
 // archive.
-func (w *walker) openParent(requested, src string) (*os.Root, string, error) {
+func (w *walker) openParent(requested, src string) (srcDir, string, error) {
 	if w.opt.root != nil {
 		dir, name := path.Split(requested)
 		if dir == "" {
@@ -162,9 +173,14 @@ func (w *walker) openParent(requested, src string) (*os.Root, string, error) {
 	if name == "." || name == ".." || name == string(filepath.Separator) {
 		return nil, "", nil
 	}
-	parent, err := os.OpenRoot(filepath.Dir(clean))
-	if err != nil {
+	// A parent that the user may not list is walked by the path. Another
+	// error, of the disk say, is the error of the walk.
+	parent, err := srcPaths.OpenRoot(filepath.Dir(clean))
+	switch {
+	case errors.Is(err, fs.ErrPermission):
 		return nil, "", nil
+	case err != nil:
+		return nil, "", atPath(err, filepath.Dir(clean))
 	}
 	return parent, name, nil
 }
@@ -199,7 +215,7 @@ func (w *walker) fail(src string, top bool, err error) error {
 // walk handles one filesystem object: name in the open directory dir, or the
 // path src when dir is nil. rel is the name as the user gave it, so that -C
 // does not leak into the stored path.
-func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
+func (w *walker) walk(dir srcDir, name, src, rel string, top bool) error {
 	stored, stripped, err := fsutil.StorePath(rel)
 	if err != nil {
 		return err
@@ -214,7 +230,7 @@ func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
 	if dir != nil {
 		fi, err = dir.Lstat(name)
 	} else {
-		fi, err = os.Lstat(src)
+		fi, err = srcPaths.Lstat(src)
 		pinIdentity(fi)
 	}
 	if err != nil {
@@ -232,7 +248,7 @@ func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
 			if dir != nil {
 				target, err = dir.Readlink(name)
 			} else {
-				target, err = os.Readlink(src)
+				target, err = srcPaths.Readlink(src)
 			}
 			if err != nil {
 				return w.fail(src, top, fmt.Errorf("reading link %s: %w", src, err))
@@ -244,7 +260,7 @@ func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
 		}
 		// -h: archive what the link points at, under the link's own name.
 		// Following the link is the point, so it is followed by its path.
-		followed, err := os.Stat(src)
+		followed, err := srcPaths.Stat(src)
 		if err != nil {
 			return w.fail(src, top, fmt.Errorf("following link %s: %w", src, err))
 		}
@@ -299,7 +315,7 @@ func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
 	if e.Followed {
 		// Following a directory link can loop. Resolve it and refuse to enter
 		// a directory already on the current path.
-		real, err := filepath.EvalSymlinks(src)
+		real, err := srcPaths.EvalSymlinks(src)
 		if err != nil {
 			return w.fail(src, top, fmt.Errorf("resolving %s: %w", src, err))
 		}
@@ -316,16 +332,16 @@ func (w *walker) walk(dir *os.Root, name, src, rel string, top bool) error {
 // it, and checks that it has the device and the inode that the walk found.
 // An error that fs.ErrPermission matches means that the directory cannot be
 // opened; any other means that it changed, or went away.
-func (w *walker) openDir(e entry) (*os.Root, error) {
-	var sub *os.Root
+func (w *walker) openDir(e entry) (srcDir, error) {
+	var sub srcDir
 	var err error
 	if e.dir != nil {
 		sub, err = e.dir.OpenRoot(e.name)
 	} else {
-		sub, err = os.OpenRoot(e.Src)
+		sub, err = srcPaths.OpenRoot(e.Src)
 	}
 	if err != nil {
-		if errors.Is(err, fs.ErrPermission) {
+		if errors.Is(err, fs.ErrPermission) || isDiskError(err) {
 			return nil, atPath(err, e.Src)
 		}
 		return nil, fmt.Errorf("%s: %w (%v)", e.Src, errChangedDuringWalk, err)
@@ -339,6 +355,15 @@ func (w *walker) openDir(e entry) (*os.Root, error) {
 		return nil, fmt.Errorf("%s: %w", e.Src, err)
 	}
 	return sub, nil
+}
+
+// isDiskError reports whether err is an error of the system other than the
+// ones that a change to the tree gives: a name that went away, a directory
+// that became a file, or a link in its place. os.Root reports a link that
+// leads out of the tree with an error of its own, which is no errno.
+func isDiskError(err error) bool {
+	var errno syscall.Errno
+	return errors.As(err, &errno) && errno != syscall.ENOENT && errno != syscall.ENOTDIR && errno != syscall.ELOOP
 }
 
 // pinIdentity makes fi hold the identity of the file at its path now. On
@@ -400,7 +425,7 @@ func classify(mode fs.FileMode) entryKind {
 // walkChildren visits a directory's entries in name order, so that an archive
 // of the same tree always comes out in the same order. Each entry is found
 // through sub, the open directory, by its name alone.
-func (w *walker) walkChildren(sub *os.Root, d *os.File, src, rel string) error {
+func (w *walker) walkChildren(sub srcDir, d srcFile, src, rel string) error {
 	list, err := d.ReadDir(-1)
 	if err != nil {
 		return w.fail(src, false, atPath(err, src))

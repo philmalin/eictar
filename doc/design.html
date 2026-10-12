@@ -10475,6 +10475,14 @@ itself:</strong></p>
 <td>42</td>
 <td>0</td>
 </tr>
+<tr class="odd">
+<td><code>archive</code>: <code>walk.go</code>,
+<code>capture.go</code></td>
+<td>63.7%</td>
+<td>92.8%</td>
+<td>20</td>
+<td>0</td>
+</tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
@@ -10537,10 +10545,20 @@ one more: the meter of a recompress counted the content of the members
 that share it, which a recompress does not decode, so it never reached
 its total. Of the 42 accepted mutants, most change only the batches or
 the number of workers, or cannot happen after the index checks.</p>
+<p>In <code>walk.go</code> and <code>capture.go</code>, the fault test
+of the source came first (step 3), and found three faults of the walk.
+Then tests for what no fault reaches: each kind of file, a device, the
+requested paths <code>.</code> and <code>..</code>, an absolute path
+with <code>-C</code>, a loop under <code>-h</code> named as a loop, the
+limits of an extended attribute, a file that became a pipe, which the
+open must refuse and not wait on, and <code>-u</code> with a file with
+holes, a link to another target and a change of type. A test of finding
+11 shows that a link is read through the directory that the walk holds:
+read by its path, it stored the link of the directory that took its
+place.</p>
 <p>The other files of <code>archive</code> are next:
-<code>walk.go</code>, <code>capture.go</code>, <code>diff.go</code>,
-<code>ops.go</code>, <code>dict.go</code>, <code>plan.go</code> and
-<code>dedup.go</code>.</p>
+<code>diff.go</code>, <code>ops.go</code>, <code>dict.go</code>,
+<code>plan.go</code> and <code>dedup.go</code>.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives
@@ -10644,6 +10662,30 @@ hardlink replaced a node, a failed <code>lstat</code> counted as
 “nothing there”. With the rule on the error, it also finds a fault that
 shows only later, as a link that was not made and then not
 found.</p></li>
+<li><p>The walk of a create, an append, a <code>--diff</code> and the
+training of a dictionary goes through a <code>srcDir</code>
+(<code>src.go</code>): in production an <code>os.Root</code>, so that
+each entry is found through the directory that holds it
+(doc/Security_Audit.md, finding 11). The reads of each file, of its
+holes and of its extended attributes go through it too.
+<code>TestCreateFaultsAreNeverSilent</code> makes each operation fail in
+turn, for a create, with <code>--keep-going</code>, <code>-h</code> and
+<code>--one-file-system</code>, and for an append, with
+<code>--keep-going</code> and with <code>-u</code> by digest. The rules
+are those of extraction. It found three faults, which are now fixed:</p>
+<ul>
+<li>The <code>stat</code> that gives <code>--one-file-system</code> its
+device ignored a failure. The device was then 0, each directory was on
+another file system, and the archive was empty, with no error. Now the
+walk makes the <code>stat</code> only for
+<code>--one-file-system</code>, and a failure stops it.</li>
+<li>A requested path whose parent did not open was walked by its path,
+for any error. That is for a parent that the user cannot list: now only
+a permission error does it.</li>
+<li>Each error that opened a directory of the walk was “changed after
+the walk found it”. A fault of the disk is now itself, and only the
+errors of a change (gone, not a directory, a link) say that.</li>
+</ul></li>
 </ul>
 <p><em>Part 2, power loss, is done.</em> <code>crash_test.go</code> puts
 a model of the disk behind the same <code>fileSystem</code>. The

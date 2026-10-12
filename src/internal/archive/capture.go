@@ -247,7 +247,7 @@ func (c *capturer) submitFile(m format.Member, e entry) error {
 	m.Codec = c.w.CodecRef()
 
 	// A file with holes stores only its data regions (doc/design.md 5.1).
-	segs, sparse, err := meta.DataSegments(f, e.Info.Size(), e.Sys.Blocks)
+	segs, sparse, err := dataSegments(f.file(), e.Info.Size(), e.Sys.Blocks)
 	if err != nil {
 		return fmt.Errorf("%s: %w", e.Src, err)
 	}
@@ -345,17 +345,17 @@ var errChangedDuringWalk = errors.New("changed after the walk found it; not arch
 // 11). It does not follow a link, except under -h, and the file must have the
 // device and inode that the walk saw: os.Root follows a link that stays in
 // the directory, and this check refuses what it opens.
-func openWalked(e entry) (*os.File, error) {
-	var f *os.File
+func openWalked(e entry) (srcFile, error) {
+	var f srcFile
 	var err error
 	switch {
 	case e.Followed:
-		f, err = os.Open(e.Src)
+		f, err = srcPaths.Open(e.Src)
 	case e.dir != nil:
 		f, err = e.dir.OpenFile(e.name, os.O_RDONLY|meta.NoBlock, 0)
 		err = atPathErr(err, e.Src)
 	default:
-		f, err = meta.OpenNoFollow(e.Src)
+		f, err = srcPaths.OpenNoFollow(e.Src)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", e.Src, err)
@@ -384,7 +384,7 @@ func (c *capturer) recordOwner(m *format.Member, sys meta.Info) {
 
 // recordXattrs stores the extended attributes that the options allow. f is
 // the entry, open, or nil to read them by the path.
-func (c *capturer) recordXattrs(m *format.Member, e entry, f *os.File) error {
+func (c *capturer) recordXattrs(m *format.Member, e entry, f srcFile) error {
 	xattrs, err := readXattrs(e, f, c.opt, func(name string, size int) {
 		// Linux never makes one this large, but macOS can: a resource
 		// fork is an xattr with no size limit. The file is still
@@ -404,16 +404,16 @@ func (c *capturer) recordXattrs(m *format.Member, e entry, f *os.File) error {
 // nil only for a directory that cannot be opened: then they come from the
 // path. An attribute larger than the format allows is left out, and tooLarge
 // is told of it. The result is nil when there is none.
-func readXattrs(e entry, f *os.File, opt MetadataOptions, tooLarge func(name string, size int)) (map[string][]byte, error) {
+func readXattrs(e entry, f srcFile, opt MetadataOptions, tooLarge func(name string, size int)) (map[string][]byte, error) {
 	if opt.NoXattrs && opt.NoACLs {
 		return nil, nil
 	}
 	var all map[string][]byte
 	var err error
 	if f != nil {
-		all, err = meta.ReadXattrsFile(f, e.Src)
+		all, err = readXattrsFile(f.file(), e.Src)
 	} else {
-		all, err = meta.ReadXattrs(e.Src, e.Followed)
+		all, err = readXattrsPath(e.Src, e.Followed)
 	}
 	if err != nil {
 		return nil, err
@@ -540,7 +540,7 @@ func sameContent(old *format.Member, e entry, newHash func() hash.Hash) (bool, e
 
 // sameContentOf is sameContent on f, the walked file that openWalked opened.
 // --diff opens the file during the walk, and reads it in a worker after.
-func sameContentOf(old *format.Member, f *os.File, e entry, newHash func() hash.Hash) (bool, error) {
+func sameContentOf(old *format.Member, f srcFile, e entry, newHash func() hash.Hash) (bool, error) {
 	size := e.Info.Size()
 	if uint64(size) != old.Size {
 		return false, nil
@@ -563,7 +563,7 @@ func sameContentOf(old *format.Member, f *os.File, e entry, newHash func() hash.
 	if !bytes.Equal(h.Sum(nil), old.Digest) {
 		return false, nil
 	}
-	cur, sparse, err := meta.DataSegments(f, size, e.Sys.Blocks)
+	cur, sparse, err := dataSegments(f.file(), size, e.Sys.Blocks)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", e.Src, err)
 	}

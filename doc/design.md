@@ -3843,6 +3843,7 @@ The survivors fall into these groups, in order of risk:
 | `archive`: `writer.go`, `reader.go`, `fs.go` | 77.4% | 91.6% | 31 | 0 |
 | `archive`: `extract.go` | 62.1% | 91.6% | 27 | 0 |
 | `archive`: `mutate.go` | 74.2% | 88.7% | 42 | 0 |
+| `archive`: `walk.go`, `capture.go` | 63.7% | 92.8% | 20 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
 not count it, and gives 100% for each row. Part of the increase
@@ -3902,8 +3903,18 @@ recompress does not decode, so it never reached its total. Of the 42
 accepted mutants, most change only the batches or the number of workers,
 or cannot happen after the index checks.
 
-The other files of `archive` are next: `walk.go`, `capture.go`,
-`diff.go`, `ops.go`, `dict.go`, `plan.go` and `dedup.go`.
+In `walk.go` and `capture.go`, the fault test of the source came first
+(step 3), and found three faults of the walk. Then tests for what no
+fault reaches: each kind of file, a device, the requested paths `.` and
+`..`, an absolute path with `-C`, a loop under `-h` named as a loop, the
+limits of an extended attribute, a file that became a pipe, which the open
+must refuse and not wait on, and `-u` with a file with holes, a link to
+another target and a change of type. A test of finding 11 shows that a
+link is read through the directory that the walk holds: read by its path,
+it stored the link of the directory that took its place.
+
+The other files of `archive` are next: `diff.go`, `ops.go`, `dict.go`,
+`plan.go` and `dedup.go`.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of
@@ -3996,6 +4007,25 @@ stress tester injects these faults at random.
   hardlink replaced a node, a failed `lstat` counted as "nothing there".
   With the rule on the error, it also finds a fault that shows only later,
   as a link that was not made and then not found.
+- The walk of a create, an append, a `--diff` and the training of a
+  dictionary goes through a `srcDir` (`src.go`): in production an
+  `os.Root`, so that each entry is found through the directory that holds
+  it (doc/Security_Audit.md, finding 11). The reads of each file, of its
+  holes and of its extended attributes go through it too.
+  `TestCreateFaultsAreNeverSilent` makes each operation fail in turn, for a
+  create, with `--keep-going`, `-h` and `--one-file-system`, and for an
+  append, with `--keep-going` and with `-u` by digest. The rules are those
+  of extraction. It found three faults, which are now fixed:
+  - The `stat` that gives `--one-file-system` its device ignored a
+    failure. The device was then 0, each directory was on another file
+    system, and the archive was empty, with no error. Now the walk makes
+    the `stat` only for `--one-file-system`, and a failure stops it.
+  - A requested path whose parent did not open was walked by its path,
+    for any error. That is for a parent that the user cannot list: now
+    only a permission error does it.
+  - Each error that opened a directory of the walk was "changed after the
+    walk found it". A fault of the disk is now itself, and only the errors
+    of a change (gone, not a directory, a link) say that.
 
 *Part 2, power loss, is done.* `crash_test.go` puts a model of the disk
 behind the same `fileSystem`. The operations reach the disk as in

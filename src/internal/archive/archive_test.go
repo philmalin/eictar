@@ -622,7 +622,9 @@ func TestDereferenceDetectsLoops(t *testing.T) {
 	if err == nil {
 		t.Fatal("a symlink loop was followed without complaint")
 	}
-	if !strings.Contains(err.Error(), "loop") {
+	// The walk names the loop. A walk that did not see it would fail later,
+	// on a path too long, with "loop" in the path but not this.
+	if !strings.Contains(err.Error(), "symlink loop: ") || !strings.Contains(err.Error(), "leads back to") {
 		t.Errorf("error = %v, want it to name the loop", err)
 	}
 }
