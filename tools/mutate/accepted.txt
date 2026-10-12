@@ -538,3 +538,44 @@ src/internal/archive/walk.go: pinIdentity: operator: != → ==
 src/internal/archive/walk.go: classify: operator: & → | #4
 	Equivalent. No mode has the character-device bit without the device
 	bit, so the first clause adds nothing to the second.
+
+# --- archive: --diff (diff.go) ---
+
+src/internal/archive/diff.go: DiffArchive: operator: && → ||
+	Equivalent. The map of parents then holds ".", which the walk never
+	gives as a path: the root of the tree is not emitted.
+src/internal/archive/diff.go: DiffArchive: operator: < → <= #2
+	Equivalent. The paths of the missing members are all different, so no
+	two compare equal.
+src/internal/archive/diff.go: DiffArchive: operator: < → <= #3
+	Equivalent. This branch runs only when the two paths are different.
+src/internal/archive/diff.go: DiffArchive: operator: < → <= #4
+	Equivalent. A path has each kind of difference once at most, so no two
+	differences of one path have the same rank.
+src/internal/archive/diff.go: differ.startWorkers: if false: d.stopped() != nil → false
+	Equivalent. After a failure without --keep-going, the workers compare
+	the files that are left before they stop. The run returns the first
+	failure either way.
+src/internal/archive/diff.go: differ.walk: if false: err != nil → false #3
+	Equivalent. See the entry for startWorkers: the walk goes on to the
+	next root, and the run returns the first failure.
+src/internal/archive/diff.go: differ.visit: if false: err != nil → false
+	Equivalent. See the entry for startWorkers.
+src/internal/archive/diff.go: differ.rootThere: operator: & → |
+	Equivalent. The parents are checked from the deepest. Each one below
+	the link fails to lstat, as it is outside the base, so the first that
+	does lstat is the link.
+src/internal/archive/diff.go: differ.visit: operator: && → || #4
+	Equivalent. A path on disk that is not a file then opens for a member
+	that is one. compareEntry reports the type first, and uses nothing
+	that the open gave.
+src/internal/archive/diff.go: differ.visit: if false: e.Kind == kindDir → false #2
+	Equivalent. The attributes of a directory are then read by its path,
+	which gives the same ones while the tree does not change.
+src/internal/archive/diff.go: differ.visit: operator: == → != #7
+	Equivalent. See the entry above.
+src/internal/archive/diff.go: differ.visit: operator: && → || #7
+	Equivalent. A member that is not a hardlink then goes to the check of
+	hardlinks, which finds no target for it (no member has the id 0).
+src/internal/archive/diff.go: compareEntry: if false: e.Kind == kindSocket → false
+	Equivalent. memberTypeFor gives the socket type for a socket too.

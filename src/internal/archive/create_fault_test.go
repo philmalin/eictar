@@ -253,7 +253,7 @@ func TestCreateFaultsAreNeverSilent(t *testing.T) {
 		// update, when set, makes the run an append to an archive of the
 		// tree: "replace" replaces each file, and a mode of -u compares each
 		// with the archive.
-		update string
+		update string // or "diff" for a --diff of an archive of the tree
 	}{
 		{"create", false, false, false, ""},
 		{"with --keep-going", true, false, false, ""},
@@ -262,6 +262,8 @@ func TestCreateFaultsAreNeverSilent(t *testing.T) {
 		{"append", false, false, false, "replace"},
 		{"append with --keep-going", true, false, false, "replace"},
 		{"append -u=digest", false, false, false, UpdateDigest},
+		{"--diff", false, false, false, "diff"},
+		{"--diff with --keep-going", true, false, false, "diff"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var base string
@@ -283,6 +285,15 @@ func TestCreateFaultsAreNeverSilent(t *testing.T) {
 					switch tc.update {
 					case "":
 						stats, err = CreateArchive(cfg)
+					case "diff":
+						// A difference is no failure: a fault must not
+						// show as one.
+						var res DiffResult
+						res, err = DiffArchive(DiffConfig{Archive: cfg.Archive, BaseDir: tree.Root, Workers: 2, KeepGoing: tc.keepGoing})
+						stats.Failed = res.Failed
+						if ff.failed == "" && len(res.Differences) > 0 {
+							t.Errorf("with no fault, differences: %+v", res.Differences)
+						}
 					case "replace":
 						stats, err = AppendArchive(AppendConfig{CreateConfig: cfg})
 					default:
@@ -310,6 +321,9 @@ func TestCreateFaultsAreNeverSilent(t *testing.T) {
 					t.Errorf("fault %s: reported as damage: %v", what, err)
 				case err == nil && stats.Failed <= 0 && ff.failed != "" && !ff.harmless:
 					t.Errorf("fault %s: the create reported success (%d failed)", what, stats.Failed)
+				case err == nil && !tc.keepGoing && ff.failed != "" && !ff.harmless:
+					// Without --keep-going, a fault stops the run with its error.
+					t.Errorf("fault %s: no error without --keep-going (%d failed)", what, stats.Failed)
 				case err != nil && !errors.Is(err, syscall.EIO):
 					t.Errorf("fault %s: the error is not the fault: %v", what, err)
 				}

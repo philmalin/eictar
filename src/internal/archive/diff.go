@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -194,7 +195,8 @@ func DiffArchive(cfg DiffConfig) (DiffResult, error) {
 	if base == "" {
 		base = "."
 	}
-	if d.root, err = os.OpenRoot(base); err != nil {
+	d.base = base
+	if d.root, err = srcPaths.OpenRoot(base); err != nil {
 		return res, fmt.Errorf("opening %s: %w", base, err)
 	}
 	defer d.root.Close()
@@ -202,13 +204,15 @@ func DiffArchive(cfg DiffConfig) (DiffResult, error) {
 	d.startWorkers()
 	walkErr := d.walk(sortedKeys(roots))
 	d.stopWorkers()
-	if walkErr == nil {
-		walkErr = d.firstErr
-	}
 	if walkErr != nil {
 		return res, walkErr
 	}
 	d.checkHardlinks()
+	// Without --keep-going, the first failure of a worker or of a link that
+	// could not be checked.
+	if d.firstErr != nil {
+		return res, d.firstErr
+	}
 
 	// A member that the walk did not find is not on disk. Under a directory
 	// that is not on disk, only the directory is reported.
@@ -295,7 +299,8 @@ func sortedKeys(set map[string]bool) []string {
 type differ struct {
 	cfg  DiffConfig
 	r    *Reader
-	root *os.Root
+	root srcDir // the base directory
+	base string // its path, for the messages
 	byID map[uint64]*format.Member
 	// parents holds the directories above the members of want.
 	parents map[string]bool
@@ -408,7 +413,7 @@ func (d *differ) stopWorkers() {
 // disk is not walked: its members are then reported as missing.
 func (d *differ) walk(roots []string) error {
 	opt := walkOptions{
-		root:          osSrc{d.root},
+		root:          d.root,
 		baseDir:       d.cfg.BaseDir,
 		dereference:   d.cfg.Dereference,
 		exclude:       d.cfg.Exclude,
@@ -461,7 +466,7 @@ func (d *differ) rootThere(root string) (bool, error) {
 	for dir := path.Dir(root); dir != "."; dir = path.Dir(dir) {
 		if fi, lerr := d.root.Lstat(dir); lerr == nil && fi.Mode()&os.ModeSymlink != 0 {
 			return false, fmt.Errorf("%w: member %q is under the symbolic link %q, which leads out of %s",
-				fsutil.ErrUnsafePath, root, dir, d.root.Name())
+				fsutil.ErrUnsafePath, root, dir, d.base)
 		}
 	}
 	return false, fmt.Errorf("%s: %w", root, err)
@@ -578,7 +583,12 @@ func (d *differ) checkHardlinks() {
 			continue
 		}
 		fi, err := d.root.Lstat(t.Path)
-		if err != nil {
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			continue // the walk reports it as missing
+		case err != nil:
+			// Not checked is not the same: the error is a failure.
+			d.fail(atPath(err, filepath.Join(d.base, t.Path)))
 			continue
 		}
 		if !os.SameFile(fi, l.info) {

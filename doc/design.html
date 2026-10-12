@@ -10483,6 +10483,13 @@ itself:</strong></p>
 <td>20</td>
 <td>0</td>
 </tr>
+<tr class="even">
+<td><code>archive</code>: <code>diff.go</code></td>
+<td>70.4%</td>
+<td>93.9%</td>
+<td>13</td>
+<td>0</td>
+</tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
@@ -10556,9 +10563,18 @@ holes, a link to another target and a change of type. A test of finding
 11 shows that a link is read through the directory that the walk holds:
 read by its path, it stored the link of the directory that took its
 place.</p>
+<p>In <code>diff.go</code>, the fault test of the source covers
+<code>--diff</code> too (step 3). The tests that came after give: a
+refused path, a root under a link that leads out of the base, the order
+of the differences of one path, a change of type, devices, owners,
+extended attributes against ACLs, a hardlink whose target is a
+tombstone, files that do not open, and patterns with
+<code>--strip-components</code>. Two live members with one path, from a
+forged index, are compared in index order, as extraction writes
+them.</p>
 <p>The other files of <code>archive</code> are next:
-<code>diff.go</code>, <code>ops.go</code>, <code>dict.go</code>,
-<code>plan.go</code> and <code>dedup.go</code>.</p>
+<code>ops.go</code>, <code>dict.go</code>, <code>plan.go</code> and
+<code>dedup.go</code>.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives
@@ -10670,9 +10686,14 @@ each entry is found through the directory that holds it
 holes and of its extended attributes go through it too.
 <code>TestCreateFaultsAreNeverSilent</code> makes each operation fail in
 turn, for a create, with <code>--keep-going</code>, <code>-h</code> and
-<code>--one-file-system</code>, and for an append, with
-<code>--keep-going</code> and with <code>-u</code> by digest. The rules
-are those of extraction. It found three faults, which are now fixed:</p>
+<code>--one-file-system</code>, for an append, with
+<code>--keep-going</code> and with <code>-u</code> by digest, and for a
+<code>--diff</code>, with and without <code>--keep-going</code>. The
+rules are those of extraction, and one more: without
+<code>--keep-going</code>, a fault stops the run with its error. A
+<code>--diff</code> that finds a difference has not failed, so a fault
+must not show as one. The test found four faults, which are now
+fixed:</p>
 <ul>
 <li>The <code>stat</code> that gives <code>--one-file-system</code> its
 device ignored a failure. The device was then 0, each directory was on
@@ -10685,6 +10706,12 @@ a permission error does it.</li>
 <li>Each error that opened a directory of the walk was “changed after
 the walk found it”. A fault of the disk is now itself, and only the
 errors of a change (gone, not a directory, a link) say that.</li>
+<li><code>--diff</code> did not check a hardlink whose target did not
+lstat, for any error, and found no difference. Only a target that is
+gone is not checked now: the walk reports it as missing. The first form
+of this fix counted the failure and gave no error, because the check of
+hardlinks comes after the run reads its first error. The rule on
+<code>--keep-going</code> found that before the fix was committed.</li>
 </ul></li>
 </ul>
 <p><em>Part 2, power loss, is done.</em> <code>crash_test.go</code> puts

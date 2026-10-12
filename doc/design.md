@@ -3844,6 +3844,7 @@ The survivors fall into these groups, in order of risk:
 | `archive`: `extract.go` | 62.1% | 91.6% | 27 | 0 |
 | `archive`: `mutate.go` | 74.2% | 88.7% | 42 | 0 |
 | `archive`: `walk.go`, `capture.go` | 63.7% | 92.8% | 20 | 0 |
+| `archive`: `diff.go` | 70.4% | 93.9% | 13 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
 not count it, and gives 100% for each row. Part of the increase
@@ -3913,8 +3914,16 @@ another target and a change of type. A test of finding 11 shows that a
 link is read through the directory that the walk holds: read by its path,
 it stored the link of the directory that took its place.
 
-The other files of `archive` are next: `diff.go`, `ops.go`, `dict.go`,
-`plan.go` and `dedup.go`.
+In `diff.go`, the fault test of the source covers `--diff` too (step 3).
+The tests that came after give: a refused path, a root under a link that
+leads out of the base, the order of the differences of one path, a change
+of type, devices, owners, extended attributes against ACLs, a hardlink
+whose target is a tombstone, files that do not open, and patterns with
+`--strip-components`. Two live members with one path, from a forged
+index, are compared in index order, as extraction writes them.
+
+The other files of `archive` are next: `ops.go`, `dict.go`, `plan.go`
+and `dedup.go`.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of
@@ -4013,9 +4022,12 @@ stress tester injects these faults at random.
   it (doc/Security_Audit.md, finding 11). The reads of each file, of its
   holes and of its extended attributes go through it too.
   `TestCreateFaultsAreNeverSilent` makes each operation fail in turn, for a
-  create, with `--keep-going`, `-h` and `--one-file-system`, and for an
-  append, with `--keep-going` and with `-u` by digest. The rules are those
-  of extraction. It found three faults, which are now fixed:
+  create, with `--keep-going`, `-h` and `--one-file-system`, for an
+  append, with `--keep-going` and with `-u` by digest, and for a `--diff`,
+  with and without `--keep-going`. The rules are those of extraction, and
+  one more: without `--keep-going`, a fault stops the run with its error. A
+  `--diff` that finds a difference has not failed, so a fault must not
+  show as one. The test found four faults, which are now fixed:
   - The `stat` that gives `--one-file-system` its device ignored a
     failure. The device was then 0, each directory was on another file
     system, and the archive was empty, with no error. Now the walk makes
@@ -4026,6 +4038,12 @@ stress tester injects these faults at random.
   - Each error that opened a directory of the walk was "changed after the
     walk found it". A fault of the disk is now itself, and only the errors
     of a change (gone, not a directory, a link) say that.
+  - `--diff` did not check a hardlink whose target did not lstat, for
+    any error, and found no difference. Only a target that is gone is not
+    checked now: the walk reports it as missing. The first form of this
+    fix counted the failure and gave no error, because the check of
+    hardlinks comes after the run reads its first error. The rule on
+    `--keep-going` found that before the fix was committed.
 
 *Part 2, power loss, is done.* `crash_test.go` puts a model of the disk
 behind the same `fileSystem`. The operations reach the disk as in
