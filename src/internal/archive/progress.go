@@ -58,11 +58,25 @@ func (c *counting) Write(b []byte) (int, error) {
 	return n, err
 }
 
-// payloadTotal is the content that decoding the members will produce.
+// payloadTotal is the content that decoding the members will produce. An
+// extraction writes the content of a member that shares it, so it counts.
 func payloadTotal(members []format.Member) int64 {
 	var n int64
 	for i := range members {
 		if members[i].Type.HasPayload() {
+			n += int64(members[i].PayloadSize())
+		}
+	}
+	return n
+}
+
+// ownPayloadTotal is the content that a recompress decodes: that of each
+// member with a blob of its own. A member that shares the content of another
+// keeps sharing it, with nothing to decode.
+func ownPayloadTotal(members []format.Member) int64 {
+	var n int64
+	for i := range members {
+		if members[i].Type.HasPayload() && members[i].Data == 0 {
 			n += int64(members[i].PayloadSize())
 		}
 	}

@@ -28,6 +28,9 @@ type faultFS struct {
 	mu     sync.Mutex
 	n      int
 	failAt int
+	// failOp, when it is set, makes the first operation of that kind fail
+	// in place of operation failAt.
+	failOp string
 	failed string // the operation that failed, if one did
 	// harmless means that a run can ignore the failed operation: a chown,
 	// which a run that is not root cannot always do, or a close of a file
@@ -46,7 +49,12 @@ func (fs *faultFS) step(op, name string) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	fs.n++
-	if fs.n != fs.failAt {
+	switch {
+	case fs.failOp != "":
+		if op != fs.failOp || fs.failed != "" {
+			return nil
+		}
+	case fs.n != fs.failAt:
 		return nil
 	}
 	fs.failed = fmt.Sprintf("%s %s (operation %d)", op, filepath.Base(name), fs.n)
@@ -376,6 +384,40 @@ func writeCases(t *testing.T) []faultCase {
 			}, opens},
 			faultCase{"create with a dictionary" + suffix, func(*testing.T, string) string { return "m.ect" },
 				create(dicts, e, codec.Params{"train": "4K"}, "src"), opens},
+			// The append loads the archive's dictionary, and uses it again.
+			faultCase{"append with a dictionary" + suffix, func(t *testing.T, dir string) string {
+				if err := create(dicts, e, codec.Params{"train": "4K"}, "src/f000.go", "src/f001.go", "src/f002.go",
+					"src/f003.go", "src/f004.go", "src/f005.go", "src/f006.go", "src/f007.go")(filepath.Join(dir, "m.ect")); err != nil {
+					t.Fatal(err)
+				}
+				return "m.ect"
+			}, func(path string) error {
+				_, err := appendTo(t, path, dicts, e, func(c *AppendConfig) {
+					c.Workers = 2
+					c.Options.Params = codec.Params{"train": "4K"}
+				}, "src/f008.go", "src/f009.go")
+				return err
+			}, opens},
+			// The compact copies the dictionary as it is.
+			faultCase{"compact with a dictionary" + suffix, func(t *testing.T, dir string) string {
+				path := filepath.Join(dir, "m.ect")
+				if err := create(dicts, e, codec.Params{"train": "4K"}, "src")(path); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := DeleteMembers(DeleteConfig{Archive: path, Patterns: []string{"src/f000.go"}, Open: openFor(e)}); err != nil {
+					t.Fatal(err)
+				}
+				return "m.ect"
+			}, func(path string) error {
+				_, err := CompactArchive(CompactConfig{Archive: path, Open: openFor(e)})
+				return err
+			}, opens},
+			// The recompress learns a new dictionary from the members.
+			faultCase{"recompress with a dictionary" + suffix, mk(dicts, e, "src"), func(path string) error {
+				_, err := CompactArchive(CompactConfig{Archive: path, Open: openFor(e),
+					Recompress: &RecompressConfig{Codec: "zstd", Params: codec.Params{"train": "4K"}, Workers: 2}})
+				return err
+			}, opens},
 			faultCase{"repair" + suffix, func(t *testing.T, dir string) string {
 				name := mk(tree, e, "t")(t, dir)
 				f, err := os.OpenFile(filepath.Join(dir, name), os.O_APPEND|os.O_WRONLY, 0)
@@ -477,6 +519,11 @@ func checkFault(t *testing.T, ff *faultFS, k int, path string, runErr error, bef
 	// A fault of the disk is an I/O error (exit 4), not damage (exit 3).
 	if runErr != nil && !wasTorn && IsDamage(runErr) {
 		t.Errorf("fault %s: reported as damage: %v", what, runErr)
+	}
+	// The error is the fault, not what came of it later: a repair that
+	// could not read a generation said that the archive had none.
+	if runErr != nil && ff.failed != "" && !errors.Is(runErr, syscall.EIO) && !errors.Is(runErr, syscall.ENOSPC) {
+		t.Errorf("fault %s: the error is not the fault: %v", what, runErr)
 	}
 
 	got, err := archiveState(path, opens)

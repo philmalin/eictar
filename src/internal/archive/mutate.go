@@ -439,7 +439,7 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 		}
 	} else {
 		if progress != nil {
-			progress.Total(payloadTotal(keep))
+			progress.Total(ownPayloadTotal(keep))
 		}
 		res.Recompressed, err = recompressBlobs(r, w, keep, cfg.Recompress, tmpPath, progress, warnOf(cfg.Reporter))
 	}
@@ -1044,8 +1044,9 @@ type RepairResult struct {
 	Generation   uint64
 }
 
-// repairWindow is how much of the file one scan step reads.
-const repairWindow = 1 << 20
+// repairWindow is how much of the file one scan step reads. A test makes it
+// small, so that a trailer falls across the boundary of two steps.
+var repairWindow int64 = 1 << 20
 
 // trailerMagic starts every trailer.
 var trailerMagic = format.TrailerMagic[:]
@@ -1132,12 +1133,21 @@ func RepairArchive(path string, open OpenOptions) (res RepairResult, err error) 
 		return res, fmt.Errorf("%s: %w; if it should be, it has been replaced or stripped", path, ErrNotEncrypted)
 	}
 
-	candidate := func(p int64) (*Reader, bool) {
+	// candidate loads the generation whose trailer is at p. Damage means that
+	// it is not a complete generation of this archive, and so does a version
+	// that this build does not read: an archive of archives stored without
+	// compression holds the trailers of its members, which a later version
+	// can have made. Another error, a read that failed say, stops the repair:
+	// the generation can be whole on a disk that works.
+	candidate := func(p int64) (*Reader, error) {
 		c := &Reader{f: f, path: path, size: p + format.TrailerSize}
 		if err := c.load(OpenOptions{keys: base.keys}); err != nil {
-			return nil, false
+			if IsDamage(err) || errors.Is(err, format.ErrUnsupportedVersion) {
+				return nil, nil
+			}
+			return nil, err
 		}
-		return c, true
+		return c, nil
 	}
 
 	body := base.hdr.BodyOffset()
@@ -1159,7 +1169,11 @@ func RepairArchive(path string, open OpenOptions) (res RepairResult, err error) 
 			}
 			p := start + int64(i)
 			if p+format.TrailerSize <= size {
-				if c, ok := candidate(p); ok {
+				c, err := candidate(p)
+				if err != nil {
+					return res, err
+				}
+				if c != nil {
 					res.Generation = c.tr.Generation
 					res.Removed = size - c.size
 					if err := f.Truncate(c.size); err != nil {

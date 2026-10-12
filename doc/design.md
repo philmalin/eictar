@@ -3842,6 +3842,7 @@ The survivors fall into these groups, in order of risk:
 | `pipeline` | 59.0% | 88.3% | 21 | 0 |
 | `archive`: `writer.go`, `reader.go`, `fs.go` | 77.4% | 91.6% | 31 | 0 |
 | `archive`: `extract.go` | 62.1% | 91.6% | 27 | 0 |
+| `archive`: `mutate.go` | 74.2% | 88.7% | 42 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
 not count it, and gives 100% for each row. Part of the increase
@@ -3889,8 +3890,20 @@ gives a directory, a link and a hardlink a path that is not in stored form.
 Of the 27 accepted mutants, 5 need root, 2 run on another platform, and
 the others change only the speed, or cannot happen after the index checks.
 
-The other files of `archive` are next: `mutate.go`, `walk.go`,
-`capture.go`, `diff.go`, `ops.go`, `dict.go`, `plan.go` and `dedup.go`.
+In `mutate.go`, the tests now give: the tombstones that compact keeps,
+repair with windows as small as the magic of a trailer (so that a trailer
+falls across two of them), an archive with no complete generation, the
+checks of a change of passphrase, the choices of a recompress, and the
+counts and the notices of verify across several batches. Fault cases for
+an append, a compact and a recompress with a dictionary came with them.
+They found the repair fault of step 3, and one more: the meter of a
+recompress counted the content of the members that share it, which a
+recompress does not decode, so it never reached its total. Of the 42
+accepted mutants, most change only the batches or the number of workers,
+or cannot happen after the index checks.
+
+The other files of `archive` are next: `walk.go`, `capture.go`,
+`diff.go`, `ops.go`, `dict.go`, `plan.go` and `dedup.go`.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of
@@ -3912,8 +3925,9 @@ stress tester injects these faults at random.
   through a `fileSystem` (`fs.go`). In production, it is the operating
   system. `TestFaultsLeaveTheOldOrTheNewArchive` makes each of these
   operations fail in turn. It does this for create, create over an
-  archive, append, delete, compact, recompress, a dictionary, repair and a
-  change of passphrase, plain and encrypted. A write that fails writes half
+  archive, append, delete, compact, recompress, repair and a change of
+  passphrase, and for a create, an append, a compact and a recompress with
+  a dictionary, plain and encrypted. A write that fails writes half
   of its bytes and gives `ENOSPC`. Each other operation gives `EIO`. After
   each fault, these rules apply:
   - The archive holds its old state or its new state. Only a fault in the
@@ -3922,7 +3936,7 @@ stress tester injects these faults at random.
   - A run that reports success had no fault. There are two exceptions: a
     `chown`, which a user that is not root cannot always do, and a `close`
     of a file that the run did not write.
-  - The error is an I/O error, not damage.
+  - The error is the fault itself: an I/O error, not damage.
   - No file stays open, and no temporary file stays behind.
 
   `TestReadFaultsAreNeverSilent` does the same for extract and verify.
@@ -3936,6 +3950,14 @@ stress tester injects these faults at random.
     stops the run.
   - Repair ignored the error of its last `close`. After the `fsync`, this
     error can still report a lost write, on NFS for example.
+
+  The rule that the error is the fault found one more: a read that failed
+  while repair loaded a generation counted as damage. Repair then said
+  that the archive had no complete generation (exit 3), when the disk had
+  failed (exit 4). Now only damage, or a version that this build does not
+  read, rejects a generation. The second matters for an archive of
+  archives stored without compression: it holds the trailers of its
+  members, which a later version can have made.
 
   Under `-race`, each run of the dictionary case trains a
   dictionary, which is slow. Thus, under `-race`, that case tests one

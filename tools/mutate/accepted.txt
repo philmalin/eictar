@@ -368,3 +368,111 @@ src/internal/archive/extract.go: boundByMemory: operator: < → <=
 src/internal/archive/extract.go: tempName: operator: > → >=
 	Equivalent. A name of exactly 200 bytes is cut to 180 and the random
 	part, which fits as well as the whole name.
+
+# --- archive: the operations that change an archive (mutate.go) ---
+
+src/internal/archive/mutate.go: AppendArchive: if false: workers < 1 → false
+	Equivalent. The number of workers changes only the speed. No worker
+	means one: the pipeline makes one when it is given none.
+src/internal/archive/mutate.go: AppendArchive: operator: < → <=
+	Equivalent. Workers: 1 then means GOMAXPROCS workers. Only the speed
+	changes.
+src/internal/archive/mutate.go: AppendArchive: operator: < → >=
+	Equivalent. See the entries above: only the number of workers changes.
+src/internal/archive/mutate.go: recompressBlobs: if false: workers < 1 → false
+	Equivalent. See the entries for AppendArchive.
+src/internal/archive/mutate.go: recompressBlobs: operator: < → <=
+	Equivalent. See the entries for AppendArchive.
+src/internal/archive/mutate.go: recompressBlobs: operator: < → >=
+	Equivalent. See the entries for AppendArchive.
+src/internal/archive/mutate.go: recompressBlobs: if false: spill <= 0 → false
+	Equivalent. The spill threshold decides only whether the content of a
+	member waits in memory or on the disk.
+src/internal/archive/mutate.go: recompressBlobs: operator: <= → < #2
+	Equivalent. See the entry above.
+src/internal/archive/mutate.go: recompressBlobs: operator: <= → > #2
+	Equivalent. See the entry above.
+src/internal/archive/mutate.go: recompressBlobs: operator: < → <= #2
+	Equivalent. The order in which members go to the pipeline changes only
+	where their blobs lie. The writer sorts the index by id.
+src/internal/archive/mutate.go: recompressBlobs: operator: < → >= #2
+	Equivalent. See the entry above.
+src/internal/archive/mutate.go: recompressBlobs: if false: addErr != nil → false
+	Equivalent. AddMeta fails only after the build stopped, and Finish then
+	gives the same error.
+src/internal/archive/mutate.go: copyBlobs: operator: < → <=
+	Equivalent. The blobs are copied in another order. Only the order of
+	the reads changes, and the writer sorts the index by id.
+src/internal/archive/mutate.go: copyBlobs: operator: < → >=
+	Equivalent. See the entry above.
+src/internal/archive/mutate.go: copyBlobs: operator: || → &&
+	Equivalent. A member that is not reg has a len of 0, so the third
+	clause holds for it either way.
+src/internal/archive/mutate.go: usedDicts: operator: < → <=
+	Equivalent. Validate refuses a codec that is not a catalog position, so
+	no codec equals the length of the catalog.
+src/internal/archive/mutate.go: pruneCatalog: operator: < → <=
+	Equivalent. See the entry for usedDicts.
+src/internal/archive/mutate.go: pruneCatalog: operator: < → <= #2
+	Equivalent. See the entry for usedDicts.
+src/internal/archive/mutate.go: pruneCatalog: operator: >= → > #2
+	Equivalent. When entry 0 is in use, it keeps the number 0, so a member
+	with codec 0 needs no new number.
+src/internal/archive/mutate.go: Info: operator: < → <=
+	Equivalent. See the entry for usedDicts.
+src/internal/archive/mutate.go: Info: operator: && → ||
+	Equivalent. A codec of -1 is counted in the branch before this one, and
+	Validate refuses any other negative codec.
+src/internal/archive/mutate.go: rewrapHeaders: if false: err != nil → false
+	Equivalent. Wrap derives the key with the same parameters, and refuses
+	the same ones with the same error.
+src/internal/archive/mutate.go: rewrapHeaders: operator: > → >=
+	Too costly: a key derivation with the most passes that the format
+	allows. TestRewrapChecks gives one more.
+src/internal/archive/mutate.go: rewrapHeaders: operator: > → >= #2
+	Too costly: a key derivation with the 4 GiB of memory that the format
+	allows. TestRewrapChecks gives one KiB more.
+src/internal/archive/mutate.go: rewrapHeaders: if false: err != nil → false #4
+	Equivalent. Wrap fails only for parameters that the checks before it
+	refuse.
+src/internal/archive/mutate.go: rewrapHeaders: if false: err != nil → false #5
+	Equivalent. CryptoHeader.Marshal checks the same limits as the checks
+	before it, and the salt and the key that Wrap makes.
+src/internal/archive/mutate.go: rewrapHeaders: if false: err != nil → false #6
+	Equivalent. Header.MarshalBinary fails only when the encrypted flag and
+	the length of the crypto header disagree, and this header has both.
+src/internal/archive/mutate.go: decodeInParallel: operator: < → <=
+	Equivalent. Only the number of workers changes.
+src/internal/archive/mutate.go: decodeInParallel: if false: workers < 1 → false #2
+	Equivalent. With no work, the loops that follow have nothing to do.
+src/internal/archive/mutate.go: decodeInParallel: if false: i > starts[len(starts)-1] && (i-starts[len(starts)-1] == decodeBatchMembers || size >= decodeBatchBytes) → false
+	Equivalent. Each split of the members into consecutive batches gives
+	the same reports, in the same order: pending puts them in order.
+src/internal/archive/mutate.go: decodeInParallel: operator: > → >=
+	Equivalent. See the entry above: an empty batch reports nothing.
+src/internal/archive/mutate.go: decodeInParallel: operator: > → <=
+	Equivalent. See the entry above.
+src/internal/archive/mutate.go: decodeInParallel: operator: && → ||
+	Equivalent. See the entry above.
+src/internal/archive/mutate.go: decodeInParallel: operator: - → + #2
+	Equivalent. See the entry above.
+src/internal/archive/mutate.go: decodeInParallel: operator: == → !=
+	Equivalent. See the entry above.
+src/internal/archive/mutate.go: decodeInParallel: operator: || → &&
+	Equivalent. See the entry above.
+src/internal/archive/mutate.go: decodeInParallel: operator: >= → >
+	Equivalent. See the entry above.
+src/internal/archive/mutate.go: decodeInParallel: operator: >= → <
+	Equivalent. See the entry above.
+src/internal/archive/mutate.go: decodeBatchBytes: operator: << → >>
+	Equivalent. See the entries for decodeInParallel: batches of one member.
+src/internal/archive/mutate.go: RepairArchive: operator: > → >=
+	Equivalent. The loop ends at the start of the body by the break that
+	follows, before the condition can be equal.
+src/internal/archive/mutate.go: RepairArchive: operator: <= → <
+	Equivalent. A trailer that ends at the end of the file is the last
+	generation, which did not open, so it is not a candidate either way.
+src/internal/archive/mutate.go: RepairArchive: operator: + → - #4
+	Equivalent. The magic EICTRAIL has no start that is also its end, so
+	two of them cannot overlap, and the part that the search keeps is not
+	needed.
