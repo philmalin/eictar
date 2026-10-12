@@ -369,6 +369,9 @@ func TestSameContentReadError(t *testing.T) {
 	}
 	old := r.index.Members[0]
 	r.Close()
+	if len(old.Sparse) == 0 {
+		t.Skip("this platform finds no holes in a file, and stores it dense")
+	}
 	// Dense now: the whole file is data, and the part past the stored
 	// segment must be read.
 	dense := make([]byte, 1<<20)

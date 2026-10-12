@@ -444,19 +444,21 @@ func TestSharedEncoderRunsInParallel(t *testing.T) {
 	//
 	// A virtual machine can report four CPUs and not run four goroutines at
 	// once: in the OpenBSD job, the parallel run took up to 1.5 times the
-	// serial one. Thus each attempt first measures the machine with plain
-	// work, and counts only when the machine ran in parallel then. The test
-	// passes when one counted attempt meets the bound, and skips when no
-	// attempt counted.
+	// serial one, and the ratio of plain work went from 0.13 to 5.5 from one
+	// attempt to the next. Thus each attempt measures the machine with plain
+	// work before and after, and counts only when both times it had four
+	// free cores. The test passes when one counted attempt meets the bound,
+	// and skips when no attempt counted.
 	var tries []string
 	counted := 0
-	for range 5 {
-		machine := parallelism(callers)
+	for range 8 {
+		before := parallelism(callers)
 		serial := timeWith(1, 1)
 		parallel := timeWith(callers, callers)
-		t.Logf("machine %.2f; serial %v, parallel %v", machine, serial, parallel)
-		if machine > 0.6 {
-			continue // the machine did not run the goroutines in parallel
+		after := parallelism(callers)
+		t.Logf("machine %.2f and %.2f; serial %v, parallel %v", before, after, serial, parallel)
+		if !freeCores(before) || !freeCores(after) {
+			continue // the machine was busy, or did not run the goroutines in parallel
 		}
 		counted++
 		if parallel <= serial*3/4 {
@@ -465,12 +467,18 @@ func TestSharedEncoderRunsInParallel(t *testing.T) {
 		tries = append(tries, fmt.Sprintf("%v against %v", parallel, serial))
 	}
 	if counted == 0 {
-		t.Skipf("the machine reports %d CPUs, but did not run %d goroutines in parallel", runtime.NumCPU(), callers)
+		t.Skipf("the machine reports %d CPUs, but did not have %d free cores in any attempt", runtime.NumCPU(), callers)
 	}
 	t.Errorf("sharing an encoder across %d goroutines took %s serial, in each attempt "+
 		"in which the machine ran in parallel; the encoder is probably serialising on a state pool of one",
 		callers, strings.Join(tries, ", "))
 }
+
+// freeCores reports whether a ratio of parallelism for 4 goroutines is what 4
+// free cores give: about a quarter. More is cores that the machine does not
+// have, or that something else used. Less is a serial run that something
+// slowed, which says that the timing of the attempt means nothing.
+func freeCores(ratio float64) bool { return ratio >= 0.2 && ratio <= 0.45 }
 
 // parallelism gives the time that n goroutines take for n units of plain CPU
 // work, as a part of the time that one goroutine takes for them. It is about
