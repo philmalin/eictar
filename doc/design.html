@@ -10262,26 +10262,32 @@ its check never runs</li>
 </ul>
 <p>A run of the tests first gives the coverage. A mutant in code that no
 test runs is <em>not covered</em>, and its tests do not run. A coverage
-profile has no block for the expressions of a <code>case</code>, or for
-a declaration outside a function. Thus a case expression takes the
-coverage of its <code>switch</code>, and a declaration outside a
-function always counts as run. Each other mutant goes to
-<code>go test -overlay</code>, so the source tree never changes, and
-mutants run in parallel. A failed test finds the mutant. A test binary
-that does not end in three times the time of the first run stops, and
-that also finds the mutant. With <code>-j</code>, the mutants share the
-machine, so a slow run can pass that limit with no hang. Thus each
-mutant that stops runs again alone, and only a second stop finds it. On
-<code>archive</code>, before this rule, 156 of 388 mutants stopped under
-<code>-j 8</code>. A mutant that does not compile does not count. The
-score is the part of the counted mutants that the tests find.
-<code>-test</code> gives other packages whose tests run, so that a run
-can tell a gap of one package from a gap of the whole program.</p>
+profile has no block for the expressions of a <code>case</code>, for a
+declaration outside a function, or for the rest of a statement after a
+function literal in it. Thus a case expression takes the coverage of its
+<code>switch</code>, a declaration outside a function always counts as
+run, and the rest of a statement takes the coverage of its start. The
+last rule came late: in
+<code>if err := applyOwner(m, func(…) {…}); err != nil {</code>, the
+condition showed as not covered, and the accepted list hid it. Each
+other mutant goes to <code>go test -overlay</code>, so the source tree
+never changes, and mutants run in parallel. A failed test finds the
+mutant. A test binary that does not end in three times the time of the
+first run stops, and that also finds the mutant. With <code>-j</code>,
+the mutants share the machine, so a slow run can pass that limit with no
+hang. Thus each mutant that stops runs again alone, and only a second
+stop finds it. On <code>archive</code>, before this rule, 156 of 388
+mutants stopped under <code>-j 8</code>. A mutant that does not compile
+does not count. The score is the part of the counted mutants that the
+tests find. <code>-test</code> gives other packages whose tests run, so
+that a run can tell a gap of one package from a gap of the whole
+program.</p>
 <p><strong>The accepted list.</strong> Some mutants cannot be found by
-any test. <code>tools/mutate/accepted.txt</code> lists them, and
+any test, or by no test of a run of <code>make mutate</code>.
+<code>tools/mutate/accepted.txt</code> lists them, and
 <code>make mutate</code> does not count them. An entry names the file,
 the function and the change, in the form that the report prints. Thus an
-entry stays correct when lines move. Each entry must give one of two
+entry stays correct when lines move. Each entry must give one of four
 reasons:</p>
 <ul>
 <li><em>Equivalent:</em> the change cannot change what eictar does, for
@@ -10290,6 +10296,12 @@ one.</li>
 <li><em>Too costly:</em> a test needs more memory than a test can use.
 The entry names the check that stops the same input before it gets
 there.</li>
+<li><em>Needs root:</em> only root can run the code, such as a device
+node or an owner, and <code>make mutate</code> does not run as root. The
+entry names the test that the CI job as root runs.</li>
+<li><em>Another platform:</em> the code runs only on a platform where
+<code>make mutate</code> does not run. The entry names the
+platforms.</li>
 </ul>
 <p>An entry whose mutant the tests find, or that names no mutant, fails
 the run. Thus the list cannot keep an entry that is no longer true.</p>
@@ -10449,6 +10461,13 @@ itself:</strong></p>
 <td>31</td>
 <td>0</td>
 </tr>
+<tr class="odd">
+<td><code>archive</code>: <code>extract.go</code></td>
+<td>62.1%</td>
+<td>91.6%</td>
+<td>27</td>
+<td>0</td>
+</tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
@@ -10489,6 +10508,21 @@ keep the time of the file.</li>
 <p>Of the 31 accepted mutants, 14 are checks of the reader that the
 index validator makes first, and 3 are errors of
 <code>crypto/rand.Read</code>, which ends the program instead.</p>
+<p>In <code>extract.go</code>, most survivors were errors of the
+destination that no test could make, so the fault test of step 3 came
+first (above). Then tests for the parts that no fault reaches: the
+owner, the access time, the notices for extended attributes that were
+not restored, directories finished deepest first, a name of 250 bytes,
+files with holes in chunks that do not fall on their segments,
+extraction to stdout, and the bound on workers. The index checks do not
+check paths (doc/format.md 8.6), so a test gives a directory, a link and
+a hardlink a path that is not in stored form. Of the 27 accepted
+mutants, 5 need root, 2 run on another platform, and the others change
+only the speed, or cannot happen after the index checks.</p>
+<p>The other files of <code>archive</code> are next:
+<code>mutate.go</code>, <code>walk.go</code>, <code>capture.go</code>,
+<code>diff.go</code>, <code>ops.go</code>, <code>dict.go</code>,
+<code>plan.go</code> and <code>dedup.go</code>.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives
@@ -10563,6 +10597,26 @@ random. Its <code>AddFile</code> then gave no error, and it was emitted
 after the failure. <code>Finish</code> gave the error, so no archive was
 wrong.</li>
 </ul></li>
+<li>In extraction, each operation on the destination goes through a
+<code>destDir</code> (<code>dest.go</code>): in production an
+<code>os.Root</code>, so that no name leads out of the destination. The
+calls of <code>meta</code> on a descriptor (a pipe, a device, the times
+of a link, an extended attribute) go through it too.
+<code>TestExtractFaultsAreNeverSilent</code> makes each of about 100
+operations fail in turn: into an empty directory, over the tree, and
+with <code>--keep-going</code>. These rules apply:
+<ul>
+<li>An extraction that reports success, with no failed member, had no
+fault, apart from the close of a handle that wrote nothing.</li>
+<li>The error is the fault itself: an I/O error, not damage, and not an
+unsafe path.</li>
+<li>No directory or file stays open, and no temporary file stays
+behind.</li>
+</ul>
+It found one fault, which is now fixed: before a link, a pipe or a
+hardlink replaced a node, a failed <code>lstat</code> counted as
+“nothing there”. With the rule on the error, it also finds a fault that
+shows only later, as a link that was not made and then not found.</li>
 </ul>
 <p><em>Part 2, power loss, is done.</em> <code>crash_test.go</code> puts
 a model of the disk behind the same <code>fileSystem</code>. The

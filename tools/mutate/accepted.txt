@@ -1,14 +1,18 @@
-# Mutants that no test can find, because they cannot change what eictar
-# does (doc/design.md 13.5). make mutate does not count them.
+# Mutants that make mutate does not count (doc/design.md 13.5): no test can
+# find them, or no test of this run can.
 #
 # Each entry is the name that make mutate prints for the mutant, then one or
 # more indented lines with the reason. An entry that the tests find, or that
 # names no mutant, fails the run.
 #
-# Two kinds of reason are accepted:
+# Four kinds of reason are accepted:
 # - Equivalent: the change cannot change what eictar does.
 # - Too costly: a test needs more memory than a test can use. Each such entry
 #   names the check that stops the same input before it gets there.
+# - Needs root: only root can run the code, and make mutate does not run as
+#   root. Each such entry names the test that the CI job as root runs.
+# - Another platform: the code runs only on a platform where make mutate does
+#   not run. Each such entry names the platforms.
 
 # --- format: errors that cannot occur ---
 
@@ -292,3 +296,75 @@ src/internal/archive/writer.go: Writer.AppendMember: operator: > → >=
 	Equivalent. The pipeline emits a member with an empty payload with no
 	spool, so its payload is nil, and the check stops at payload != nil.
 	TestEmptyFilesAreNotShared keeps the result.
+
+# --- archive: extraction ---
+
+src/internal/archive/extract.go: extraction.extractNode: operator: == → !=
+	Needs root. A device node can be made only by root.
+	TestDeviceNodesNeedAsking, in the CI job as root, makes a character
+	device and requires its type.
+src/internal/archive/extract.go: extraction.writeSpecial: if false: err != nil → false #3
+	Needs root. Only an owner that root restores can fail here.
+	TestExtractFaultsAreNeverSilent, as root, restores the owners and makes
+	each lchown fail.
+src/internal/archive/extract.go: extraction.writeSymlink: if false: err != nil → false #3
+	Needs root. See the entry for writeSpecial above.
+src/internal/archive/extract.go: extraction.finishDir: if false: err == nil → false
+	Needs root. The owner of a directory: TestOwnershipRestoredAsRoot, in
+	the CI job as root, restores one.
+src/internal/archive/extract.go: extraction.finishDir: operator: == → !=
+	Needs root. See the entry above.
+src/internal/archive/extract.go: extraction.writeSpecial: if false: errors.Is(err, meta.ErrUnsupported) → false
+	Another platform: the platforms with no call for a pipe or a device on
+	the descriptor of a directory (meta_other.go: Windows, and others). There
+	a member is skipped with a notice, not failed.
+src/internal/archive/extract.go: extraction.writeSymlink: if false: errors.Is(err, meta.ErrUnsupported) → false
+	Another platform: the platforms with no call to set the times of a link
+	(meta_other.go). There the link keeps the times it was made with.
+src/internal/archive/extract.go: extraction.parent: if false: dir != "." → false
+	Equivalent. MkdirAll of "." makes nothing.
+src/internal/archive/extract.go: extraction.writeSymlink: if false: dir != "." → false
+	Equivalent. MkdirAll of "." makes nothing.
+src/internal/archive/extract.go: extraction.extractHardlink: if false: dir != "." → false
+	Equivalent. MkdirAll of "." makes nothing.
+src/internal/archive/extract.go: extraction.extractFiles: operator: < → <=
+	Equivalent. Workers: 1 then means GOMAXPROCS workers. Only the number of
+	workers changes, and the result does not depend on it.
+src/internal/archive/extract.go: extraction.extractFiles: if false: workers < 1 → false #2
+	Equivalent. No worker means no file: the loop that follows sends no
+	batch.
+src/internal/archive/extract.go: extraction.extractFiles: operator: < → <= #5
+	Equivalent. A batch can take one file more. Only the batches change.
+src/internal/archive/extract.go: extraction.extractFiles: operator: < → <= #6
+	Equivalent. A batch can take one file more. Only the batches change.
+src/internal/archive/extract.go: fileWorker.in: if false: w.dir != nil && w.name == name → false
+	Equivalent. The worker opens its directory again for each file. Only
+	the speed changes.
+src/internal/archive/extract.go: fileWorker.writeFile: if false: err != nil → false
+	Equivalent. crypto/rand.Read does not return an error (see the writer).
+src/internal/archive/extract.go: tempName: if false: err != nil → false
+	Equivalent. crypto/rand.Read does not return an error (see the writer).
+src/internal/archive/extract.go: fileWorker.writeFile: operator: > → >= #2
+	Equivalent. A file with no holes is cut to the size that it has.
+src/internal/archive/extract.go: extraction.finishDirs: operator: > → >=
+	Equivalent. Only two directories with the same path compare equal, and
+	sort.Slice gives no order to equal ones in either form.
+src/internal/archive/extract.go: extraction.applyXattrs: if false: len(m.Xattrs) == 0 → false
+	Equivalent. The loop that follows has no name to restore.
+src/internal/archive/extract.go: sparseWriter.Write: if false: s.i >= len(s.segs) → false
+	Equivalent. Validate makes the payload of a file with holes the sum of
+	its segments, so no data comes after the last segment.
+src/internal/archive/extract.go: sparseWriter.Write: operator: >= → >
+	Equivalent. See the entry above.
+src/internal/archive/extract.go: holeExpander.Write: if false: h.i >= len(h.segs) → false
+	Equivalent. See the entries for sparseWriter above.
+src/internal/archive/extract.go: holeExpander.Write: operator: >= → >
+	Equivalent. See the entries for sparseWriter above.
+src/internal/archive/extract.go: extractToStdout: if false: content == nil → false
+	Equivalent. Validate refuses a hardlink whose id is not a reg member of
+	the index (doc/format.md 8.4).
+src/internal/archive/extract.go: boundByMemory: operator: < → <=
+	Equivalent. Both give one worker for an affordable count of 1.
+src/internal/archive/extract.go: tempName: operator: > → >=
+	Equivalent. A name of exactly 200 bytes is cut to 180 and the random
+	part, which fits as well as the whole name.

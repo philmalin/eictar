@@ -255,6 +255,15 @@ type CompareOptions struct {
 // mismatch rather than only the first.
 func CompareTrees(tb testing.TB, wantRoot, gotRoot string, opt CompareOptions) {
 	tb.Helper()
+	if diffs := TreeDiffs(tb, wantRoot, gotRoot, opt); len(diffs) > 0 {
+		tb.Errorf("trees differ (want %s, got %s):\n  %s", wantRoot, gotRoot, joinLines(diffs))
+	}
+}
+
+// TreeDiffs gives each difference between the two trees in the selected
+// properties, one per line, and none when they are the same.
+func TreeDiffs(tb testing.TB, wantRoot, gotRoot string, opt CompareOptions) []string {
+	tb.Helper()
 
 	want := Snapshot(tb, wantRoot)
 	got := Snapshot(tb, gotRoot)
@@ -332,11 +341,7 @@ func CompareTrees(tb testing.TB, wantRoot, gotRoot string, opt CompareOptions) {
 	if opt.Hardlinks {
 		compareLinkGroups(want, got, report)
 	}
-
-	if len(diffs) > 0 {
-		tb.Errorf("trees differ (want %s, got %s):\n  %s",
-			wantRoot, gotRoot, joinLines(diffs))
-	}
+	return diffs
 }
 
 // compareLinkGroups checks that files sharing an inode in one tree also share

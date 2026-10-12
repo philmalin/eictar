@@ -160,6 +160,10 @@ type span struct {
 //     run its case expressions too, up to the case that matches.
 //   - A declaration outside a function, such as a constant. The compiler
 //     uses it, so each test that builds uses it.
+//   - The rest of a statement after a function literal in it, up to the
+//     body of an if, a for or a switch. Its block ends where the literal
+//     starts. The statement takes its place: the tests that run its start
+//     run the rest.
 func anchors(f *ast.File) []span {
 	var out []span
 	for _, d := range f.Decls {
@@ -184,7 +188,65 @@ func anchors(f *ast.File) []span {
 		}
 		return true
 	})
+
+	// What follows a function literal in its statement. A block of go test
+	// -cover ends where a function literal starts, and no block holds the
+	// rest of the statement: in `if err := f(func() {...}); err != nil {`,
+	// the condition is in no block. The statement runs when its start runs.
+	var stack []ast.Node
+	ast.Inspect(f, func(n ast.Node) bool {
+		if n == nil {
+			stack = stack[:len(stack)-1]
+			return true
+		}
+		if lit, ok := n.(*ast.FuncLit); ok {
+			for i := len(stack) - 1; i >= 0; i-- {
+				st, ok := stack[i].(ast.Stmt)
+				if !ok {
+					continue
+				}
+				if _, block := st.(*ast.BlockStmt); block {
+					continue
+				}
+				if _, clause := st.(*ast.CaseClause); clause {
+					break // a case expression has its own anchor
+				}
+				// The init statement of an if, a for or a switch is part of
+				// its header: the condition after it is in no block either.
+				for j := i - 1; j >= 0; j-- {
+					if outer, ok := stack[j].(ast.Stmt); ok && headerEnd(outer) != outer.End() && st.End() <= headerEnd(outer) {
+						st = outer
+						break
+					}
+				}
+				if end := headerEnd(st); lit.End() < end {
+					out = append(out, span{lit.End(), end, st.Pos()})
+				}
+				break
+			}
+		}
+		stack = append(stack, n)
+		return true
+	})
 	return out
+}
+
+// headerEnd is where the part of st before its body ends: the brace of the
+// body of an if, a for or a switch, and the end of any other statement.
+func headerEnd(st ast.Stmt) token.Pos {
+	switch s := st.(type) {
+	case *ast.IfStmt:
+		return s.Body.Lbrace
+	case *ast.ForStmt:
+		return s.Body.Lbrace
+	case *ast.RangeStmt:
+		return s.Body.Lbrace
+	case *ast.SwitchStmt:
+		return s.Body.Lbrace
+	case *ast.TypeSwitchStmt:
+		return s.Body.Lbrace
+	}
+	return st.End()
 }
 
 // named is a declaration outside a function and its name.

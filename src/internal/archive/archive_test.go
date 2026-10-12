@@ -1665,6 +1665,38 @@ func TestExtractionWorkersAreBoundedByMemory(t *testing.T) {
 			}
 		})
 	}
+
+	// No limit takes the default budget, of 128 MiB at least; no chunk
+	// bounds nothing.
+	if got := boundByMemory(8, 64<<10, 0); got != 8 {
+		t.Errorf("with no limit: %d workers, want 8", got)
+	}
+	if got := boundByMemory(5, 0, 1); got != 5 {
+		t.Errorf("with no chunk: %d workers, want 5", got)
+	}
+	// A member that shares content decodes the chunks of its owner.
+	owner := &format.Member{ID: 1, ChunkSize: 64 << 20}
+	sharer := &format.Member{ID: 2, Data: 1}
+	ownerOf := func(m *format.Member) *format.Member {
+		if m.Data == owner.ID {
+			return owner
+		}
+		return nil
+	}
+	if got := largestChunk([]*format.Member{sharer}, ownerOf); got != 64<<20 {
+		t.Errorf("largestChunk of a member that shares content = %d, want its owner's %d", got, 64<<20)
+	}
+}
+
+// TestDefaultExtractBudget: a quarter of the RAM, or 512 MiB where the RAM
+// cannot be measured.
+func TestDefaultExtractBudget(t *testing.T) {
+	if got := defaultExtractBudgetOn(1 << 30); got != 1<<28 {
+		t.Errorf("1 GiB of RAM: %d, want %d", got, 1<<28)
+	}
+	if got := defaultExtractBudgetOn(0); got != 512<<20 {
+		t.Errorf("no measure of the RAM: %d, want %d", got, 512<<20)
+	}
 }
 
 // ---------------------------------------------------------------------------

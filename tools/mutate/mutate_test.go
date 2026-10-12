@@ -154,6 +154,12 @@ func f(a int) int {
 	}
 	return a - 1
 }
+
+func g(h func(func() int) error) {
+	if err := h(func() int { return 0 }); err != nil {
+		return
+	}
+}
 `
 	ms, err := mutants("p.go", []byte(src))
 	if err != nil {
@@ -168,6 +174,7 @@ func f(a int) int {
 		">":  "6:2 always=false", // the switch keyword
 		"+":  "8:12 always=false",
 		"-":  "10:11 always=false",
+		"!=": "14:2 always=false", // after a function literal: the if statement
 	} {
 		if got[orig] != want {
 			t.Errorf("%s: %s, want %s", orig, got[orig], want)

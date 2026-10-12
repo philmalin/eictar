@@ -551,18 +551,25 @@ func TestFifoCannotEscapeThroughALink(t *testing.T) {
 	}
 }
 
-// TestOwnershipRestoredAsRoot only runs as root, where chown works.
+// TestOwnershipRestoredAsRoot only runs as root, where chown works. Each kind
+// of node gets its owner by its own path in extraction: a directory in the
+// last pass, a file before its rename, a link and a pipe by lchown.
 func TestOwnershipRestoredAsRoot(t *testing.T) {
 	if !meta.IsRoot() {
 		t.Skip("restoring ownership needs root")
 	}
 	tree := testutil.NewTree(t)
-	tree.Text("a", 0o644, "x")
-	if err := os.Chown(tree.Path("a"), 12345, 12345); err != nil {
-		t.Fatal(err)
+	tree.Dir("d", 0o755)
+	tree.Text("d/a", 0o644, "x")
+	tree.Symlink("d/l", "a")
+	tree.Fifo("d/p", 0o644)
+	for i, p := range []string{"d", "d/a", "d/l", "d/p"} {
+		if err := os.Lchown(tree.Path(p), 12345+i, 22345+i); err != nil {
+			t.Fatal(err)
+		}
 	}
 	archivePath := filepath.Join(t.TempDir(), "a.ect")
-	if _, err := CreateArchive(CreateConfig{Archive: archivePath, Paths: []string{"a"},
+	if _, err := CreateArchive(CreateConfig{Archive: archivePath, Paths: []string{"d"},
 		BaseDir: tree.Root, Options: Options{Codec: "none"}}); err != nil {
 		t.Fatal(err)
 	}

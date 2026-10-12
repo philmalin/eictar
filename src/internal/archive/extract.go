@@ -80,7 +80,7 @@ const (
 // extraction carries the state one Extract call shares across its phases.
 type extraction struct {
 	r     *Reader
-	root  *os.Root
+	root  destDir
 	cfg   ExtractConfig
 	names *meta.Names
 
@@ -134,7 +134,7 @@ func Extract(cfg ExtractConfig) (Stats, error) {
 	if err := os.MkdirAll(dest, 0o777); err != nil {
 		return Stats{}, fmt.Errorf("creating %s: %w", dest, err)
 	}
-	root, err := os.OpenRoot(dest)
+	root, err := openDest(dest)
 	if err != nil {
 		return Stats{}, fmt.Errorf("opening %s: %w", dest, err)
 	}
@@ -360,7 +360,7 @@ func (x *extraction) extractNode(m *format.Member) (bool, error) {
 
 	case format.TypeFIFO:
 		return x.writeSpecial(m, func(dir *os.File, base string) error {
-			return meta.Mkfifo(dir, base, 0o600)
+			return mkfifo(dir, base, 0o600)
 		})
 
 	case format.TypeCharDev, format.TypeBlockDev:
@@ -369,7 +369,7 @@ func (x *extraction) extractNode(m *format.Member) (bool, error) {
 		}
 		char := m.Type == format.TypeCharDev
 		return x.writeSpecial(m, func(dir *os.File, base string) error {
-			return meta.Mknod(dir, base, char, 0o600, m.RDev[0], m.RDev[1])
+			return mknod(dir, base, char, 0o600, m.RDev[0], m.RDev[1])
 		})
 
 	case format.TypeSocket:
@@ -392,7 +392,7 @@ func checkPath(m *format.Member) error {
 // parent opens the directory that will hold m, creating it private if it does
 // not exist. The descriptor comes from os.Root, so the *at calls made against
 // it with a single name component stay inside the destination.
-func (x *extraction) parent(m *format.Member) (*os.File, string, error) {
+func (x *extraction) parent(m *format.Member) (destFile, string, error) {
 	dir, base := path.Split(m.Path)
 	dir = path.Clean(dir)
 	if dir != "." {
@@ -418,10 +418,16 @@ func (x *extraction) clearForReplace(m *format.Member) (bool, error) {
 	if skip {
 		return true, nil
 	}
-	if _, err := x.root.Lstat(m.Path); err == nil {
+	// Only "does not exist" means that nothing is there. Another error, an
+	// EIO say, says nothing about what is there.
+	_, err = x.root.Lstat(m.Path)
+	switch {
+	case err == nil:
 		if err := x.root.Remove(m.Path); err != nil {
 			return false, fmt.Errorf("replacing %s: %w", m.Path, err)
 		}
+	case !errors.Is(err, fs.ErrNotExist):
+		return false, fmt.Errorf("replacing %s: %w", m.Path, err)
 	}
 	return false, nil
 }
@@ -437,7 +443,7 @@ func (x *extraction) writeSpecial(m *format.Member, create func(dir *os.File, ba
 	}
 	defer dir.Close()
 
-	if err := create(dir, base); err != nil {
+	if err := create(dir.file(), base); err != nil {
 		if errors.Is(err, meta.ErrUnsupported) {
 			// Only a call on a directory descriptor is safe from a planted
 			// link, and this platform has none for this node type
@@ -482,7 +488,7 @@ func (x *extraction) writeSymlink(m *format.Member) (bool, error) {
 		return false, err
 	}
 	defer dir.Close()
-	if err := meta.SetLinkTimes(dir, base, x.atime(m), m.MTimeNanos); err != nil {
+	if err := setLinkTimes(dir.file(), base, x.atime(m), m.MTimeNanos); err != nil {
 		if errors.Is(err, meta.ErrUnsupported) {
 			return false, nil
 		}
@@ -576,8 +582,8 @@ const (
 // root, so it is inside the destination as well.
 type fileWorker struct {
 	x    *extraction
-	name string   // the directory held, relative to the destination
-	dir  *os.Root // that directory, or nil
+	name string  // the directory held, relative to the destination
+	dir  destDir // that directory, or nil
 	set  *decoderSet
 }
 
@@ -595,7 +601,7 @@ func (w *fileWorker) close() {
 
 // in returns the directory name, opened through the destination's root, and
 // creates it first when it does not exist. m is the member, for the error.
-func (w *fileWorker) in(m *format.Member, name string) (*os.Root, error) {
+func (w *fileWorker) in(m *format.Member, name string) (destDir, error) {
 	if w.dir != nil && w.name == name {
 		return w.dir, nil
 	}
@@ -665,7 +671,7 @@ func (w *fileWorker) extractFile(m *format.Member, target string) (bool, error) 
 // owner goes first: chown clears setuid, so the mode has to follow it.
 //
 // dir is the directory that holds target, and base is target's name in it.
-func (w *fileWorker) writeFile(dir *os.Root, m *format.Member, base, target string) error {
+func (w *fileWorker) writeFile(dir destDir, m *format.Member, base, target string) error {
 	x := w.x
 	tmp, err := tempName(base)
 	if err != nil {
@@ -700,7 +706,7 @@ func (w *fileWorker) writeFile(dir *os.Root, m *format.Member, base, target stri
 	}
 
 	steps := []func() error{
-		func() error { return x.applyXattrs(m, f, target) },
+		func() error { return x.applyXattrs(m, f.file(), target) },
 		func() error { return x.applyOwner(m, func(uid, gid int) error { return f.Chown(uid, gid) }) },
 		func() error { return f.Chmod(x.mode(m)) },
 	}
@@ -784,7 +790,7 @@ func (x *extraction) finishDir(m *format.Member) error {
 	if err != nil {
 		return fmt.Errorf("opening %s: %w", m.Path, err)
 	}
-	err = x.applyXattrs(m, d, m.Path)
+	err = x.applyXattrs(m, d.file(), m.Path)
 	if err == nil {
 		err = x.applyOwner(m, func(uid, gid int) error { return d.Chown(uid, gid) })
 	}
@@ -847,7 +853,7 @@ func (x *extraction) applyXattrs(m *format.Member, f *os.File, where string) err
 			x.withhold()
 			continue
 		}
-		if err := meta.SetXattr(f, name, m.Xattrs[name]); err != nil {
+		if err := setXattr(f, name, m.Xattrs[name]); err != nil {
 			if errors.Is(err, meta.ErrRefused) {
 				x.mu.Lock()
 				x.refused[name]++
@@ -1078,8 +1084,13 @@ func boundByMemory(workers int, largest, limit int64) int {
 }
 
 // defaultExtractBudget is what extraction may use when no limit was given.
-func defaultExtractBudget() int64 {
-	if ram := totalMemory(); ram > 0 {
+func defaultExtractBudget() int64 { return defaultExtractBudgetOn(totalMemory()) }
+
+// defaultExtractBudgetOn is defaultExtractBudget for a given amount of RAM,
+// so that the rule can be tested on any machine. 0 is RAM that this platform
+// cannot measure.
+func defaultExtractBudgetOn(ram int64) int64 {
+	if ram > 0 {
 		return ram / 4
 	}
 	return 512 << 20
@@ -1102,10 +1113,16 @@ func tempName(memberPath string) (string, error) {
 	return path.Join(dir, name), nil
 }
 
+// lstater is the part of a directory that shouldSkip and unsafeOrRaw use: an
+// *os.Root, or a destDir.
+type lstater interface {
+	Lstat(name string) (fs.FileInfo, error)
+}
+
 // shouldSkip applies the overwrite policy to name in root, for a member with
 // the modification time mtime. The caller reports an error with the member's
 // path.
-func shouldSkip(root *os.Root, name string, mtime int64, policy OverwritePolicy) (bool, error) {
+func shouldSkip(root lstater, name string, mtime int64, policy OverwritePolicy) (bool, error) {
 	fi, err := root.Lstat(name)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
@@ -1129,7 +1146,7 @@ func shouldSkip(root *os.Root, name string, mtime int64, policy OverwritePolicy)
 // its text, this walks the member's own parent components: if any of them is a
 // symbolic link, the archive was trying to write through it, and that is worth
 // naming precisely. The check runs only on the failure path.
-func unsafeOrRaw(root *os.Root, m *format.Member, err error) error {
+func unsafeOrRaw(root lstater, m *format.Member, err error) error {
 	dir := path.Dir(m.Path)
 	for dir != "." && dir != "/" && dir != "" {
 		if fi, lerr := root.Lstat(dir); lerr == nil && fi.Mode()&os.ModeSymlink != 0 {

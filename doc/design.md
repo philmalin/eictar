@@ -3727,9 +3727,13 @@ on this platform. It makes these changes, one at a time:
 
 A run of the tests first gives the coverage. A mutant in code that no test
 runs is *not covered*, and its tests do not run. A coverage profile has no
-block for the expressions of a `case`, or for a declaration outside a
-function. Thus a case expression takes the coverage of its `switch`, and a
-declaration outside a function always counts as run. Each other mutant goes to
+block for the expressions of a `case`, for a declaration outside a
+function, or for the rest of a statement after a function literal in it.
+Thus a case expression takes the coverage of its `switch`, a declaration
+outside a function always counts as run, and the rest of a statement takes
+the coverage of its start. The last rule came late: in
+`if err := applyOwner(m, func(…) {…}); err != nil {`, the condition showed
+as not covered, and the accepted list hid it. Each other mutant goes to
 `go test -overlay`, so the source tree never changes, and mutants run in
 parallel. A failed test finds the mutant. A test binary that does not end
 in three times the time of the first run stops, and that also finds the
@@ -3741,16 +3745,21 @@ part of the counted mutants that the tests find. `-test` gives other
 packages whose tests run, so that a run can tell a gap of one package from a
 gap of the whole program.
 
-**The accepted list.** Some mutants cannot be found by any test.
-`tools/mutate/accepted.txt` lists them, and `make mutate` does not count
-them. An entry names the file, the function and the change, in the form
-that the report prints. Thus an entry stays correct when lines move. Each
-entry must give one of two reasons:
+**The accepted list.** Some mutants cannot be found by any test, or by
+no test of a run of `make mutate`. `tools/mutate/accepted.txt` lists them,
+and `make mutate` does not count them. An entry names the file, the
+function and the change, in the form that the report prints. Thus an entry
+stays correct when lines move. Each entry must give one of four reasons:
 
 - *Equivalent:* the change cannot change what eictar does, for example the
   error of `crypto/rand.Read`, which never returns one.
 - *Too costly:* a test needs more memory than a test can use. The entry
   names the check that stops the same input before it gets there.
+- *Needs root:* only root can run the code, such as a device node or an
+  owner, and `make mutate` does not run as root. The entry names the test
+  that the CI job as root runs.
+- *Another platform:* the code runs only on a platform where `make mutate`
+  does not run. The entry names the platforms.
 
 An entry whose mutant the tests find, or that names no mutant, fails the
 run. Thus the list cannot keep an entry that is no longer true.
@@ -3832,6 +3841,7 @@ The survivors fall into these groups, in order of risk:
 | `crypt` | 55.2% | 89.7% | 9 | 0 |
 | `pipeline` | 59.0% | 88.3% | 21 | 0 |
 | `archive`: `writer.go`, `reader.go`, `fs.go` | 77.4% | 91.6% | 31 | 0 |
+| `archive`: `extract.go` | 62.1% | 91.6% | 27 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
 not count it, and gives 100% for each row. Part of the increase
@@ -3867,6 +3877,20 @@ showed these gaps, which are now closed:
 Of the 31 accepted mutants, 14 are checks of the reader that the index
 validator makes first, and 3 are errors of `crypto/rand.Read`, which ends
 the program instead.
+
+In `extract.go`, most survivors were errors of the destination that no
+test could make, so the fault test of step 3 came first (above). Then
+tests for the parts that no fault reaches: the owner, the access time, the
+notices for extended attributes that were not restored, directories
+finished deepest first, a name of 250 bytes, files with holes in chunks
+that do not fall on their segments, extraction to stdout, and the bound on
+workers. The index checks do not check paths (doc/format.md 8.6), so a test
+gives a directory, a link and a hardlink a path that is not in stored form.
+Of the 27 accepted mutants, 5 need root, 2 run on another platform, and
+the others change only the speed, or cannot happen after the index checks.
+
+The other files of `archive` are next: `mutate.go`, `walk.go`,
+`capture.go`, `diff.go`, `ops.go`, `dict.go`, `plan.go` and `dedup.go`.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of
@@ -3933,6 +3957,23 @@ stress tester injects these faults at random.
     could still submit its chunks, because `select` chooses at random. Its
     `AddFile` then gave no error, and it was emitted after the failure.
     `Finish` gave the error, so no archive was wrong.
+- In extraction, each operation on the destination goes through a
+  `destDir` (`dest.go`): in production an `os.Root`, so that no name leads
+  out of the destination. The calls of `meta` on a descriptor (a pipe, a
+  device, the times of a link, an extended attribute) go through it too.
+  `TestExtractFaultsAreNeverSilent` makes each of about 100 operations fail
+  in turn: into an empty directory, over the tree, and with
+  `--keep-going`. These rules apply:
+  - An extraction that reports success, with no failed member, had no
+    fault, apart from the close of a handle that wrote nothing.
+  - The error is the fault itself: an I/O error, not damage, and not an
+    unsafe path.
+  - No directory or file stays open, and no temporary file stays behind.
+
+  It found one fault, which is now fixed: before a link, a pipe or a
+  hardlink replaced a node, a failed `lstat` counted as "nothing there".
+  With the rule on the error, it also finds a fault that shows only later,
+  as a link that was not made and then not found.
 
 *Part 2, power loss, is done.* `crash_test.go` puts a model of the disk
 behind the same `fileSystem`. The operations reach the disk as in
