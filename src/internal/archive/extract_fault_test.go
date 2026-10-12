@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -302,7 +301,7 @@ func TestExtractFaultsAreNeverSilent(t *testing.T) {
 	tree.Hardlink("t/link.txt", "t/a.txt")
 	tree.Symlink("t/sym", "a.txt")
 	tree.Sparse("t/holes", 0o644, 1<<20, testutil.Segment{Offset: 1 << 19, Data: []byte("data in the middle")})
-	if runtime.GOOS != "windows" {
+	if pipesExtracted(t) {
 		tree.Fifo("t/pipe", 0o644)
 	}
 	archive := mkArchive(t, tree, false, "t")
@@ -372,4 +371,17 @@ func TestExtractFaultsAreNeverSilent(t *testing.T) {
 			}
 		})
 	}
+}
+
+// pipesExtracted reports whether extraction makes a pipe on this platform. A
+// platform with no call to make one on the descriptor of a directory skips
+// it, with a notice: macOS and Windows (doc/design.md 15.1).
+func pipesExtracted(t *testing.T) bool {
+	t.Helper()
+	d, err := os.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	return !errors.Is(meta.Mkfifo(d, "p", 0o600), meta.ErrUnsupported)
 }

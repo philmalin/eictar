@@ -316,11 +316,11 @@ src/internal/archive/extract.go: extraction.finishDir: operator: == → !=
 	Needs root. See the entry above.
 src/internal/archive/extract.go: extraction.writeSpecial: if false: errors.Is(err, meta.ErrUnsupported) → false
 	Another platform: the platforms with no call for a pipe or a device on
-	the descriptor of a directory (meta_other.go: Windows, and others). There
-	a member is skipped with a notice, not failed.
+	the descriptor of a directory: macOS (sys_darwin.go), Windows, and those
+	of meta_other.go. There a member is skipped with a notice, not failed.
 src/internal/archive/extract.go: extraction.writeSymlink: if false: errors.Is(err, meta.ErrUnsupported) → false
-	Another platform: the platforms with no call to set the times of a link
-	(meta_other.go). There the link keeps the times it was made with.
+	Another platform: the platforms with no call to set the times of a link,
+	those of meta_other.go. There the link keeps the times it was made with.
 src/internal/archive/extract.go: extraction.parent: if false: dir != "." → false
 	Equivalent. MkdirAll of "." makes nothing.
 src/internal/archive/extract.go: extraction.writeSymlink: if false: dir != "." → false
