@@ -3845,6 +3845,7 @@ The survivors fall into these groups, in order of risk:
 | `archive`: `mutate.go` | 74.2% | 88.7% | 42 | 0 |
 | `archive`: `walk.go`, `capture.go` | 63.7% | 92.8% | 20 | 0 |
 | `archive`: `diff.go` | 70.4% | 93.9% | 13 | 0 |
+| `archive`: `ops.go`, `dict.go` | 63.1% | 94.2% | 22 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
 not count it, and gives 100% for each row. Part of the increase
@@ -3922,8 +3923,18 @@ whose target is a tombstone, files that do not open, and patterns with
 `--strip-components`. Two live members with one path, from a forged
 index, are compared in index order, as extraction writes them.
 
-The other files of `archive` are next: `ops.go`, `dict.go`, `plan.go`
-and `dedup.go`.
+In `ops.go`, most of the mutants that survived were in helpers that only
+the command line uses, such as the descriptions of a listing. They have
+tests of their own now. The measurement of `train=auto` in `dict.go` is
+now made of parts that a test can reach: the samples held out, the
+candidate sizes, the net gain, and the order in which the candidates run.
+Tests replace the trainer, the encoder of the measurement and the source
+of dictionary ids, and make each one fail. The other tests give: the
+budget of samples, the samples of a tree and of a recompression, a
+dictionary of exactly the 1 MiB limit, and each check of a dictionary
+that is read.
+
+The other files of `archive` are next: `plan.go` and `dedup.go`.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of

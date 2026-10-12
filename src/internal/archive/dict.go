@@ -112,7 +112,7 @@ func (w *Writer) train(samples [][]byte, size int) ([]byte, uint32, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	content, err := codec.TrainDict(w.codecName, w.params, samples, size, id)
+	content, err := trainDict(w.codecName, w.params, samples, size, id)
 	if err == nil && len(content) > format.MaxDictSize {
 		// The codec keeps within size, and size within the limit. This is
 		// the check that the index makes on Close, made before any member
@@ -148,34 +148,23 @@ type dictTrial struct {
 // a candidate past the stop point is not used, so the choice does not depend
 // on -j.
 func (w *Writer) chooseDictSize(samples [][]byte, total int) (int, error) {
-	var training, held [][]byte
-	for i, s := range samples {
-		if i%heldOut == heldOut-1 {
-			held = append(held, s)
-		} else {
-			training = append(training, s)
-		}
-	}
+	training, held := splitHeldOut(samples)
 	held = pick(held, trialBudget)
 	heldBytes := 0
 	for _, s := range held {
 		heldBytes += len(s)
 	}
-	var sizes []int
-	for size := trialMin; size <= format.MaxDictSize && 2*size <= total; size *= 2 {
-		sizes = append(sizes, size)
-	}
+	sizes := trialSizes(total)
 	if heldBytes == 0 || len(sizes) == 0 {
 		return 0, nil
 	}
-	scale := float64(total) / float64(heldBytes)
 
 	// compressed is the size of the held-out files with dict, or without a
 	// dictionary when dict is nil. Each call has its own encoder, at the
 	// archive's level. A window of one sample gives the same result as a
 	// window of a chunk, in less memory.
 	compressed := func(dict []byte) (int, error) {
-		enc, err := codec.NewEncoderWith(w.codecName, w.params, codec.EncoderOptions{Concurrency: 1, Dict: dict, MaxChunk: sampleSize})
+		enc, err := trialEncoder(w.codecName, w.params, codec.EncoderOptions{Concurrency: 1, Dict: dict, MaxChunk: sampleSize})
 		if err != nil {
 			return 0, err
 		}
@@ -194,42 +183,85 @@ func (w *Writer) chooseDictSize(samples [][]byte, total int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	return runTrials(len(sizes), max(1, w.concurrency), func(i int) (dictTrial, error) {
+		t := dictTrial{size: sizes[i]}
+		dict, err := trainDict(w.codecName, w.params, pick(training, trialFactor*t.size), t.size, trialID)
+		if err != nil {
+			return t, nil // a candidate that cannot be trained has no gain
+		}
+		n, err := compressed(dict)
+		if err != nil {
+			return t, err
+		}
+		t.net, t.ok = netGain(base, n, len(dict), total, heldBytes), true
+		return t, nil
+	})
+}
 
-	// The candidates start in order of size. At most w.concurrency run at
-	// once: that is -j, bounded by memory, as for the compression. A
-	// candidate starts only when all those trialLookahead places before it
-	// are done, and have not stopped the measurement. The training time
-	// doubles with each size, so a candidate past the stop point costs as
-	// much as all the smaller ones together: no more than one runs.
-	trials := make([]dictTrial, len(sizes))
+// trainDict and trialEncoder are the trainer and the encoder of the
+// measurement. A test replaces them, to make them fail.
+var (
+	trainDict    = codec.TrainDict
+	trialEncoder = codec.NewEncoderWith
+)
+
+// splitHeldOut divides the samples: every heldOut-th one is held out, and
+// the others are for training.
+func splitHeldOut(samples [][]byte) (training, held [][]byte) {
+	for i, s := range samples {
+		if i%heldOut == heldOut-1 {
+			held = append(held, s)
+		} else {
+			training = append(training, s)
+		}
+	}
+	return training, held
+}
+
+// trialSizes is the candidate sizes for total bytes of samples: 4 KiB, then
+// each double, up to the limit and to half of total.
+func trialSizes(total int) []int {
+	var sizes []int
+	for size := trialMin; size <= format.MaxDictSize && 2*size <= total; size *= 2 {
+		sizes = append(sizes, size)
+	}
+	return sizes
+}
+
+// netGain is what a dictionary of dictLen bytes saves on the whole tree:
+// the held-out files of heldBytes are base bytes compressed without it and n
+// with it, and they stand for total bytes.
+func netGain(base, n, dictLen, total, heldBytes int) float64 {
+	return float64(base-n)*float64(total)/float64(heldBytes) - float64(dictLen)
+}
+
+// runTrials measures the candidates 0 to n-1 with trial, and returns the
+// size that bestTrial chooses, or the first error.
+//
+// The candidates start in order of size. At most slots run at once: that is
+// -j, bounded by memory, as for the compression. A candidate starts only
+// when all those trialLookahead places before it are done, and have not
+// stopped the measurement. The training time doubles with each size, so a
+// candidate past the stop point costs as much as all the smaller ones
+// together: no more than one runs.
+func runTrials(n, slots int, trial func(i int) (dictTrial, error)) (int, error) {
+	trials := make([]dictTrial, n)
 	type result struct {
 		i   int
+		t   dictTrial
 		err error
 	}
 	results := make(chan result)
-	run := func(i int) {
-		size := sizes[i]
-		trials[i].size = size
-		dict, err := codec.TrainDict(w.codecName, w.params, pick(training, trialFactor*size), size, trialID)
-		if err != nil {
-			results <- result{i, nil} // a candidate that cannot be trained has no gain
-			return
-		}
-		n, err := compressed(dict)
-		if err == nil {
-			trials[i].net = float64(base-n)*scale - float64(len(dict))
-			trials[i].ok = true
-		}
-		results <- result{i, err}
-	}
-	slots := max(1, w.concurrency)
-	done := make([]bool, len(sizes))
+	done := make([]bool, n)
 	next, running, prefix := 0, 0, 0
 	var firstErr error
 	best, stop := 0, false
 	for {
-		for !stop && firstErr == nil && next < len(sizes) && next < prefix+trialLookahead && running < slots {
-			go run(next)
+		for !stop && firstErr == nil && next < n && next < prefix+trialLookahead && running < slots {
+			go func(i int) {
+				t, err := trial(i)
+				results <- result{i, t, err}
+			}(next)
 			next, running = next+1, running+1
 		}
 		if running == 0 {
@@ -237,11 +269,11 @@ func (w *Writer) chooseDictSize(samples [][]byte, total int) (int, error) {
 		}
 		r := <-results
 		running--
-		done[r.i] = true
+		done[r.i], trials[r.i] = true, r.t
 		if r.err != nil && firstErr == nil {
 			firstErr = r.err
 		}
-		for prefix < len(sizes) && done[prefix] {
+		for prefix < n && done[prefix] {
 			prefix++
 		}
 		best, stop = bestTrial(trials[:prefix])
@@ -291,7 +323,7 @@ func pick(samples [][]byte, budget int) [][]byte {
 func (w *Writer) newDictID() (uint32, error) {
 	for {
 		var b [4]byte
-		if _, err := rand.Read(b[:]); err != nil {
+		if _, err := dictIDSource(b[:]); err != nil {
 			return 0, fmt.Errorf("generating a dictionary id: %w", err)
 		}
 		id := binary.LittleEndian.Uint32(b[:])&0x7fffffff | 1<<15
@@ -304,6 +336,10 @@ func (w *Writer) newDictID() (uint32, error) {
 		}
 	}
 }
+
+// dictIDSource gives the random bytes of a dictionary id. A test replaces it,
+// to choose the id.
+var dictIDSource = rand.Read
 
 // storeDict writes a dictionary blob at the current offset, sealed when the
 // archive is encrypted, and lists it in the index.

@@ -445,11 +445,17 @@ func encoderSlotsOn(opts Options, workers int, limit, ram int64) int {
 // worker (doc/design.md 8.1). The second term is what actually binds on a large
 // machine, and the first is what keeps a small one usable.
 func budgetFor(limit int64, workers, chunkSize int) int64 {
+	return budgetForOn(limit, workers, chunkSize, totalMemory())
+}
+
+// budgetForOn is budgetFor for a given amount of RAM, so that the rule can
+// be tested without a small machine. ram is 0 when it is not known.
+func budgetForOn(limit int64, workers, chunkSize int, ram int64) int64 {
 	if limit > 0 {
 		return limit
 	}
 	byWorkers := int64(workers) * 4 * int64(chunkSize)
-	if ram := totalMemory(); ram > 0 {
+	if ram > 0 {
 		if quarter := ram / 4; quarter < byWorkers {
 			return quarter
 		}

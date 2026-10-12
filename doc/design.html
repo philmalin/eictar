@@ -10490,6 +10490,13 @@ itself:</strong></p>
 <td>13</td>
 <td>0</td>
 </tr>
+<tr class="odd">
+<td><code>archive</code>: <code>ops.go</code>, <code>dict.go</code></td>
+<td>63.1%</td>
+<td>94.2%</td>
+<td>22</td>
+<td>0</td>
+</tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
@@ -10572,9 +10579,19 @@ tombstone, files that do not open, and patterns with
 <code>--strip-components</code>. Two live members with one path, from a
 forged index, are compared in index order, as extraction writes
 them.</p>
+<p>In <code>ops.go</code>, most of the mutants that survived were in
+helpers that only the command line uses, such as the descriptions of a
+listing. They have tests of their own now. The measurement of
+<code>train=auto</code> in <code>dict.go</code> is now made of parts
+that a test can reach: the samples held out, the candidate sizes, the
+net gain, and the order in which the candidates run. Tests replace the
+trainer, the encoder of the measurement and the source of dictionary
+ids, and make each one fail. The other tests give: the budget of
+samples, the samples of a tree and of a recompression, a dictionary of
+exactly the 1 MiB limit, and each check of a dictionary that is
+read.</p>
 <p>The other files of <code>archive</code> are next:
-<code>ops.go</code>, <code>dict.go</code>, <code>plan.go</code> and
-<code>dedup.go</code>.</p>
+<code>plan.go</code> and <code>dedup.go</code>.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives

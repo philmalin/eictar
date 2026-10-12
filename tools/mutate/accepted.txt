@@ -579,3 +579,72 @@ src/internal/archive/diff.go: differ.visit: operator: && → || #7
 	hardlinks, which finds no target for it (no member has the id 0).
 src/internal/archive/diff.go: compareEntry: if false: e.Kind == kindSocket → false
 	Equivalent. memberTypeFor gives the socket type for a socket too.
+
+# --- archive: the operations and the dictionaries (ops.go, dict.go) ---
+
+src/internal/archive/ops.go: CreateArchive: if false: workers < 1 → false
+	Equivalent. The number of workers changes only the speed: the archive
+	is the same for each -j (TestManyMembersAcrossWorkers). The pipeline
+	and encoderSlots make a count below 1 into 1.
+src/internal/archive/ops.go: CreateArchive: operator: < → <=
+	Equivalent. See the entry above.
+src/internal/archive/ops.go: CreateArchive: operator: < → >=
+	Equivalent. See the entry above.
+src/internal/archive/ops.go: addPaths: if false: spill <= 0 → false
+	Equivalent. The threshold decides only where a payload waits before it
+	is written, in memory or in a temporary file. The archive is the same.
+src/internal/archive/ops.go: addPaths: operator: <= → <
+	Equivalent. See the entry above.
+src/internal/archive/ops.go: addPaths: operator: <= → >
+	Equivalent. See the entry above.
+src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → false
+	Equivalent. Keys.Wrap derives the key with the parameters, and refuses
+	them with the same error. The check comes first so that a refusal
+	costs no work.
+src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → false #3
+	Equivalent. crypto/rand.Read never returns an error (see
+	crypt.SealIndex).
+src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → false #4
+	Equivalent. NewDataKey fails only when crypto/rand.Read does, which it
+	never does.
+src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → false #5
+	Equivalent. NewKeys fails only for a data key of the wrong size, and
+	NewDataKey gives the right size.
+src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → false #6
+	Equivalent. Wrap fails only when crypto/rand.Read does, or for the
+	parameters, which Validate passed.
+src/internal/archive/ops.go: encoderSlotsOn: if false: name == "" → false
+	Equivalent. The codec none needs no memory for its state, so the slots
+	are the workers. With the empty name, EncodeMemory fails, and the
+	slots are the workers too.
+src/internal/archive/ops.go: budgetForOn: operator: < → <=
+	Equivalent. When the two are equal, either one is the budget.
+src/internal/archive/ops.go: ListArchive: operator: < → <=
+	Equivalent. Two live members with one path come only from a forged
+	index, and sort.Slice gives them in no stated order either way.
+src/internal/archive/ops.go: excludeMembers: if false: len(exclude) == 0 && len(excludeRegex) == 0 → false
+	Equivalent. With no pattern, the loop keeps each member. The return
+	before it only saves the loop.
+
+src/internal/archive/dict.go: Writer.chooseDictSize: if false: err != nil → false #4
+	Equivalent. A candidate that is not trained then has no dictionary,
+	and is measured with none: its net gain is 0, which does not win.
+src/internal/archive/dict.go: bestTrial: operator: > → >=
+	Equivalent. bestNet is never below 0, so a net gain above
+	bestNet*(1+trialMargin) is above 0 too.
+src/internal/archive/dict.go: Writer.storeDict: if false: err != nil → false
+	Equivalent. crypto/rand.Read never returns an error (see
+	crypt.SealIndex).
+src/internal/archive/dict.go: Writer.storeDict: if false: err != nil → false #2
+	Equivalent. DictKey fails only for a salt of the wrong size, and the
+	salt has the right size.
+src/internal/archive/dict.go: Writer.storeDict: if false: err != nil → false #3
+	Equivalent. SealDict fails only for a key of the wrong size, and
+	DictKey gives the right size.
+src/internal/archive/dict.go: Writer.switchEncoder: if false: err != nil → false
+	Equivalent. The parameters built the encoder of the writer, and the
+	dictionary is one that the trainer made or that loadDict checked.
+	NewEncoderWith accepts them.
+src/internal/archive/dict.go: Reader.dictFor: operator: >= → >
+	Equivalent. Validate refuses a codec that is not -1 and not in the
+	catalog (see Reader.CodecName).
