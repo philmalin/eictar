@@ -2,8 +2,6 @@ package fsutil
 
 import (
 	"errors"
-	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -57,12 +55,10 @@ func TestStorePath(t *testing.T) {
 			if stripped != tc.wantStripped {
 				t.Errorf("StorePath(%q) stripped = %v, want %v", tc.in, stripped, tc.wantStripped)
 			}
-			// Whatever comes out must be storable and must survive extraction.
+			// Whatever comes out must be storable, and so must survive
+			// extraction, which refuses any other form.
 			if !IsStoredPath(got) {
 				t.Errorf("StorePath(%q) = %q, which is not canonical", tc.in, got)
-			}
-			if _, err := SafeJoin("/dest", got); err != nil {
-				t.Errorf("StorePath(%q) = %q, which SafeJoin rejects: %v", tc.in, got, err)
 			}
 		})
 	}
@@ -124,35 +120,11 @@ func TestIsStoredPath(t *testing.T) {
 	}
 }
 
-func TestSafeJoin(t *testing.T) {
-	dest := filepath.FromSlash("/tmp/dest")
-
-	for _, tc := range []struct {
-		member string
-		want   string
-	}{
-		{"file.txt", filepath.Join(dest, "file.txt")},
-		{"a/b/c.txt", filepath.Join(dest, "a", "b", "c.txt")},
-		{".", dest},
-		{"odd name.txt", filepath.Join(dest, "odd name.txt")},
-	} {
-		t.Run(tc.member, func(t *testing.T) {
-			got, err := SafeJoin(dest, tc.member)
-			if err != nil {
-				t.Fatalf("SafeJoin(%q, %q): %v", dest, tc.member, err)
-			}
-			if got != tc.want {
-				t.Errorf("SafeJoin = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-// TestSafeJoinRefusesEscapes is the extraction-hardening test. Every case here is what a crafted archive contains when it wants to write outside
-// the destination.
-func TestSafeJoinRefusesEscapes(t *testing.T) {
-	dest := filepath.FromSlash("/tmp/dest")
-
+// TestIsStoredPathRefusesEscapes is the extraction-hardening test. Every case
+// here is what a crafted archive contains when it wants to write outside the
+// destination. Extraction refuses each member whose path is not in the
+// stored form (checkPath in package archive).
+func TestIsStoredPathRefusesEscapes(t *testing.T) {
 	for _, member := range []string{
 		"",
 		"/etc/passwd",
@@ -167,47 +139,16 @@ func TestSafeJoinRefusesEscapes(t *testing.T) {
 		"a/",    // not canonical
 		"a/./b", // not canonical
 	} {
-		t.Run(member, func(t *testing.T) {
-			got, err := SafeJoin(dest, member)
-			if err == nil {
-				t.Fatalf("SafeJoin(%q, %q) = %q, want a refusal", dest, member, got)
-			}
-			if !errors.Is(err, ErrUnsafePath) {
-				t.Errorf("error = %v, want ErrUnsafePath", err)
-			}
-		})
-	}
-}
-
-// TestSafeJoinStaysUnderDestination is the property the individual cases are
-// examples of: whatever comes back is under the destination, always.
-func TestSafeJoinStaysUnderDestination(t *testing.T) {
-	dest := filepath.FromSlash("/tmp/dest")
-
-	for _, member := range []string{
-		"a", "a/b", "a/b/c", ".", "deep/" + strings.Repeat("x/", 40) + "leaf",
-	} {
-		got, err := SafeJoin(dest, member)
-		if err != nil {
-			t.Fatalf("SafeJoin(%q, %q): %v", dest, member, err)
-		}
-		if got != dest && !strings.HasPrefix(got, dest+string(filepath.Separator)) {
-			t.Errorf("SafeJoin(%q, %q) = %q, which is outside the destination", dest, member, got)
+		if IsStoredPath(member) {
+			t.Errorf("IsStoredPath(%q) = true, want a refusal", member)
 		}
 	}
 }
 
-// TestSafeJoinRelativeDestination covers -d with a relative directory, which
-// is what a user types most of the time.
-func TestSafeJoinRelativeDestination(t *testing.T) {
-	got, err := SafeJoin("out", "a/b.txt")
-	if err != nil {
-		t.Fatalf("SafeJoin: %v", err)
-	}
-	if want := filepath.Join("out", "a", "b.txt"); got != want {
-		t.Errorf("SafeJoin = %q, want %q", got, want)
-	}
-	if _, err := SafeJoin("out", "../b.txt"); !errors.Is(err, ErrUnsafePath) {
-		t.Errorf("error = %v, want ErrUnsafePath", err)
+// TestStorePathOfTwoSeparators: "//" is the root, as "/" is. The check for
+// three separators must not read past the end of a path of two.
+func TestStorePathOfTwoSeparators(t *testing.T) {
+	if got, stripped, err := StorePath("//"); got != RootPath || !stripped || err != nil {
+		t.Errorf(`StorePath("//") = %q, %v, %v; want %q, true, nil`, got, stripped, err, RootPath)
 	}
 }

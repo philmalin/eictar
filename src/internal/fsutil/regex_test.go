@@ -83,3 +83,25 @@ func TestRegexMatchAnyOrParent(t *testing.T) {
 		t.Error("no expressions matched")
 	}
 }
+
+// TestCompileRegexpsAtTheNestingLimit: an expression that compiles alone
+// can fail inside the group that anchors it, which adds one level. Then it
+// is refused, and not compiled without its anchors.
+func TestCompileRegexpsAtTheNestingLimit(t *testing.T) {
+	e := strings.Repeat("(", 999) + "a" + strings.Repeat(")", 999)
+	if _, err := CompileRegexps([]string{e}); err == nil {
+		t.Error("an expression at the limit of nesting: no error")
+	}
+}
+
+// TestMatchAnyOrParentStopsAtTheTop: the parents of "/x" end at "/x"; the
+// empty string before the "/" is not a parent.
+func TestMatchAnyOrParentStopsAtTheTop(t *testing.T) {
+	rs, err := CompileRegexps([]string{""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rs.MatchAnyOrParent("/x") {
+		t.Error(`"" matches "/x" by its parent ""`)
+	}
+}

@@ -1,9 +1,11 @@
 // Package fsutil holds the path rules shared by the writer and the extractor.
 //
 // The two are separate on purpose. StorePath decides what a path looks like
-// inside an archive, and is applied when writing. SafeJoin decides where a
-// member may land on extraction, and is applied when reading - including to
-// archives this program did not write, which is the case that matters.
+// inside an archive, and is applied when writing. IsStoredPath decides
+// whether a member path may be extracted, and is applied when reading -
+// including to archives this program did not write, which is the case that
+// matters. The extractor writes each member through an os.Root of the
+// destination, which also refuses a link that leads out of it.
 package fsutil
 
 import (
@@ -98,40 +100,4 @@ func IsStoredPath(s string) bool {
 		}
 	}
 	return true
-}
-
-// SafeJoin resolves a member path against a destination directory, refusing
-// anything that would land outside it.
-//
-// It is applied to every member on extraction, including members written by
-// this program: an archive is untrusted input whoever made it, and the whole
-// point of the check is the archive that was crafted to escape.
-//
-// The check here is lexical. It stops "../etc/passwd" and "/etc/passwd"; it
-// does not stop a destination path whose own components are symlinks planted
-// earlier in the same extraction. That needs per-component checking as
-// directories are created, which lands with extraction in M2.
-func SafeJoin(dest, member string) (string, error) {
-	if member == "" {
-		return "", fmt.Errorf("%w: empty member path", ErrUnsafePath)
-	}
-	if path.IsAbs(member) || filepath.IsAbs(member) {
-		return "", fmt.Errorf("%w: %q is absolute", ErrUnsafePath, member)
-	}
-	if !IsStoredPath(member) {
-		return "", fmt.Errorf("%w: %q is not in canonical stored form", ErrUnsafePath, member)
-	}
-	if member == RootPath {
-		return filepath.Clean(dest), nil
-	}
-
-	cleanDest := filepath.Clean(dest)
-	joined := filepath.Join(cleanDest, filepath.FromSlash(member))
-
-	// Join cleans its result, so an escape shows up as a path that is no
-	// longer under the destination.
-	if joined != cleanDest && !strings.HasPrefix(joined, cleanDest+string(filepath.Separator)) {
-		return "", fmt.Errorf("%w: %q escapes %q", ErrUnsafePath, member, dest)
-	}
-	return joined, nil
 }

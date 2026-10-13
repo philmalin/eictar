@@ -671,3 +671,26 @@ src/internal/archive/syncdir_other.go: syncDir: if false: err != nil → false #
 	Too costly. It needs a file system on which the fsync of a directory
 	that opened fails. The crash model of step 3 (crash_test.go) shows what
 	a sync that is not done costs.
+
+# --- fsutil ---
+
+src/internal/fsutil/match.go: MatchAnyOrParent: if false: len(patterns) == 0 → false
+	Equivalent. With no pattern, MatchAny is false for each parent, and the
+	loop ends at the top. The return before it only saves the loop.
+src/internal/fsutil/match.go: MatchAnyOrParent: operator: <= → <
+	Equivalent. With "<", a path that starts with "/" also tries "". Only
+	"*" and "**" match "", and they match the empty first name of the path
+	itself, so the result is the same. A stored path has no leading "/".
+src/internal/fsutil/path.go: StorePath: if false: v != "" → false
+	Another platform: Windows. Elsewhere VolumeName is always empty.
+	path_windows_test.go has the cases of a drive and a share.
+src/internal/fsutil/path.go: StorePath: if false: !IsStoredPath(s) → false
+	Equivalent. Clean, and the removal of the leading "/" and "../", give
+	a stored path each time (TestStorePath checks each result).
+src/internal/fsutil/path.go: IsStoredPath: if false: s == "" || strings.HasPrefix(s, "/") → false
+	Equivalent. The empty string, and a path that starts with "/", have an
+	empty name, which the loop refuses. The check before it is shorter.
+src/internal/fsutil/path.go: IsStoredPath: operator: || → &&
+	Equivalent. See the entry above.
+src/internal/fsutil/regex.go: Regexps.MatchAnyOrParent: if false: len(rs) == 0 → false
+	Equivalent. See MatchAnyOrParent in match.go.

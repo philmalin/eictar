@@ -107,3 +107,21 @@ func TestMatchAny(t *testing.T) {
 		t.Error("no patterns should match nothing, not everything")
 	}
 }
+
+// TestMatchByNameAndBelow: a pattern is the path itself even when it has the
+// characters of a glob, and a pattern with a "/" takes what is below it.
+func TestMatchByNameAndBelow(t *testing.T) {
+	for _, tc := range []struct {
+		pattern, path string
+		want          bool
+	}{
+		{"a[1].txt", "a[1].txt", true}, // as a glob, [1] is the class of 1
+		{"a[1].txt", "a1.txt", true},
+		{"a/b", "a/b/c", true},
+		{"a/b", "a/bc", false},
+	} {
+		if got := Match(tc.pattern, tc.path); got != tc.want {
+			t.Errorf("Match(%q, %q) = %v, want %v", tc.pattern, tc.path, got, tc.want)
+		}
+	}
+}

@@ -1278,8 +1278,8 @@ Three rules apply to links:
   directory, which comes from `os.Root`, with a single name component.
 - **Extraction never goes through a linked directory.** A crafted archive can
   create `evil -> /etc` and then write `evil/passwd`. That write must not
-  reach `/etc`. The lexical check in `fsutil.SafeJoin` cannot catch this
-  alone.
+  reach `/etc`. The lexical check of each member path,
+  `fsutil.IsStoredPath`, cannot catch this alone.
 
   Thus **every filesystem operation during extraction goes through
   `os.Root`** (Go 1.24 and later). `os.Root` holds a descriptor on the
@@ -3007,7 +3007,7 @@ src/internal/crypt/        Argon2id, the wrapped data key, the HKDF key schedule
 src/internal/pipeline/     Budget, Spool, Builder: the chunk pool and its memory budget
 src/internal/cli/          option parsing, the configuration layer (§11), operation dispatch,
                            passphrase input, output, the progress meter
-src/internal/fsutil/       StorePath and SafeJoin (§7), Match for patterns, Regexps for -R
+src/internal/fsutil/       StorePath and IsStoredPath (§7), Match for patterns, Regexps for -R
 src/internal/meta/         xattrs, holes, device numbers, names, *at calls for pipes, devices, link times.
                            Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows, one file each for what
                            differs (§15.1).
@@ -3310,7 +3310,7 @@ Every item in the lists below exists now, except the items marked "later".
 
   The crafted-KDF test fails if the check is removed. This proves that the
   test catches the fault.
-- **Path rules**: `StorePath`, `SafeJoin` and `Match`, with hostile inputs:
+- **Path rules**: `StorePath`, `IsStoredPath` and `Match`, with hostile inputs:
   `../` escapes, absolute paths, and paths that are not canonical.
 - **Fuzzing** (`go test -fuzz`): the header, the trailer, the crypto header
   and the index decoder. A malformed archive must give an error. It must
@@ -3850,6 +3850,7 @@ The survivors fall into these groups, in order of risk:
 | `archive`: `ops.go`, `dict.go` | 63.1% | 94.2% | 22 | 0 |
 | `archive`: `plan.go`, `dedup.go` | 59.2% | 96.7% | 4 | 0 |
 | `archive`: the small files | 79.2% | 98.6% | 1 | 0 |
+| `fsutil` | 67.3% | 84.1% | 7 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
 not count it, and gives 100% for each row. Part of the increase
@@ -3964,8 +3965,18 @@ which a test gives lines of `/proc/meminfo` that are not usual. A lock
 that fails for another reason than a lock that is held, and a collision
 of a directory with a file after `--strip-components`, have tests too.
 
-With this, each file of `archive` has no unexplained survivor. The other
-packages are next: `codec`, `fsutil`, `meta` and `cli`.
+With this, each file of `archive` has no unexplained survivor.
+
+In `fsutil`, five survivors were in `SafeJoin`, which nothing called:
+extraction checks each path with `IsStoredPath`, and writes through
+`os.Root`. `SafeJoin` is gone, and its hostile paths are now a test of
+`IsStoredPath`. The first score counts its mutants, and the score now
+does not. New tests give: a pattern with the characters of a glob, which
+matches its own name; a pattern with a "/", which takes what is below it;
+the path "//"; and an expression of `-R` that compiles alone but not in
+the group that anchors it, at the limit of nesting.
+
+The other packages are next: `meta`, `codec` and `cli`.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of

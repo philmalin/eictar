@@ -6988,8 +6988,9 @@ name component.</p></li>
 <li><p><strong>Extraction never goes through a linked
 directory.</strong> A crafted archive can create
 <code>evil -&gt; /etc</code> and then write <code>evil/passwd</code>.
-That write must not reach <code>/etc</code>. The lexical check in
-<code>fsutil.SafeJoin</code> cannot catch this alone.</p>
+That write must not reach <code>/etc</code>. The lexical check of each
+member path, <code>fsutil.IsStoredPath</code>, cannot catch this
+alone.</p>
 <p>Thus <strong>every filesystem operation during extraction goes
 through <code>os.Root</code></strong> (Go 1.24 and later).
 <code>os.Root</code> holds a descriptor on the destination. It refuses
@@ -9485,7 +9486,7 @@ src/internal/crypt/        Argon2id, the wrapped data key, the HKDF key schedule
 src/internal/pipeline/     Budget, Spool, Builder: the chunk pool and its memory budget
 src/internal/cli/          option parsing, the configuration layer (§11), operation dispatch,
                            passphrase input, output, the progress meter
-src/internal/fsutil/       StorePath and SafeJoin (§7), Match for patterns, Regexps for -R
+src/internal/fsutil/       StorePath and IsStoredPath (§7), Match for patterns, Regexps for -R
 src/internal/meta/         xattrs, holes, device numbers, names, *at calls for pipes, devices, link times.
                            Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows, one file each for what
                            differs (§15.1).
@@ -9759,7 +9760,7 @@ zstd</li>
 The crafted-KDF test fails if the check is removed. This proves that the
 test catches the fault.</li>
 <li><strong>Path rules</strong>: <code>StorePath</code>,
-<code>SafeJoin</code> and <code>Match</code>, with hostile inputs:
+<code>IsStoredPath</code> and <code>Match</code>, with hostile inputs:
 <code>../</code> escapes, absolute paths, and paths that are not
 canonical.</li>
 <li><strong>Fuzzing</strong> (<code>go test -fuzz</code>): the header,
@@ -10514,6 +10515,13 @@ itself:</strong></p>
 <td>1</td>
 <td>0</td>
 </tr>
+<tr class="even">
+<td><code>fsutil</code></td>
+<td>67.3%</td>
+<td>84.1%</td>
+<td>7</td>
+<td>0</td>
+</tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
@@ -10635,8 +10643,19 @@ the error, and no file with it. The amount of memory is read by
 another reason than a lock that is held, and a collision of a directory
 with a file after <code>--strip-components</code>, have tests too.</p>
 <p>With this, each file of <code>archive</code> has no unexplained
-survivor. The other packages are next: <code>codec</code>,
-<code>fsutil</code>, <code>meta</code> and <code>cli</code>.</p>
+survivor.</p>
+<p>In <code>fsutil</code>, five survivors were in <code>SafeJoin</code>,
+which nothing called: extraction checks each path with
+<code>IsStoredPath</code>, and writes through <code>os.Root</code>.
+<code>SafeJoin</code> is gone, and its hostile paths are now a test of
+<code>IsStoredPath</code>. The first score counts its mutants, and the
+score now does not. New tests give: a pattern with the characters of a
+glob, which matches its own name; a pattern with a “/”, which takes what
+is below it; the path “//”; and an expression of <code>-R</code> that
+compiles alone but not in the group that anchors it, at the limit of
+nesting.</p>
+<p>The other packages are next: <code>meta</code>, <code>codec</code>
+and <code>cli</code>.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives
