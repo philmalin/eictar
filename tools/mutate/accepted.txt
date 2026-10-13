@@ -724,3 +724,102 @@ src/internal/meta/meta_unix.go: MayFollow: if false: !owner.OK || !dirOwner.OK �
 	package gives a Stat_t for each, so OK is always true on Unix.
 src/internal/meta/meta_unix.go: MayFollow: operator: || → &&
 	Equivalent. See the entry above.
+
+# --- codec ---
+
+src/internal/codec/codec.go: EncodeMemory: operator: * → /
+	Equivalent. Each codec has an estimate of its own (memoryFactory), so
+	the estimate for the others never runs. It stays for a new codec.
+src/internal/codec/codec.go: EncodeMemory: operator: + → -
+	Equivalent. See the entry above.
+src/internal/codec/codec.go: EncodeMemory: operator: << → >>
+	Equivalent. See the entry above.
+src/internal/codec/codec.go: DictID: if false: err != nil → false
+	Equivalent. With no factory, the test for a dictFactory fails, and
+	DictID returns an error all the same.
+src/internal/codec/codec.go: normalize: if false: len(p) == 0 → false
+	Equivalent. With no parameters, the loop makes an empty copy. The
+	return before it only saves the copy.
+src/internal/codec/deflate.go: deflateEncoder.Encode: if false: err != nil → false
+	Equivalent. The writer writes to a bytes.Buffer, which never fails.
+src/internal/codec/deflate.go: deflateEncoder.Encode: if false: err != nil → false #2
+	Equivalent. See the entry above.
+src/internal/codec/none.go: noneCodec.Decode: operator: > → >=
+	Equivalent. NewDecoderWithDict refuses a bound that is not above 0, so
+	maxPlain is never 0.
+src/internal/codec/s2.go: s2Encoder.Encode: if false: need < 0 → false
+	Equivalent. MaxEncodedLen is below 0 only for a chunk above 2 GiB, and
+	the format refuses a chunk above 256 MiB (format.MaxChunkSize).
+src/internal/codec/s2.go: s2Encoder.Encode: operator: < → <=
+	Equivalent. MaxEncodedLen is at least 1, also for an empty chunk.
+src/internal/codec/s2.go: s2Encoder.Encode: operator: < → <= #2
+	Equivalent. With exactly the room, the mutant makes a new buffer, and
+	the result is the same.
+src/internal/codec/s2.go: s2Decoder.Decode: if false: err != nil → false
+	Equivalent. When DecodedLen fails, the length is 0, and the check of
+	the length, or the decode, refuses the block.
+src/internal/codec/s2.go: s2Decoder.Decode: operator: < → <=
+	Equivalent. See s2Encoder.Encode #2.
+src/internal/codec/s2.go: s2Decoder.Decode: if false: err != nil → false #2
+	Equivalent. A failed decode returns no output, and the check of the
+	length after it refuses the block.
+src/internal/codec/s2.go: s2Decoder.Decode: if false: len(out) != plainSize → false
+	Equivalent. s2.Decode gives the length that DecodedLen gave, which the
+	check before it compared with the index.
+src/internal/codec/stream.go: decodeStream: operator: < → <=
+	Equivalent. See s2Encoder.Encode #2.
+src/internal/codec/xz.go: xzFactory.NewEncoder: if false: err != nil → false #3
+	Equivalent. The configuration has a dictionary of the table and the
+	hash-table matcher, which Verify accepts.
+src/internal/codec/xz.go: xzEncoder.Encode: if false: err != nil → false
+	Equivalent. NewWriter2 fails only for a configuration that Verify
+	refused.
+src/internal/codec/xz.go: xzEncoder.Encode: if false: err != nil → false #2
+	Equivalent. The writer writes to a bytes.Buffer, which never fails.
+src/internal/codec/xz.go: xzEncoder.Encode: if false: err != nil → false #3
+	Equivalent. See the entry above.
+src/internal/codec/xz.go: xzDecoder.Decode: if false: err != nil → false
+	Equivalent. NewReader2 reads nothing, and its dictionary is at least
+	MinDictCap, so it cannot fail. The read finds a bad stream.
+src/internal/codec/zstd.go: zstdFactory.newEncoderWith: if false: err != nil → false #3
+	Equivalent. With a value of long that is not a number, intParam gives 0,
+	and the window is 1 << 0, one byte. The library refuses a window below
+	1 KiB, so the encoder fails all the same.
+src/internal/codec/zstd.go: zstdFactory.newEncoderWith: operator: != → == #5
+	Too costly. The window then stays at the size of the level, above the
+	chunk. The output decodes the same, and only the memory of each state
+	grows, which a test would have to measure inside the library.
+	TestZstdWindowFitsTheChunk checks the window that zstdWindow chooses.
+src/internal/codec/zstd.go: zstdDecoder.Decode: if false: cap(dst)-start < plainSize → false
+	Equivalent. DecodeAll appends to dst, and grows it when it must. The
+	check only makes the room at once.
+src/internal/codec/zstd.go: zstdDecoder.Decode: operator: - → +
+	Equivalent. See the entry above.
+src/internal/codec/zstd.go: zstdDecoder.Decode: operator: < → <=
+	Equivalent. See the entry above.
+src/internal/codec/zstd.go: zstdDecoder.Decode: operator: < → >=
+	Equivalent. See the entry above.
+src/internal/codec/zstd.go: zstdWindow: operator: < → <= #2
+	Equivalent. The window reaches 512 MiB only for a chunk above 256 MiB,
+	which the format refuses (format.MaxChunkSize).
+src/internal/codec/zstd.go: zstdFactory.trainSize: if false: err != nil → false
+	Equivalent. parseSize gives 0 with its error, and 0 is out of range.
+src/internal/codec/zstd.go: zstdFactory.train: operator: <= → <
+	Equivalent. A dictionary of exactly the size is trained again with a
+	smaller content, and the result is still within the size.
+src/internal/codec/zstd.go: zstdFactory.train: if false: content < zstdTrainMin/2 → false
+	Equivalent. The loop then runs its 4 attempts, and the trainer fails on
+	a content that is too small. The result is an error either way.
+src/internal/codec/zstd.go: zstdFactory.train: operator: < → <=
+	Equivalent. See the entry above.
+src/internal/codec/zstd.go: zstdFactory.trainOnce: if false: err != nil → false
+	Equivalent. The trainer returns no dictionary with its error, and the
+	check of the id refuses it.
+src/internal/codec/zstd.go: zstdFactory.trainOnce: if false: err != nil || got != id → false
+	Equivalent. The trainer writes the id that it is given. The check
+	guards against a change in the library, and archive checks the id of
+	each dictionary that it reads (loadDict).
+src/internal/codec/zstd.go: zstdFactory.trainOnce: operator: || → &&
+	Equivalent. See the entry above.
+src/internal/codec/zstd.go: parseSize: if false: i == 0 → false
+	Equivalent. Atoi of the empty string fails, with the same error.

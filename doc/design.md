@@ -3852,6 +3852,7 @@ The survivors fall into these groups, in order of risk:
 | `archive`: the small files | 79.2% | 98.6% | 1 | 0 |
 | `fsutil` | 67.3% | 84.1% | 7 | 0 |
 | `meta` | 51.0% | 93.0% | 10 | 0 |
+| `codec` | 64.7% | 88.1% | 36 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
 not count it, and gives 100% for each row. Part of the increase
@@ -3992,7 +3993,19 @@ and ids 0, which are ids and not "no id".
 The test of a device as root found a fault of `x/sys` on NetBSD, which
 made each device node 0:0 (§15.1).
 
-The other packages are next: `codec` and `cli`.
+In `codec`, the suite that runs for each codec did not reach the functions
+that take a codec by name, which `cli` and `archive` call. Tests now give
+their refusals of a name and of parameters, the window or dictionary that
+the parameters ask for against the chunk, the dictionary of each preset of
+xz, the estimates of memory for each speed of zstd, and the limits of
+`train` and of a size. A decode appends to a destination that has no room,
+little room, or room only with its prefix. A test makes a block of s2 that
+has the right length and the wrong content. Of the 36 accepted mutants,
+most are errors that cannot happen, such as a write to a `bytes.Buffer`,
+or checks that the next check covers. One is too costly: a zstd window
+larger than the chunk changes only the memory of the library.
+
+The last package is next: `cli`.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of

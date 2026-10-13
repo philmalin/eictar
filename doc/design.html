@@ -10532,6 +10532,13 @@ itself:</strong></p>
 <td>10</td>
 <td>0</td>
 </tr>
+<tr class="even">
+<td><code>codec</code></td>
+<td>64.7%</td>
+<td>88.1%</td>
+<td>36</td>
+<td>0</td>
+</tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
@@ -10680,8 +10687,20 @@ size and its read; the errors of the attributes; and ids 0, which are
 ids and not “no id”. The test of a device as root found a fault of
 <code>x/sys</code> on NetBSD, which made each device node 0:0
 (§15.1).</p>
-<p>The other packages are next: <code>codec</code> and
-<code>cli</code>.</p>
+<p>In <code>codec</code>, the suite that runs for each codec did not
+reach the functions that take a codec by name, which <code>cli</code>
+and <code>archive</code> call. Tests now give their refusals of a name
+and of parameters, the window or dictionary that the parameters ask for
+against the chunk, the dictionary of each preset of xz, the estimates of
+memory for each speed of zstd, and the limits of <code>train</code> and
+of a size. A decode appends to a destination that has no room, little
+room, or room only with its prefix. A test makes a block of s2 that has
+the right length and the wrong content. Of the 36 accepted mutants, most
+are errors that cannot happen, such as a write to a
+<code>bytes.Buffer</code>, or checks that the next check covers. One is
+too costly: a zstd window larger than the chunk changes only the memory
+of the library.</p>
+<p>The last package is next: <code>cli</code>.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives
