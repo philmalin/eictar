@@ -4,6 +4,7 @@ package archive
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -17,8 +18,13 @@ func totalMemory() int64 {
 		return 0
 	}
 	defer f.Close()
+	return memTotal(f)
+}
 
-	sc := bufio.NewScanner(f)
+// memTotal reads the MemTotal line of meminfo, in KiB, and returns it in
+// bytes, or 0 when there is none that it can read.
+func memTotal(meminfo io.Reader) int64 {
+	sc := bufio.NewScanner(meminfo)
 	for sc.Scan() {
 		line := sc.Text()
 		if !strings.HasPrefix(line, "MemTotal:") {

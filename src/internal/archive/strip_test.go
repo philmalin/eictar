@@ -26,6 +26,8 @@ func TestStripPath(t *testing.T) {
 		{"a/b/c", 3, "", false},
 		{"a", 1, "", false},
 		{"a/b", 5, "", false},
+		// An empty first component is a component, as for tar.
+		{"/a/b", 1, "a/b", true},
 	} {
 		got, ok := stripPath(tc.in, tc.n)
 		if got != tc.want || ok != tc.ok {
@@ -298,5 +300,18 @@ func TestStripMembersKeepsOneDirectory(t *testing.T) {
 	}
 	if out[0].Mode != 0o755 {
 		t.Errorf("the directory has mode %o, want the later member's 755", out[0].Mode)
+	}
+}
+
+// TestStripMembersDirectoryAndFile: a directory and a file with one path
+// are a collision, in either order.
+func TestStripMembersDirectoryAndFile(t *testing.T) {
+	for _, types := range [][2]format.MemberType{{format.TypeDir, format.TypeReg}, {format.TypeReg, format.TypeDir}} {
+		members := []format.Member{{Path: "p1/x", Type: types[0]}, {Path: "p2/x", Type: types[1]}}
+		rep := &recordingReporter{}
+		out, collided := stripMembers(members, 1, rep, "not extracted")
+		if len(out) != 1 || out[0].Type != types[1] || collided != 1 || len(rep.warnings) != 1 {
+			t.Errorf("%v: %+v, collided %d, warnings %q", types, out, collided, rep.warnings)
+		}
 	}
 }

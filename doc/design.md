@@ -3753,8 +3753,10 @@ stays correct when lines move. Each entry must give one of four reasons:
 
 - *Equivalent:* the change cannot change what eictar does, for example the
   error of `crypto/rand.Read`, which never returns one.
-- *Too costly:* a test needs more memory than a test can use. The entry
-  names the check that stops the same input before it gets there.
+- *Too costly:* a test needs what a unit test cannot have: more memory
+  than a test can use, a file system on which a given call fails, or a
+  count of the open descriptors of the process. The entry says what the
+  test needs, and names what else stops the input or covers the risk.
 - *Needs root:* only root can run the code, such as a device node or an
   owner, and `make mutate` does not run as root. The entry names the test
   that the CI job as root runs.
@@ -3847,6 +3849,7 @@ The survivors fall into these groups, in order of risk:
 | `archive`: `diff.go` | 70.4% | 93.9% | 13 | 0 |
 | `archive`: `ops.go`, `dict.go` | 63.1% | 94.2% | 22 | 0 |
 | `archive`: `plan.go`, `dedup.go` | 59.2% | 96.7% | 4 | 0 |
+| `archive`: the small files | 79.2% | 98.6% | 1 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
 not count it, and gives 100% for each row. Part of the increase
@@ -3952,8 +3955,17 @@ files that `-k` keeps, and failures with and without `--keep-going`. In
 content, the key of a file with many data segments, an owner that this
 run wrote, and an old owner that fails its check.
 
-The small files of `archive` are next: `strip.go`, `progress.go`, the
-locks, the memory of the machine, and the seams `src.go` and `dest.go`.
+The small files of `archive` are `strip.go`, `progress.go`, the locks,
+the memory of the machine, the sync of a directory, and the seams `src.go`
+and `dest.go`. The fault tests replace the seams, so a test now opens a
+path that is not there through each seam on the disk: each gives the
+error, and no file with it. The amount of memory is read by `memTotal`,
+which a test gives lines of `/proc/meminfo` that are not usual. A lock
+that fails for another reason than a lock that is held, and a collision
+of a directory with a file after `--strip-components`, have tests too.
+
+With this, each file of `archive` has no unexplained survivor. The other
+packages are next: `codec`, `fsutil`, `meta` and `cli`.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of

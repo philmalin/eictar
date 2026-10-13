@@ -664,3 +664,10 @@ src/internal/archive/dedup.go: dedup.usable: operator: || → &&
 src/internal/archive/dedup.go: contentKey: operator: + → -
 	Equivalent. The expression is the capacity of a buffer that append
 	grows, and it stays above 0: 32-8, and 16 more for each segment.
+
+# --- archive: the small files ---
+
+src/internal/archive/syncdir_other.go: syncDir: if false: err != nil → false #2
+	Too costly. It needs a file system on which the fsync of a directory
+	that opened fails. The crash model of step 3 (crash_test.go) shows what
+	a sync that is not done costs.

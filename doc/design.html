@@ -10293,9 +10293,11 @@ reasons:</p>
 <li><em>Equivalent:</em> the change cannot change what eictar does, for
 example the error of <code>crypto/rand.Read</code>, which never returns
 one.</li>
-<li><em>Too costly:</em> a test needs more memory than a test can use.
-The entry names the check that stops the same input before it gets
-there.</li>
+<li><em>Too costly:</em> a test needs what a unit test cannot have: more
+memory than a test can use, a file system on which a given call fails,
+or a count of the open descriptors of the process. The entry says what
+the test needs, and names what else stops the input or covers the
+risk.</li>
 <li><em>Needs root:</em> only root can run the code, such as a device
 node or an owner, and <code>make mutate</code> does not run as root. The
 entry names the test that the CI job as root runs.</li>
@@ -10505,6 +10507,13 @@ itself:</strong></p>
 <td>4</td>
 <td>0</td>
 </tr>
+<tr class="odd">
+<td><code>archive</code>: the small files</td>
+<td>79.2%</td>
+<td>98.6%</td>
+<td>1</td>
+<td>0</td>
+</tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
@@ -10615,10 +10624,19 @@ failures with and without <code>--keep-going</code>. In
 <code>dedup.go</code>, the table of owners has tests of its own: which
 members own content, the key of a file with many data segments, an owner
 that this run wrote, and an old owner that fails its check.</p>
-<p>The small files of <code>archive</code> are next:
-<code>strip.go</code>, <code>progress.go</code>, the locks, the memory
-of the machine, and the seams <code>src.go</code> and
-<code>dest.go</code>.</p>
+<p>The small files of <code>archive</code> are <code>strip.go</code>,
+<code>progress.go</code>, the locks, the memory of the machine, the sync
+of a directory, and the seams <code>src.go</code> and
+<code>dest.go</code>. The fault tests replace the seams, so a test now
+opens a path that is not there through each seam on the disk: each gives
+the error, and no file with it. The amount of memory is read by
+<code>memTotal</code>, which a test gives lines of
+<code>/proc/meminfo</code> that are not usual. A lock that fails for
+another reason than a lock that is held, and a collision of a directory
+with a file after <code>--strip-components</code>, have tests too.</p>
+<p>With this, each file of <code>archive</code> has no unexplained
+survivor. The other packages are next: <code>codec</code>,
+<code>fsutil</code>, <code>meta</code> and <code>cli</code>.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives
