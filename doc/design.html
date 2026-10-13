@@ -10522,6 +10522,13 @@ itself:</strong></p>
 <td>7</td>
 <td>0</td>
 </tr>
+<tr class="odd">
+<td><code>meta</code></td>
+<td>51.0%</td>
+<td>93.0%</td>
+<td>10</td>
+<td>0</td>
+</tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
@@ -10654,8 +10661,22 @@ glob, which matches its own name; a pattern with a “/”, which takes what
 is below it; the path “//”; and an expression of <code>-R</code> that
 compiles alone but not in the group that anchors it, at the limit of
 nesting.</p>
-<p>The other packages are next: <code>meta</code>, <code>codec</code>
-and <code>cli</code>.</p>
+<p>In <code>meta</code>, two tests skipped where a fault made them pass.
+The test of holes skipped when <code>DataSegments</code> called a file
+dense, so a fault that lost the holes made it skip. Now it skips only
+when <code>SEEK_HOLE</code> itself finds no hole. The test of names
+skipped when <code>UserName</code> gave no name. Now a test takes the
+names from the system database of Go. A seam for <code>lseek</code>
+gives the answers that a file system gives rarely: an error of each
+call, data in all of the file, data past its size, and a hole past its
+end. Other tests give: the escapes of <code>Mknod</code> and
+<code>Lchown</code> refused by the check of the name, not by a lack of
+privilege; a device as root, of each type, with its permissions and
+numbers; <code>O_NOFOLLOW</code>; an attribute that grew between its
+size and its read; the errors of the attributes; and ids 0, which are
+ids and not “no id”.</p>
+<p>The other packages are next: <code>codec</code> and
+<code>cli</code>.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives

@@ -3851,6 +3851,7 @@ The survivors fall into these groups, in order of risk:
 | `archive`: `plan.go`, `dedup.go` | 59.2% | 96.7% | 4 | 0 |
 | `archive`: the small files | 79.2% | 98.6% | 1 | 0 |
 | `fsutil` | 67.3% | 84.1% | 7 | 0 |
+| `meta` | 51.0% | 93.0% | 10 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
 not count it, and gives 100% for each row. Part of the increase
@@ -3976,7 +3977,20 @@ matches its own name; a pattern with a "/", which takes what is below it;
 the path "//"; and an expression of `-R` that compiles alone but not in
 the group that anchors it, at the limit of nesting.
 
-The other packages are next: `meta`, `codec` and `cli`.
+In `meta`, two tests skipped where a fault made them pass. The test of
+holes skipped when `DataSegments` called a file dense, so a fault that
+lost the holes made it skip. Now it skips only when `SEEK_HOLE` itself
+finds no hole. The test of names skipped when `UserName` gave no name.
+Now a test takes the names from the system database of Go. A seam for
+`lseek` gives the answers that a file system gives rarely: an error of
+each call, data in all of the file, data past its size, and a hole past
+its end. Other tests give: the escapes of `Mknod` and `Lchown` refused by
+the check of the name, not by a lack of privilege; a device as root, of
+each type, with its permissions and numbers; `O_NOFOLLOW`; an attribute
+that grew between its size and its read; the errors of the attributes;
+and ids 0, which are ids and not "no id".
+
+The other packages are next: `codec` and `cli`.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of

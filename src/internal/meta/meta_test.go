@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -47,6 +48,9 @@ func TestClassifyXattr(t *testing.T) {
 		"com.apple.quarantine":     XattrPlain, // macOS: no namespaces
 		"user.":                    XattrPlain, // no name after the namespace
 		"usercomment":              XattrPlain,
+		"security.":                XattrPlain,
+		"trusted.":                 XattrPlain,
+		"system.":                  XattrPlain,
 	} {
 		if got := ClassifyXattr(name); got != want {
 			t.Errorf("ClassifyXattr(%q) = %v, want %v", name, got, want)
@@ -163,6 +167,11 @@ func TestDataSegmentsFindsHoles(t *testing.T) {
 		t.Fatalf("DataSegments: %v", err)
 	}
 	if !sparse {
+		// Only when the file system itself gives no hole: a test that skips
+		// whenever DataSegments says dense cannot find a fault that loses them.
+		if reportsHoles(f, size) {
+			t.Fatalf("SEEK_HOLE finds a hole, and DataSegments says the file is dense")
+		}
 		t.Skip("this filesystem did not report the holes")
 	}
 
@@ -226,11 +235,11 @@ func TestAtCallsRefuseEscapes(t *testing.T) {
 		if err := SetLinkTimes(dir, name, 0, 0); err == nil {
 			t.Errorf("SetLinkTimes accepted %q", name)
 		}
-		if err := Mknod(dir, name, true, 0o600, 1, 3); err == nil {
-			t.Errorf("Mknod accepted %q", name)
+		if err := Mknod(dir, name, true, 0o600, 1, 3); err == nil || !strings.HasPrefix(err.Error(), "meta: ") {
+			t.Errorf("Mknod accepted %q (%v)", name, err)
 		}
-		if err := Lchown(dir, name, 0, 0); err == nil {
-			t.Errorf("Lchown accepted %q", name)
+		if err := Lchown(dir, name, 0, 0); err == nil || !strings.HasPrefix(err.Error(), "meta: ") {
+			t.Errorf("Lchown accepted %q (%v)", name, err)
 		}
 	}
 }
@@ -249,6 +258,11 @@ func TestMkfifo(t *testing.T) {
 	}
 	if fi.Mode()&fs.ModeNamedPipe == 0 {
 		t.Errorf("mode = %v, want a named pipe", fi.Mode())
+	}
+	// Only the permissions of the mode go to the call. The umask can take
+	// some of them away.
+	if perm := fi.Mode().Perm(); perm&^0o640 != 0 {
+		t.Errorf("permissions %o, want 0640 at most", perm)
 	}
 }
 

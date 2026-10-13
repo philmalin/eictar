@@ -694,3 +694,33 @@ src/internal/fsutil/path.go: IsStoredPath: operator: || → &&
 	Equivalent. See the entry above.
 src/internal/fsutil/regex.go: Regexps.MatchAnyOrParent: if false: len(rs) == 0 → false
 	Equivalent. See MatchAnyOrParent in match.go.
+
+# --- meta ---
+
+src/internal/meta/holes_seek.go: DataSegments: operator: < → <=
+	Equivalent. At the size, SEEK_DATA gives ENXIO, which ends the loop as
+	the condition does.
+src/internal/meta/holes_seek.go: DataSegments: operator: > → >=
+	Equivalent. A hole at the size is set to the size: the same value.
+src/internal/meta/meta.go: Names.ResolveUser: if false: name == "" → false
+	Equivalent. No user has the empty name, so the lookup fails, and the
+	recorded id comes back, as the check gives it.
+src/internal/meta/meta.go: Names.ResolveGroup: if false: name == "" → false
+	Equivalent. See ResolveUser.
+src/internal/meta/meta_unix.go: Mknod: if false: char → false
+	Needs root. TestMknodAsRoot, in the CI job as root, makes a character
+	device and requires its type.
+src/internal/meta/meta_unix.go: Mknod: operator: | → &
+	Needs root. TestMknodAsRoot requires the type of each device.
+src/internal/meta/meta_unix.go: Mknod: operator: & → |
+	Needs root. TestMknodAsRoot gives a mode with type bits, and requires
+	the permissions 0640 alone.
+src/internal/meta/meta_unix.go: isUnsupported: operator: || → &&
+	Another platform: macOS and the BSDs. On Linux, ENOTSUP and EOPNOTSUPP
+	are one number. Elsewhere they are two, and TestReadXattrsLogic on
+	macOS gives EOPNOTSUPP for a file system without attributes.
+src/internal/meta/meta_unix.go: MayFollow: if false: !owner.OK || !dirOwner.OK → false
+	Equivalent. Each caller gives the FileInfo of an lstat, and the os
+	package gives a Stat_t for each, so OK is always true on Unix.
+src/internal/meta/meta_unix.go: MayFollow: operator: || → &&
+	Equivalent. See the entry above.

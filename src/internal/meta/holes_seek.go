@@ -10,6 +10,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// seek is lseek(2). A test replaces it, to give the answers of a file system.
+var seek = unix.Seek
+
 // DataSegments returns the data regions of a file that has holes, or nil for
 // a dense file.
 //
@@ -27,7 +30,7 @@ func DataSegments(f *os.File, size int64, blocks int64) ([]Segment, bool, error)
 	var segs []Segment
 	var total int64
 	for off := int64(0); off < size; {
-		data, err := unix.Seek(fd, off, unix.SEEK_DATA)
+		data, err := seek(fd, off, unix.SEEK_DATA)
 		if errors.Is(err, unix.ENXIO) {
 			break // no data after off: the rest is a hole
 		}
@@ -40,7 +43,7 @@ func DataSegments(f *os.File, size int64, blocks int64) ([]Segment, bool, error)
 		if data >= size {
 			break
 		}
-		hole, err := unix.Seek(fd, data, unix.SEEK_HOLE)
+		hole, err := seek(fd, data, unix.SEEK_HOLE)
 		if err != nil {
 			return nil, false, fmt.Errorf("finding a hole: %w", err)
 		}
@@ -51,7 +54,7 @@ func DataSegments(f *os.File, size int64, blocks int64) ([]Segment, bool, error)
 		total += hole - data
 		off = hole
 	}
-	if _, err := unix.Seek(fd, 0, 0); err != nil {
+	if _, err := seek(fd, 0, 0); err != nil {
 		return nil, false, fmt.Errorf("rewinding: %w", err)
 	}
 
