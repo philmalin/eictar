@@ -2963,8 +2963,8 @@ bare `go` command:
 |--------|--------|
 | `make build` | build `.build/eictar`, stripped and with no local paths (`-trimpath -ldflags="-s -w"`). The version that `--version` prints comes from `git describe`, such as `1.0.1-2-g5ccd0ce`, or is `dev` outside a git checkout. `make build VERSION=1.0.0` sets it. |
 | `make release` | build the release binaries in `.build/release/`, one directory for each platform (§12.3) |
-| `make test` | run the unit tests |
-| `make test-race` | run the unit tests with the race detector |
+| `make test` | run the unit tests. `TESTTIMEOUT` (default `30m`) is the limit for each package: the 10 minutes of Go were too few for `archive` under `-race` on the macOS runner. |
+| `make test-race` | run the unit tests with the race detector, with the same limit |
 | `make operational` | run the operational tests (§13.2) |
 | `make large` | run the operational test of an archive larger than 4 GiB (§13.2). `LARGE=8` sets the size of its large file in GiB (default 4). It needs approximately four times that much free space in `.tmp/`. |
 | `make fuzz` | run each fuzz target for `FUZZTIME` (default 30s) |

@@ -9381,11 +9381,14 @@ directory for each platform (§12.3)</td>
 </tr>
 <tr class="odd">
 <td><code>make test</code></td>
-<td>run the unit tests</td>
+<td>run the unit tests. <code>TESTTIMEOUT</code> (default
+<code>30m</code>) is the limit for each package: the 10 minutes of Go
+were too few for <code>archive</code> under <code>-race</code> on the
+macOS runner.</td>
 </tr>
 <tr class="even">
 <td><code>make test-race</code></td>
-<td>run the unit tests with the race detector</td>
+<td>run the unit tests with the race detector, with the same limit</td>
 </tr>
 <tr class="odd">
 <td><code>make operational</code></td>

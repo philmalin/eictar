@@ -22,6 +22,10 @@ export TMPDIR     := $(CURDIR)/.tmp
 
 BIN      := .build/eictar
 PKGS     := ./src/...
+# The limit of each package under test. Go gives 10 minutes, and archive
+# under -race on the macOS runner took 507 s, then passed 600 s. A hang still
+# ends at this limit, not at the limit of the CI job.
+TESTTIMEOUT ?= 30m
 FUZZTIME ?= 30s
 
 # The version that --version prints. A local build takes it from git
@@ -70,10 +74,10 @@ release: | $(TMPDIR)
 	done
 
 test: | $(TMPDIR)
-	$(GO) test $(PKGS) ./tools/...
+	$(GO) test -timeout $(TESTTIMEOUT) $(PKGS) ./tools/...
 
 test-race: | $(TMPDIR)
-	$(GO) test -race $(PKGS) ./tools/...
+	$(GO) test -race -timeout $(TESTTIMEOUT) $(PKGS) ./tools/...
 
 # Drives the compiled binary end to end; see doc/design.md 13.2.
 operational: | $(TMPDIR)
