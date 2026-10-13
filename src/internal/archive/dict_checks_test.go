@@ -436,7 +436,9 @@ func sampleTreeOf(t *testing.T) (*testutil.Tree, *Writer, CreateConfig) {
 // archive, old or new. Over the budget, every k-th file is read.
 func TestSampleTree(t *testing.T) {
 	_, w, cfg := sampleTreeOf(t)
-	if fi := mustStat(t, w.f.Name()); fi.Size() == 0 || filepath.Dir(w.f.Name()) != filepath.Dir(cfg.Archive) {
+	// The size from the open file: on Windows, a stat by path gives the size
+	// that the directory has, which is behind while the file is open.
+	if fi, err := w.f.Stat(); err != nil || fi.Size() == 0 || filepath.Dir(w.tmpPath) != filepath.Dir(cfg.Archive) {
 		t.Fatalf("the file that is being written is not in the tree, or is empty")
 	}
 	samples, total, err := sampleTree(w, cfg, 20)

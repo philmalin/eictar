@@ -10567,6 +10567,15 @@ one more: the meter of a recompress counted the content of the members
 that share it, which a recompress does not decode, so it never reached
 its total. Of the 42 accepted mutants, most change only the batches or
 the number of workers, or cannot happen after the index checks.</p>
+<p>The NetBSD job of CI found a race in a recompress after these tests.
+Each member is decoded by a goroutine into a pipe, which the pipeline
+reads. When the pipeline failed, <code>recompressOne</code> returned and
+the caller closed the reader, but the goroutine could still read the old
+archive. It then read a file that was closed, and the program stopped
+with a panic. Now <code>recompressOne</code> waits until the goroutine
+ends. <code>TestRecompressOneWaitsForTheDecoder</code> holds the read of
+the goroutine, and shows that <code>recompressOne</code> does not return
+before it.</p>
 <p>In <code>walk.go</code> and <code>capture.go</code>, the fault test
 of the source came first (step 3), and found three faults of the walk.
 Then tests for what no fault reaches: each kind of file, a device, the

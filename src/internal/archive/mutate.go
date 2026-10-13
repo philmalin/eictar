@@ -688,9 +688,16 @@ func recompressOne(r *Reader, w *Writer, b *pipeline.Builder, m format.Member, p
 	// computes the new one over the same bytes, so a member that changes on
 	// the way fails instead of being stored with a digest that lies.
 	pr, pw := io.Pipe()
-	go func() { pw.CloseWithError(r.WriteMember(&old, pw)) }()
+	decoded := make(chan struct{})
+	go func() {
+		defer close(decoded)
+		pw.CloseWithError(r.WriteMember(&old, pw))
+	}()
 	err := b.AddFile(m, countReader(pr, progress), w.newDigest())
 	pr.CloseWithError(errors.New("recompression stopped")) // unblock the decoder on an early return
+	// The caller closes r after an error: the decoder must not read from it
+	// then.
+	<-decoded
 	if err != nil {
 		return fmt.Errorf("%s: %w", old.Path, err)
 	}

@@ -196,10 +196,12 @@ func TestKeepGoingWithNoReporter(t *testing.T) {
 			cfg.Reporter = rep
 		}
 		stats, err := CreateArchive(cfg)
-		if err != nil || stats.Failed != 2 {
-			t.Errorf("%v, %d failed; want two failures and no error", err, stats.Failed)
+		// On macOS, a directory that cannot be read also fails the read of
+		// its extended attributes: a third failure.
+		if err != nil || stats.Failed < 2 {
+			t.Errorf("%v, %d failed; want two failures or more, and no error", err, stats.Failed)
 		}
-		if rep != nil && len(rep.warnings) != 2 {
+		if rep != nil && len(rep.warnings) != stats.Failed {
 			t.Errorf("warnings %q, want one for each failure", rep.warnings)
 		}
 	}
