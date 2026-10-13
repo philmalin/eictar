@@ -447,8 +447,12 @@ func TestSharedEncoderRunsInParallel(t *testing.T) {
 	// serial one, and the ratio of plain work went from 0.13 to 5.5 from one
 	// attempt to the next. Thus each attempt measures the machine with plain
 	// work before and after, and counts only when both times it had four
-	// free cores. The test passes when one counted attempt meets the bound,
-	// and skips when no attempt counted.
+	// free cores. The test passes when one counted attempt meets the bound.
+	// The checks before and after do not see load that comes during the
+	// attempt: in one OpenBSD run, the one attempt that counted was slow.
+	// Thus the test fails only when at least minCounted attempts counted,
+	// and skips otherwise. A serial encoder misses the bound in each one.
+	const minCounted = 3
 	var tries []string
 	counted := 0
 	for range 8 {
@@ -466,8 +470,9 @@ func TestSharedEncoderRunsInParallel(t *testing.T) {
 		}
 		tries = append(tries, fmt.Sprintf("%v against %v", parallel, serial))
 	}
-	if counted == 0 {
-		t.Skipf("the machine reports %d CPUs, but did not have %d free cores in any attempt", runtime.NumCPU(), callers)
+	if counted < minCounted {
+		t.Skipf("the machine reports %d CPUs, but had %d free cores in %d attempts only, and they missed the bound: %s",
+			runtime.NumCPU(), callers, counted, strings.Join(tries, ", "))
 	}
 	t.Errorf("sharing an encoder across %d goroutines took %s serial, in each attempt "+
 		"in which the machine ran in parallel; the encoder is probably serialising on a state pool of one",
