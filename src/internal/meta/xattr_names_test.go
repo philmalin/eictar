@@ -104,10 +104,14 @@ func TestSetXattrErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	if err := SetXattr(f, "user.big", make([]byte, 1<<20)); err == nil || errors.Is(err, ErrRefused) {
-		t.Errorf("a value too large: %v, want the error of the system", err)
-	}
 	if err := SetXattr(f, "com.example.no-namespace-on-linux", []byte("v")); err != nil && !errors.Is(err, ErrRefused) {
 		t.Errorf("a name the system does not take: %v, want ErrRefused", err)
+	}
+
+	// A closed descriptor is a fault on each platform. (APFS takes a value of
+	// 1 MiB, so a large value is not one on macOS.)
+	f.Close()
+	if err := SetXattr(f, "user.t", []byte("v")); !errors.Is(err, unix.EBADF) || errors.Is(err, ErrRefused) {
+		t.Errorf("a closed file: %v, want the error of the system", err)
 	}
 }

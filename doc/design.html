@@ -10674,7 +10674,9 @@ end. Other tests give: the escapes of <code>Mknod</code> and
 privilege; a device as root, of each type, with its permissions and
 numbers; <code>O_NOFOLLOW</code>; an attribute that grew between its
 size and its read; the errors of the attributes; and ids 0, which are
-ids and not “no id”.</p>
+ids and not “no id”. The test of a device as root found a fault of
+<code>x/sys</code> on NetBSD, which made each device node 0:0
+(§15.1).</p>
 <p>The other packages are next: <code>codec</code> and
 <code>cli</code>.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
@@ -11255,7 +11257,9 @@ single name component.</li>
 <code>syscall.Stat_t</code>, the pipe and device calls, and the
 platform’s row of the table. FreeBSD has <code>mkfifoat</code> as system
 call 497, which <code>x/sys</code> does not wrap, so eictar calls it by
-number.</li>
+number. On NetBSD, eictar makes <code>mknodat</code> itself too, because
+the wrapper of <code>x/sys</code> passes the device number in the wrong
+place.</li>
 <li><code>xattr_names.go</code> reads NUL-separated names on Linux and
 macOS. <code>xattr_extattr.go</code> calls the <code>extattr</code>
 system calls on FreeBSD and NetBSD. <code>xattr_none.go</code> is for
@@ -11283,7 +11287,17 @@ OpenBSD sysctl name in its own table, and the table has no
 Up to v1.0.8, it asked for <code>hw.physmem64</code>, got an error, and
 OpenBSD had no memory size. <code>TestTotalMemory</code> found this when
 it was added for Windows.</p>
-<p>All three are worth a report to the <code>x/sys</code> project. The
+<p>A fourth fault is on NetBSD. NetBSD declares <code>mknodat</code> as
+<code>mknodat(int fd, const char *path, mode_t mode, int PAD, dev_t dev)</code>,
+and <code>unix.Mknodat</code> puts the device number where the padding
+is. The kernel then read 0 for the number. Thus up to this change, each
+device node that eictar made on NetBSD, as root with
+<code>--preserve-devices</code>, was 0:0. Now <code>sys_netbsd.go</code>
+makes the system call itself, with the padding.
+<code>TestMknodAsRoot</code> found this in the CI job of NetBSD, which
+runs as root. The test of devices in <code>archive</code> checked only
+the type.</p>
+<p>All four are worth a report to the <code>x/sys</code> project. The
 test helpers read xattrs with their own code, not with the code in
 <code>meta</code>, so that a fault in <code>meta</code> cannot hide
 itself.</p>

@@ -513,7 +513,11 @@ func TestDeviceNodesNeedAsking(t *testing.T) {
 	}
 	fi, err := os.Lstat(filepath.Join(dest, "null"))
 	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
-		t.Errorf("as root with --preserve-devices, got %v, %v", fi, err)
+		t.Fatalf("as root with --preserve-devices, got %v, %v", fi, err)
+	}
+	// The numbers too: on NetBSD, a fault of x/sys made each device 0:0.
+	if info := meta.Stat(fi); info.Major != 1 || info.Minor != 3 {
+		t.Errorf("the device is %d:%d, want 1:3", info.Major, info.Minor)
 	}
 }
 

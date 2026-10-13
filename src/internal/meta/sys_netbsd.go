@@ -1,7 +1,9 @@
 package meta
 
 import (
+	"runtime"
 	"syscall"
+	"unsafe"
 
 	"golang.org/x/sys/unix"
 )
@@ -25,6 +27,24 @@ func mkfifoat(dirfd int, name string, mode uint32) error {
 	return unix.Mkfifoat(dirfd, name, mode)
 }
 
+// mknodat makes the system call itself. NetBSD declares it as mknodat(int fd,
+// const char *path, mode_t mode, int PAD, dev_t dev), and unix.Mknodat puts
+// dev where the padding is: the kernel then read 0, and each device node
+// was 0:0 (TestMknodAsRoot, as root). A 64-bit dev_t takes two words on a
+// 32-bit platform, low word first.
 func mknodat(dirfd int, name string, mode uint32, dev uint64) error {
-	return unix.Mknodat(dirfd, name, mode, int(dev))
+	p, err := unix.BytePtrFromString(name)
+	if err != nil {
+		return err
+	}
+	high := uintptr(0)
+	if unsafe.Sizeof(uintptr(0)) == 4 {
+		high = uintptr(dev >> 32)
+	}
+	_, _, e := unix.Syscall6(unix.SYS_MKNODAT, uintptr(dirfd), uintptr(unsafe.Pointer(p)), uintptr(mode), 0, uintptr(dev), high)
+	runtime.KeepAlive(p)
+	if e != 0 {
+		return e
+	}
+	return nil
 }

@@ -3989,6 +3989,8 @@ the check of the name, not by a lack of privilege; a device as root, of
 each type, with its permissions and numbers; `O_NOFOLLOW`; an attribute
 that grew between its size and its read; the errors of the attributes;
 and ids 0, which are ids and not "no id".
+The test of a device as root found a fault of `x/sys` on NetBSD, which
+made each device node 0:0 (§15.1).
 
 The other packages are next: `codec` and `cli`.
 
@@ -4425,7 +4427,8 @@ that it tests.
 - `sys_<os>.go` has what differs: the field names of `syscall.Stat_t`, the
   pipe and device calls, and the platform's row of the table. FreeBSD has
   `mkfifoat` as system call 497, which `x/sys` does not wrap, so eictar calls
-  it by number.
+  it by number. On NetBSD, eictar makes `mknodat` itself too, because the
+  wrapper of `x/sys` passes the device number in the wrong place.
 - `xattr_names.go` reads NUL-separated names on Linux and macOS.
   `xattr_extattr.go` calls the `extattr` system calls on FreeBSD and NetBSD.
   `xattr_none.go` is for OpenBSD.
@@ -4448,7 +4451,16 @@ which is `HW_PHYSMEM64`, the name `hw.physmem`. Thus `memory_bsd.go` asks for
 error, and OpenBSD had no memory size. `TestTotalMemory` found this when it
 was added for Windows.
 
-All three are worth a report to the `x/sys` project. The test helpers read xattrs
+A fourth fault is on NetBSD. NetBSD declares `mknodat` as `mknodat(int fd,
+const char *path, mode_t mode, int PAD, dev_t dev)`, and `unix.Mknodat`
+puts the device number where the padding is. The kernel then read 0 for
+the number. Thus up to this change, each device node that eictar made on
+NetBSD, as root with `--preserve-devices`, was 0:0. Now `sys_netbsd.go`
+makes the system call itself, with the padding. `TestMknodAsRoot` found
+this in the CI job of NetBSD, which runs as root. The test of devices in
+`archive` checked only the type.
+
+All four are worth a report to the `x/sys` project. The test helpers read xattrs
 with their own code, not with the code in `meta`, so that a fault in `meta`
 cannot hide itself.
 
