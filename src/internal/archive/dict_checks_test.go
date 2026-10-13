@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -438,8 +439,13 @@ func TestSampleTree(t *testing.T) {
 	_, w, cfg := sampleTreeOf(t)
 	// The size from the open file: on Windows, a stat by path gives the size
 	// that the directory has, which is behind while the file is open.
-	if fi, err := w.f.Stat(); err != nil || fi.Size() == 0 || filepath.Dir(w.tmpPath) != filepath.Dir(cfg.Archive) {
-		t.Fatalf("the file that is being written is not in the tree, or is empty")
+	if fi, err := w.f.Stat(); err != nil || fi.Size() == 0 {
+		t.Fatalf("the file that is being written is empty (%v)", err)
+	}
+	// The same directory, by identity: Create resolves the path, and on
+	// Windows that gives the long name of a directory of the short name.
+	if !os.SameFile(mustStat(t, filepath.Dir(w.tmpPath)), mustStat(t, filepath.Dir(cfg.Archive))) {
+		t.Fatalf("the file that is being written, %s, is not in the tree", w.tmpPath)
 	}
 	samples, total, err := sampleTree(w, cfg, 20)
 	if err != nil || total != 40 || !slices.EqualFunc(samples, [][]byte{[]byte("aaaaaaaaaa"), []byte("cccccccccc")}, bytes.Equal) {
