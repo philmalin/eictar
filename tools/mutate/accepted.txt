@@ -648,3 +648,19 @@ src/internal/archive/dict.go: Writer.switchEncoder: if false: err != nil → fal
 src/internal/archive/dict.go: Reader.dictFor: operator: >= → >
 	Equivalent. Validate refuses a codec that is not -1 and not in the
 	catalog (see Reader.CodecName).
+
+# --- archive: the dry runs and the table of owners (plan.go, dedup.go) ---
+
+src/internal/archive/plan.go: PlanExtract: if false: content == nil → false
+	Equivalent. Validate refuses a hardlink to a member that the index does
+	not have, so the target is always there.
+src/internal/archive/plan.go: PlanExtract: if false: root != nil → false
+	Too costly. Without the close, the destination stays open until the
+	garbage collector closes it, and the dry run gives the same result. A
+	test would have to count the open descriptors of the process.
+src/internal/archive/dedup.go: dedup.usable: operator: || → &&
+	Equivalent. An old owner is always in d.members, which is filled from
+	d.old, so the two conditions are both true or both false.
+src/internal/archive/dedup.go: contentKey: operator: + → -
+	Equivalent. The expression is the capacity of a buffer that append
+	grows, and it stays above 0: 32-8, and 16 more for each segment.

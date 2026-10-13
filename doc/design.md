@@ -3846,6 +3846,7 @@ The survivors fall into these groups, in order of risk:
 | `archive`: `walk.go`, `capture.go` | 63.7% | 92.8% | 20 | 0 |
 | `archive`: `diff.go` | 70.4% | 93.9% | 13 | 0 |
 | `archive`: `ops.go`, `dict.go` | 63.1% | 94.2% | 22 | 0 |
+| `archive`: `plan.go`, `dedup.go` | 59.2% | 96.7% | 4 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
 not count it, and gives 100% for each row. Part of the increase
@@ -3934,7 +3935,16 @@ budget of samples, the samples of a tree and of a recompression, a
 dictionary of exactly the 1 MiB limit, and each check of a dictionary
 that is read.
 
-The other files of `archive` are next: `plan.go` and `dedup.go`.
+The dry runs of `plan.go` were tested by a comparison with their real
+runs, which reached only the paths that both write. Tests now give their
+refusals, their counts and sizes, `-O`, the current directory, devices,
+files that `-k` keeps, and failures with and without `--keep-going`. In
+`dedup.go`, the table of owners has tests of its own: which members own
+content, the key of a file with many data segments, an owner that this
+run wrote, and an old owner that fails its check.
+
+The small files of `archive` are next: `strip.go`, `progress.go`, the
+locks, the memory of the machine, and the seams `src.go` and `dest.go`.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of

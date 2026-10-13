@@ -10497,6 +10497,14 @@ itself:</strong></p>
 <td>22</td>
 <td>0</td>
 </tr>
+<tr class="even">
+<td><code>archive</code>: <code>plan.go</code>,
+<code>dedup.go</code></td>
+<td>59.2%</td>
+<td>96.7%</td>
+<td>4</td>
+<td>0</td>
+</tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
@@ -10590,8 +10598,18 @@ ids, and make each one fail. The other tests give: the budget of
 samples, the samples of a tree and of a recompression, a dictionary of
 exactly the 1 MiB limit, and each check of a dictionary that is
 read.</p>
-<p>The other files of <code>archive</code> are next:
-<code>plan.go</code> and <code>dedup.go</code>.</p>
+<p>The dry runs of <code>plan.go</code> were tested by a comparison with
+their real runs, which reached only the paths that both write. Tests now
+give their refusals, their counts and sizes, <code>-O</code>, the
+current directory, devices, files that <code>-k</code> keeps, and
+failures with and without <code>--keep-going</code>. In
+<code>dedup.go</code>, the table of owners has tests of its own: which
+members own content, the key of a file with many data segments, an owner
+that this run wrote, and an old owner that fails its check.</p>
+<p>The small files of <code>archive</code> are next:
+<code>strip.go</code>, <code>progress.go</code>, the locks, the memory
+of the machine, and the seams <code>src.go</code> and
+<code>dest.go</code>.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives
