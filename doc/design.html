@@ -9458,7 +9458,8 @@ and <code>MUTATE_ACCEPTED</code> the accepted list (§13.5).</td>
 </tr>
 <tr class="odd">
 <td><code>make stress-build</code></td>
-<td>build the stress tester alone, as <code>.build/stress</code></td>
+<td>build the stress tester alone, as <code>.build/stress</code>, and
+eictar with the disk faults, as <code>.build/eictar-faults</code></td>
 </tr>
 </tbody>
 </table>
@@ -10013,10 +10014,12 @@ The benchmarks are <code>make bench</code> and <code>make compare</code>
 <h3 id="stress-tester">13.4 Stress tester</h3>
 <p><code>make stress</code> builds and runs <code>tools/stress</code>,
 and <code>make stress-build</code> builds it alone, as
-<code>.build/stress</code>. It tests the built binary with random data
-and random operations, and it compares each result with a model. The
-unit and operational tests check the cases that someone thought of. The
-stress tester finds the combinations that nobody did.</p>
+<code>.build/stress</code>, with <code>.build/eictar-faults</code>:
+eictar built with <code>-tags faultinject</code>, for the disk faults.
+It tests the built binary with random data and random operations, and it
+compares each result with a model. The unit and operational tests check
+the cases that someone thought of. The stress tester finds the
+combinations that nobody did.</p>
 <p><strong>The model</strong> is a map from each stored path to what an
 extraction must give back. That is the type, the content, the size, the
 mode, the time, and the target of a link. It changes only as eictar’s
@@ -10132,7 +10135,7 @@ has deep directories, empty files, symbolic links, hardlinks, copies and
 sparse files. Its names have spaces, other scripts, and bytes that are
 not UTF-8 where the filesystem takes them. A name never holds a glob
 character, so that a path is a literal pattern.</p>
-<p><strong>The fault mode</strong> is on by default. It adds two
+<p><strong>The fault mode</strong> is on by default. It adds three
 tests:</p>
 <ul>
 <li><strong>A crash.</strong> After a change, the tester cuts the
@@ -10146,6 +10149,22 @@ one to four bits, often in the index and the trailer.
 copy with exit 3. Otherwise both must accept it and give back the model
 exactly, because a bit in dead space harms nothing. Wrong content with
 exit 0 is the failure that this test looks for.</li>
+<li><strong>A disk fault.</strong> The tester runs a change to the
+archive with <code>.build/eictar-faults</code>, and
+<code>EICTAR_FAULT</code> makes one operation on the archive file fail:
+the Nth open, create, write, short write, <code>fsync</code>, truncate,
+close, rename, remove or <code>fsync</code> of the directory. The change
+is an append, a delete, a compact, a recompress or a change of
+passphrase. A command that succeeds must leave the new state. A command
+that fails must exit with 4, and leave the old state or the new one,
+with no file beside the archive, except a temporary file whose removal
+was the fault. A change that commits with a rename must leave the old
+archive byte for byte, or the new one. A change in place may need
+<code>--repair</code>, which must then give back one of the two. One
+fault does not stop the rollback of a change in place, so that needs two
+faults or a crash after one, which the crash model of §13.5 covers. The
+tester prints a note and leaves the disk faults out when the binary is
+not there.</li>
 </ul>
 <p>Any other exit code, a panic, or a command that runs for more than
 two minutes is a failure.</p>
@@ -10913,7 +10932,23 @@ digest.</p>
 other changes to the directory, and that does not change bytes that no
 write touched. It does not model a disk that lies about
 <code>fsync</code>.</p>
-<p><em>Next:</em> the faults in the stress tester.</p>
+<p><em>Part 3, faults in the stress tester, is done.</em> A file of
+<code>archive</code> that is built only with
+<code>-tags faultinject</code> (<code>faultinject.go</code>) puts a
+layer on the same <code>fileSystem</code>.
+<code>EICTAR_FAULT=KIND:N</code> makes the Nth operation of a kind fail,
+and a line on stderr says that it happened. A release binary does not
+have the file. <code>make stress-build</code> builds
+<code>.build/eictar-faults</code> with it, and the stress tester runs a
+change of the archive with it at random (§13.4). Thus the faults meet
+the random trees, codecs, dictionaries and histories of the stress
+tester, which the unit tests of part 1 do not. A run of five minutes
+made 167 changes with a fault, and in 33 of them the fault happened and
+the command failed. Each one exited with 4, and left the old state or
+the new one, with no file beside the archive. No rule broke.
+<code>make vet</code> checks the file with the tag, so that it cannot
+stop compiling.</p>
+<p>With this, step 3 is done.</p>
 <p><strong>Step 4. More fuzzing.</strong> A fuzz target opens, lists,
 verifies and extracts changed copies of the golden archives into a
 temporary root. Each run must end with exit 3, or with the exact

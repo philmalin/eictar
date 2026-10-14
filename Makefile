@@ -169,10 +169,12 @@ stress: build stress-build
 
 stress-build: | $(TMPDIR)
 	$(GO) build -trimpath -o $(STRESS_BIN) ./tools/stress
+	$(GO) build -trimpath -tags faultinject -o .build/eictar-faults ./src/cmd/eictar
 
 vet: | $(TMPDIR)
 	$(GO) vet $(PKGS) ./tools/...
 	$(GO) vet -tags operational ./src/operational/
+	$(GO) vet -tags faultinject ./src/internal/archive/
 
 # vet for each platform of CI (doc/design.md 15.1), from this machine. A
 # file for one platform can use a name that another platform does not have,

@@ -20,11 +20,12 @@ const commandTimeout = 2 * time.Minute
 // runner runs the eictar binary for one sequence, and keeps every command,
 // so that a failure can be replayed by hand.
 type runner struct {
-	bin     string
-	dir     string   // the sequence's directory: commands run here
-	crypt   []string // the passphrase options, for an encrypted archive
-	history []string // shell lines, for replay.sh
-	calls   int
+	bin      string
+	faultBin string   // the binary built with -tags faultinject, or ""
+	dir      string   // the sequence's directory: commands run here
+	crypt    []string // the passphrase options, for an encrypted archive
+	history  []string // shell lines, for replay.sh
+	calls    int
 
 	// slow keeps the slowest commands of the run, and seed and profile say
 	// where each one came from (slow.go).
@@ -56,19 +57,31 @@ func clip(s string) string {
 // configuration file or EICTAR_* variables cannot change what it tests.
 // withKey adds the passphrase options.
 func (r *runner) run(withKey bool, args ...string) (result, error) {
+	return r.runWith(r.bin, nil, withKey, args...)
+}
+
+// runWith is run with another binary, and more variables in the environment.
+func (r *runner) runWith(bin string, env []string, withKey bool, args ...string) (result, error) {
 	// The options go first: the arguments can end with "--" and paths.
 	full := []string{"--no-config"}
 	if withKey {
 		full = append(full, r.crypt...)
 	}
 	full = append(full, args...)
-	r.history = append(r.history, "eictar "+shellJoin(full))
+	line := "eictar " + shellJoin(full)
+	if len(env) > 0 {
+		line = strings.Join(env, " ") + " " + filepath.Base(bin) + " " + shellJoin(full)
+	}
+	r.history = append(r.history, line)
 	r.calls++
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, r.bin, full...)
+	cmd := exec.CommandContext(ctx, bin, full...)
 	cmd.Dir = r.dir
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	began := time.Now()

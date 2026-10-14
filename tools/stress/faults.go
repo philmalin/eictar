@@ -123,3 +123,178 @@ func (s *sequence) flipCheck() error {
 	s.stats.checks["damage-dead"]++
 	return nil
 }
+
+// diskFaultKinds are the kinds of EICTAR_FAULT (src/internal/archive/
+// faultinject.go).
+var diskFaultKinds = []string{"open", "create", "write", "short", "sync", "truncate", "close", "rename", "remove", "syncdir"}
+
+// diskFault runs a change to the archive with the binary of -tags
+// faultinject, and makes one operation on the archive file fail: the Nth of
+// a kind, at random (doc/design.md 13.5, step 3). The rules:
+//
+//   - A command that reports success leaves the new state.
+//   - A command that fails leaves the old state or the new one. A change
+//     made in place (append, delete) can need --repair, which must then give
+//     back one of them. A change that commits with a rename (compact,
+//     recompress, a change of passphrase) must never need it.
+//   - No file is left beside the archive, except when the fault was the
+//     removal of a temporary file.
+//   - A failure is an I/O error: exit 4, never "damaged".
+func (s *sequence) diskFault() error {
+	before, err := os.ReadFile(s.archive)
+	if err != nil {
+		return err
+	}
+	modelBefore := s.model.clone()
+	after := s.model.clone()
+	oldCrypt, newCrypt := s.r.crypt, s.r.crypt
+	inPlace := true
+	var args []string
+	var what string
+	switch op := s.rnd.IntN(5); {
+	case op == 0:
+		paths := s.g.pickArgs()
+		if len(paths) == 0 {
+			return nil
+		}
+		spec := s.codecSpec()
+		args = withPaths(append([]string{"-rf", s.archive, "-C", s.src, "--compress", spec}, s.tuning(spec)...), paths)
+		s.model = after
+		_, _, _, err := s.addToModel(paths, "replace", "", filter{})
+		after, s.model = s.model, modelBefore.clone()
+		if err != nil {
+			return err
+		}
+		what = fmt.Sprintf("-r %q", paths)
+	case op == 1:
+		paths := s.model.paths()
+		if len(paths) == 0 {
+			return nil
+		}
+		p := paths[s.rnd.IntN(len(paths))]
+		args = withPaths([]string{"--delete", "-f", s.archive}, []string{p})
+		for q := range after.selectPaths([]string{p}) {
+			delete(after, q)
+		}
+		what = fmt.Sprintf("--delete %q", p)
+	case op == 2:
+		args, inPlace, what = []string{"--compact", "-f", s.archive}, false, "--compact"
+	case op == 3:
+		spec := s.codecSpec()
+		args = append([]string{"--compact", "-f", s.archive, "--recompress", spec}, s.tuning(spec)...)
+		inPlace, what = false, "--compact --recompress "+spec
+	default:
+		if !s.encrypted {
+			return nil
+		}
+		s.passphrases++
+		pass := filepath.Join(s.dir, fmt.Sprintf("passphrase-%d", s.passphrases))
+		if err := os.WriteFile(pass, []byte(fmt.Sprintf("stress passphrase %d\n", s.passphrases)), 0o600); err != nil {
+			return err
+		}
+		args = []string{"--change-passphrase", "-f", s.archive, "--new-passphrase-file", pass}
+		newCrypt = []string{"--passphrase-file", pass}
+		inPlace, what = false, "--change-passphrase"
+	}
+
+	kind := diskFaultKinds[s.rnd.IntN(len(diskFaultKinds))]
+	n := 1 + s.rnd.IntN(4)
+	if kind == "write" || kind == "short" {
+		n = 1 + s.rnd.IntN(40)
+	}
+	fault := fmt.Sprintf("%s:%d", kind, n)
+	s.note("disk fault %s in %s", fault, what)
+	s.stats.ops["disk fault"]++
+	namesBefore, err := dirNames(s.dir)
+	if err != nil {
+		return err
+	}
+	res, err := s.r.runWith(s.r.faultBin, []string{"EICTAR_FAULT=" + fault}, true, args...)
+	if err != nil {
+		return err
+	}
+	fired := strings.Contains(res.stderr, "eictar-fault: ")
+	switch {
+	case res.code == 0:
+		s.r.crypt = newCrypt
+		s.model = after
+		return s.inState("after a success", after)
+	case !fired:
+		return fmt.Errorf("a failure with no fault:\n%s", res)
+	case res.code != 4:
+		return fmt.Errorf("a disk fault: exit %d, want 4:\n%s", res.code, res)
+	}
+	s.stats.checks["disk-fault"]++
+
+	// What is left beside the archive.
+	namesAfter, err := dirNames(s.dir)
+	if err != nil {
+		return err
+	}
+	for name := range namesAfter {
+		if namesBefore[name] {
+			continue
+		}
+		if kind != "remove" || !strings.HasPrefix(name, "."+filepath.Base(s.archive)+".") {
+			return fmt.Errorf("a disk fault left %s beside the archive:\n%s", name, res)
+		}
+		if err := os.Remove(filepath.Join(s.dir, name)); err != nil {
+			return err
+		}
+	}
+
+	list, err := s.r.run(true, "-tf", s.archive)
+	if err != nil {
+		return err
+	}
+	if list.code == 3 && inPlace && strings.Contains(list.stderr, "--repair") {
+		// One fault cannot stop the rollback of a change in place, so this
+		// needs two, or a crash after the fault (crash_test.go). It is an
+		// outcome that the rules allow, not one that a run must reach.
+		if _, err := s.r.expect(true, "--repair", "-f", s.archive); err != nil {
+			return fmt.Errorf("repair after a disk fault: %w", err)
+		}
+	}
+	// The old state, or the new one. A change of passphrase that failed
+	// leaves the old one, or a new one under the new passphrase.
+	s.model = modelBefore
+	if err := s.inState("", modelBefore); err == nil {
+		if !inPlace {
+			if now, err := os.ReadFile(s.archive); err != nil || !bytes.Equal(now, before) {
+				return fmt.Errorf("a failed %s changed the archive in place (%v):\n%s", what, err, res)
+			}
+		}
+		return nil
+	}
+	s.r.crypt, s.model = newCrypt, after
+	if err := s.inState("", after); err != nil {
+		s.r.crypt = oldCrypt
+		return fmt.Errorf("a disk fault left neither the old state nor the new one: %w\n%s", err, res)
+	}
+	return nil
+}
+
+// inState checks that the archive holds m, with the checks after each step.
+func (s *sequence) inState(when string, m Model) error {
+	kept := s.model
+	s.model = m
+	err := s.checkArchive()
+	s.model = kept
+	if err != nil && when != "" {
+		return fmt.Errorf("%s: %w", when, err)
+	}
+	return err
+}
+
+// dirNames is the set of names in dir.
+func dirNames(dir string) (map[string]bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	names := map[string]bool{}
+	for _, e := range entries {
+		names[e.Name()] = true
+	}
+	return names, nil
+}

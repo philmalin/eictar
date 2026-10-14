@@ -2977,7 +2977,7 @@ bare `go` command:
 | `make cover` | the coverage of the unit tests and the operational tests together, in `.tmp/cover/` (§13.5) |
 | `make mutate` | mutation testing of the packages in `MUTATE` (default `format`, `crypt` and `pipeline`). `MUTATE_FLAGS` gives options to `tools/mutate`, and `MUTATE_ACCEPTED` the accepted list (§13.5). |
 | `make stress` | random end-to-end tests against a model (§13.4). `STRESS="-duration 30m"` runs longer, and `STRESS="-seed N -sequences 1"` replays a failure. |
-| `make stress-build` | build the stress tester alone, as `.build/stress` |
+| `make stress-build` | build the stress tester alone, as `.build/stress`, and eictar with the disk faults, as `.build/eictar-faults` |
 
 `GO=go` gives another toolchain, as CI does: `make check GO=go`.
 
@@ -3513,7 +3513,8 @@ parts work.
 ### 13.4 Stress tester
 
 `make stress` builds and runs `tools/stress`, and `make stress-build` builds
-it alone, as `.build/stress`. It tests the built binary with random data
+it alone, as `.build/stress`, with `.build/eictar-faults`: eictar built with
+`-tags faultinject`, for the disk faults. It tests the built binary with random data
 and random operations, and it compares each result with a model. The unit
 and operational tests check the cases that someone thought of. The stress
 tester finds the combinations that nobody did.
@@ -3601,7 +3602,7 @@ spaces, other scripts, and bytes that are not UTF-8 where the filesystem
 takes them. A name never holds a glob character, so that a path is a literal
 pattern.
 
-**The fault mode** is on by default. It adds two tests:
+**The fault mode** is on by default. It adds three tests:
 
 - **A crash.** After a change, the tester cuts the archive at a random point
   inside the new generation. The archive must be refused with exit 3 and a
@@ -3612,6 +3613,20 @@ pattern.
   Both must refuse the copy with exit 3. Otherwise both must accept it and
   give back the model exactly, because a bit in dead space harms nothing.
   Wrong content with exit 0 is the failure that this test looks for.
+- **A disk fault.** The tester runs a change to the archive with
+  `.build/eictar-faults`, and `EICTAR_FAULT` makes one operation on the
+  archive file fail: the Nth open, create, write, short write, `fsync`,
+  truncate, close, rename, remove or `fsync` of the directory. The change is
+  an append, a delete, a compact, a recompress or a change of passphrase. A
+  command that succeeds must leave the new state. A command that fails must
+  exit with 4, and leave the old state or the new one, with no file beside
+  the archive, except a temporary file whose removal was the fault. A
+  change that commits with a rename must leave the old archive byte for
+  byte, or the new one. A change in place may need `--repair`, which must
+  then give back one of the two. One fault does not stop the rollback of a
+  change in place, so that needs two faults or a crash after one, which the
+  crash model of §13.5 covers. The tester prints a note and leaves the disk
+  faults out when the binary is not there.
 
 Any other exit code, a panic, or a command that runs for more than two
 minutes is a failure.
@@ -4186,7 +4201,20 @@ The model takes a file system that keeps a rename in order with the other
 changes to the directory, and that does not change bytes that no write
 touched. It does not model a disk that lies about `fsync`.
 
-*Next:* the faults in the stress tester.
+*Part 3, faults in the stress tester, is done.* A file of `archive` that is
+built only with `-tags faultinject` (`faultinject.go`) puts a layer on the
+same `fileSystem`. `EICTAR_FAULT=KIND:N` makes the Nth operation of a kind
+fail, and a line on stderr says that it happened. A release binary does not
+have the file. `make stress-build` builds `.build/eictar-faults` with it, and
+the stress tester runs a change of the archive with it at random (§13.4).
+Thus the faults meet the random trees, codecs, dictionaries and histories
+of the stress tester, which the unit tests of part 1 do not. A run of five
+minutes made 167 changes with a fault, and in 33 of them the fault
+happened and the command failed. Each one exited with 4, and left the old
+state or the new one, with no file beside the archive. No rule broke. `make
+vet` checks the file with the tag, so that it cannot stop compiling.
+
+With this, step 3 is done.
 
 **Step 4. More fuzzing.** A fuzz target opens, lists, verifies and extracts
 changed copies of the golden archives into a temporary root. Each run must

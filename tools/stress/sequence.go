@@ -45,7 +45,7 @@ type stats struct {
 	slow                 slowest
 }
 
-func newSequence(seed uint64, dir, bin string, faults bool, st *stats, profile string) (*sequence, error) {
+func newSequence(seed uint64, dir, bin, faultBin string, faults bool, st *stats, profile string) (*sequence, error) {
 	s := &sequence{
 		seed:   seed,
 		rnd:    rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
@@ -66,7 +66,7 @@ func newSequence(seed uint64, dir, bin string, faults bool, st *stats, profile s
 		return nil, err
 	}
 	s.g = newGen(s.rnd, s.src, s.profile)
-	s.r = &runner{bin: bin, dir: dir, slow: &st.slow, seed: seed, profile: s.profile}
+	s.r = &runner{bin: bin, faultBin: faultBin, dir: dir, slow: &st.slow, seed: seed, profile: s.profile}
 	s.encrypted = s.rnd.IntN(3) == 0
 	if s.encrypted {
 		pass := filepath.Join(dir, "passphrase")
@@ -244,6 +244,10 @@ func (s *sequence) step() error {
 			return err
 		}
 		s.note("change the source: %s", did)
+	}
+	// A disk fault in a change of the archive (faults.go).
+	if s.faults && s.r.faultBin != "" && s.rnd.IntN(8) == 0 {
+		return s.diskFault()
 	}
 	op := s.rnd.IntN(26)
 	switch {

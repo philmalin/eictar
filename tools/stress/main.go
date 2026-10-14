@@ -24,7 +24,9 @@
 // dictionaries and windows included.
 // After each step it lists, verifies and extracts the archive, and compares
 // the result with the model. In the fault mode it also cuts the archive as a
-// crash would, and flips bits in a copy.
+// crash would, flips bits in a copy, and runs a change with a disk fault:
+// the binary of -tags faultinject (-eictar-faults) makes one operation on
+// the archive file fail.
 //
 // The summary starts with the result, PASS or FAIL, and then gives each
 // check with the number of times that it held. It ends with the slowest
@@ -54,7 +56,8 @@ func main() {
 	sequences := flag.Int("sequences", 0, "stop after this many sequences (0: run for -duration)")
 	steps := flag.Int("steps", 20, "steps in each sequence")
 	seed := flag.Uint64("seed", 0, "the seed of the first sequence (0: from the clock)")
-	faults := flag.Bool("faults", true, "also simulate crashes and damage")
+	faults := flag.Bool("faults", true, "also simulate crashes, damage and disk faults")
+	faultBin := flag.String("eictar-faults", ".build/eictar-faults", "eictar built with -tags faultinject (make stress-build), for the disk faults")
 	keep := flag.Bool("keep", false, "keep the directories of sequences that passed")
 	profile := flag.String("profile", "", "the kind of tree for every sequence: mixed, small, large or versions (default: each seed chooses)")
 	flag.Parse()
@@ -65,6 +68,16 @@ func main() {
 	}
 	if _, err := os.Stat(abs); err != nil {
 		fatal(fmt.Errorf("%w (build it with make build)", err))
+	}
+	faultAbs := ""
+	if *faults {
+		if p, err := filepath.Abs(*faultBin); err == nil {
+			if _, err := os.Stat(p); err == nil {
+				faultAbs = p
+			} else {
+				fmt.Printf("stress: no disk faults: %v (build it with make stress-build)\n", err)
+			}
+		}
 	}
 	if *seed == 0 {
 		*seed = uint64(time.Now().UnixNano())
@@ -100,7 +113,7 @@ func main() {
 			fatal(err)
 		}
 		removeAll(seqDir)
-		seq, err := newSequence(s, seqDir, abs, *faults, st, *profile)
+		seq, err := newSequence(s, seqDir, abs, faultAbs, *faults, st, *profile)
 		if err != nil {
 			fatal(err)
 		}
@@ -146,6 +159,7 @@ var checkNames = []struct{ key, rule string }{
 	{"crash", "crash: the cut archive is refused with exit 3, and --repair gives back the archive of before, byte for byte"},
 	{"damage-refused", "damage: --verify and extraction both refuse the damaged copy with exit 3"},
 	{"damage-dead", "damage: --verify and extraction both accept the damaged copy, and extraction gives back the model (the bits were in dead space)"},
+	{"disk-fault", "disk fault: one operation on the archive file fails (-r, --delete, --compact, --recompress, a change of passphrase); the command exits with 4, and the archive holds the old state or the new one, with no file left beside it"},
 	{"diff-clean", "--diff of a tree just extracted finds no difference"},
 	{"diff-change", "--diff after one change to that tree reports that path and that kind of change, and nothing else"},
 	{"dry-run", "-n lists exactly the paths of the real run (-r, -u, --delete, -x), changes nothing, and makes no destination"},
