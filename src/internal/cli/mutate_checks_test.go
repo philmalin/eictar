@@ -29,7 +29,7 @@ func TestAppendRefusals(t *testing.T) {
 		{[]string{"-rf", archivePath, "-C", dir, "-X", filepath.Join(dir, "missing"), "t/a.txt"}, ExitIO, "reading -X"},
 	} {
 		code, _, stderr := runCLI(tc.argv...)
-		if code != tc.code || !strings.Contains(stderr, tc.text) {
+		if code != tc.code || !strings.Contains(stderr, printable(tc.text)) {
 			t.Errorf("%q: exit %d, %q", tc.argv, code, stderr)
 		}
 	}
@@ -206,7 +206,7 @@ func TestDryRunRefusals(t *testing.T) {
 		{[]string{"-xnf", missing + ".ect", "-d", t.TempDir()}, ExitIO, "missing.ect"},
 		{[]string{"--delete", "-nf", archivePath, "nothing"}, ExitUsage, "nothing"},
 	} {
-		if code, _, stderr := runCLI(tc.argv...); code != tc.code || !strings.Contains(stderr, tc.text) {
+		if code, _, stderr := runCLI(tc.argv...); code != tc.code || !strings.Contains(stderr, printable(tc.text)) {
 			t.Errorf("%q: exit %d, %s; want %d", tc.argv, code, stderr, tc.code)
 		}
 	}

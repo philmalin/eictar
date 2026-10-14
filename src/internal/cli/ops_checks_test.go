@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/philmalin/eictar/src/internal/archive"
 	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/meta"
 )
 
 // Tests of ops.go that the other tests of the package and the operational
@@ -75,7 +77,7 @@ func TestOperationRefusals(t *testing.T) {
 		{"extract, -C a file", []string{"-xf", archivePath, "-C", file}, ExitIO, "not a directory"},
 	} {
 		code, _, stderr := runCLI(tc.argv...)
-		if code == ExitOK || (tc.code >= 0 && code != tc.code) || !strings.Contains(stderr, tc.text) {
+		if code == ExitOK || (tc.code >= 0 && code != tc.code) || !strings.Contains(stderr, printable(tc.text)) {
 			t.Errorf("%s: exit %d, %q; want exit %d and %q", tc.name, code, stderr, tc.code, tc.text)
 		}
 	}
@@ -268,16 +270,20 @@ func TestListingOfSharersThroughRun(t *testing.T) {
 
 // TestLongListingOfADevice: the size column of a device is its numbers.
 func TestLongListingOfADevice(t *testing.T) {
-	if fi, err := os.Lstat("/dev/null"); err != nil || fi.Mode()&fs.ModeCharDevice == 0 || runtime.GOOS == "windows" {
+	fi, err := os.Lstat("/dev/null")
+	if err != nil || fi.Mode()&fs.ModeCharDevice == 0 || runtime.GOOS == "windows" {
 		t.Skip("no /dev/null")
 	}
+	// The numbers of /dev/null differ from one platform to the next.
+	info := meta.Stat(fi)
+	want := fmt.Sprintf(" %d,%d ", info.Major, info.Minor)
 	archivePath := filepath.Join(t.TempDir(), "d.ect")
 	if code, _, stderr := runCLI("-cf", archivePath, "-C", "/dev", "null"); code != ExitOK {
 		t.Fatalf("create: exit %d: %s", code, stderr)
 	}
 	code, stdout, stderr := runCLI("-tvf", archivePath)
-	if code != ExitOK || !strings.Contains(stdout, " 1,3 ") && !strings.Contains(stdout, " 2,2 ") {
-		t.Errorf("exit %d, %q, %s; want the numbers of /dev/null", code, stdout, stderr)
+	if code != ExitOK || !strings.Contains(stdout, want) {
+		t.Errorf("exit %d, %q, %s; want %q", code, stdout, stderr, want)
 	}
 }
 

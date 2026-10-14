@@ -312,7 +312,7 @@ func TestDiffRefusalsAndLines(t *testing.T) {
 		{"--diff", "-f", archivePath, "-C", dir, "-X", missing},
 		{"--diff", "-f", archivePath, "-C", missing},
 	} {
-		if code, _, stderr := runCLI(argv...); code != ExitIO || !strings.Contains(stderr, missing) {
+		if code, _, stderr := runCLI(argv...); code != ExitIO || !strings.Contains(stderr, printable(missing)) {
 			t.Errorf("%q: exit %d, %s", argv, code, stderr)
 		}
 	}
