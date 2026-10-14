@@ -1,8 +1,8 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete, and v1.1.0 is the current release. The CI workflow passes
+Status: M1 to M11 are complete, and v1.1.1 is the current release. The CI workflow passes
 on Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows (§15.1).
-Date: 2026-10-10
+Date: 2026-10-14
 Applies to: v1 (format version 1.0)
 
 This document describes the on-disk format, the concurrency model, the
@@ -5005,6 +5005,71 @@ The fix:
   platform gives a size.
 
 The format is still 1.0. v1.1.0 reads every earlier archive, and earlier
+versions read what it writes.
+
+**v1.1.1 fixes faults that a new plan of tests found (§13.5).** The plan
+measures how strong the tests are, and makes the disk fail under each
+operation. Each fix has a test that fails without it.
+
+The fixes that change what an archive holds, or the result of a command:
+
+- With `--one-file-system`, a `stat` that failed gave the device 0. Each
+  directory was then on another file system, and the archive was empty,
+  with no error. Now a failure stops the create.
+- `--diff` did not check a hardlink whose target did not `lstat`, for any
+  error, and found no difference. Now only a target that is gone is not
+  checked, and the walk reports it as missing. The other errors are
+  failures.
+- Before a link, a pipe or a hardlink replaced a node on extraction, a
+  failed `lstat` counted as "nothing there". Now it is an error.
+- On NetBSD, each device node that `--preserve-devices` made was 0:0. A
+  fault in `x/sys` put the device number where NetBSD has a padding
+  argument. eictar now makes the system call itself (§15.1).
+- `--compact --recompress` could stop with a panic when the compression
+  failed: the read of the old archive went on after the archive was
+  closed. Now the operation waits for that read to stop.
+- The writer did a `stat` of the archive for each file of the walk, and a
+  failure gave "not the same file". An archive inside a path to archive
+  could then go into itself. Now the writer does one `stat` when the
+  archive opens, and a failure stops the run.
+
+The fixes of messages and of exit codes:
+
+- `--repair` ignored the error of its last `close`, which can report a
+  lost write on NFS. Now it is an error.
+- A read that failed while `--repair` loaded a generation counted as
+  damage, and repair said that the archive had no complete generation
+  (exit 3). Now it is an I/O error (exit 4).
+- Each error that opened a directory of the walk said "changed after the
+  walk found it". Now a fault of the disk shows as itself.
+- A requested path whose parent did not open was walked by its path, for
+  any error. Now only a permission error does that.
+- The progress meter of `--compact --recompress` counted the content of
+  the members that share it, which a recompress does not decode, so it
+  never reached its total.
+- On Windows, the check for a link that another user planted in the path
+  of `-f` stopped at the volume, and checked nothing
+  (`doc/Security_Audit.md`, finding 4).
+
+Faults that no release showed, now fixed too:
+
+- When an encoder failed on a chunk that was not the last to return, the
+  member was left out with no error. No codec of eictar fails that way.
+- After a create failed, a member could still be emitted. The run gave the
+  error all the same, so no archive was wrong.
+
+The format:
+
+- The writer, compact and recompress do not write `off` on a member with
+  no blob, as `doc/format.md` §8.3 says. A reader accepts it and ignores
+  it, because 1.1.0 and earlier wrote it.
+- The validator refuses more shapes of a hostile index: a chunk on a
+  member that is not a file, and a chunk for an empty payload. No version
+  of eictar wrote them.
+- `doc/format.md` is now the specification of the format, and the tests
+  check the key schedule against it.
+
+The format is still 1.0. v1.1.1 reads every earlier archive, and earlier
 versions read what it writes.
 
 ## Appendix A. Why these primitives, compared with AES

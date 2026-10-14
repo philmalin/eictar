@@ -5323,9 +5323,9 @@ the usual choices</a></li>
 </ul>
 </nav>
 <h1 id="eictar-design-document">eictar — Design Document</h1>
-<p>Status: M1 to M11 are complete, and v1.1.0 is the current release.
+<p>Status: M1 to M11 are complete, and v1.1.1 is the current release.
 The CI workflow passes on Linux, macOS, FreeBSD, NetBSD, OpenBSD and
-Windows (§15.1). Date: 2026-10-10 Applies to: v1 (format version
+Windows (§15.1). Date: 2026-10-14 Applies to: v1 (format version
 1.0)</p>
 <p>This document describes the on-disk format, the concurrency model,
 the command line and the internal package layout of <code>eictar</code>,
@@ -11945,6 +11945,77 @@ The program now asks for <code>hw.physmem</code>, which
 size.</li>
 </ul>
 <p>The format is still 1.0. v1.1.0 reads every earlier archive, and
+earlier versions read what it writes.</p>
+<p><strong>v1.1.1 fixes faults that a new plan of tests found
+(§13.5).</strong> The plan measures how strong the tests are, and makes
+the disk fail under each operation. Each fix has a test that fails
+without it.</p>
+<p>The fixes that change what an archive holds, or the result of a
+command:</p>
+<ul>
+<li>With <code>--one-file-system</code>, a <code>stat</code> that failed
+gave the device 0. Each directory was then on another file system, and
+the archive was empty, with no error. Now a failure stops the
+create.</li>
+<li><code>--diff</code> did not check a hardlink whose target did not
+<code>lstat</code>, for any error, and found no difference. Now only a
+target that is gone is not checked, and the walk reports it as missing.
+The other errors are failures.</li>
+<li>Before a link, a pipe or a hardlink replaced a node on extraction, a
+failed <code>lstat</code> counted as “nothing there”. Now it is an
+error.</li>
+<li>On NetBSD, each device node that <code>--preserve-devices</code>
+made was 0:0. A fault in <code>x/sys</code> put the device number where
+NetBSD has a padding argument. eictar now makes the system call itself
+(§15.1).</li>
+<li><code>--compact --recompress</code> could stop with a panic when the
+compression failed: the read of the old archive went on after the
+archive was closed. Now the operation waits for that read to stop.</li>
+<li>The writer did a <code>stat</code> of the archive for each file of
+the walk, and a failure gave “not the same file”. An archive inside a
+path to archive could then go into itself. Now the writer does one
+<code>stat</code> when the archive opens, and a failure stops the
+run.</li>
+</ul>
+<p>The fixes of messages and of exit codes:</p>
+<ul>
+<li><code>--repair</code> ignored the error of its last
+<code>close</code>, which can report a lost write on NFS. Now it is an
+error.</li>
+<li>A read that failed while <code>--repair</code> loaded a generation
+counted as damage, and repair said that the archive had no complete
+generation (exit 3). Now it is an I/O error (exit 4).</li>
+<li>Each error that opened a directory of the walk said “changed after
+the walk found it”. Now a fault of the disk shows as itself.</li>
+<li>A requested path whose parent did not open was walked by its path,
+for any error. Now only a permission error does that.</li>
+<li>The progress meter of <code>--compact --recompress</code> counted
+the content of the members that share it, which a recompress does not
+decode, so it never reached its total.</li>
+<li>On Windows, the check for a link that another user planted in the
+path of <code>-f</code> stopped at the volume, and checked nothing
+(<code>doc/Security_Audit.md</code>, finding 4).</li>
+</ul>
+<p>Faults that no release showed, now fixed too:</p>
+<ul>
+<li>When an encoder failed on a chunk that was not the last to return,
+the member was left out with no error. No codec of eictar fails that
+way.</li>
+<li>After a create failed, a member could still be emitted. The run gave
+the error all the same, so no archive was wrong.</li>
+</ul>
+<p>The format:</p>
+<ul>
+<li>The writer, compact and recompress do not write <code>off</code> on
+a member with no blob, as <code>doc/format.md</code> §8.3 says. A reader
+accepts it and ignores it, because 1.1.0 and earlier wrote it.</li>
+<li>The validator refuses more shapes of a hostile index: a chunk on a
+member that is not a file, and a chunk for an empty payload. No version
+of eictar wrote them.</li>
+<li><code>doc/format.md</code> is now the specification of the format,
+and the tests check the key schedule against it.</li>
+</ul>
+<p>The format is still 1.0. v1.1.1 reads every earlier archive, and
 earlier versions read what it writes.</p>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
