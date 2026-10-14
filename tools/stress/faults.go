@@ -255,15 +255,23 @@ func (s *sequence) diskFault() error {
 			return fmt.Errorf("repair after a disk fault: %w", err)
 		}
 	}
-	// The old state, or the new one. A change of passphrase that failed
-	// leaves the old one, or a new one under the new passphrase.
+	// The old state, or the new one. A change that commits with a rename
+	// leaves the old archive byte for byte, or the new one: a fault after
+	// the rename, in the fsync of the directory, leaves the new one, and
+	// the command rightly fails, as the change may not last. A compact
+	// has the same model before and after, so the bytes tell them apart. A
+	// change of passphrase that failed leaves the old one, or a new one
+	// under the new passphrase.
 	s.model = modelBefore
-	if err := s.inState("", modelBefore); err == nil {
-		if !inPlace {
-			if now, err := os.ReadFile(s.archive); err != nil || !bytes.Equal(now, before) {
-				return fmt.Errorf("a failed %s changed the archive in place (%v):\n%s", what, err, res)
-			}
+	if !inPlace {
+		now, err := os.ReadFile(s.archive)
+		if err != nil {
+			return err
 		}
+		if bytes.Equal(now, before) {
+			return s.inState("the old archive", modelBefore)
+		}
+	} else if err := s.inState("", modelBefore); err == nil {
 		return nil
 	}
 	s.r.crypt, s.model = newCrypt, after
