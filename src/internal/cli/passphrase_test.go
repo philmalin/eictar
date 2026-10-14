@@ -114,9 +114,6 @@ func TestNewPassphraseNamesItsOwnOptions(t *testing.T) {
 		t.Errorf("error = %v, want ErrNoPassphrase naming --new-passphrase-file", err)
 	}
 	src := passphraseSource{env: "V", isNew: true}
-	if got := src.describe(); got != "--new-passphrase-env V" {
-		t.Errorf("describe() = %q", got)
-	}
 	var warned []string
 	src.warnIfInsecureSource(func(f string, a ...any) { warned = append(warned, fmt.Sprintf(f, a...)) })
 	if len(warned) != 1 || !strings.Contains(warned[0], "--new-passphrase-env") {

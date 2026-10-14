@@ -6,11 +6,15 @@
 // is a survivor: code that the tests run, but do not check. A change in code
 // that no test runs is reported as not covered, and its tests do not run.
 //
-// The source tree never changes: each mutant goes to the compiler through
-// go test -overlay. Thus mutants can run in parallel, and an interrupted run
-// leaves nothing behind.
+// The source tree never changes: each mutant goes to the compiler through an
+// overlay in GOFLAGS. Thus mutants can run in parallel, and an interrupted run
+// leaves nothing behind. A go build that a test runs inherits GOFLAGS, so the
+// binary that the operational tests build has the mutant too
+// (testutil.Binary), and with -tags operational, those tests count. The
+// coverage of the binary in the run without a mutant joins that of the
+// tests: the binary writes it to GOCOVERDIR.
 //
-//	go run ./tools/mutate [-j N] [-run RE] [-test PKGS] [-files RE] PKG...
+//	go run ./tools/mutate [-j N] [-run RE] [-test PKGS] [-tags T] [-files RE] PKG...
 package main
 
 import (
@@ -35,6 +39,7 @@ type config struct {
 	goTool  string
 	jobs    int
 	run     string
+	tags    string
 	tests   []string
 	files   *regexp.Regexp
 	verbose bool
@@ -51,6 +56,7 @@ func main() {
 	var tests, files, acceptedList string
 	flag.IntVar(&cfg.jobs, "j", max(1, runtime.NumCPU()/4), "mutants to test at the same time")
 	flag.StringVar(&cfg.run, "run", "", "run only the tests that match this regular expression")
+	flag.StringVar(&cfg.tags, "tags", "", "build tags for the tests, such as operational for the tests of the binary")
 	flag.StringVar(&tests, "test", "", "the packages whose tests run, separated by commas; default: the package itself")
 	flag.StringVar(&files, "files", "", "mutate only the files whose base name matches this regular expression")
 	flag.BoolVar(&cfg.verbose, "v", false, "also list the mutants that the tests found")
@@ -147,14 +153,36 @@ func mutatePackage(cfg config, pkg string) (int, error) {
 		return 0, fmt.Errorf("the tests fail without a mutant:\n%s", out)
 	}
 	baseline := time.Since(start)
-	pf, err := os.Open(profile)
+	cov, err := readProfileFile(profile)
 	if err != nil {
 		return 0, err
 	}
-	cov, err := readProfile(pf)
-	pf.Close()
-	if err != nil {
+
+	// A binary that a test builds writes its coverage to GOCOVERDIR. With
+	// -cover, go test gives each test process a directory of its own, so
+	// this is a second run, without it, as make cover does. Only the tests
+	// with a tag, the operational tests, build the binary.
+	binCover := filepath.Join(cfg.tmp, "bincover")
+	if err := os.MkdirAll(binCover, 0o755); err != nil {
 		return 0, err
+	}
+	if cfg.tags != "" {
+		args := append([]string{"test", "-count=1", "-vet=off"}, runArgs(cfg)...)
+		if out, err := goCmdEnv(context.Background(), cfg, []string{"GOCOVERDIR=" + binCover}, append(args, tests...)...); err != nil {
+			return 0, fmt.Errorf("the tests fail without a mutant:\n%s", out)
+		}
+	}
+	if entries, _ := os.ReadDir(binCover); len(entries) > 0 {
+		binProfile := filepath.Join(cfg.tmp, "bincover.out")
+		if out, err := goCmd(context.Background(), cfg, "tool", "covdata", "textfmt",
+			"-i="+binCover, "-pkg="+info.ImportPath, "-o="+binProfile); err != nil {
+			return 0, fmt.Errorf("the coverage of the binary: %v\n%s", err, out)
+		}
+		bin, err := readProfileFile(binProfile)
+		if err != nil {
+			return 0, err
+		}
+		cov.add(bin)
 	}
 
 	type job struct {
@@ -307,8 +335,8 @@ func testMutant(cfg config, worker int, m mutant, src []byte, tests []string, li
 	// build.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*limit+time.Minute)
 	defer cancel()
-	args := append([]string{"test", "-count=1", "-vet=off", "-failfast", "-timeout=" + limit.String(), "-overlay=" + overlay}, runArgs(cfg)...)
-	out, err := goCmd(ctx, cfg, append(args, tests...)...)
+	args := append([]string{"test", "-count=1", "-vet=off", "-failfast", "-timeout=" + limit.String()}, runArgs(cfg)...)
+	out, err := goCmdEnv(ctx, cfg, []string{withGoflags("-overlay=" + overlay)}, append(args, tests...)...)
 	return classify(err, out, ctx.Err() != nil)
 }
 
@@ -326,15 +354,27 @@ func classify(err error, out []byte, timedOutCtx bool) outcome {
 }
 
 func runArgs(cfg config) []string {
-	if cfg.run == "" {
-		return nil
+	var args []string
+	if cfg.tags != "" {
+		args = append(args, "-tags="+cfg.tags)
 	}
-	return []string{"-run", cfg.run}
+	if cfg.run != "" {
+		args = append(args, "-run", cfg.run)
+	}
+	return args
 }
 
 // goCmd runs the go command, and returns its output.
 func goCmd(ctx context.Context, cfg config, args ...string) ([]byte, error) {
+	return goCmdEnv(ctx, cfg, nil, args...)
+}
+
+// goCmdEnv is goCmd with more variables in the environment.
+func goCmdEnv(ctx context.Context, cfg config, env []string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, cfg.goTool, args...)
+	if env != nil {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.WaitDelay = 5 * time.Second
 	return cmd.CombinedOutput()
 }
@@ -384,4 +424,12 @@ func staleEntries(cfg config, list string) int {
 		fmt.Printf("%s:%d: %s\n    %s\n", list, e.line, why, e.key)
 	}
 	return len(stale)
+}
+
+// withGoflags is the GOFLAGS of the environment with flag added to it.
+func withGoflags(flag string) string {
+	if g := os.Getenv("GOFLAGS"); g != "" {
+		return "GOFLAGS=" + g + " " + flag
+	}
+	return "GOFLAGS=" + flag
 }

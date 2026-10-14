@@ -115,6 +115,9 @@ cover: | $(TMPDIR)
 # code of each package in MUTATE, and its tests. A change that no test finds
 # is a survivor. MUTATE_FLAGS passes options, for example:
 #   make mutate MUTATE=./src/internal/archive MUTATE_FLAGS="-files '^dict' -j 8"
+# The operational tests count for cli: they build the binary with the mutant.
+#   make mutate MUTATE=./src/internal/cli \
+#     MUTATE_FLAGS="-tags operational -test ./src/internal/cli,./src/operational"
 # go run ./tools/mutate -h lists the options. A survivor in MUTATE_ACCEPTED,
 # the list of mutants that no test can find, does not count, and each entry
 # gives its reason.

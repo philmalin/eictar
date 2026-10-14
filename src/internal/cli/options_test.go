@@ -740,8 +740,8 @@ func TestRootOnlyOptions(t *testing.T) {
 	isRoot = func() bool { return false }
 	for _, opt := range []string{"--preserve-owner", "--preserve-devices"} {
 		_, err := Parse([]string{"-xf", "a", opt})
-		if err == nil || !strings.Contains(err.Error(), "needs root") {
-			t.Errorf("%s as a user: error = %v, want 'needs root'", opt, err)
+		if err == nil || !strings.Contains(err.Error(), opt+" needs root") {
+			t.Errorf("%s as a user: error = %v, want '%s needs root'", opt, err, opt)
 		}
 	}
 

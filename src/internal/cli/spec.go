@@ -22,12 +22,6 @@ type CompressSpec struct {
 	Params map[string]string
 }
 
-// NoCompression is the spec meaning "store the content as it is".
-const NoCompression = "none"
-
-// IsNone reports whether the spec disables compression.
-func (s CompressSpec) IsNone() bool { return s.Name == NoCompression }
-
 // ParseCompressSpec parses "NAME[:k[=v][,k[=v]]...]". A key given alone has
 // the value "on", which each codec defines (doc/design.md 10.2).
 //

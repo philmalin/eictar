@@ -177,3 +177,22 @@ func TestListCodecsShowsTheFormAlone(t *testing.T) {
 		}
 	}
 }
+
+// TestSizeEdges: a 9 among the digits, a number too large for 64 bits with
+// no unit, the largest size that does not overflow, and the form that
+// String gives.
+func TestSizeEdges(t *testing.T) {
+	for in, want := range map[string]Size{"9": 9, "19K": 19 << 10, "4194304TiB": 1 << 62} {
+		if got, err := ParseSize(in); err != nil || got != want {
+			t.Errorf("ParseSize(%q) = %d, %v; want %d", in, got, err, want)
+		}
+	}
+	if got, err := ParseSize("99999999999999999999"); err == nil {
+		t.Errorf("a number too large for 64 bits: %d, no error", got)
+	}
+	for s, want := range map[Size]string{0: "0", 1023: "1023", 4 << 20: "4MiB", 3 << 10: "3KiB", 1 << 40: "1TiB"} {
+		if got := s.String(); got != want {
+			t.Errorf("Size(%d).String() = %q, want %q", int64(s), got, want)
+		}
+	}
+}

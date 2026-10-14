@@ -823,3 +823,86 @@ src/internal/codec/zstd.go: zstdFactory.trainOnce: operator: || → &&
 	Equivalent. See the entry above.
 src/internal/codec/zstd.go: parseSize: if false: i == 0 → false
 	Equivalent. Atoi of the empty string fails, with the same error.
+
+# --- cli (with the operational tests: -tags operational -test ./src/internal/cli,./src/operational) ---
+
+src/internal/cli/config.go: loadLayers: if false: err != nil → false
+	Equivalent. configPath returns no error: each of its returns has nil.
+src/internal/cli/config.go: layers.readFile: if false: err != nil → false #2
+	Equivalent. Stat of a file that is open does not fail.
+src/internal/cli/config.go: layers.addCodec: if false: err != nil → false
+	Equivalent. With a codec that is not known, NewEncoder fails after it
+	with the same error of Lookup.
+src/internal/cli/config.go: Options.withCodecDefaults: if false: len(defaults) == 0 → false
+	Equivalent. With no defaults, the copy has the parameters of the spec
+	alone, and String shows a spec with no parameters as its name.
+src/internal/cli/config.go: Options.withCodecDefaults: operator: + → -
+	Equivalent. The expression is the size hint of a map, and the runtime
+	takes a hint below 0 as 0.
+src/internal/cli/mutate.go: runCompact: if false: err != nil → false
+	Equivalent. validate parsed the spec of --recompress already, so the
+	parse here cannot fail.
+src/internal/cli/names.go: printable: if false: !needsEscape(s) → false
+	Equivalent. For a name that needs no escape, the loop copies each
+	character as it is. The test before it only saves the copy.
+src/internal/cli/ops.go: checkSpec: if false: err != nil → false #2
+	Equivalent. NewEncoder accepted the parameters just before, so
+	WindowBeyondChunk, which reads the same ones, cannot fail.
+src/internal/cli/ops.go: runListCodecs: operator: != → ==
+	Equivalent. Each parameter of each codec has choices, or a range with
+	a maximum above 0. No parameter has a minimum with no maximum, or
+	neither.
+src/internal/cli/ops.go: longColumns: operator: >= → >
+	Equivalent. Validate requires a digest of 32 bytes on each member with
+	content, so a digest of exactly 8 bytes does not occur.
+src/internal/cli/ops.go: modeString: operator: < → <=
+	Equivalent. At i = 9 the bit is 1 << (8 - 9) as a uint, which is 0, so
+	the extra pass changes nothing.
+src/internal/cli/options.go: noOperation: operator: || → &&
+	Equivalent. noOperation runs only when resolveOperation failed: with no
+	operation, or with two or more. With none, each form is false. With
+	two, one && in place of one || still finds the other operation.
+src/internal/cli/options.go: noOperation: operator: || → && #2
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #3
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #4
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #5
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #6
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #7
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #8
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #9
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #10
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #11
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #12
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/passphrase.go: passphraseSource.warnIfInsecureSource: if false: warn == nil → false
+	Equivalent. Each caller gives the Warn of a reporter, never nil.
+src/internal/cli/run.go: version: if false: Version != "dev" → false
+	Too costly. The result differs only for a binary that the go command
+	built from a tagged module (go install), whose build information has
+	a version, and that the linker also gave another version. A test
+	binary has no such build information.
+src/internal/cli/run.go: archiveName: operator: || → && #2
+	Another platform: Windows. Elsewhere the separator is "/", so the two
+	tests of the suffix are the same test.
+src/internal/cli/spec.go: ParseCompressSpec: if false: s == "" → false
+	Equivalent. The empty spec has an empty name, which the next check
+	refuses.
+src/internal/cli/spec.go: ParseCompressSpec: if false: rest == "" → false
+	Equivalent. The empty rest has one empty parameter name, which the
+	loop refuses.
+src/internal/cli/spec.go: CompressSpec.String: if false: len(s.Params) == 0 → false
+	Equivalent. With no parameters, the loop adds nothing to the name.
+src/internal/cli/spec.go: ParseSize: if false: s == "" → false
+	Equivalent. The empty size has no digits, which the next check refuses.
+src/internal/cli/spec.go: ParseSize: if false: i == 0 → false
+	Equivalent. With no digits, ParseInt of the empty string fails.

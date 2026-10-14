@@ -270,3 +270,39 @@ func TestStaleEntries(t *testing.T) {
 		t.Errorf("%d stale entries, want 2", n)
 	}
 }
+
+// TestCoveredAdd: the coverage of the binary joins that of the tests.
+func TestCoveredAdd(t *testing.T) {
+	tests, err := readProfile(strings.NewReader("mode: set\nexample.com/p/p.go:3.1,4.1 1 1\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin, err := readProfile(strings.NewReader("mode: set\nexample.com/p/p.go:7.1,8.1 1 1\nexample.com/p/q.go:1.1,2.1 1 1\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests.add(bin)
+	if !tests.has("p.go", 3, 5) || !tests.has("p.go", 7, 5) || !tests.has("q.go", 1, 5) {
+		t.Errorf("after add: %v", tests)
+	}
+}
+
+// TestRunArgsAndGoflags: the tags and -run go to each go test, and the
+// overlay joins the GOFLAGS of the environment, so that a go build that a
+// test runs has it too.
+func TestRunArgsAndGoflags(t *testing.T) {
+	if got := runArgs(config{tags: "operational", run: "TestX"}); !slices.Equal(got, []string{"-tags=operational", "-run", "TestX"}) {
+		t.Errorf("runArgs: %q", got)
+	}
+	if got := runArgs(config{}); len(got) != 0 {
+		t.Errorf("runArgs with nothing: %q", got)
+	}
+	t.Setenv("GOFLAGS", "")
+	if got := withGoflags("-overlay=o.json"); got != "GOFLAGS=-overlay=o.json" {
+		t.Errorf("no GOFLAGS: %q", got)
+	}
+	t.Setenv("GOFLAGS", "-mod=mod")
+	if got := withGoflags("-overlay=o.json"); got != "GOFLAGS=-mod=mod -overlay=o.json" {
+		t.Errorf("with GOFLAGS: %q", got)
+	}
+}

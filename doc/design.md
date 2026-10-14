@@ -3734,8 +3734,15 @@ outside a function always counts as run, and the rest of a statement takes
 the coverage of its start. The last rule came late: in
 `if err := applyOwner(m, func(…) {…}); err != nil {`, the condition showed
 as not covered, and the accepted list hid it. Each other mutant goes to
-`go test -overlay`, so the source tree never changes, and mutants run in
-parallel. A failed test finds the mutant. A test binary that does not end
+the compiler through an overlay in `GOFLAGS`, so the source tree never
+changes, and mutants run in parallel. A `go build` that a test runs
+inherits `GOFLAGS`. Thus the binary that the operational tests build has
+the mutant too, and with `-tags operational` and `-test` for their
+package, they count. With `-tags`, a second run without a mutant gives
+the coverage of that binary: it writes it to `GOCOVERDIR`, as for `make
+cover`, and the tool adds it to the coverage of the tests. A second run
+is necessary, because with `-cover`, `go test` gives each test process a
+coverage directory of its own. A failed test finds the mutant. A test binary that does not end
 in three times the time of the first run stops, and that also finds the
 mutant. With `-j`, the mutants share the machine, so a slow run can pass
 that limit with no hang. Thus each mutant that stops runs again alone, and
@@ -3853,6 +3860,7 @@ The survivors fall into these groups, in order of risk:
 | `fsutil` | 67.3% | 84.1% | 7 | 0 |
 | `meta` | 51.0% | 93.0% | 10 | 0 |
 | `codec` | 64.7% | 88.1% | 36 | 0 |
+| `cli`, with the operational tests | 67.9% | 96.1% | 31 | 0 |
 
 The raw score counts an accepted mutant as a survivor. `make mutate` does
 not count it, and gives 100% for each row. Part of the increase
@@ -4005,7 +4013,22 @@ most are errors that cannot happen, such as a write to a `bytes.Buffer`,
 or checks that the next check covers. One is too costly: a zstd window
 larger than the chunk changes only the memory of the library.
 
-The last package is next: `cli`.
+In `cli`, the operational tests count: they run the binary, and with the
+change to the tool above, the binary has the mutant. The first score, with
+the tests of the package alone, was 67.9%. The operational tests raised it
+to 77.2%, and the mutants that no test covered went from 95 to 18. The
+tests that came after give: the refusals of each operation, `-T` from a
+file and from the standard input, the long listing of a device, of a
+shared member and of a deleted owner, the alignment of `-vv`, the rows of
+`--info`, the messages of `--compact`, `--verify --quick` and `--repair`,
+the dry runs, the search for the configuration file, the edges of the
+escapes of a name, of a size and of the meter, and the owner of a
+configuration file. A test on Linux opens a pseudo-terminal, and types
+the passphrase: once, twice, two that do not match, and an empty one. Two
+functions that nothing called are gone: `CompressSpec.IsNone` and
+`passphraseSource.describe`.
+
+With this, each package has no unexplained survivor.
 
 **Step 2. A second reader, from `doc/format.md` only.** An independent
 program reads an archive with the rules of `doc/format.md` and no code of

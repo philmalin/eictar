@@ -10274,18 +10274,27 @@ run, and the rest of a statement takes the coverage of its start. The
 last rule came late: in
 <code>if err := applyOwner(m, func(…) {…}); err != nil {</code>, the
 condition showed as not covered, and the accepted list hid it. Each
-other mutant goes to <code>go test -overlay</code>, so the source tree
-never changes, and mutants run in parallel. A failed test finds the
-mutant. A test binary that does not end in three times the time of the
-first run stops, and that also finds the mutant. With <code>-j</code>,
-the mutants share the machine, so a slow run can pass that limit with no
-hang. Thus each mutant that stops runs again alone, and only a second
-stop finds it. On <code>archive</code>, before this rule, 156 of 388
-mutants stopped under <code>-j 8</code>. A mutant that does not compile
-does not count. The score is the part of the counted mutants that the
-tests find. <code>-test</code> gives other packages whose tests run, so
-that a run can tell a gap of one package from a gap of the whole
-program.</p>
+other mutant goes to the compiler through an overlay in
+<code>GOFLAGS</code>, so the source tree never changes, and mutants run
+in parallel. A <code>go build</code> that a test runs inherits
+<code>GOFLAGS</code>. Thus the binary that the operational tests build
+has the mutant too, and with <code>-tags operational</code> and
+<code>-test</code> for their package, they count. With
+<code>-tags</code>, a second run without a mutant gives the coverage of
+that binary: it writes it to <code>GOCOVERDIR</code>, as for
+<code>make cover</code>, and the tool adds it to the coverage of the
+tests. A second run is necessary, because with <code>-cover</code>,
+<code>go test</code> gives each test process a coverage directory of its
+own. A failed test finds the mutant. A test binary that does not end in
+three times the time of the first run stops, and that also finds the
+mutant. With <code>-j</code>, the mutants share the machine, so a slow
+run can pass that limit with no hang. Thus each mutant that stops runs
+again alone, and only a second stop finds it. On <code>archive</code>,
+before this rule, 156 of 388 mutants stopped under <code>-j 8</code>. A
+mutant that does not compile does not count. The score is the part of
+the counted mutants that the tests find. <code>-test</code> gives other
+packages whose tests run, so that a run can tell a gap of one package
+from a gap of the whole program.</p>
 <p><strong>The accepted list.</strong> Some mutants cannot be found by
 any test, or by no test of a run of <code>make mutate</code>.
 <code>tools/mutate/accepted.txt</code> lists them, and
@@ -10539,6 +10548,13 @@ itself:</strong></p>
 <td>36</td>
 <td>0</td>
 </tr>
+<tr class="odd">
+<td><code>cli</code>, with the operational tests</td>
+<td>67.9%</td>
+<td>96.1%</td>
+<td>31</td>
+<td>0</td>
+</tr>
 </tbody>
 </table>
 <p>The raw score counts an accepted mutant as a survivor.
@@ -10700,7 +10716,23 @@ are errors that cannot happen, such as a write to a
 <code>bytes.Buffer</code>, or checks that the next check covers. One is
 too costly: a zstd window larger than the chunk changes only the memory
 of the library.</p>
-<p>The last package is next: <code>cli</code>.</p>
+<p>In <code>cli</code>, the operational tests count: they run the
+binary, and with the change to the tool above, the binary has the
+mutant. The first score, with the tests of the package alone, was 67.9%.
+The operational tests raised it to 77.2%, and the mutants that no test
+covered went from 95 to 18. The tests that came after give: the refusals
+of each operation, <code>-T</code> from a file and from the standard
+input, the long listing of a device, of a shared member and of a deleted
+owner, the alignment of <code>-vv</code>, the rows of
+<code>--info</code>, the messages of <code>--compact</code>,
+<code>--verify --quick</code> and <code>--repair</code>, the dry runs,
+the search for the configuration file, the edges of the escapes of a
+name, of a size and of the meter, and the owner of a configuration file.
+A test on Linux opens a pseudo-terminal, and types the passphrase: once,
+twice, two that do not match, and an empty one. Two functions that
+nothing called are gone: <code>CompressSpec.IsNone</code> and
+<code>passphraseSource.describe</code>.</p>
+<p>With this, each package has no unexplained survivor.</p>
 <p><strong>Step 2. A second reader, from <code>doc/format.md</code>
 only.</strong> An independent program reads an archive with the rules of
 <code>doc/format.md</code> and no code of eictar. On the golden archives

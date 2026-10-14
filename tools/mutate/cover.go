@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"path"
 	"strings"
 )
@@ -56,4 +57,22 @@ func (c covered) has(base string, line, col int) bool {
 		}
 	}
 	return false
+}
+
+// readProfileFile reads the coverage profile in the file path.
+func readProfileFile(path string) (covered, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return readProfile(f)
+}
+
+// add joins the blocks of other to c: a block that either run covered is
+// covered.
+func (c covered) add(other covered) {
+	for base, blocks := range other {
+		c[base] = append(c[base], blocks...)
+	}
 }

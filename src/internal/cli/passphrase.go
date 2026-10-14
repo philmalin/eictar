@@ -119,18 +119,6 @@ func (p passphraseSource) prompt() ([]byte, error) {
 	return first, nil
 }
 
-// describe says where a passphrase would come from, for error messages.
-func (p passphraseSource) describe() string {
-	switch {
-	case p.file != "":
-		return p.option() + "-file " + p.file
-	case p.env != "":
-		return p.option() + "-env " + p.env
-	default:
-		return "the terminal"
-	}
-}
-
 // option is the start of the name of the options that give this passphrase.
 func (p passphraseSource) option() string {
 	if p.isNew {
