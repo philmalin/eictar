@@ -104,11 +104,11 @@ func (f *injectFS) CreateTemp(dir, pattern string) (archiveFile, error) {
 	return &injectFile{archiveFile: af, fs: f}, nil
 }
 
-func (f *injectFS) Rename(oldpath, newpath string) error {
+func (f *injectFS) Rename(oldpath, newpath string, replace bool) error {
 	if f.fail("rename") {
 		return &os.LinkError{Op: "rename", Old: oldpath, New: newpath, Err: syscall.EIO}
 	}
-	return f.fs.Rename(oldpath, newpath)
+	return f.fs.Rename(oldpath, newpath, replace)
 }
 
 func (f *injectFS) Remove(path string) error {

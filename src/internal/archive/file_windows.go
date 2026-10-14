@@ -51,10 +51,21 @@ type fileRenameInfo struct {
 // semantics (FAT, or Windows before 10 version 1607) gets MoveFileEx, which
 // replaces only a file that is not open.
 func renameOver(oldpath, newpath string) error {
-	err := renamePOSIX(oldpath, newpath)
+	return rename(oldpath, newpath, true)
+}
+
+// renameNew renames oldpath to newpath, and fails with an error that matches
+// fs.ErrExist when newpath exists: neither call replaces a file without
+// its flag.
+func renameNew(oldpath, newpath string) error {
+	return rename(oldpath, newpath, false)
+}
+
+func rename(oldpath, newpath string, replace bool) error {
+	err := renamePOSIX(oldpath, newpath, replace)
 	if errors.Is(err, windows.ERROR_INVALID_PARAMETER) || errors.Is(err, windows.ERROR_NOT_SUPPORTED) ||
 		errors.Is(err, windows.ERROR_INVALID_FUNCTION) {
-		err = moveFile(oldpath, newpath)
+		err = moveFile(oldpath, newpath, replace)
 	}
 	if err != nil {
 		return &os.LinkError{Op: "rename", Old: oldpath, New: newpath, Err: err}
@@ -62,7 +73,7 @@ func renameOver(oldpath, newpath string) error {
 	return nil
 }
 
-func renamePOSIX(oldpath, newpath string) error {
+func renamePOSIX(oldpath, newpath string, replace bool) error {
 	from, err := windows.UTF16PtrFromString(oldpath)
 	if err != nil {
 		return err
@@ -88,13 +99,16 @@ func renamePOSIX(oldpath, newpath string) error {
 	size := int(unsafe.Offsetof(fileRenameInfo{}.FileName)) + len(to)*2
 	buf := make([]byte, size)
 	info := (*fileRenameInfo)(unsafe.Pointer(&buf[0]))
-	info.Flags = windows.FILE_RENAME_REPLACE_IF_EXISTS | windows.FILE_RENAME_POSIX_SEMANTICS
+	info.Flags = windows.FILE_RENAME_POSIX_SEMANTICS
+	if replace {
+		info.Flags |= windows.FILE_RENAME_REPLACE_IF_EXISTS
+	}
 	info.FileNameLength = uint32(nameLen)
 	copy(unsafe.Slice(&info.FileName[0], len(to)), to)
 	return windows.SetFileInformationByHandle(h, windows.FileRenameInfoEx, &buf[0], uint32(size))
 }
 
-func moveFile(oldpath, newpath string) error {
+func moveFile(oldpath, newpath string, replace bool) error {
 	from, err := windows.UTF16PtrFromString(oldpath)
 	if err != nil {
 		return err
@@ -103,5 +117,9 @@ func moveFile(oldpath, newpath string) error {
 	if err != nil {
 		return err
 	}
-	return windows.MoveFileEx(from, to, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
+	flags := uint32(windows.MOVEFILE_WRITE_THROUGH)
+	if replace {
+		flags |= windows.MOVEFILE_REPLACE_EXISTING
+	}
+	return windows.MoveFileEx(from, to, flags)
 }

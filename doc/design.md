@@ -1691,12 +1691,12 @@ Append, update and delete all use this sequence:
 2. Write the new blobs **after the old trailer**, at the old end of the
    file. A new dictionary comes first, if the run trains one (§4.2). The old
    index and the old trailer stay in place as dead space.
-3. `fsync` the data.
-4. Write the new index. Then `fsync`.
-5. Write the 96-byte trailer with `generation + 1` and
+3. Write the new index. Then `fsync`: one `fsync` makes the blobs and the
+   index durable.
+4. Write the 96-byte trailer with `generation + 1` and
    `prev_index_offset = <old index_offset>`. Then `fsync`.
 
-Step 5 is the commit. Until then, the old trailer still describes the old
+Step 4 is the commit. Until then, the old trailer still describes the old
 generation exactly, at its old place.
 
 The old trailer must stay intact. A new blob written over it destroys the only
@@ -1704,7 +1704,7 @@ trailer in the file. Until the M6 review, this section put the new blobs
 directly after the old index, on top of the old trailer. After a crash, that
 left nothing to recover. Each generation now costs 96 bytes of dead space.
 
-If a mutation fails before step 5 with an error (not a crash), the writer
+If a mutation fails before step 4 with an error (not a crash), the writer
 truncates the file back to its old length. The archive is then exactly as it
 was. A run that changes nothing, because every path was skipped or up to
 date, also leaves the file as it was. It adds no generation.
@@ -1873,6 +1873,14 @@ Each writer takes an advisory lock on the archive file:
   until the new trailer is synced, or until the rename for compact.
 - Create locks the file that it replaces, if there is one, and keeps the lock
   until its rename.
+- A create that finds no file at the path has nothing to lock. Its rename
+  does not replace a file: it uses `link(2)` on Unix, and a rename without
+  the flag that replaces on Windows. If another run made an archive there in
+  the meantime, the create stops with exit 4 and leaves that archive. A
+  rename over it can lose an append that a third run is writing into it.
+  The TLA+ model of the writers found this (§13.5, step 5). A file system
+  with no hard links gets a check and then a rename, with a short window
+  between them.
 - If another process holds the lock, the program stops with exit 4 and the
   message "another eictar is changing this archive". It does not wait. A
   backup job that waits can hang with no message.
@@ -2979,6 +2987,7 @@ bare `go` command:
 | `make stress` | random end-to-end tests against a model (§13.4). `STRESS="-duration 30m"` runs longer, and `STRESS="-seed N -sequences 1"` replays a failure. |
 | `make stress-build` | build the stress tester alone, as `.build/stress`, and eictar with the disk faults, as `.build/eictar-faults` |
 | `make ectread` | build the second reader, written from `doc/format.md` alone, as `.build/ectread` (§13.5, step 2) |
+| `make tla` | check the TLA+ models of `spec/` with TLC (§13.5, step 5). Needs Java (`JAVA`, default `/opt/java/bin/java`) and `tla2tools.jar` in the root (`TLA_JAR`). |
 
 `GO=go` gives another toolchain, as CI does: `make check GO=go`.
 
@@ -2997,6 +3006,7 @@ tools/testskips/           lists the skipped and the failed tests, for make skip
 tools/stress/              the stress tester: model, generator and profiles, runner, checks and faults (§13.4)
 tools/mutate/              mutation testing, for make mutate (§13.5)
 tools/ectread/             the second reader, from doc/format.md alone, and the comparison with eictar (§13.5)
+spec/                      the TLA+ models of the protocols, for make tla (§13.5)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
@@ -4322,6 +4332,56 @@ faults of order and of timing hide:
 
 The two hangs that the tests found were both in the memory budget.
 
+*Done.* `make tla` checks four models in `spec/` with TLC, the model checker
+of TLA+. TLC needs Java and `tla2tools.jar` (from the releases of
+`github.com/tlaplus/tlaplus`) in the root of the project. Git does not keep
+the jar, and the CI does not run the models. Each model has configurations
+that take out one guarantee of the program, and TLC must find the fault in
+each. Thus a model that cannot see a fault makes `make tla` fail.
+
+- `Commit.tla`: an append, an update or a delete (§9.1), and the cut-back
+  after an error. The disk keeps each write and truncate in a cache until
+  an `fsync`. At a power failure, any subset of the cached operations is on
+  the disk, in order, and a write can be torn. In each state, after a power
+  failure, the archive gives the old generation or the new one, at worst
+  after `--repair`. A success is durable. An error leaves the old archive
+  when the truncate worked. TLC finds the fault when the `fsync` before the
+  trailer, after the trailer, or after the cut-back is gone.
+- `Replace.tla`: a compact, a change of passphrase and a create, which
+  rename a temporary file over the path (§9.3, §9.7). The path gives the
+  old archive or the complete new one, and a success is durable. Without
+  the `fsync` of the new file, the path can name an incomplete archive.
+  Without the `fsync` of the directory, a success is not durable. That is
+  the case on Windows (§15.1).
+- `Writers.tla`: appends, compacts and creates at the same time, with the
+  lock and the check of the path (§9.6). No append that reported success
+  is lost, unless a create replaced the archive after it. TLC finds a lost
+  append without the check of the path, and when a compact reads its
+  archive before it takes the lock, a fault that the code had before.
+- `Budget.tla`: the memory budget of a create (§8.1). No state stops for
+  ever, each member reaches the archive, the budget stays within its
+  limit, and all of it comes back. TLC finds a deadlock without the spill
+  before the wait (the hang that M8 fixed), with a spool that waits for
+  budget, and with a budget of one chunk.
+
+The models found one fault in the program. A create that found no archive
+at the path held no lock. A second create could then make an archive
+there, and an append could start on it. The first create renamed its own
+archive over it, and the append, which reported success, was lost. Now the
+rename of such a create fails when a file is at the path, and the create
+stops with exit 4 (§9.6). `TestCreateDoesNotReplaceAnArchiveThatAppeared`
+fails without the fix.
+
+The models also showed that §9.1 listed one `fsync` more than the code
+makes: the blobs and the index have one `fsync` together. The text now
+follows the code.
+
+The models have limits. A model is not the code, and only the tests check
+that the code does what its model does. The models are small: three
+members of three chunks, up to three workers, and up to six writers. They
+take a rename to be atomic, and a disk that does not lie about `fsync`, as
+the test of power loss does (step 3).
+
 **Step 6. The release gate.** Before a tag, these must pass:
 
 - `make check` on each platform, as CI does
@@ -4727,6 +4787,8 @@ Unix in these ways, and the program does as follows:
   `FILE_FLAG_DELETE_ON_CLOSE` in place of the unlink (§8).
 - **Directory sync.** Windows cannot sync a directory. The program does not
   sync it after a rename (§9.3). NTFS records the rename in its journal.
+  Thus a success is durable only when NTFS has written its journal, as the
+  model `Replace.tla` shows (§13.5, step 5).
 - **Configuration file.** The home directory is `%USERPROFILE%`, not `$HOME`.
 - **Memory size.** `GlobalMemoryStatusEx` gives the size of the RAM for the
   budget (§8.1) and for the check of the key derivation. `x/sys/windows`
@@ -5166,6 +5228,9 @@ versions read what it writes.
 - After a compact of an archive whose members were all deleted, the index
   held `members` as null. `doc/format.md` §8.2 asks for an array, and the
   writer now writes an empty array. Each version reads both forms.
+- A create of an archive that did not exist could rename over one that a
+  second create made in the meantime, and lose an append to it that had
+  reported success. Now that create stops with exit 4 (§9.6).
 
 ## Appendix A. Why these primitives, compared with AES
 

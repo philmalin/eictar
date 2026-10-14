@@ -465,7 +465,7 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	if err := tmp.Close(); err != nil {
 		return res, fmt.Errorf("closing the compacted archive: %w", err)
 	}
-	if err := fsys.Rename(tmpPath, path); err != nil {
+	if err := fsys.Rename(tmpPath, path, true); err != nil {
 		return res, fmt.Errorf("replacing %s: %w", cfg.Archive, err)
 	}
 	committed = true

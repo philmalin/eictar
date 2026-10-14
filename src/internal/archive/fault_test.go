@@ -100,11 +100,11 @@ func (fs *faultFS) CreateTemp(dir, pattern string) (archiveFile, error) {
 	return fs.wrap(osFS{}.CreateTemp(dir, pattern))
 }
 
-func (fs *faultFS) Rename(oldpath, newpath string) error {
+func (fs *faultFS) Rename(oldpath, newpath string, replace bool) error {
 	if err := fs.step("rename", oldpath); err != nil {
 		return err
 	}
-	return osFS{}.Rename(oldpath, newpath)
+	return osFS{}.Rename(oldpath, newpath, replace)
 }
 
 func (fs *faultFS) Remove(path string) error {

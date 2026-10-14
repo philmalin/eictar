@@ -205,10 +205,10 @@ func (fs *crashFS) CreateTemp(dir, pattern string) (archiveFile, error) {
 	return fs.created(f, err, "create")
 }
 
-func (fs *crashFS) Rename(oldpath, newpath string) error {
+func (fs *crashFS) Rename(oldpath, newpath string, replace bool) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
-	if err := (osFS{}).Rename(oldpath, newpath); err != nil {
+	if err := (osFS{}).Rename(oldpath, newpath, replace); err != nil {
 		return err
 	}
 	old, name := fs.name(oldpath), fs.name(newpath)

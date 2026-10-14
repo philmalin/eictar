@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -497,9 +498,16 @@ func (w *Writer) Close() error {
 	}
 
 	// The rename is the commit for a new archive: before it, any old file at
-	// the path is intact, and after it the new one is complete.
-	if err := fsys.Rename(w.tmpPath, w.path); err != nil {
+	// the path is intact, and after it the new one is complete. A create that
+	// found no file at the path holds no lock. It must not replace an archive
+	// that another run made there since, and that a third run can be
+	// appending to (doc/design.md 9.6).
+	replace := w.guard != nil
+	if err := fsys.Rename(w.tmpPath, w.path, replace); err != nil {
 		fsys.Remove(w.tmpPath)
+		if !replace && errors.Is(err, fs.ErrExist) {
+			return fmt.Errorf("%s: %w (another run created it while this one wrote it)", w.path, ErrLocked)
+		}
 		return fmt.Errorf("replacing %s: %w", w.path, err)
 	}
 	return fsys.SyncDir(filepath.Dir(w.path))

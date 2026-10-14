@@ -95,3 +95,34 @@ func TestLockOnAReplacedFileIsRefused(t *testing.T) {
 		t.Errorf("lock on the replaced file: got %v, want ErrLocked", err)
 	}
 }
+
+// TestCreateDoesNotReplaceAnArchiveThatAppeared: a create that found no
+// archive at the path holds no lock. If another run creates an archive there
+// in the meantime, and a third run appends to it, a rename over it would lose
+// that append. The TLA+ model of the writers found this (spec/Writers.tla).
+// So the create stops with ErrLocked, and leaves the other archive.
+func TestCreateDoesNotReplaceAnArchiveThatAppeared(t *testing.T) {
+	tree := mutTree(t)
+	archive := filepath.Join(t.TempDir(), "a.ect")
+	w, err := Create(archive, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateArchive(CreateConfig{Archive: archive, Paths: []string{"t"}, BaseDir: tree.Root}); err != nil {
+		t.Fatal(err)
+	}
+	other := readAll(t, archive)
+	if err := w.Close(); !errors.Is(err, ErrLocked) {
+		t.Errorf("the create that found no archive: got %v, want ErrLocked", err)
+	}
+	if !bytes.Equal(readAll(t, archive), other) {
+		t.Error("the create replaced the archive that another run made")
+	}
+	entries, err := os.ReadDir(filepath.Dir(archive))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("the directory holds %d files, want the archive alone", len(entries))
+	}
+}

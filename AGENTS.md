@@ -56,6 +56,7 @@ The exceptions:
    benchmarks (bench/compare.sh), on files inside the project.
 -  If you need to generate the html for a .md file, you may execute
    /home/psm/bin/md2html 'filename'.
+-  You may run Java tools in /opt/java
 
 If a tool call would touch any path outside the project root and these
 exceptions, DO NOT make that tool call. Instead, respond with: "I cannot

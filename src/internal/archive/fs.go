@@ -38,9 +38,10 @@ type fileSystem interface {
 	CreateNew(path string, perm os.FileMode) (archiveFile, error)
 	// CreateTemp makes a temporary file, as os.CreateTemp does.
 	CreateTemp(dir, pattern string) (archiveFile, error)
-	// Rename renames oldpath to newpath, and replaces the file at newpath,
-	// which can be open.
-	Rename(oldpath, newpath string) error
+	// Rename renames oldpath to newpath. With replace, it replaces the file at
+	// newpath, which can be open. Without it, it fails with an error that
+	// matches fs.ErrExist when newpath exists, and replaces nothing.
+	Rename(oldpath, newpath string, replace bool) error
 	Remove(path string) error
 	// SyncDir makes a rename in dir durable.
 	SyncDir(dir string) error
@@ -77,6 +78,11 @@ func (osFS) CreateTemp(dir, pattern string) (archiveFile, error) {
 	return f, nil
 }
 
-func (osFS) Rename(oldpath, newpath string) error { return renameOver(oldpath, newpath) }
-func (osFS) Remove(path string) error             { return os.Remove(path) }
-func (osFS) SyncDir(dir string) error             { return syncDir(dir) }
+func (osFS) Rename(oldpath, newpath string, replace bool) error {
+	if replace {
+		return renameOver(oldpath, newpath)
+	}
+	return renameNew(oldpath, newpath)
+}
+func (osFS) Remove(path string) error { return os.Remove(path) }
+func (osFS) SyncDir(dir string) error { return syncDir(dir) }

@@ -43,7 +43,7 @@ VERSION  ?= $(or $(shell git describe --tags --dirty 2>/dev/null | sed 's/^v//')
 LDFLAGS    := -s -w -X github.com/philmalin/eictar/src/internal/cli.Version=$(VERSION)
 BUILDFLAGS := -trimpath -ldflags="$(LDFLAGS)"
 
-.PHONY: all build release test test-race operational large cover mutate fuzz bench compare stress stress-build ectread vet crossvet fmt check check-norace skips clean
+.PHONY: all build release test test-race operational large cover mutate fuzz bench compare stress stress-build ectread tla vet crossvet fmt check check-norace skips clean
 
 all: build
 
@@ -175,6 +175,47 @@ stress: build stress-build
 stress-build: | $(TMPDIR)
 	$(GO) build -trimpath -o $(STRESS_BIN) ./tools/stress
 	$(GO) build -trimpath -tags faultinject -o .build/eictar-faults ./src/cmd/eictar
+
+# The TLA+ models of the protocols (doc/design.md 13.5, step 5), checked
+# with TLC. Each entry is MODEL:CONFIG:RESULT. RESULT is ok, or the property
+# that TLC must find broken, or deadlock: those configurations take out a
+# guarantee of the program, to show that the model finds the fault.
+JAVA       ?= /opt/java/bin/java
+TLA_JAR    ?= tla2tools.jar
+TLA_CHECKS := Commit:Commit:ok \
+	Commit:Commit_NoSyncBeforeTrailer:OldOrNew \
+	Commit:Commit_NoSyncAfterTrailer:SuccessIsDurable \
+	Commit:Commit_NoSyncAfterTruncate:ErrorLeavesTheOld \
+	Replace:Replace:ok \
+	Replace:Replace_NoSyncBeforeRename:OldOrNew \
+	Replace:Replace_NoSyncDir:SuccessIsDurable \
+	Writers:Writers:ok \
+	Writers:Writers_CreateReplaces:NoLostAppend \
+	Writers:Writers_NoCheckPath:NoLostAppend \
+	Writers:Writers_ReadBeforeLock:NoLostAppend \
+	Budget:Budget:ok \
+	Budget:Budget_OneWorker:ok \
+	Budget:Budget_Wide:ok \
+	Budget:Budget_NoSpillBeforeWait:deadlock \
+	Budget:Budget_SpoolWaits:deadlock \
+	Budget:Budget_OneChunk:deadlock
+
+tla: | $(TMPDIR)
+	@for c in $(TLA_CHECKS); do \
+		model=$${c%%:*}; rest=$${c#*:}; cfg=$${rest%%:*}; want=$${rest#*:}; \
+		out=$$($(JAVA) -Djava.io.tmpdir=$(TMPDIR)/tla -XX:+UseParallelGC -cp $(TLA_JAR) \
+			tlc2.TLC -noGenerateSpecTE -metadir $(TMPDIR)/tla/$$cfg -workers auto \
+			-config spec/$$cfg.cfg spec/$$model.tla 2>&1); \
+		if [ "$$want" = ok ]; then \
+			echo "$$out" | grep -q "No error has been found" || { echo "$$out"; echo "FAIL $$cfg"; exit 1; }; \
+			echo "ok    $$cfg: $$(echo "$$out" | grep -o '[0-9,]* distinct states found' | tail -1)"; \
+		else \
+			if [ "$$want" = deadlock ]; then pat="Deadlock reached"; msg="a deadlock"; \
+			else pat="Invariant $$want is violated"; msg="$$want broken"; fi; \
+			echo "$$out" | grep -q "$$pat" || { echo "$$out"; echo "FAIL $$cfg: TLC did not find $$msg"; exit 1; }; \
+			echo "ok    $$cfg: TLC finds $$msg, as it must"; \
+		fi; \
+	done
 
 # The second reader, written from doc/format.md alone (doc/design.md 13.5,
 # step 2). .build/ectread -h lists its options.

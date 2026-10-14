@@ -907,7 +907,9 @@ member of a plain archive, some bytes can come out before the digest check
 fails. The exit status says so.
 .IP \(bu 2
 Two eictar processes cannot change one archive at the same time: the second
-stops with exit 4. The lock is advisory, and it is not reliable on NFS.
+stops with exit 4. This is also true of two creates of an archive that did
+not exist: the one that finishes second stops. The lock is advisory, and it
+is not reliable on NFS.
 .IP \(bu 2
 Extraction never changes the destination directory itself, even for an
 archive that holds an entry for its root
