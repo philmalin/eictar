@@ -270,8 +270,8 @@ func ptr[T any](v *T) any {
 // target is live. Nothing else is there, apart from the directories above a
 // member. Modes, times, owners and extended attributes are in the listing,
 // and Listing compares them. A device and a socket need root, so they are
-// not compared, and on Windows a pipe is not either. Nor are the types in
-// skip.
+// not compared. eictar makes no pipe on Windows and macOS (doc/design.md
+// 15.1), so there a pipe is not compared either. Nor are the types in skip.
 func Tree(a *ect.Archive, root string, skip ...string) error {
 	var p problems
 	members := livePaths(a, &p)
@@ -289,7 +289,7 @@ func Tree(a *ect.Archive, root string, skip ...string) error {
 		abs := filepath.Join(root, filepath.FromSlash(path))
 		fi, err := os.Lstat(abs)
 		ignore := m.Type == "sock" || m.Type == "chardev" || m.Type == "blockdev" ||
-			m.Type == "fifo" && runtime.GOOS == "windows" || slices.Contains(skip, m.Type)
+			m.Type == "fifo" && (runtime.GOOS == "windows" || runtime.GOOS == "darwin") || slices.Contains(skip, m.Type)
 		if ignore {
 			continue
 		}
