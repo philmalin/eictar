@@ -128,14 +128,19 @@ MUTATE_ACCEPTED ?= tools/mutate/accepted.txt
 mutate: | $(TMPDIR)
 	$(GO) run ./tools/mutate -accepted $(MUTATE_ACCEPTED) $(MUTATE_FLAGS) $(MUTATE)
 
+# Each fuzz target, as package:name (doc/design.md 13.5, step 4).
+FUZZ_TARGETS := format:FuzzHeaderUnmarshal format:FuzzTrailerUnmarshal \
+	format:FuzzDecodeIndex format:FuzzUnmarshalCryptoHeader \
+	codec:FuzzDecoders codec:FuzzZstdDictionary \
+	crypt:FuzzChunkOpen crypt:FuzzIndexAndDictOpen \
+	archive:FuzzArchive fsutil:FuzzMatch \
+	cli:FuzzCompressSpec cli:FuzzConfigFile
+
 fuzz: | $(TMPDIR)
-	@for t in FuzzHeaderUnmarshal FuzzTrailerUnmarshal FuzzDecodeIndex FuzzUnmarshalCryptoHeader; do \
+	@for pt in $(FUZZ_TARGETS); do \
+		p=$${pt%%:*}; t=$${pt#*:}; \
 		echo "=== $$t"; \
-		$(GO) test ./src/internal/format/ -run=XXX -fuzz=$$t -fuzztime=$(FUZZTIME) || exit 1; \
-	done
-	@for t in FuzzDecoders FuzzZstdDictionary; do \
-		echo "=== $$t"; \
-		$(GO) test ./src/internal/codec/ -run=XXX -fuzz=$$t -fuzztime=$(FUZZTIME) || exit 1; \
+		$(GO) test ./src/internal/$$p/ -run=XXX -fuzz="^$$t\$$" -fuzztime=$(FUZZTIME) || exit 1; \
 	done
 
 # Go benchmarks of eictar alone: create and extract throughput per codec.

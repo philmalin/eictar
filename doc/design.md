@@ -2967,7 +2967,7 @@ bare `go` command:
 | `make test-race` | run the unit tests with the race detector, with the same limit |
 | `make operational` | run the operational tests (§13.2) |
 | `make large` | run the operational test of an archive larger than 4 GiB (§13.2). `LARGE=8` sets the size of its large file in GiB (default 4). It needs approximately four times that much free space in `.tmp/`. |
-| `make fuzz` | run each fuzz target for `FUZZTIME` (default 30s) |
+| `make fuzz` | run each fuzz target of `FUZZ_TARGETS` for `FUZZTIME` (default 30s). Go keeps the corpus that a run finds in `.gobuildcache/fuzz`, and the next run starts from it. A failing input goes to `testdata/fuzz` of its package, and becomes a test that `make check` runs. |
 | `make bench` | run the Go benchmarks of create and extract (§8.4) |
 | `make compare` | compare eictar with `tar` and a compressor, on `DIR` (default: the module cache). Needs `tar`, `zstd`, `xz` and `gzip`. |
 | `make crossvet` | run `vet` for each platform of the CI workflow: Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows (§15.1). A cross-compile finds a name that one platform does not have, before a push. |
@@ -3312,10 +3312,12 @@ Every item in the lists below exists now, except the items marked "later".
   test catches the fault.
 - **Path rules**: `StorePath`, `IsStoredPath` and `Match`, with hostile inputs:
   `../` escapes, absolute paths, and paths that are not canonical.
-- **Fuzzing** (`go test -fuzz`): the header, the trailer, the crypto header
-  and the index decoder. A malformed archive must give an error. It must
-  never cause a panic or an unbounded allocation. A fuzz target for the chunk
-  opener comes later.
+- **Fuzzing** (`go test -fuzz`): the header, the trailer, the crypto header,
+  the index decoder, the decoders of the codecs, the openers of a sealed
+  chunk, index and dictionary, whole archives changed from the golden ones,
+  the pattern rules, the compression spec and the configuration file. A
+  malformed archive must give an error. It must never cause a panic or an
+  unbounded allocation. §13.5, step 4, gives the rule of each target.
 - **Race**: all tests under `-race`, with `-j` from 1 to 64.
 - **Configuration**: the precedence of the four levels, codec defaults, and
   the search order of the files. Unknown keys and variables are usage errors
@@ -4226,6 +4228,40 @@ write outside the root. More targets cover the chunk opener, the
 configuration parser, the compression spec, and the pattern rules against a
 simple reference matcher. Before a release, each target runs for hours, and
 the corpus is kept.
+
+*Done.* `make fuzz` runs twelve targets (`FUZZ_TARGETS`). The six new ones:
+
+- `FuzzArchive` (`archive`) changes the bytes of a golden archive, then
+  lists, verifies and extracts it into a temporary root. Each operation
+  ends with an error that gives exit 3, or with success. A successful
+  extraction gives exactly the content of a generation of a golden
+  archive: a cut at the end of a generation makes an older archive that
+  is valid. The target finds the content of each such cut before it
+  starts. Verify and extraction agree. Nothing is written in the
+  temporary directory outside the root. The target takes bytes alone,
+  because the fuzzer changes one golden archive into another, and the
+  header of a plain archive is not authenticated. Its first run found
+  that fault in the target, not in eictar. A changed crypto header can
+  ask for 4 GiB for the key derivation, so the target lets the machine
+  have 32 MiB (`kdfMemory`). The derivation is then refused above 16 MiB.
+- `FuzzChunkOpen` and `FuzzIndexAndDictOpen` (`crypt`): a sealed chunk,
+  index or dictionary opens only if the sealer makes the same bytes from
+  its plaintext, in its place. It does not open at another index, with the
+  other final flag, in another member, or for another generation or id.
+- `FuzzMatch` (`fsutil`) compares `Match` with a matcher that follows the
+  four rules of §10.11 and has a glob of its own. The patterns are of `a`,
+  `b`, `*`, `?` and `/`. With one rule taken out of `Match`, it finds a
+  difference in less than a second.
+- `FuzzCompressSpec` (`cli`): a spec that parses has a name, and no empty
+  key or value, and its `String` parses back to the same spec.
+- `FuzzConfigFile` (`cli`): any content of a configuration file gives a
+  usage error, an error of the read for a line that is too long, or
+  settings that `--show-config` shows.
+
+In their first runs, `FuzzArchive` ran 5 minutes (about one million
+inputs), and `FuzzMatch` one minute (27 million). No fault of eictar came
+out. Go keeps the corpus in `.gobuildcache/fuzz`. The runs of hours before
+a release are for step 6.
 
 **Step 5. Models of the protocols.** TLA+ models check three protocols, where
 faults of order and of timing hide:

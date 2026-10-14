@@ -9403,7 +9403,11 @@ It needs approximately four times that much free space in
 </tr>
 <tr class="odd">
 <td><code>make fuzz</code></td>
-<td>run each fuzz target for <code>FUZZTIME</code> (default 30s)</td>
+<td>run each fuzz target of <code>FUZZ_TARGETS</code> for
+<code>FUZZTIME</code> (default 30s). Go keeps the corpus that a run
+finds in <code>.gobuildcache/fuzz</code>, and the next run starts from
+it. A failing input goes to <code>testdata/fuzz</code> of its package,
+and becomes a test that <code>make check</code> runs.</td>
 </tr>
 <tr class="even">
 <td><code>make bench</code></td>
@@ -9768,9 +9772,12 @@ test catches the fault.</li>
 <code>../</code> escapes, absolute paths, and paths that are not
 canonical.</li>
 <li><strong>Fuzzing</strong> (<code>go test -fuzz</code>): the header,
-the trailer, the crypto header and the index decoder. A malformed
-archive must give an error. It must never cause a panic or an unbounded
-allocation. A fuzz target for the chunk opener comes later.</li>
+the trailer, the crypto header, the index decoder, the decoders of the
+codecs, the openers of a sealed chunk, index and dictionary, whole
+archives changed from the golden ones, the pattern rules, the
+compression spec and the configuration file. A malformed archive must
+give an error. It must never cause a panic or an unbounded allocation.
+§13.5, step 4, gives the rule of each target.</li>
 <li><strong>Race</strong>: all tests under <code>-race</code>, with
 <code>-j</code> from 1 to 64.</li>
 <li><strong>Configuration</strong>: the precedence of the four levels,
@@ -10961,6 +10968,47 @@ targets cover the chunk opener, the configuration parser, the
 compression spec, and the pattern rules against a simple reference
 matcher. Before a release, each target runs for hours, and the corpus is
 kept.</p>
+<p><em>Done.</em> <code>make fuzz</code> runs twelve targets
+(<code>FUZZ_TARGETS</code>). The six new ones:</p>
+<ul>
+<li><code>FuzzArchive</code> (<code>archive</code>) changes the bytes of
+a golden archive, then lists, verifies and extracts it into a temporary
+root. Each operation ends with an error that gives exit 3, or with
+success. A successful extraction gives exactly the content of a
+generation of a golden archive: a cut at the end of a generation makes
+an older archive that is valid. The target finds the content of each
+such cut before it starts. Verify and extraction agree. Nothing is
+written in the temporary directory outside the root. The target takes
+bytes alone, because the fuzzer changes one golden archive into another,
+and the header of a plain archive is not authenticated. Its first run
+found that fault in the target, not in eictar. A changed crypto header
+can ask for 4 GiB for the key derivation, so the target lets the machine
+have 32 MiB (<code>kdfMemory</code>). The derivation is then refused
+above 16 MiB.</li>
+<li><code>FuzzChunkOpen</code> and <code>FuzzIndexAndDictOpen</code>
+(<code>crypt</code>): a sealed chunk, index or dictionary opens only if
+the sealer makes the same bytes from its plaintext, in its place. It
+does not open at another index, with the other final flag, in another
+member, or for another generation or id.</li>
+<li><code>FuzzMatch</code> (<code>fsutil</code>) compares
+<code>Match</code> with a matcher that follows the four rules of §10.11
+and has a glob of its own. The patterns are of <code>a</code>,
+<code>b</code>, <code>*</code>, <code>?</code> and <code>/</code>. With
+one rule taken out of <code>Match</code>, it finds a difference in less
+than a second.</li>
+<li><code>FuzzCompressSpec</code> (<code>cli</code>): a spec that parses
+has a name, and no empty key or value, and its <code>String</code>
+parses back to the same spec.</li>
+<li><code>FuzzConfigFile</code> (<code>cli</code>): any content of a
+configuration file gives a usage error, an error of the read for a line
+that is too long, or settings that <code>--show-config</code>
+shows.</li>
+</ul>
+<p>In their first runs, <code>FuzzArchive</code> ran 5 minutes (about
+one million inputs), and <code>FuzzMatch</code> one minute (27 million).
+No fault of eictar came out. Go keeps the corpus in
+<code>.gobuildcache/fuzz</code>. The runs of hours before a release are
+for step 6.</p>
 <p><strong>Step 5. Models of the protocols.</strong> TLA+ models check
 three protocols, where faults of order and of timing hide:</p>
 <ul>
