@@ -376,7 +376,13 @@ func goCmdEnv(ctx context.Context, cfg config, env []string, args ...string) ([]
 		cmd.Env = append(os.Environ(), env...)
 	}
 	cmd.WaitDelay = 5 * time.Second
-	return cmd.CombinedOutput()
+	ownGroup(cmd)
+	out, err := cmd.CombinedOutput()
+	// A test can start a process that a mutant makes run for ever: the
+	// eictar binary of the operational tests. When the test stops at its
+	// limit, that process stays. The group goes with the command.
+	killGroup(cmd)
+	return out, err
 }
 
 type pkgInfo struct {

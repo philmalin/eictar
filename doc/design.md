@@ -3757,7 +3757,10 @@ package, they count. With `-tags`, a second run without a mutant gives
 the coverage of that binary: it writes it to `GOCOVERDIR`, as for `make
 cover`, and the tool adds it to the coverage of the tests. A second run
 is necessary, because with `-cover`, `go test` gives each test process a
-coverage directory of its own. A failed test finds the mutant. A test binary that does not end
+coverage directory of its own. Each `go` command runs in a process group of
+its own, and the tool kills the group when the command ends. A mutant can
+make the binary loop for ever, and when its test stopped at the time
+limit, the binary stayed: one run left 18 of them, each on a core. A failed test finds the mutant. A test binary that does not end
 in three times the time of the first run stops, and that also finds the
 mutant. With `-j`, the mutants share the machine, so a slow run can pass
 that limit with no hang. Thus each mutant that stops runs again alone, and

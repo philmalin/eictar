@@ -10304,16 +10304,20 @@ that binary: it writes it to <code>GOCOVERDIR</code>, as for
 <code>make cover</code>, and the tool adds it to the coverage of the
 tests. A second run is necessary, because with <code>-cover</code>,
 <code>go test</code> gives each test process a coverage directory of its
-own. A failed test finds the mutant. A test binary that does not end in
-three times the time of the first run stops, and that also finds the
-mutant. With <code>-j</code>, the mutants share the machine, so a slow
-run can pass that limit with no hang. Thus each mutant that stops runs
-again alone, and only a second stop finds it. On <code>archive</code>,
-before this rule, 156 of 388 mutants stopped under <code>-j 8</code>. A
-mutant that does not compile does not count. The score is the part of
-the counted mutants that the tests find. <code>-test</code> gives other
-packages whose tests run, so that a run can tell a gap of one package
-from a gap of the whole program.</p>
+own. Each <code>go</code> command runs in a process group of its own,
+and the tool kills the group when the command ends. A mutant can make
+the binary loop for ever, and when its test stopped at the time limit,
+the binary stayed: one run left 18 of them, each on a core. A failed
+test finds the mutant. A test binary that does not end in three times
+the time of the first run stops, and that also finds the mutant. With
+<code>-j</code>, the mutants share the machine, so a slow run can pass
+that limit with no hang. Thus each mutant that stops runs again alone,
+and only a second stop finds it. On <code>archive</code>, before this
+rule, 156 of 388 mutants stopped under <code>-j 8</code>. A mutant that
+does not compile does not count. The score is the part of the counted
+mutants that the tests find. <code>-test</code> gives other packages
+whose tests run, so that a run can tell a gap of one package from a gap
+of the whole program.</p>
 <p><strong>The accepted list.</strong> Some mutants cannot be found by
 any test, or by no test of a run of <code>make mutate</code>.
 <code>tools/mutate/accepted.txt</code> lists them, and
