@@ -271,7 +271,12 @@ func (ix *Index) Encode(opt EncodeOptions) (*EncodedIndex, error) {
 		return nil, err
 	}
 
-	b, err := encMode.Marshal(ix)
+	out := *ix
+	if out.Members == nil {
+		// An empty array, not null (doc/format.md 8.2).
+		out.Members = []Member{}
+	}
+	b, err := encMode.Marshal(&out)
 	if err != nil {
 		return nil, fmt.Errorf("format: encoding index: %w", err)
 	}

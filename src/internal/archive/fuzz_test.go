@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -15,6 +16,8 @@ import (
 	"github.com/philmalin/eictar/src/internal/crypt"
 	"github.com/philmalin/eictar/src/internal/format"
 	"github.com/philmalin/eictar/src/internal/fsutil"
+	"github.com/philmalin/eictar/tools/ectread/compare"
+	"github.com/philmalin/eictar/tools/ectread/ect"
 )
 
 // The fuzz target of step 4 (doc/design.md 13.5): changed copies of the
@@ -187,6 +190,9 @@ func FuzzArchive(f *testing.F) {
 		if (verifyErr == nil) != (extractErr == nil) {
 			t.Fatalf("verify %v, extract %v: they disagree", verifyErr, extractErr)
 		}
+		if err := secondReaderAgrees(path, root, extractErr == nil); err != nil {
+			t.Fatalf("%v\nchanged bytes from the nearest golden archive: %s", err, changedBytes(nearest(data), data))
+		}
 		if extractErr == nil && !contents[fp] {
 			t.Fatalf("the extraction succeeded with content that no generation of a golden archive has\nchanged bytes from the nearest golden archive: %s\nextracted:\n%s",
 				changedBytes(nearest(data), data), treeListing(root))
@@ -260,4 +266,39 @@ func nearest(data []byte) []byte {
 		}
 	}
 	return best
+}
+
+// secondReaderAgrees runs the second reader (doc/design.md 13.5, step 2) on
+// the archive at path. It must read each member when eictar extracted the
+// archive into root, with the content that eictar extracted, and refuse the
+// archive when eictar refused it. As for eictar, the passphrase is given only
+// to an encrypted archive.
+func secondReaderAgrees(path, root string, eictarAccepts bool) error {
+	opt := ect.Options{MaxKDFMemoryKiB: 16 << 10}
+	a, err := ect.Open(path, opt)
+	if errors.Is(err, ect.ErrNeedPassphrase) {
+		opt.Passphrase = []byte("golden")
+		a, err = ect.Open(path, opt)
+	}
+	if err == nil {
+		defer a.Close()
+		if eictarAccepts {
+			err = compare.Tree(a, root)
+		} else {
+			for _, m := range a.Live() {
+				if m.Type == "reg" || m.Type == "hardlink" {
+					if err = a.Content(m, io.Discard); err != nil {
+						break
+					}
+				}
+			}
+		}
+	}
+	switch {
+	case eictarAccepts && err != nil:
+		return fmt.Errorf("eictar extracts the archive, and the second reader: %w", err)
+	case !eictarAccepts && err == nil:
+		return errors.New("eictar refuses the archive, and the second reader reads each member")
+	}
+	return nil
 }

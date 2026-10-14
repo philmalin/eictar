@@ -17,6 +17,9 @@ examples of this format:
 The passphrase of the encrypted examples is `golden`. The fixed test vectors
 of the key schedule are in `src/internal/crypt/crypt_test.go`.
 
+`tools/ectread` is a second reader, written from this document alone. The
+tests compare it with eictar (`doc/design.md` §13.5, step 2).
+
 ## 1. Conventions
 
 - All integers are little-endian, except the chunk index in an AEAD nonce and
@@ -265,10 +268,11 @@ then seals one message only, so the fixed nonce is safe.
 
 The index is encoded in these steps:
 
-1. CBOR (RFC 8949) of the Index map (§8.2). Map keys are sorted bytewise.
-   Arrays and maps have a definite length. There are no tags and no
-   duplicate keys. Text strings can hold any bytes, because a path is not
-   always UTF-8.
+1. CBOR (RFC 8949) of the Index map (§8.2). Map keys are sorted bytewise by
+   their encoded form (RFC 8949, section 4.2.1), so a shorter key comes
+   first. A reader does not check the order. Arrays and maps have a
+   definite length. There are no tags and no duplicate keys. Text strings
+   can hold any bytes, because a path is not always UTF-8.
 2. Zstandard, one frame, when bit 1 of trailer_flags is 1. A writer always
    sets it.
 3. The seal of §7.4, when bit 0 of trailer_flags is 1.
@@ -285,7 +289,7 @@ the number of members to 4194304.
 | `gen` | uint | the generation, equal to the trailer |
 | `codecs` | array | the catalog (§6). Absent when it is empty. |
 | `dicts` | array | the Dict maps (§6.1). Absent when there are none. |
-| `members` | array | the Member maps |
+| `members` | array | the Member maps. An empty array when there are none: eictar 1.1.1 and earlier wrote null there, and a reader accepts null as an empty array. |
 
 A Dict map:
 
@@ -332,10 +336,11 @@ Only `reg` members have content. A member of another type has no `off`,
 `len`, `chunks` or `chunk`, and its `size` is 0. A `reg` member with an empty
 payload has no chunks and no blob.
 
-A writer does not write `off` on a member with no blob. eictar 1.1.0 and
-earlier wrote one there: the write position at that time, with `len` 0. A
-reader accepts an `off` on such a member, and ignores it. This does not
-apply to a member with `data`, which has no `off` (§8.5).
+A writer does not write `off` on a member with no blob, of any type. eictar
+1.1.0 and earlier wrote one there: the write position at that time, with
+no `len` or with `len` 0. A reader accepts an `off` on such a member, and
+ignores it. This does not apply to a member with `data`, which has no
+`off` (§8.5).
 
 The same is true for `enc`. A writer does not write it on an empty file.
 eictar 1.1.0 and earlier wrote one there, with a salt that no key uses. A

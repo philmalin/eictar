@@ -2978,6 +2978,7 @@ bare `go` command:
 | `make mutate` | mutation testing of the packages in `MUTATE` (default `format`, `crypt` and `pipeline`). `MUTATE_FLAGS` gives options to `tools/mutate`, and `MUTATE_ACCEPTED` the accepted list (§13.5). |
 | `make stress` | random end-to-end tests against a model (§13.4). `STRESS="-duration 30m"` runs longer, and `STRESS="-seed N -sequences 1"` replays a failure. |
 | `make stress-build` | build the stress tester alone, as `.build/stress`, and eictar with the disk faults, as `.build/eictar-faults` |
+| `make ectread` | build the second reader, written from `doc/format.md` alone, as `.build/ectread` (§13.5, step 2) |
 
 `GO=go` gives another toolchain, as CI does: `make check GO=go`.
 
@@ -2995,6 +2996,7 @@ bench/                     compare.sh: eictar against tar and a compressor (§8.
 tools/testskips/           lists the skipped and the failed tests, for make skips (§13.3)
 tools/stress/              the stress tester: model, generator and profiles, runner, checks and faults (§13.4)
 tools/mutate/              mutation testing, for make mutate (§13.5)
+tools/ectread/             the second reader, from doc/format.md alone, and the comparison with eictar (§13.5)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
@@ -3581,7 +3583,7 @@ A third of the sequences are encrypted, some with a sealed index. In these, a
 step can also change the passphrase. After the change, the old passphrase
 must fail with exit 3.
 
-**After each step** the tester makes four checks:
+**After each step** the tester makes five checks:
 
 1. `-t` lists exactly the model's paths.
 2. `--verify` passes.
@@ -3591,7 +3593,8 @@ must fail with exit 3.
    each file a link group. One run puts the names of one inode that it
    stores into one group. The names of a group must be one file, and the
    names of two groups must be two files. Each extraction of the tester
-   makes this check, not only the full extraction.
+. The second reader (§13.5, step 2) agrees. Its fields are those of
+   `-t --json`, and its own extraction gives back the model.
 
 Some operations must be refused: a conflict under `--on-conflict=error`, an
 `-R` that matches nothing, and a delete pattern that matches nothing. Each
@@ -3615,6 +3618,8 @@ pattern.
   Both must refuse the copy with exit 3. Otherwise both must accept it and
   give back the model exactly, because a bit in dead space harms nothing.
   Wrong content with exit 0 is the failure that this test looks for.
+  The second reader must refuse the copy when eictar refuses it, and read
+  each member when eictar accepts it.
 - **A disk fault.** The tester runs a change to the archive with
   `.build/eictar-faults`, and `EICTAR_FAULT` makes one operation on the
   archive file fail: the Nth open, create, write, short write, `fsync`,
@@ -4056,6 +4061,51 @@ eictar. On the golden archives and on the archives of the stress tester, it
 must give the same members and the same bytes as eictar. Thus the
 specification is complete, the writer obeys it, and a user has a way to
 read an archive that does not depend on eictar.
+
+*Done.* `tools/ectread` is the second reader. It was written from
+`doc/format.md` alone, and it imports no package of eictar: a test checks
+this. It has its own CBOR decoder. It uses the same libraries as eictar for
+zstd, S2, LZMA2, BLAKE3, Argon2id and XChaCha20-Poly1305. Thus a fault in
+one of these libraries is common to the two readers. `make ectread` builds
+`.build/ectread`, which lists an archive as lines of JSON (`-t`), reads
+and checks each member (`-c`), or extracts it (`-x`).
+
+These tests compare the second reader with eictar:
+
+- `TestSecondReaderGoldens` and `TestSecondReaderCodecs` (operational) use
+  the golden archives, and archives of each codec, plain and encrypted,
+  with and without a sealed index. The archives have three generations, a
+  dictionary, shared content, a sparse file, a pipe, and a hardlink whose
+  target is a tombstone. A check makes sure that each archive has these.
+  The fields of `-t --json` must be those that the reader decodes, and
+  the tree that eictar extracts must hold the bytes that the reader
+  decodes. Package `tools/ectread/compare` makes the two comparisons.
+- The stress tester makes the same comparison after each step, and
+  compares the extraction of the reader with its model. On a damaged copy,
+  the reader must refuse what eictar refuses, and read what eictar reads
+  (§13.4). After the fix below, a run of 10 minutes compared 2,469 states
+  and 375 damaged copies, with no difference.
+- `FuzzArchive` (step 4) runs the second reader on each changed golden
+  archive. When eictar extracts the archive, the reader must read it with
+  the same content. When eictar refuses it, the reader must refuse it too.
+  A run of 3 minutes, on 541,000 archives, found no difference.
+- The unit tests of the reader break each rule of `doc/format.md` §8.4 in
+  the index of a golden archive. The reader must refuse each one.
+
+The second reader found two gaps in the specification and one fault in the
+writer:
+
+- §8.3 said that a member that is not `reg` has no `off`. But eictar 1.1.0
+  and earlier wrote an `off` on each member with no blob, of each type, as
+  the golden archives show. The rule for the old writers now says so.
+- §8.1 said that the map keys are "sorted bytewise", and not of what. The
+  order is that of the encoded keys, so a shorter key comes first. No
+  reader checks it.
+- After a compact of an archive whose members were all deleted, the index
+  held `members` as null, and §8.2 asks for an array. The stress tester
+  found it. The writer now writes an empty array
+  (`TestIndexNoMembersIsAnArray`). A reader accepts null, because eictar
+  1.1.1 and earlier wrote it.
 
 **Step 3. Faults of the disk and of the machine.** A layer under the writer
 makes a write, an `fsync` or a rename fail, or makes a write short. A
@@ -5110,6 +5160,12 @@ The format:
 
 The format is still 1.0. v1.1.1 reads every earlier archive, and earlier
 versions read what it writes.
+
+**After v1.1.1, not yet in a release.**
+
+- After a compact of an archive whose members were all deleted, the index
+  held `members` as null. `doc/format.md` §8.2 asks for an array, and the
+  writer now writes an empty array. Each version reads both forms.
 
 ## Appendix A. Why these primitives, compared with AES
 

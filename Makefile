@@ -43,7 +43,7 @@ VERSION  ?= $(or $(shell git describe --tags --dirty 2>/dev/null | sed 's/^v//')
 LDFLAGS    := -s -w -X github.com/philmalin/eictar/src/internal/cli.Version=$(VERSION)
 BUILDFLAGS := -trimpath -ldflags="$(LDFLAGS)"
 
-.PHONY: all build release test test-race operational large cover mutate fuzz bench compare stress stress-build vet crossvet fmt check check-norace skips clean
+.PHONY: all build release test test-race operational large cover mutate fuzz bench compare stress stress-build ectread vet crossvet fmt check check-norace skips clean
 
 all: build
 
@@ -175,6 +175,11 @@ stress: build stress-build
 stress-build: | $(TMPDIR)
 	$(GO) build -trimpath -o $(STRESS_BIN) ./tools/stress
 	$(GO) build -trimpath -tags faultinject -o .build/eictar-faults ./src/cmd/eictar
+
+# The second reader, written from doc/format.md alone (doc/design.md 13.5,
+# step 2). .build/ectread -h lists its options.
+ectread: | $(TMPDIR)
+	$(GO) build -trimpath -o .build/ectread ./tools/ectread
 
 vet: | $(TMPDIR)
 	$(GO) vet $(PKGS) ./tools/...

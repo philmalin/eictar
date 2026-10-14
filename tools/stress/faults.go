@@ -112,6 +112,9 @@ func (s *sequence) flipCheck() error {
 	if (verify.code == 0) != (extract.code == 0) {
 		return fmt.Errorf("--verify and extraction disagree about a damaged archive:\n%s\n%s", verify, extract)
 	}
+	if err := s.checkSecondReaderDamaged(damaged, extract.code == 0); err != nil {
+		return err
+	}
 	if extract.code != 0 {
 		s.stats.checks["damage-refused"]++
 		return nil

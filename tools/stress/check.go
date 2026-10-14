@@ -12,9 +12,10 @@ import (
 	"syscall"
 )
 
-// checkArchive makes the four checks of doc/design.md 13.4 after a step:
-// the listing names exactly the model's paths, --verify passes, and a full
-// extraction gives back the model, with its hardlinks.
+// checkArchive makes the checks of doc/design.md 13.4 after a step: the
+// listing names exactly the model's paths, --verify passes, a full
+// extraction gives back the model, with its hardlinks, and the second reader
+// agrees (13.5, step 2).
 func (s *sequence) checkArchive() error {
 	res, err := s.r.expect(true, "-tf", s.archive)
 	if err != nil {
@@ -28,6 +29,9 @@ func (s *sequence) checkArchive() error {
 	}
 	if err := s.checkExtract(s.archive, nil, s.model); err != nil {
 		return err
+	}
+	if err := s.checkSecondReader(); err != nil {
+		return fmt.Errorf("second reader: %w", err)
 	}
 	s.stats.checks["state"]++
 	if len(s.model.linkGroups()) > 0 {

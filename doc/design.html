@@ -9465,6 +9465,11 @@ and <code>MUTATE_ACCEPTED</code> the accepted list (§13.5).</td>
 <td>build the stress tester alone, as <code>.build/stress</code>, and
 eictar with the disk faults, as <code>.build/eictar-faults</code></td>
 </tr>
+<tr class="even">
+<td><code>make ectread</code></td>
+<td>build the second reader, written from <code>doc/format.md</code>
+alone, as <code>.build/ectread</code> (§13.5, step 2)</td>
+</tr>
 </tbody>
 </table>
 <p><code>GO=go</code> gives another toolchain, as CI does:
@@ -9482,6 +9487,7 @@ bench/                     compare.sh: eictar against tar and a compressor (§8.
 tools/testskips/           lists the skipped and the failed tests, for make skips (§13.3)
 tools/stress/              the stress tester: model, generator and profiles, runner, checks and faults (§13.4)
 tools/mutate/              mutation testing, for make mutate (§13.5)
+tools/ectread/             the second reader, from doc/format.md alone, and the comparison with eictar (§13.5)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
@@ -10120,7 +10126,7 @@ so that the coverage of these features is measured, not assumed.</p>
 <p>A third of the sequences are encrypted, some with a sealed index. In
 these, a step can also change the passphrase. After the change, the old
 passphrase must fail with exit 3.</p>
-<p><strong>After each step</strong> the tester makes four checks:</p>
+<p><strong>After each step</strong> the tester makes five checks:</p>
 <ol type="1">
 <li><code>-t</code> lists exactly the model’s paths.</li>
 <li><code>--verify</code> passes.</li>
@@ -10129,8 +10135,10 @@ are the parent directories that extraction makes itself.</li>
 <li>The hardlinks of the extraction agree with the model. The model
 gives each file a link group. One run puts the names of one inode that
 it stores into one group. The names of a group must be one file, and the
-names of two groups must be two files. Each extraction of the tester
-makes this check, not only the full extraction.</li>
+names of two groups must be two files. Each extraction of the tester .
+The second reader (§13.5, step 2) agrees. Its fields are those of
+<code>-t --json</code>, and its own extraction gives back the
+model.</li>
 </ol>
 <p>Some operations must be refused: a conflict under
 <code>--on-conflict=error</code>, an <code>-R</code> that matches
@@ -10155,7 +10163,9 @@ one to four bits, often in the index and the trailer.
 <code>--verify</code> and extraction must agree. Both must refuse the
 copy with exit 3. Otherwise both must accept it and give back the model
 exactly, because a bit in dead space harms nothing. Wrong content with
-exit 0 is the failure that this test looks for.</li>
+exit 0 is the failure that this test looks for. The second reader must
+refuse the copy when eictar refuses it, and read each member when eictar
+accepts it.</li>
 <li><strong>A disk fault.</strong> The tester runs a change to the
 archive with <code>.build/eictar-faults</code>, and
 <code>EICTAR_FAULT</code> makes one operation on the archive file fail:
@@ -10770,6 +10780,57 @@ and on the archives of the stress tester, it must give the same members
 and the same bytes as eictar. Thus the specification is complete, the
 writer obeys it, and a user has a way to read an archive that does not
 depend on eictar.</p>
+<p><em>Done.</em> <code>tools/ectread</code> is the second reader. It
+was written from <code>doc/format.md</code> alone, and it imports no
+package of eictar: a test checks this. It has its own CBOR decoder. It
+uses the same libraries as eictar for zstd, S2, LZMA2, BLAKE3, Argon2id
+and XChaCha20-Poly1305. Thus a fault in one of these libraries is common
+to the two readers. <code>make ectread</code> builds
+<code>.build/ectread</code>, which lists an archive as lines of JSON
+(<code>-t</code>), reads and checks each member (<code>-c</code>), or
+extracts it (<code>-x</code>).</p>
+<p>These tests compare the second reader with eictar:</p>
+<ul>
+<li><code>TestSecondReaderGoldens</code> and
+<code>TestSecondReaderCodecs</code> (operational) use the golden
+archives, and archives of each codec, plain and encrypted, with and
+without a sealed index. The archives have three generations, a
+dictionary, shared content, a sparse file, a pipe, and a hardlink whose
+target is a tombstone. A check makes sure that each archive has these.
+The fields of <code>-t --json</code> must be those that the reader
+decodes, and the tree that eictar extracts must hold the bytes that the
+reader decodes. Package <code>tools/ectread/compare</code> makes the two
+comparisons.</li>
+<li>The stress tester makes the same comparison after each step, and
+compares the extraction of the reader with its model. On a damaged copy,
+the reader must refuse what eictar refuses, and read what eictar reads
+(§13.4). After the fix below, a run of 10 minutes compared 2,469 states
+and 375 damaged copies, with no difference.</li>
+<li><code>FuzzArchive</code> (step 4) runs the second reader on each
+changed golden archive. When eictar extracts the archive, the reader
+must read it with the same content. When eictar refuses it, the reader
+must refuse it too. A run of 3 minutes, on 541,000 archives, found no
+difference.</li>
+<li>The unit tests of the reader break each rule of
+<code>doc/format.md</code> §8.4 in the index of a golden archive. The
+reader must refuse each one.</li>
+</ul>
+<p>The second reader found two gaps in the specification and one fault
+in the writer:</p>
+<ul>
+<li>§8.3 said that a member that is not <code>reg</code> has no
+<code>off</code>. But eictar 1.1.0 and earlier wrote an <code>off</code>
+on each member with no blob, of each type, as the golden archives show.
+The rule for the old writers now says so.</li>
+<li>§8.1 said that the map keys are “sorted bytewise”, and not of what.
+The order is that of the encoded keys, so a shorter key comes first. No
+reader checks it.</li>
+<li>After a compact of an archive whose members were all deleted, the
+index held <code>members</code> as null, and §8.2 asks for an array. The
+stress tester found it. The writer now writes an empty array
+(<code>TestIndexNoMembersIsAnArray</code>). A reader accepts null,
+because eictar 1.1.1 and earlier wrote it.</li>
+</ul>
 <p><strong>Step 3. Faults of the disk and of the machine.</strong> A
 layer under the writer makes a write, an <code>fsync</code> or a rename
 fail, or makes a write short. A power-loss mode records the writes, and
@@ -12069,6 +12130,13 @@ and the tests check the key schedule against it.</li>
 </ul>
 <p>The format is still 1.0. v1.1.1 reads every earlier archive, and
 earlier versions read what it writes.</p>
+<p><strong>After v1.1.1, not yet in a release.</strong></p>
+<ul>
+<li>After a compact of an archive whose members were all deleted, the
+index held <code>members</code> as null. <code>doc/format.md</code> §8.2
+asks for an array, and the writer now writes an empty array. Each
+version reads both forms.</li>
+</ul>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>
 <p>This appendix supports §6.1. The question “how does this compare with

@@ -564,6 +564,26 @@ func TestIndexEmptyArchive(t *testing.T) {
 	}
 }
 
+// TestIndexNoMembersIsAnArray encodes an index whose Members is nil, as
+// after a compact of an archive with no live member. doc/format.md 8.2 asks
+// for an array, and the second reader found a null there. An archive that
+// eictar v1.1.1 or earlier wrote can have the null, so it still decodes.
+func TestIndexNoMembersIsAnArray(t *testing.T) {
+	ix := &Index{Version: IndexVersion, Generation: 7}
+	enc, err := ix.Encode(EncodeOptions{})
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	if want := []byte("\x67members\x80"); !bytes.Contains(enc.Bytes, want) {
+		t.Errorf("the index is %x, want members as an empty array (%x)", enc.Bytes, want)
+	}
+	old := []byte("\xa3\x61v\x01\x63gen\x07\x67members\xf6")
+	got, err := DecodeIndex(old, 0, nil)
+	if err != nil || len(got.Members) != 0 {
+		t.Errorf("an index with members null: %v, %v", got, err)
+	}
+}
+
 // TestIndexWithManyChunks is a regression test for the decoder's array bound.
 //
 // The bound is derived from the encoded length, so it has to assume the
