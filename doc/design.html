@@ -5938,9 +5938,9 @@ dictionary.</p>
 <p>The size bounds the whole dictionary. The trainer’s own size is that
 of the content only, and the header and the tables add about 100 bytes.
 Thus when the result is too large, the writer trains again with less
-content. Before this rule, <code>train=1M</code> gave a dictionary above
-the 1 MiB limit. The index check then refused the archive at the end of
-the run.</p>
+content. Without this rule, <code>train=1M</code> gives a dictionary
+above the 1 MiB limit. The index check then refuses the archive at the
+end of the run.</p>
 <p><strong>Training is a pass before the compression.</strong> The
 writer walks the paths, with the same filters, and makes a list of the
 regular files and their sizes. It takes the first 32 KiB of each file as
@@ -6188,11 +6188,11 @@ different.</li>
 of 2000 small JSON files and 40 large logs, the JSON files gained about
 30%. But they hold 4% of the 110 MB, so the archive gained 1.8%.</li>
 </ul>
-<p>Before <code>train=auto</code>, a fixed 112 KiB made 9 of the 29
-trees larger than no dictionary, by up to 35%. With
-<code>train=auto</code>, no tree was larger than with no dictionary. The
-measurement is an estimate, so this is not certain, but a wrong choice
-costs little: the worst tree was 1.2% above its best size.</p>
+<p>A fixed size of 112 KiB made 9 of the 29 trees larger than no
+dictionary, by up to 35%. With <code>train=auto</code>, no tree was
+larger than with no dictionary. The measurement is an estimate, so this
+is not certain, but a wrong choice costs little: the worst tree was 1.2%
+above its best size.</p>
 <p>The time is the trade-off. Without a dictionary, the 120 Go files
 took 0.2 s, the 20000 JSON files 0.7 s, and the 232 MB tree 0.8 s,
 against the times of <code>train=auto</code> in the table above. The
@@ -6735,16 +6735,16 @@ memberK  = HKDF(dataK, info = &quot;eictar/v1/member&quot;     || archive_uuid, 
 dictK    = HKDF(dataK, info = &quot;eictar/v1/dict&quot;       || archive_uuid, salt = dict.salt)</code></pre>
 <p>A wrong passphrase gives another KEK, and the seal of
 <code>key</code> fails its tag. The reader reports that as a wrong
-passphrase, before it reads anything else. Thus the tag does what the M4
-<code>check</code> value did, and <code>check</code> is gone. An
-attacker can test a guess offline against the tag, as against any file
-that a passphrase protects. The Argon2id parameters exist to make each
-guess expensive.</p>
+passphrase, before it reads anything else. Thus the tag also checks the
+passphrase, and the header needs no other check value. An attacker can
+test a guess offline against the tag, as against any file that a
+passphrase protects. The Argon2id parameters exist to make each guess
+expensive.</p>
 <p>The wrapped key is the reason that a passphrase can change (§9.7). A
 change seals the same data key under a new KEK. Every subkey stays the
-same, so no member is sealed again, and every digest stays valid. Until
-the format revision of M9, the passphrase gave the master key directly,
-and a change was not possible.</p>
+same, so no member is sealed again, and every digest stays valid. A
+passphrase that gives the master key directly cannot change without a
+new seal of each member.</p>
 <p>All HKDF instances use SHA-256. The encoding of
 <code>generation</code> is <code>uint64_le</code> in every key and
 digest. <code>member.salt</code> is 16 random bytes, stored in each
@@ -6809,9 +6809,9 @@ next append uses the same generation.</li>
 </ul>
 <p><code>indexK</code> comes from the pair. Thus a nonce that also comes
 from the pair uses one key and nonce two times. That exposes the XOR of
-the two indexes, and the Poly1305 key that authenticates them. Until the
-M6 review, the nonce came from the generation. A random 192-bit nonce
-cannot collide in practice (Appendix A).</p>
+the two indexes, and the Poly1305 key that authenticates them. Thus the
+nonce is random. A random 192-bit nonce cannot collide in practice
+(Appendix A).</p>
 <p>Compact must keep the uuid: the member keys come from it, so a new
 uuid makes every sealed blob impossible to open.</p>
 <p>A dictionary (§4.2) is sealed as one message with a key of its
@@ -7078,13 +7078,13 @@ itself.</strong> Without <code>-p</code>, a user who is not root gets
 each mode less the umask, as with <code>tar</code>. An ACL can give
 access as a mode can, so it needs root or <code>-p</code> too. One
 notice counts the ACLs and attributes that <code>-p</code> restores.
-Until the audit of v1.0.1 (<code>doc/Security_Audit.md</code>), an
-archive’s 0666 file and 0777 directory kept those modes.</p>
+Without this rule, an archive’s 0666 file and 0777 directory keep those
+modes (<code>doc/Security_Audit.md</code>).</p>
 <p><strong>The root of the archived tree is never applied to the
 destination.</strong> A member whose path is <code>.</code> changes the
 mode, the times and the owner of the destination itself. The writer
-never stores one. The reader skips one with a notice. A crafted archive
-made a destination of 0755 into 0777 before this rule.</p>
+never stores one. The reader skips one with a notice. Without this rule,
+a crafted archive can make a destination of 0755 into 0777.</p>
 <p><strong>The owner goes on before the mode.</strong>
 <code>chown</code> clears the setuid bit, so a mode set first loses it.
 On a regular file, the owner, the xattrs and the mode go on the
@@ -7098,8 +7098,7 @@ exist on this machine, the reader uses the recorded number.
 <p><strong>Privileged xattrs need root and <code>-p</code>.</strong>
 <code>security.capability</code> gives a program Linux capabilities, as
 setuid gives it a user. Restored by default, an archive can install a
-program that makes any user root. Until the audit, these names were
-restored for root with no option.</p>
+program that makes any user root.</p>
 <p><code>security.*</code> also holds an SELinux label that belongs to
 one machine. <code>trusted.*</code> needs <code>CAP_SYS_ADMIN</code>.
 Other <code>system.*</code> names belong to one filesystem type, and on
@@ -7202,8 +7201,7 @@ platform reads the size of the RAM. When the size is not known, the
 default is <code>j × 4 × chunk_size</code>. The reader goroutine
 reserves one chunk of budget before each read. The worker releases the
 reservation when it has handed the chunk to the spool.</p>
-<p>Four rules prevent deadlock. The first version of M3 deadlocked, and
-so did M7 on a small machine. These rules are the fix:</p>
+<p>Four rules prevent deadlock:</p>
 <ul>
 <li><p><strong>Nothing waits for budget while it holds budget.</strong>
 A worker releases its chunk reservation <em>before</em> it adds the
@@ -7220,10 +7218,9 @@ in its spool, and they hold budget. The member is complete only when the
 reader goes on. Thus, if the budget is not free at once, the reader
 first moves that spool to disk, and then it waits. Everything else that
 holds budget is released without the reader.</p>
-<p>Until M8, this rule was missing. With 2 workers and 512-byte chunks,
-a create stopped for ever. With the defaults, a file of 24 to 32 MiB on
-a machine with two CPUs was able to do the same. A run of the tests as
-on a CI runner with two CPUs found it.</p></li>
+<p>Without this rule, a create with 2 workers and 512-byte chunks stops
+for ever. With the defaults, a file of 24 to 32 MiB on a machine with
+two CPUs can do the same.</p></li>
 <li><p><strong>The budget is at least two chunks.</strong> The reader
 holds one chunk while it waits for the next. The builder raises a
 smaller budget to two chunks.</p></li>
@@ -7242,9 +7239,9 @@ state for the whole call.</p>
 <p>An encoder with a pool of 1, shared by many workers, is correct and
 free of races, but it is fully serial. The workers run, but only one of
 them compresses at a time.</p>
-<p>The first version of M3 had this fault, and a measurement showed it.
-With 207 MB at zstd level 12, <code>-j 1</code> took 3.15 s and
-<code>-j 8</code> took 3.28 s. User time was equal to wall time.</p>
+<p>A measurement shows the cost. With a pool of 1 and 207 MB at zstd
+level 12, <code>-j 1</code> took 3.15 s and <code>-j 8</code> took 3.28
+s. User time was equal to wall time.</p>
 <p>When the pool size is equal to the worker count, the same work takes
 0.57 s at <code>-j 8</code>. User time stays at approximately 3.3 s.
 Thus <code>codec.NewEncoder</code> takes the concurrency as an argument.
@@ -7252,9 +7249,9 @@ A codec conformance test fails if a shared encoder is serial.</p>
 <p><strong>The number of encoder states is also bounded by
 memory.</strong> A state of zstd at its best speed holds approximately
 44 MB with 4 MiB chunks, and an xz compression holds approximately 30
-MB. With 32 workers, that is more than 1 GB. After the default level
-became 12, the test machines of FreeBSD and OpenBSD ran out of
-memory.</p>
+MB. With 32 workers, that is more than 1 GB. Without a bound, the test
+machines of FreeBSD and OpenBSD ran out of memory at the default
+level.</p>
 <p>Thus each codec estimates the memory of one compression in progress.
 The writer makes no more states than fit in one sixteenth of the RAM.
 When <code>--memory-limit</code> is given, the states can use half of
@@ -7505,12 +7502,11 @@ default 256 MiB.</p>
 <p><code>make bench</code> runs Go benchmarks of eictar alone, on a
 mixed tree of 64 MiB: 2000 small files, large text files, and random
 data.</p>
-<p><strong>The benchmarks found a fault.</strong> The pipeline made a
-new buffer of the chunk size (4 MiB) to read each file, also a file of 8
-KiB. For 2000 small files, the program cleared 8 GB of memory, and 20%
-of its CPU time went to that. Now one read buffer stays from file to
-file, and a short chunk is copied out at its own size. Create became 2.8
-times faster with zstd, and 7 times faster with no compression.</p>
+<p><strong>One read buffer stays from file to file</strong>, and a short
+chunk is copied out at its own size. A new buffer of the chunk size (4
+MiB) for each file, also a file of 8 KiB, clears 8 GB of memory for 2000
+small files. That took 20% of the CPU time. The one buffer makes create
+2.8 times faster with zstd, and 7 times faster with no compression.</p>
 <h2 id="changes-and-checks">9. Changes and checks</h2>
 <p>This section describes the operations on an existing archive. Append,
 update, delete, compact, repair and the change of passphrase change it
@@ -7526,9 +7522,8 @@ the mutation adds no content.</p>
 writer makes a temporary file beside the archive path, and
 <code>Close</code> renames it into place after the trailer is synced.
 Until the rename, a file that is already at the path stays as it was.
-Before the M6 review, create truncated that file at the start and
-removed it after an error, so one mistyped source path destroyed a
-backup.</p>
+Thus a create that fails, for example on a mistyped source path, does
+not destroy a backup.</p>
 <p>The new file gets the permissions of the file that it replaces. If
 the path is a symbolic link, the file that the link points to is
 replaced, and the link stays. The walk skips both the temporary file and
@@ -7540,9 +7535,9 @@ to the caller or to the owner of the directory
 (<code>fs.protected_symlinks</code>). The writer resolves the path
 itself and renames over the target, so the kernel’s rule never applies.
 Thus the writer applies the rule to each link in the path, for create,
-compact and change of passphrase. Before the audit, a link
-<code>/tmp/backup.ect -&gt; /etc/passwd</code> that another user planted
-made a create by root replace <code>/etc/passwd</code>.</p>
+compact and change of passphrase. Without this rule, a link
+<code>/tmp/backup.ect -&gt; /etc/passwd</code> that another user plants
+makes a create by root replace <code>/etc/passwd</code>.</p>
 <h3 id="the-write-sequence">9.1 The write sequence</h3>
 <p>Append, update and delete all use this sequence:</p>
 <ol type="1">
@@ -7561,10 +7556,8 @@ makes the blobs and the index durable.</li>
 <p>Step 4 is the commit. Until then, the old trailer still describes the
 old generation exactly, at its old place.</p>
 <p>The old trailer must stay intact. A new blob written over it destroys
-the only trailer in the file. Until the M6 review, this section put the
-new blobs directly after the old index, on top of the old trailer. After
-a crash, that left nothing to recover. Each generation now costs 96
-bytes of dead space.</p>
+the only trailer in the file, and after a crash nothing is left to
+recover. Thus each generation costs 96 bytes of dead space.</p>
 <p>If a mutation fails before step 4 with an error (not a crash), the
 writer truncates the file back to its old length. The archive is then
 exactly as it was. A run that changes nothing, because every path was
@@ -7752,8 +7745,7 @@ immediately before such a rename. It then locks the old file, which the
 rename has unlinked, and its writes are lost. Thus, after it gets the
 lock, a writer makes sure that the path still names the file that it
 locked. If not, it stops with the same error.</p>
-<p>The M6 plan put a lock on the new file of compact instead. That does
-not stop the lost write.</p>
+<p>A lock on the new file of compact does not stop the lost write.</p>
 <p>The lock is advisory: a program that does not ask for it can still
 write. The kernel removes the lock when the process ends, so a crash
 leaves no stale lock. Linux, macOS, the BSDs and the other UNIX systems
@@ -8276,9 +8268,9 @@ CPUs, gave these results:</p>
 </table>
 <p><strong>The default level is 12</strong>, the best speed. It is
 approximately 5% smaller than level 3, and a create takes approximately
-3.4 times as long. The speed of extraction does not change. Until v1.0.0
-the default was 3, the default of zstd. The default is 12, not 19, so
-that it stays a sensible level if the library gets finer levels.</p>
+3.4 times as long. The speed of extraction does not change. The default
+is 12, not 19, so that it stays a sensible level if the library gets
+finer levels.</p>
 <p><strong>A window larger than the chunk has no effect.</strong> The
 chunks are independent (§4), so no match reaches back past the start of
 its chunk. <code>long=27</code> needs <code>--chunk-size 128MiB</code>
@@ -8350,9 +8342,9 @@ implementation.</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Every codec must compress and decompress.</strong> The M6
-design also listed a bzip2 codec for decompression only. No writer of
-eictar makes bzip2 members, so the codec was dropped.</p>
+<p><strong>Every codec must compress and decompress.</strong> Thus there
+is no bzip2 codec for decompression only: no writer of eictar makes
+bzip2 members.</p>
 <p><strong>The <code>xz</code> codec stores raw LZMA2, without the
 <code>.xz</code> container.</strong> The container declares the
 dictionary size, and the library honors it. Thus a crafted chunk can
@@ -8771,8 +8763,8 @@ missed changes.</li>
 of the member. For a member with holes, the bytes at the member’s data
 regions must give its digest, and the rest of the file must be zero. The
 file’s own regions do not count: a filesystem can report other regions
-for the same content. Until the stress tester found it (testing.md §4),
-such a file was archived again.</p>
+for the same content. Thus such a file is not archived again (testing.md
+§4).</p>
 <p><code>digest</code> never compresses without need and never misses a
 change. It reads each candidate in full. A sequential read costs much
 less than compression, encryption and a write. Thus on a large tree with
@@ -8789,8 +8781,8 @@ stores that content again in full.</p>
 this build does not support yet</h3>
 <p>The program refuses an option that it can parse but cannot apply yet.
 It exits with 70 and names the milestone, as it does for an operation
-that is not built. Since M7, every option is built. The rule stays for
-the next option that is not, and a unit test keeps the rule working.</p>
+that is not built. This build has every option. The rule stays for the
+next option that is not, and a unit test keeps the rule working.</p>
 <p>If the program accepts such an option without a message, the result
 is wrong and no warning shows it. For example, an <code>--exclude</code>
 that excludes nothing gives a wrong archive. The archive contains the
@@ -8850,7 +8842,7 @@ filesystem</td>
 <tr class="even">
 <td>70</td>
 <td>an option that is not built yet (<code>EX_SOFTWARE</code>). The
-message names the milestone. Since M7, no option gives it.</td>
+message names the milestone. No option of this build gives it.</td>
 </tr>
 </tbody>
 </table>
@@ -8962,13 +8954,12 @@ any depth. Thus <code>*.go</code> takes <code>src/main.go</code>, and
 <code>cache</code> takes <code>a/cache</code> and everything below
 it.</li>
 </ul>
-<p>The last rule applied to the last name only until the stress tester
-found the result (testing.md §4). <code>--delete cache</code> deleted
-the directory <code>a/cache</code>, but its members stayed, and
-<code>--exclude cache</code> hid <code>a/cache</code> but not its
-contents. A directory that a pattern names, or that a pattern with no
-<code>/</code> matches by name, now takes its contents, at any
-depth.</p>
+<p>A directory that a pattern names, or that a pattern with no
+<code>/</code> matches by name, takes its contents, at any depth.
+Without this rule, <code>--delete cache</code> deletes the directory
+<code>a/cache</code> but not its members, and
+<code>--exclude cache</code> hides <code>a/cache</code> but not its
+contents (testing.md §4).</p>
 <p>A glob with a <code>/</code> matches the whole path only. Thus
 <code>src/sub*</code> selects the directory <code>src/sub</code>, but
 not <code>src/sub/main.go</code>. To select the contents, name the
@@ -8977,10 +8968,10 @@ directory. <code>-n</code> shows what a pattern selects (§9.9).</p>
 walk of create, append, update and diff does not enter an excluded
 directory. On a read, an <code>--exclude</code> pattern also excludes
 each member under a directory that it matches, so that a list of an
-archive agrees with the walk that made it. Before this rule,
-<code>-t --exclude &#39;src/sub*&#39;</code> listed the contents of
+archive agrees with the walk that made it. Without this rule,
+<code>-t --exclude &#39;src/sub*&#39;</code> lists the contents of
 <code>src/sub</code>, and <code>--diff</code> with the same option
-reported them as not on disk.</p>
+reports them as not on disk.</p>
 <p><strong>Regular expressions.</strong> <code>-R RE</code>
 (<code>--regex</code>) and <code>--exclude-regex RE</code> use the RE2
 syntax of Go’s <code>regexp</code> package. The time of a match is
@@ -9191,9 +9182,9 @@ names. A test proves that a <code>.eictarrc</code> in the current
 directory has no effect.</p>
 <p><strong><code>--no-config</code> ignores levels 2 and 3</strong>: no
 file, and no <code>EICTAR_*</code> variable. Then only the command line
-decides. Scripts and unattended runs use it. The M6 design ignored only
-the file, but a variable from a login shell also changes what a script
-does.</p>
+decides. Scripts and unattended runs use it. It ignores the variables as
+well as the file, because a variable from a login shell also changes
+what a script does.</p>
 <p><code>--show-config</code> shows each setting in effect, with its
 source, and exits. It needs no operation and no archive. With an
 operation, it shows the settings for that operation.</p>
@@ -9350,9 +9341,8 @@ by default. The release workflow sets it from the tag.</p>
 All three are inside the project. The <code>Makefile</code> sets
 <code>GOMODCACHE</code>, <code>GOCACHE</code> and <code>TMPDIR</code>,
 so a build or a test run writes nothing outside the project directory.
-Until M7, the <code>Makefile</code> did not set <code>GOCACHE</code>,
-and Go used <code>~/.cache/go-build</code>. Use the <code>make</code>
-targets, not a bare <code>go</code> command:</p>
+Use the <code>make</code> targets, not a bare <code>go</code>
+command:</p>
 <table>
 <colgroup>
 <col style="width: 50%" />
@@ -9763,12 +9753,6 @@ minutes. The golden archives show that the format did not change.</li>
 <li>Update <code>THIRD_PARTY.md</code>: the versions, and the license
 texts if they changed. Until then, a test fails.</li>
 </ol>
-<p>The update of 2026-10-02 took <code>klauspost/compress</code> to
-v1.20.1 (changes to the zstd and huff0 decoders),
-<code>ulikunitz/xz</code> to v0.5.17 (a reader that returns no data and
-no error is no longer a failure), and <code>klauspost/cpuid</code> to
-v2.4.0. The ratios did not change, and the benchmarks of §8 did not
-change by more than their noise.</p>
 <h2 id="testing">13. Testing</h2>
 <p>The testing plan is in <code>testing.md</code>: the unit tests, the
 operational tests, the supporting tools, the stress tester, and the
@@ -9787,10 +9771,10 @@ clearly. <code>--encrypt-index</code> hides it. Then an observer sees
 only that the archive exists, and its total size.</p></li>
 <li><p><strong>Content digests.</strong> The plain index also shows the
 digest of each member. In an encrypted archive, the digest is keyed
-(§6.2), so it tells an observer nothing about the content. Before M9 it
-was not keyed, and it showed if the archive held a file that the
-observer had. Equal keyed digests still show that two members have the
-same content, and so does a reference (§4.3).</p></li>
+(§6.2), so it tells an observer nothing about the content. A digest that
+is not keyed shows if the archive holds a file that the observer has.
+Equal keyed digests still show that two members have the same content,
+and so does a reference (§4.3).</p></li>
 <li><p><strong>Dictionaries.</strong> A dictionary holds pieces of the
 files, so in an encrypted archive it is sealed like content (§6.3). Its
 size and its place are in the index.</p></li>
@@ -9947,8 +9931,8 @@ it, each <code>lstat</code>, <code>readlink</code> and open uses one
 name in that directory. A subdirectory must have the device and the
 inode of its <code>lstat</code>, or it fails as a member that changed,
 and the walk does not enter it. The extended attributes come from the
-open file or directory, not from the path. Before this rule, a link put
-in the place of a directory took the walk into the directory that the
+open file or directory, not from the path. Without this rule, a link put
+in the place of a directory takes the walk into the directory that the
 link points to (<code>doc/Security_Audit.md</code>, finding 11).</p>
 <p>A path that the user names is opened by its path, from its parent. A
 directory that the process cannot open is archived empty, and its
@@ -9986,9 +9970,9 @@ inline, for use through a pipe.</li>
 trailer.</li>
 </ul>
 <h3 id="other-platforms">15.1 Other platforms</h3>
-<p><strong>Status: complete in M8</strong> for the five UNIX-like
-platforms. Windows is supported from v1.1.0 (see “Windows” below). The
-CI workflow passes on all six platforms (see “Testing” below).</p>
+<p>eictar supports the five UNIX-like platforms and Windows (see
+“Windows” below). The CI workflow passes on all six platforms (see
+“Testing” below).</p>
 <p>The metadata code (<code>src/internal/meta</code>) has a part that
 the five UNIX-like platforms share, and a small file for each platform.
 Windows has <code>meta_windows.go</code>. On any other platform
@@ -10130,19 +10114,17 @@ OpenBSD sysctl name in its own table, and the table has no
 <code>hw.physmem64</code>. It gives MIB <code>{6, 19}</code>, which is
 <code>HW_PHYSMEM64</code>, the name <code>hw.physmem</code>. Thus
 <code>memory_bsd.go</code> asks for <code>hw.physmem</code> on OpenBSD.
-Up to v1.0.8, it asked for <code>hw.physmem64</code>, got an error, and
-OpenBSD had no memory size. <code>TestTotalMemory</code> found this when
-it was added for Windows.</p>
+A request for <code>hw.physmem64</code> gets an error, and then OpenBSD
+has no memory size. <code>TestTotalMemory</code> makes sure that each
+platform gives a size.</p>
 <p>A fourth fault is on NetBSD. NetBSD declares <code>mknodat</code> as
 <code>mknodat(int fd, const char *path, mode_t mode, int PAD, dev_t dev)</code>,
 and <code>unix.Mknodat</code> puts the device number where the padding
-is. The kernel then read 0 for the number. Thus up to this change, each
-device node that eictar made on NetBSD, as root with
-<code>--preserve-devices</code>, was 0:0. Now <code>sys_netbsd.go</code>
-makes the system call itself, with the padding.
-<code>TestMknodAsRoot</code> found this in the CI job of NetBSD, which
-runs as root. The test of devices in <code>archive</code> checked only
-the type.</p>
+is. The kernel then read 0 for the number. Thus each device node that
+<code>unix.Mknodat</code> makes on NetBSD is 0:0.
+<code>sys_netbsd.go</code> makes the system call itself, with the
+padding. <code>TestMknodAsRoot</code> makes sure of the device number,
+in the CI job of NetBSD, which runs as root.</p>
 <p>All four are worth a report to the <code>x/sys</code> project. The
 test helpers read xattrs with their own code, not with the code in
 <code>meta</code>, so that a fault in <code>meta</code> cannot hide
@@ -10167,29 +10149,14 @@ Linux and macOS, and in virtual machines for FreeBSD, NetBSD and
 OpenBSD. NetBSD and OpenBSD have no race detector, so they run
 <code>make check-norace</code>. A platform is supported while the
 workflow passes on it.</p>
-<p>The first runs on the five UNIX-like platforms (M8) found five faults
-that no run on Linux had shown:</p>
-<ul>
-<li><code>.tmp</code> is not in the repository, and <code>vet</code> and
-<code>fmt</code> did not create it.</li>
-<li>A configuration test used a worker count that is the default on a CI
-runner with two CPUs.</li>
-<li>The pipeline deadlock of §8.1, which the check for that test
-found.</li>
-<li>The hole test expected the 4 KiB granularity of ext4. ZFS reports
-128 KiB records.</li>
-<li>A recompress test expected holes on NetBSD and OpenBSD, which store
-files dense. Also, the NetBSD job used <code>sort -V</code>, which
-NetBSD does not have.</li>
-</ul>
 <p>Each job runs on its platform, so CI leaves out <code>crossvet</code>
 (<code>CROSSVET=</code>). On Linux and macOS, <code>setup-go</code>
 saves the build cache and the module cache between runs. The Makefile
 keeps them in <code>.gobuildcache/</code> and <code>.gocache/</code>,
 where <code>setup-go</code> does not look. So these jobs give the
 directories of <code>setup-go</code> on the command line of
-<code>make</code>. Before, each run built every package again, with the
-race detector and for each fuzz target.</p>
+<code>make</code>. Without them, each run builds every package again,
+with the race detector and for each fuzz target.</p>
 <p>Windows has no <code>make</code> in the runner image. Its job runs
 <code>go vet</code>, the unit tests and the operational tests directly,
 without the race detector. The Linux job runs <code>gofmt</code> and the
@@ -10290,12 +10257,8 @@ A name cannot hold a control character. Windows refuses such a name from
 an archive made on Unix, so that member does not extract there.</li>
 </ul>
 <h3 id="outstanding-items">15.2 Outstanding items</h3>
-<p>The code review after M6, and the discussion after it, found these
-items. They are not faults. Each one needs a decision or a measurement
-before any work starts. Two items of this list, the wrapped data key and
-the keyed content digest, were decided for M9 (§6.2, §9.7). Two more are
-done: parallel <code>--verify</code> (§9.4) and a decoder that the
-workers use again (§8.3).</p>
+<p>These items are not faults. Each one needs a decision or a
+measurement before any work starts.</p>
 <ul>
 <li><p><strong>The decode of the index.</strong> Each operation decodes
 the whole index when it opens the archive.

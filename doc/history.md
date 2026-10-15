@@ -35,7 +35,9 @@ and pass, not that the feature ran once by hand.
    the spools, the memory budget with `TryAcquire`), parallel extraction,
    `-j`, `--memory-limit` and `--spill-threshold`. Tests with 1 to 64 workers
    pass under `-race`. The measured speedup is 5.5 times on eight cores
-   (design.md §8.2).
+   (design.md §8.2). The first version deadlocked (design.md §8.1). Its
+   workers also shared an encoder with one state, so `-j 8` was no faster
+   than `-j 1` (design.md §8.2).
 4. **M4 — Encryption** *(complete, reviewed)*: `src/internal/crypt` holds
    Argon2id, the HKDF key schedule, XChaCha20-Poly1305 for chunks, and the
    sealed and authenticated index. The milestone also added `--encrypt`,
@@ -63,6 +65,10 @@ and pass, not that the feature ran once by hand.
      worker wrote a chunk to a spool that was already closed
    - a failed create removed the archive that was already at the path (design.md §9)
 
+   The review also changed the write sequence. The design put the new blobs
+   on top of the old trailer, so a crash left nothing to recover. Now they
+   go after it (design.md §9.1).
+
    The same review made each pattern of `-t`, `-x` and `--verify` match at
    least one member, as for `--delete` (exit 2). It also made the other
    links to a target that was not extracted link to the first copy (design.md §7.7). It
@@ -73,7 +79,14 @@ and pass, not that the feature ran once by hand.
    (design.md §10.2). Also `--progress` (design.md §10.10), `--recompress` (design.md §9.3), and the
    advisory lock for writers (design.md §9.6). Also the man page (`doc/eictar.1`), the
    format reference (`doc/format.md`), and the benchmarks (design.md §8.4). Every
-   option is built.
+   option is built. The `Makefile` sets `GOCACHE`, so a build writes nothing
+   outside the project (design.md §12).
+
+   The work changed three points of the M6 design. The M6 design locked the
+   new file of compact. Now a writer locks the archive, and then makes sure
+   that the path still names the file that it locked (design.md §9.6). There is no bzip2 codec for
+   decompression only (design.md §10.2). `--no-config` ignores the `EICTAR_*`
+   variables too, not only the file (design.md §11).
 
    The work found and corrected these faults:
    - the xz reader took its dictionary size from the stream, so a crafted
@@ -90,12 +103,26 @@ and pass, not that the feature ran once by hand.
    FreeBSD, NetBSD and OpenBSD, as design.md §15.1 describes. Open questions 4 and 5
    are decided (design.md §1.1, rows 8 and 9). The CI workflow in
    `.github/workflows/ci.yml` passes on all five platforms. The first runs
-   found a deadlock in the pipeline (design.md §8.1), and four faults in tests and in
-   the workflow (design.md §15.1).
+   found five faults that no run on Linux had shown:
+   - a deadlock in the pipeline, on a CI runner with two CPUs (design.md §8.1)
+   - `.tmp` is not in the repository, and `vet` and `fmt` did not create it
+   - a configuration test used a worker count that is the default on a CI
+     runner with two CPUs
+   - the hole test expected the 4 KiB granularity of ext4, but ZFS reports
+     128 KiB records
+   - a recompress test expected holes on NetBSD and OpenBSD, which store
+     files dense. Also, the NetBSD job used `sort -V`, which NetBSD does not
+     have.
 9. **M9 — Format revision** *(complete)*: a random data key that the
    passphrase wraps, `--change-passphrase` (design.md §9.7), and a keyed member digest
    in encrypted archives (design.md §6.2). Both change the format, so they come before a
-   first release, with new test vectors and golden files.
+   first release, with new test vectors and golden files. Before M9, the
+   passphrase gave the master key directly, so a change of passphrase was not
+   possible, and the header held the `check` value of M4 to find a wrong
+   passphrase. The tag of the wrapped key took its place (design.md §6.2). The
+   member digest was not keyed, so it showed if the archive held a file that
+   an observer had (design.md §14.1). These are two of the items that the M6
+   review left for later (design.md §15.2).
 10. **M10 — Dictionaries** *(complete)*: `-Z zstd:train` trains a zstd
     dictionary in a pass before the compression. The archive stores it,
     sealed when the archive is encrypted (design.md §4.2, §5.1, §6.3). Codec
@@ -114,8 +141,10 @@ Between M9 and M10, the module path became `github.com/philmalin/eictar`.
 The interface also got the `.ect` extension (design.md §10.12), and selection by
 regular expression, `-R` and `--exclude-regex` (design.md §10.11). After M11, the
 release workflow made the first release, v1.0.0 (design.md §12.3). The next release,
-v1.0.1, made zstd level 12 the default, and bounded the memory of the
-encoders (design.md §8.2).
+v1.0.1, made zstd level 12 the default (design.md §10.2), in place of 3, the
+default of zstd. It also bounded the memory of the encoders, because the test
+machines of FreeBSD and OpenBSD ran out of memory at level 12 (design.md
+§8.2).
 
 **v1.0.2 is a security release.** A review of v1.0.1 found eight problems
 (`doc/Security_Audit.md`). Two were serious for a root user with an archive
@@ -157,7 +186,8 @@ results of its fuzz run (`doc/Security_Audit.md` §6). v1.0.4 has them.
 
 **v1.0.5** updates `klauspost/compress` to v1.20.1, `ulikunitz/xz` to
 v0.5.17 and `klauspost/cpuid` to v2.4.0. The updates change decoders that
-read untrusted archives. `make check` and a fuzz run of each target passed,
+read untrusted archives: the zstd and huff0 decoders, and an xz reader that
+returns no data and no error is no longer a failure. `make check` and a fuzz run of each target passed,
 the ratios did not change, and the speed did not change by more than the
 noise of the benchmarks (design.md §12.3). The program now warns when an xz preset
 has a dictionary larger than the chunk size, as it does for a zstd window

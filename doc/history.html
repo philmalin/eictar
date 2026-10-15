@@ -1494,7 +1494,9 @@ memory budget with <code>TryAcquire</code>), parallel extraction,
 <code>-j</code>, <code>--memory-limit</code> and
 <code>--spill-threshold</code>. Tests with 1 to 64 workers pass under
 <code>-race</code>. The measured speedup is 5.5 times on eight cores
-(design.md §8.2).</p></li>
+(design.md §8.2). The first version deadlocked (design.md §8.1). Its
+workers also shared an encoder with one state, so <code>-j 8</code> was
+no faster than <code>-j 1</code> (design.md §8.2).</p></li>
 <li><p><strong>M4 — Encryption</strong> <em>(complete, reviewed)</em>:
 <code>src/internal/crypt</code> holds Argon2id, the HKDF key schedule,
 XChaCha20-Poly1305 for chunks, and the sealed and authenticated index.
@@ -1533,6 +1535,9 @@ worker wrote a chunk to a spool that was already closed</li>
 <li>a failed create removed the archive that was already at the path
 (design.md §9)</li>
 </ul>
+<p>The review also changed the write sequence. The design put the new
+blobs on top of the old trailer, so a crash left nothing to recover. Now
+they go after it (design.md §9.1).</p>
 <p>The same review made each pattern of <code>-t</code>, <code>-x</code>
 and <code>--verify</code> match at least one member, as for
 <code>--delete</code> (exit 2). It also made the other links to a target
@@ -1546,7 +1551,14 @@ the codecs gzip, flate, xz and s2 (design.md §10.2). Also
 (design.md §9.3), and the advisory lock for writers (design.md §9.6).
 Also the man page (<code>doc/eictar.1</code>), the format reference
 (<code>doc/format.md</code>), and the benchmarks (design.md §8.4). Every
-option is built.</p>
+option is built. The <code>Makefile</code> sets <code>GOCACHE</code>, so
+a build writes nothing outside the project (design.md §12).</p>
+<p>The work changed three points of the M6 design. The M6 design locked
+the new file of compact. Now a writer locks the archive, and then makes
+sure that the path still names the file that it locked (design.md §9.6).
+There is no bzip2 codec for decompression only (design.md §10.2).
+<code>--no-config</code> ignores the <code>EICTAR_*</code> variables
+too, not only the file (design.md §11).</p>
 <p>The work found and corrected these faults:</p>
 <ul>
 <li>the xz reader took its dictionary size from the stream, so a crafted
@@ -1567,14 +1579,32 @@ slower than necessary (design.md §8.4)</li>
 design.md §15.1 describes. Open questions 4 and 5 are decided (design.md
 §1.1, rows 8 and 9). The CI workflow in
 <code>.github/workflows/ci.yml</code> passes on all five platforms. The
-first runs found a deadlock in the pipeline (design.md §8.1), and four
-faults in tests and in the workflow (design.md §15.1).</p></li>
+first runs found five faults that no run on Linux had shown:</p>
+<ul>
+<li>a deadlock in the pipeline, on a CI runner with two CPUs (design.md
+§8.1)</li>
+<li><code>.tmp</code> is not in the repository, and <code>vet</code> and
+<code>fmt</code> did not create it</li>
+<li>a configuration test used a worker count that is the default on a CI
+runner with two CPUs</li>
+<li>the hole test expected the 4 KiB granularity of ext4, but ZFS
+reports 128 KiB records</li>
+<li>a recompress test expected holes on NetBSD and OpenBSD, which store
+files dense. Also, the NetBSD job used <code>sort -V</code>, which
+NetBSD does not have.</li>
+</ul></li>
 <li><p><strong>M9 — Format revision</strong> <em>(complete)</em>: a
 random data key that the passphrase wraps,
 <code>--change-passphrase</code> (design.md §9.7), and a keyed member
 digest in encrypted archives (design.md §6.2). Both change the format,
 so they come before a first release, with new test vectors and golden
-files.</p></li>
+files. Before M9, the passphrase gave the master key directly, so a
+change of passphrase was not possible, and the header held the
+<code>check</code> value of M4 to find a wrong passphrase. The tag of
+the wrapped key took its place (design.md §6.2). The member digest was
+not keyed, so it showed if the archive held a file that an observer had
+(design.md §14.1). These are two of the items that the M6 review left
+for later (design.md §15.2).</p></li>
 <li><p><strong>M10 — Dictionaries</strong> <em>(complete)</em>:
 <code>-Z zstd:train</code> trains a zstd dictionary in a pass before the
 compression. The archive stores it, sealed when the archive is encrypted
@@ -1598,7 +1628,9 @@ archive.</p></li>
 expression, <code>-R</code> and <code>--exclude-regex</code> (design.md
 §10.11). After M11, the release workflow made the first release, v1.0.0
 (design.md §12.3). The next release, v1.0.1, made zstd level 12 the
-default, and bounded the memory of the encoders (design.md §8.2).</p>
+default (design.md §10.2), in place of 3, the default of zstd. It also
+bounded the memory of the encoders, because the test machines of FreeBSD
+and OpenBSD ran out of memory at level 12 (design.md §8.2).</p>
 <p><strong>v1.0.2 is a security release.</strong> A review of v1.0.1
 found eight problems (<code>doc/Security_Audit.md</code>). Two were
 serious for a root user with an archive from someone else: privileged
@@ -1644,14 +1676,16 @@ has them.</p>
 <p><strong>v1.0.5</strong> updates <code>klauspost/compress</code> to
 v1.20.1, <code>ulikunitz/xz</code> to v0.5.17 and
 <code>klauspost/cpuid</code> to v2.4.0. The updates change decoders that
-read untrusted archives. <code>make check</code> and a fuzz run of each
-target passed, the ratios did not change, and the speed did not change
-by more than the noise of the benchmarks (design.md §12.3). The program
-now warns when an xz preset has a dictionary larger than the chunk size,
-as it does for a zstd window (design.md §10.2).
-<code>THIRD_PARTY.md</code> lists the modules in the binary with their
-license texts, and a release includes it. Dependabot proposes updates of
-the modules and the actions each month (design.md §12.3).</p>
+read untrusted archives: the zstd and huff0 decoders, and an xz reader
+that returns no data and no error is no longer a failure.
+<code>make check</code> and a fuzz run of each target passed, the ratios
+did not change, and the speed did not change by more than the noise of
+the benchmarks (design.md §12.3). The program now warns when an xz
+preset has a dictionary larger than the chunk size, as it does for a
+zstd window (design.md §10.2). <code>THIRD_PARTY.md</code> lists the
+modules in the binary with their license texts, and a release includes
+it. Dependabot proposes updates of the modules and the actions each
+month (design.md §12.3).</p>
 <p><strong>v1.0.6 is a security release</strong>, and it adds two
 operations. A review of the changes after v1.0.5 found two problems
 (<code>doc/Security_Audit.md</code> §7). The release fixes both, each
