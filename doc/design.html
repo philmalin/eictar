@@ -5325,8 +5325,8 @@ the usual choices</a></li>
 <h1 id="eictar-design-document">eictar — Design Document</h1>
 <p>Status: M1 to M11 are complete, and v1.1.1 is the current release.
 The CI workflow passes on Linux, macOS, FreeBSD, NetBSD, OpenBSD and
-Windows (§15.1). Date: 2026-10-14 Applies to: v1 (format version
-1.0)</p>
+Windows (§15.1). The six steps of the assurance plan (§13.5) are
+complete. Date: 2026-10-15 Applies to: v1 (format version 1.0)</p>
 <p>This document describes the on-disk format, the concurrency model,
 the command line and the internal package layout of <code>eictar</code>,
 and gives the reason for each choice. <code>doc/format.md</code> is the
@@ -9485,6 +9485,24 @@ alone, as <code>.build/ectread</code> (§13.5, step 2)</td>
 <code>/opt/java/bin/java</code>) and <code>tla2tools.jar</code> in the
 root (<code>TLA_JAR</code>).</td>
 </tr>
+<tr class="even">
+<td><code>make vuln</code></td>
+<td>scan for the known vulnerabilities of the modules and of the
+standard library that the code calls, with <code>govulncheck</code>
+(<code>GOVULNCHECK</code> gives its version). It uses the toolchain of
+<code>GO</code>, and needs the network.</td>
+</tr>
+<tr class="odd">
+<td><code>make gate</code></td>
+<td>the release gate (§13.5, step 6): <code>check</code>,
+<code>tla</code>, <code>vuln</code>, <code>mutate</code> on each
+package, <code>fuzz</code> and <code>stress</code>, on a worktree of the
+commit <code>GATE_REF</code> (default <code>HEAD</code>). It writes a
+record in <code>.build/gate/</code>. With the defaults it takes about a
+day. <code>GATE_STEPS</code>, <code>GATE_FUZZTIME</code> (default
+<code>1h</code>), <code>GATE_STRESSTIME</code> (default <code>8h</code>)
+and <code>GATE_MUTATE</code> change it.</td>
+</tr>
 </tbody>
 </table>
 <p><code>GO=go</code> gives another toolchain, as CI does:
@@ -9504,6 +9522,7 @@ tools/stress/              the stress tester: model, generator and profiles, run
 tools/mutate/              mutation testing, for make mutate (§13.5)
 tools/ectread/             the second reader, from doc/format.md alone, and the comparison with eictar (§13.5)
 spec/                      the TLA+ models of the protocols, for make tla (§13.5)
+tools/gate/                gate.sh: the release gate, for make gate (§13.5)
 src/cmd/eictar/            main.go: calls cli.Run and exits with its code
 src/internal/format/       header, trailer, crypto header, CBOR index types, limits
 src/internal/archive/      Reader, Writer, the walk, capture, create, list and extract.
@@ -9704,11 +9723,26 @@ its old length.</p>
 <p>A release is a tag of the form <code>v1.2.3</code>. The version
 follows semantic versioning. A change of the format that an old reader
 cannot read needs a new major version (§3).</p>
+<p>These steps make a release:</p>
+<ol type="1">
+<li>Run <code>make gate</code> on the commit (§13.5, step 6). The last
+line of its record, <code>.build/gate/SHA/record.txt</code>, must be
+<code>PASS</code>.</li>
+<li>Make sure that the ci workflow passed on the same commit, on all six
+platforms.</li>
+<li>Tag the commit with
+<code>git tag -a v1.2.3 -m &quot;eictar 1.2.3&quot;</code>, and push the tag.</li>
+<li>When the release workflow and the ci workflow on the tag pass,
+publish the draft release.</li>
+</ol>
+<p>The gate runs on the machine of the developer, not on GitHub, because
+it takes about a day.</p>
 <p>A push of the tag starts the release workflow
 (<code>.github/workflows/release.yml</code>). The workflow runs
-<code>make check</code> on Linux. Then <code>make release</code> builds
-one binary for each platform of §15.1, on amd64 and on arm64, with the
-man page, <code>README.md</code>, <code>LICENSE</code>,
+<code>make check</code> on Linux, and <code>make vuln</code> with the
+toolchain that builds the binaries. Then <code>make release</code>
+builds one binary for each platform of §15.1, on amd64 and on arm64,
+with the man page, <code>README.md</code>, <code>LICENSE</code>,
 <code>TRADEMARKS.md</code> and <code>THIRD_PARTY.md</code>. The licenses
 of the modules in the binary require their texts in a binary
 distribution, and <code>THIRD_PARTY.md</code> holds them. It must be
@@ -11156,10 +11190,81 @@ pass:</p>
 <li><code>make check</code> on each platform, as CI does</li>
 <li>a run of the stress tester of at least 8 hours</li>
 <li>each fuzz target for at least one hour</li>
-<li><code>make mutate</code> on <code>format</code>, <code>crypt</code>
-and <code>pipeline</code>, with no survivor that is not explained</li>
-<li><code>govulncheck</code> on the modules</li>
+<li><code>make mutate</code> on each package, with no survivor that is
+not explained</li>
+<li><code>govulncheck</code> on the modules and the standard
+library</li>
+<li>the TLA+ models</li>
 </ul>
+<p><em>Done.</em> <code>make gate</code> runs each step that one machine
+can run, in this order: <code>make check</code>, <code>make tla</code>,
+<code>make vuln</code>, <code>make mutate</code> on each package,
+<code>make fuzz</code> with one hour for each target, and
+<code>make stress</code> for 8 hours. The CI workflow gives
+<code>make check</code> on the other platforms (§12.3). The quick steps
+come first, so that a fault in them stops the gate before the long steps
+start. The gate stops at the first step that fails, because a fix makes
+a new commit, and the gate must run again on that commit.</p>
+<p>The gate runs on a git worktree of the commit, in
+<code>.tmp/gate/</code>. Thus the result belongs to that commit, and not
+to the changes in the working tree, and work can continue while the gate
+runs. Also, a mutant can write files in the directory of its package,
+where <code>go test</code> runs it. In the gate, these files stay in the
+worktree, which the gate removes. The worktree uses the caches of the
+project, so the fuzz corpus grows from one gate to the next. The gate
+writes the output of each step to a log in
+<code>.build/gate/SHA/</code>, and a record with the commit, the
+toolchain, and the result and time of each step. The last line of the
+record is <code>PASS</code> only when every step ran and passed. The
+release steps of §12.3 ask for this line. When a step fails, the
+worktree stays for the examination. For example, it holds the input of a
+fuzz target that failed, in <code>testdata/fuzz</code>.</p>
+<p><code>make vuln</code> runs <code>govulncheck</code>
+(<code>golang.org/x/vuln</code>, at a fixed version). It finds only the
+vulnerabilities that the code calls, so a vulnerability in a function
+that eictar does not use does not stop a release. The scan uses the
+toolchain that builds, because the standard library is part of the
+binary. The release workflow runs <code>make vuln</code> too, with the
+toolchain that builds the release binaries.</p>
+<p>The first run of the gate found a vulnerability. GO-2026-6604 lets
+<code>os.Root.MkdirAll</code> follow a junction out of the root on
+Windows. An extraction uses <code>os.Root</code> to keep each member in
+the destination (§7.6). Go 1.27.2 fixes it. The toolchain of the
+development machine was 1.27.1, so the gate stopped at
+<code>make vuln</code>. The release workflow takes the newest patch
+release of the version in <code>go.mod</code>, so a release built after
+Go 1.27.2 has the fix.</p>
+<p>The first run also found a mutant in <code>pipeline</code> that the
+tests found only by chance of timing. A member is complete when the
+reader drops its claim and every chunk is in the spool. Either one can
+come last, but in a build the last chunk usually comes after the reader.
+Thus a fault in the check of the reader showed in the runs of step 1,
+and not in this run. <code>TestMemberCompletesInEitherOrder</code> now
+gives both orders.</p>
+<p>In <code>archive</code>, the run found two more gaps:</p>
+<ul>
+<li>The rename of step 5, which does not replace a file, had one
+survivor and four mutants that no test ran. A check after
+<code>link(2)</code> did the same as the check that follows it, so it is
+gone. The path for a file system with no hard links had no test.
+<code>TestRenameNew</code> now gives both kinds of file system: the name
+is free, the name is in use, and the check fails.</li>
+<li>Two entries of the accepted list in <code>capture.go</code> said
+that a file with one name never has the identity of another file. That
+is false under <code>-h</code>: a symbolic link and its target are one
+file with one name. A test of the dry run from step 1 finds both
+mutants, so the entries are gone. Thus the rule that an entry must stay
+true worked.</li>
+</ul>
+<p>The step took 3 hours and 21 minutes, of which <code>archive</code>
+took 3 hours.</p>
+<p>The work on the gate also found that the operational tests left the
+binary that they built in <code>.tmp/</code>, which no one clears. Each
+mutant of <code>cli</code> runs them, so the runs of step 1 left 2,700
+binaries, or 23 GB. A <code>TestMain</code> now removes the binary after
+the tests (<code>RemoveBinary</code>). A test that stops at its time
+limit still leaves its binary. In the gate, the worktree goes with
+it.</p>
 <table>
 <colgroup>
 <col style="width: 50%" />
@@ -11174,29 +11279,29 @@ and <code>pipeline</code>, with no survivor that is not explained</li>
 <tbody>
 <tr class="odd">
 <td>1. Strength of the tests</td>
-<td>done: <code>format</code>, <code>crypt</code> and
-<code>pipeline</code> have no survivor that is not explained</td>
+<td>done: each package has no survivor that is not explained</td>
 </tr>
 <tr class="even">
 <td>2. Second reader</td>
-<td>planned</td>
+<td>done: <code>tools/ectread</code>, with no difference from
+eictar</td>
 </tr>
 <tr class="odd">
 <td>3. Faults of the disk and the machine</td>
-<td>faults that the program sees, and power loss: done; the stress
-tester is next</td>
+<td>done: faults that the program sees, power loss, and faults in the
+stress tester</td>
 </tr>
 <tr class="even">
 <td>4. More fuzzing</td>
-<td>planned</td>
+<td>done: twelve targets</td>
 </tr>
 <tr class="odd">
 <td>5. Models of the protocols</td>
-<td>planned</td>
+<td>done: four models; they found one fault</td>
 </tr>
 <tr class="even">
 <td>6. Release gate</td>
-<td>planned</td>
+<td>done: <code>make gate</code></td>
 </tr>
 </tbody>
 </table>
@@ -12210,6 +12315,11 @@ version reads both forms.</li>
 <li>A create of an archive that did not exist could rename over one that
 a second create made in the meantime, and lose an append to it that had
 reported success. Now that create stops with exit 4 (§9.6).</li>
+<li>The release gate: <code>make gate</code> runs every check of §13.5
+on one commit, and <code>make vuln</code> scans for known
+vulnerabilities. The release workflow runs <code>make vuln</code> too. A
+release needs Go 1.27.2 or later, which fixes GO-2026-6604 in
+<code>os.Root</code> on Windows.</li>
 </ul>
 <h2 id="appendix-a.-why-these-primitives-compared-with-aes">Appendix A.
 Why these primitives, compared with AES</h2>

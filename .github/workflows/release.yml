@@ -28,6 +28,10 @@ jobs:
         with:
           go-version-file: go.mod
       - run: make check GO=go
+      # The known vulnerabilities, with the toolchain that builds the
+      # binaries. A fault of the standard library that a newer patch release
+      # fixes stops the release here.
+      - run: make vuln GO=go
       - name: build
         run: make release GO=go VERSION="${GITHUB_REF_NAME#v}"
       # A .zip for Windows, which opens it without other tools, and a

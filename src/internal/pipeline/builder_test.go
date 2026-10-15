@@ -156,6 +156,39 @@ func TestReaderDoesNotWaitOnItsOwnSpool(t *testing.T) {
 	}
 }
 
+// TestMemberCompletesInEitherOrder: a member is complete when the reader has
+// dropped its claim and every chunk is in the spool. Either one can come
+// last. In a build, the last chunk usually settles after the reader is done,
+// so a fault in release showed only by chance of timing: a mutant of the
+// check in release survived one run of make mutate, and no other.
+func TestMemberCompletesInEitherOrder(t *testing.T) {
+	for _, readerLast := range []bool{true, false} {
+		mb := &memberBuild{
+			spool:   NewSpool(NewBudget(1<<20), 1<<20, t.TempDir()),
+			pending: map[int][]byte{},
+			left:    3, // the reader's claim, and two chunks
+		}
+		done := make(chan *memberBuild, 1)
+		mb.settle(1, []byte("b"), done) // early: it waits for chunk 0
+		if readerLast {
+			mb.settle(0, []byte("a"), done)
+			mb.release(done)
+		} else {
+			mb.release(done)
+			mb.settle(0, []byte("a"), done)
+		}
+		select {
+		case got := <-done:
+			if got != mb || len(mb.lengths) != 2 {
+				t.Errorf("reader last %v: the member completed with %d chunks", readerLast, len(mb.lengths))
+			}
+		default:
+			t.Errorf("reader last %v: the member never completed", readerLast)
+		}
+		mb.close()
+	}
+}
+
 // TestFailedSpillDoesNotHang: when the budget is full, the reader moves its
 // member's spool to disk, and then waits for budget. If the spill fails, the
 // spool keeps its budget, and the wait never ends. A spill fails on a full

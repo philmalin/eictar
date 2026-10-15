@@ -43,7 +43,7 @@ VERSION  ?= $(or $(shell git describe --tags --dirty 2>/dev/null | sed 's/^v//')
 LDFLAGS    := -s -w -X github.com/philmalin/eictar/src/internal/cli.Version=$(VERSION)
 BUILDFLAGS := -trimpath -ldflags="$(LDFLAGS)"
 
-.PHONY: all build release test test-race operational large cover mutate fuzz bench compare stress stress-build ectread tla vet crossvet fmt check check-norace skips clean
+.PHONY: all build release test test-race operational large cover mutate fuzz bench compare stress stress-build ectread tla vuln gate vet crossvet fmt check check-norace skips clean
 
 all: build
 
@@ -221,6 +221,33 @@ tla: | $(TMPDIR)
 # step 2). .build/ectread -h lists its options.
 ectread: | $(TMPDIR)
 	$(GO) build -trimpath -o .build/ectread ./tools/ectread
+
+# The known vulnerabilities of the modules and of the standard library that
+# the code of eictar calls. The scan uses the toolchain of GO, so it finds a
+# fault of the standard library that a newer patch release fixes. It needs
+# the network, for the module and for the database at vuln.go.dev.
+GOVULNCHECK ?= golang.org/x/vuln/cmd/govulncheck@v1.8.0
+
+vuln: | $(TMPDIR)
+	$(GO) run $(GOVULNCHECK) ./src/...
+
+# The release gate (doc/design.md 13.5, step 6): every step below, on a
+# worktree of the commit GATE_REF, with a record in .build/gate/. With the
+# defaults it takes about a day. Try it with less, for example:
+#   make gate GATE_STEPS="check vuln"
+#   make gate GATE_FUZZTIME=1m GATE_STRESSTIME=5m
+# tools/gate/gate.sh tells what each setting does.
+GATE_REF        ?= HEAD
+GATE_STEPS      ?= check tla vuln mutate fuzz stress
+GATE_FUZZTIME   ?= 1h
+GATE_STRESSTIME ?= 8h
+GATE_MUTATE     ?= format crypt pipeline codec fsutil meta archive cli
+
+gate:
+	GO="$(GO)" GATE_REF="$(GATE_REF)" GATE_STEPS="$(GATE_STEPS)" \
+	GATE_FUZZTIME="$(GATE_FUZZTIME)" GATE_STRESSTIME="$(GATE_STRESSTIME)" \
+	GATE_MUTATE="$(GATE_MUTATE)" GOVULNCHECK="$(GOVULNCHECK)" JAVA="$(JAVA)" TLA_JAR="$(TLA_JAR)" \
+	tools/gate/gate.sh
 
 vet: | $(TMPDIR)
 	$(GO) vet $(PKGS) ./tools/...

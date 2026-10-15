@@ -482,14 +482,6 @@ src/internal/archive/mutate.go: RepairArchive: operator: + → - #4
 src/internal/archive/capture.go: capturer.decide: if false: !replacing → false
 	Equivalent. When the path is not live, old is nil, which is what the
 	early return gives.
-src/internal/archive/capture.go: capturer.submitFile: operator: && → ||
-	Equivalent. A platform with no identity of a file has no count of its
-	names either, so the count is 0. Where there is an identity, the result
-	is the same.
-src/internal/archive/capture.go: capturer.submitFile: operator: > → >=
-	Equivalent. Each file then counts as one of several names. Only a file
-	with another name has the same identity, so the map of first names
-	gets entries that no second name finds.
 src/internal/archive/capture.go: capturer.shareIfCopy: if false: uint64(n) != payload → false
 	Equivalent. A short read gives the digest of fewer bytes, which no
 	member with the size of the payload has, but by a collision of BLAKE3.

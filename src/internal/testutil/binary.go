@@ -25,8 +25,8 @@ func Binary(tb testing.TB) string {
 			return
 		}
 
-		// Build into a directory that outlives any single test, and that the
-		// OS clears eventually; t.TempDir would vanish between tests.
+		// Build into a directory that outlives any single test:
+		// t.TempDir would vanish between tests. RemoveBinary removes it.
 		dir, err := os.MkdirTemp("", "eictar-bin-")
 		if err != nil {
 			buildErr = err
@@ -56,6 +56,15 @@ func Binary(tb testing.TB) string {
 		tb.Fatalf("testutil: building eictar: %v", buildErr)
 	}
 	return binPath
+}
+
+// RemoveBinary removes the directory of the binary that Binary built, if it
+// built one. A TestMain calls it after the tests: TMPDIR is .tmp/ in the
+// project, which no one clears, and each run left a binary there.
+func RemoveBinary() {
+	if binPath != "" {
+		os.RemoveAll(filepath.Dir(binPath))
+	}
 }
 
 var (
