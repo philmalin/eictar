@@ -14,7 +14,7 @@ import (
 )
 
 // crashFS is the file system of the archive files (fs.go) with a model of
-// what a power loss keeps (doc/design.md 13.5, step 3). The operations reach
+// what a power loss keeps (doc/testing.md 5, step 3). The operations reach
 // the disk as they do in production. Beside them, crashFS keeps the content
 // of each file at its last Sync, and the names of the directory at its last
 // SyncDir. After each operation that changes a file or a name, it records

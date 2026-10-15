@@ -132,7 +132,7 @@ OldOrNew == \A d \in CrashDisks : Recover(d) \in {"old", "new", "old after repai
 SuccessIsDurable == result = "success" => \A d \in CrashDisks : Recover(d) = "new"
 
 \* A failed append leaves the old archive, with no repair, when the
-\* truncate worked (doc/design.md 13.5, step 3).
+\* truncate worked (doc/testing.md 5, step 3).
 ErrorLeavesTheOld ==
     (result = "error" /\ cutOK) => \A d \in CrashDisks : Recover(d) = "old"
 =============================================================================

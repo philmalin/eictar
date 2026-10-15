@@ -12,7 +12,7 @@ import (
 	"syscall"
 )
 
-// checkArchive makes the checks of doc/design.md 13.4 after a step: the
+// checkArchive makes the checks of doc/testing.md 4 after a step: the
 // listing names exactly the model's paths, --verify passes, a full
 // extraction gives back the model, with its hardlinks, and the second reader
 // agrees (13.5, step 2).

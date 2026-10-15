@@ -9,7 +9,7 @@ import (
 // archive that is read or appended to, the temporary file of a create or of a
 // rewrite, and the file that a create replaces. In production it is an
 // *os.File. The fault tests wrap one, to make an operation fail and to
-// record what reaches the disk (doc/design.md 13.5, step 3).
+// record what reaches the disk (doc/testing.md 5, step 3).
 type archiveFile interface {
 	io.Reader
 	io.Writer

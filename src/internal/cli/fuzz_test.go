@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// The parsers of what a person types (doc/design.md 13.5, step 4).
+// The parsers of what a person types (doc/testing.md 5, step 4).
 
 // FuzzCompressSpec parses a compression spec. A spec that parses has a name,
 // and keys and values that are not empty, and its String parses back to the

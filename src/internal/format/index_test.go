@@ -248,7 +248,7 @@ func TestIndexLiveAndCount(t *testing.T) {
 
 // TestIndexValidateRejects: each case breaks one rule, and the error must
 // name that rule. Without the name, a later check that refuses the same index
-// for another reason hides a check that is gone (doc/design.md 13.5).
+// for another reason hides a check that is gone (doc/testing.md 5).
 func TestIndexValidateRejects(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

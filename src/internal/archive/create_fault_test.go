@@ -14,7 +14,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
-// The fault tests of the source of a create (doc/design.md 13.5, step 3):
+// The fault tests of the source of a create (doc/testing.md 5, step 3):
 // the walk, and the reads of each file, through srcPaths and srcDir.
 
 // faultSrcPaths is srcPaths with faults: each operation steps fs, the counter

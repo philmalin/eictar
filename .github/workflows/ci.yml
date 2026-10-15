@@ -48,7 +48,7 @@ jobs:
 
   # The same tests as root. The linux job runs them as an ordinary user, and
   # the tests of the owner, device nodes and privileged xattrs skip there
-  # (doc/design.md 13.5). The caches stay inside the project, as the
+  # (doc/testing.md 5). The caches stay inside the project, as the
   # Makefile keeps them: the caches of setup-go belong to the runner user,
   # and root must not write in them.
   linux-root:

@@ -17,7 +17,7 @@ import (
 // src/main.go, and it keeps the directory rule for a name found deeper
 // down: "node_modules" takes a/node_modules and everything below it. Until
 // the stress tester, it matched only the last component, so it took the
-// directory a/node_modules and left its contents behind (doc/design.md 13.4).
+// directory a/node_modules and left its contents behind (doc/testing.md 4).
 func Match(pattern, memberPath string) bool {
 	pattern = strings.TrimSuffix(path.Clean(pattern), "/")
 	if pattern == "" || pattern == "." {

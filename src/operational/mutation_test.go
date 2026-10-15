@@ -303,7 +303,7 @@ func TestOverlappingAppendsAreRefused(t *testing.T) {
 }
 
 // TestEveryCodecInOneArchive: members from separate appends, each with its
-// own codec, extracted in one pass (doc/design.md 13.2, mixed archives).
+// own codec, extracted in one pass (doc/testing.md 2, mixed archives).
 // -z and -J select gzip and xz, as in tar.
 func TestEveryCodecInOneArchive(t *testing.T) {
 	tree := testutil.NewTree(t)

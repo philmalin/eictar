@@ -9,7 +9,7 @@ import (
 
 // entry is one mutant of the accepted list: a change that no test can find,
 // because it cannot change what the program does. Each entry gives its
-// reason (doc/design.md 13.5).
+// reason (doc/testing.md 5).
 type entry struct {
 	key    string
 	reason string

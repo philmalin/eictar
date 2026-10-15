@@ -520,7 +520,7 @@ func memberTypeFor(k entryKind) format.MemberType {
 // delayed allocation settles, or on another filesystem - so hashing the
 // file's current regions compared two layouts, not two contents, and
 // archived an unchanged sparse file again. The stress tester found it
-// (doc/design.md 13.4).
+// (doc/testing.md 4).
 //
 // Thus the file is read as the member was stored. For a member with holes:
 // the bytes at the member's data regions must give its digest, and the rest

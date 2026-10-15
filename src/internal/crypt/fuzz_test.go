@@ -8,7 +8,7 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-// The openers of sealed data (doc/design.md 13.5, step 4). Each one takes
+// The openers of sealed data (doc/testing.md 5, step 4). Each one takes
 // bytes from the archive, which can be hostile. A success must be what the
 // sealer makes from that plaintext, in that place, and no input may panic.
 

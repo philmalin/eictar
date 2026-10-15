@@ -3,7 +3,7 @@
 // Package operational drives the compiled eictar binary the way a user does,
 // asserting on exit status, streams and the filesystem. It never imports the
 // internal packages: what is tested here is the program, not its parts
-// (doc/design.md 13.2).
+// (doc/testing.md 2).
 //
 // Run with: go test -tags operational ./src/operational/
 package operational

@@ -1210,7 +1210,7 @@ func buildVariedTree(t *testing.T, chunk int) *testutil.Tree {
 	return tree
 }
 
-// TestConcurrencyDeterminism is the property doc/design.md 13.2 asks for: the
+// TestConcurrencyDeterminism is the property doc/testing.md 2 asks for: the
 // worker count must not change what comes out. Byte layout may differ, since
 // the writer takes whichever member finishes first; the content must not.
 func TestConcurrencyDeterminism(t *testing.T) {

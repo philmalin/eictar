@@ -1,0 +1,3027 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang xml:lang>
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Testing</title>
+  <style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+</style>
+  <style type="text/css">
+:root {
+--background-body: #fff;
+--background: #efefef;
+--background-alt: #f7f7f7;
+--selection: #9e9e9e;
+--text-main: #363636;
+--text-bright: #000;
+--text-muted: #70777f;
+--links: #0076d1;
+--focus: #0096bfab;
+--border: #dbdbdb;
+--code: #000;
+--animation-duration: 0.1s;
+--button-base: #d0cfcf;
+--button-hover: #9b9b9b;
+--scrollbar-thumb: rgb(170, 170, 170);
+--scrollbar-thumb-hover: var(--button-hover);
+--form-placeholder: #949494;
+--form-text: #1d1d1d;
+--variable: #39a33c;
+--highlight: #ff0;
+--select-arrow: url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23161f27'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+:root {
+--background-body: #202b38;
+--background: #161f27;
+--background-alt: #1a242f;
+--selection: #1c76c5;
+--text-main: #dbdbdb;
+--text-bright: #fff;
+--text-muted: #a9b1ba;
+--links: #41adff;
+--focus: #0096bfab;
+--border: #526980;
+--code: #ffbe85;
+--animation-duration: 0.1s;
+--button-base: #0c151c;
+--button-hover: #040a0f;
+--scrollbar-thumb: var(--button-hover);
+--scrollbar-thumb-hover: rgb(0, 0, 0);
+--form-placeholder: #a9a9a9;
+--form-text: #fff;
+--variable: #d941e2;
+--highlight: #efdb43;
+--select-arrow: url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23efefef'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E");
+}
+}
+html {
+scrollbar-color: rgb(170, 170, 170) #fff;
+scrollbar-color: var(--scrollbar-thumb) var(--background-body);
+scrollbar-width: thin;
+}
+@media (prefers-color-scheme: dark) {
+html {
+scrollbar-color: #040a0f #202b38;
+scrollbar-color: var(--scrollbar-thumb) var(--background-body);
+}
+}
+@media (prefers-color-scheme: dark) {
+html {
+scrollbar-color: #040a0f #202b38;
+scrollbar-color: var(--scrollbar-thumb) var(--background-body);
+}
+}
+@media (prefers-color-scheme: dark) {
+html {
+scrollbar-color: #040a0f #202b38;
+scrollbar-color: var(--scrollbar-thumb) var(--background-body);
+}
+}
+@media (prefers-color-scheme: dark) {
+html {
+scrollbar-color: #040a0f #202b38;
+scrollbar-color: var(--scrollbar-thumb) var(--background-body);
+}
+}
+@media (prefers-color-scheme: dark) {
+html {
+scrollbar-color: #040a0f #202b38;
+scrollbar-color: var(--scrollbar-thumb) var(--background-body);
+}
+}
+@media (prefers-color-scheme: dark) {
+html {
+scrollbar-color: #040a0f #202b38;
+scrollbar-color: var(--scrollbar-thumb) var(--background-body);
+}
+}
+body {
+font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+line-height: 1.4;
+max-width: 80%;
+margin: 20px auto;
+padding: 0 10px;
+word-wrap: break-word;
+color: #363636;
+color: var(--text-main);
+background: #fff;
+background: var(--background-body);
+text-rendering: optimizeLegibility;
+}
+@media (prefers-color-scheme: dark) {
+body {
+background: #202b38;
+background: var(--background-body);
+}
+}
+@media (prefers-color-scheme: dark) {
+body {
+color: #dbdbdb;
+color: var(--text-main);
+}
+}
+button {
+transition:
+background-color 0.1s linear,
+border-color 0.1s linear,
+color 0.1s linear,
+box-shadow 0.1s linear,
+transform 0.1s ease;
+transition:
+background-color var(--animation-duration) linear,
+border-color var(--animation-duration) linear,
+color var(--animation-duration) linear,
+box-shadow var(--animation-duration) linear,
+transform var(--animation-duration) ease;
+}
+@media (prefers-color-scheme: dark) {
+button {
+transition:
+background-color 0.1s linear,
+border-color 0.1s linear,
+color 0.1s linear,
+box-shadow 0.1s linear,
+transform 0.1s ease;
+transition:
+background-color var(--animation-duration) linear,
+border-color var(--animation-duration) linear,
+color var(--animation-duration) linear,
+box-shadow var(--animation-duration) linear,
+transform var(--animation-duration) ease;
+}
+}
+input {
+transition:
+background-color 0.1s linear,
+border-color 0.1s linear,
+color 0.1s linear,
+box-shadow 0.1s linear,
+transform 0.1s ease;
+transition:
+background-color var(--animation-duration) linear,
+border-color var(--animation-duration) linear,
+color var(--animation-duration) linear,
+box-shadow var(--animation-duration) linear,
+transform var(--animation-duration) ease;
+}
+@media (prefers-color-scheme: dark) {
+input {
+transition:
+background-color 0.1s linear,
+border-color 0.1s linear,
+color 0.1s linear,
+box-shadow 0.1s linear,
+transform 0.1s ease;
+transition:
+background-color var(--animation-duration) linear,
+border-color var(--animation-duration) linear,
+color var(--animation-duration) linear,
+box-shadow var(--animation-duration) linear,
+transform var(--animation-duration) ease;
+}
+}
+textarea {
+transition:
+background-color 0.1s linear,
+border-color 0.1s linear,
+color 0.1s linear,
+box-shadow 0.1s linear,
+transform 0.1s ease;
+transition:
+background-color var(--animation-duration) linear,
+border-color var(--animation-duration) linear,
+color var(--animation-duration) linear,
+box-shadow var(--animation-duration) linear,
+transform var(--animation-duration) ease;
+}
+@media (prefers-color-scheme: dark) {
+textarea {
+transition:
+background-color 0.1s linear,
+border-color 0.1s linear,
+color 0.1s linear,
+box-shadow 0.1s linear,
+transform 0.1s ease;
+transition:
+background-color var(--animation-duration) linear,
+border-color var(--animation-duration) linear,
+color var(--animation-duration) linear,
+box-shadow var(--animation-duration) linear,
+transform var(--animation-duration) ease;
+}
+}
+h1 {
+font-size: 2.2em;
+margin-top: 0;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+margin-bottom: 12px;
+margin-top: 24px;
+}
+h1 {
+color: #000;
+color: var(--text-bright);
+font-size : 200%;
+font-weight : bold;
+text-align : left;
+border-bottom : medium solid #777777;
+background-color : #f0f0f0;
+}
+h2 {
+color: #000;
+color: var(--text-bright);
+font-size : 180%;
+font-weight : bold;
+text-align : left;
+border-bottom : medium solid #777777;
+background-color : #f0f0f0;
+}
+h3 {
+color: #000;
+color: var(--text-bright);
+font-size : 160%;
+font-weight : bold;
+text-align : left;
+background-color : #f0f0f0;
+}
+h4 {
+color: #000;
+color: var(--text-bright);
+font-size : 140%;
+font-weight : bold;
+text-align : left;
+background-color : #f0f0f0;
+}
+h5 {
+color: #000;
+color: var(--text-bright);
+font-size : 120%;
+font-weight : bold;
+text-align : left;
+background-color : #f0f0f0;
+}
+h6 {
+color: #000;
+color: var(--text-bright);
+font-size : 110%;
+font-weight : bold;
+text-align : left;
+background-color : #f0f0f0;
+}
+@media (prefers-color-scheme: dark) {
+h1 {
+color: #fff;
+color: var(--text-bright);
+}
+}
+h2 {
+color: #000;
+color: var(--text-bright);
+}
+@media (prefers-color-scheme: dark) {
+h2 {
+color: #fff;
+color: var(--text-bright);
+}
+}
+h3 {
+color: #000;
+color: var(--text-bright);
+}
+@media (prefers-color-scheme: dark) {
+h3 {
+color: #fff;
+color: var(--text-bright);
+}
+}
+h4 {
+color: #000;
+color: var(--text-bright);
+}
+@media (prefers-color-scheme: dark) {
+h4 {
+color: #fff;
+color: var(--text-bright);
+}
+}
+h5 {
+color: #000;
+color: var(--text-bright);
+}
+@media (prefers-color-scheme: dark) {
+h5 {
+color: #fff;
+color: var(--text-bright);
+}
+}
+h6 {
+color: #000;
+color: var(--text-bright);
+}
+@media (prefers-color-scheme: dark) {
+h6 {
+color: #fff;
+color: var(--text-bright);
+}
+}
+strong {
+color: #000;
+color: var(--text-bright);
+}
+@media (prefers-color-scheme: dark) {
+strong {
+color: #fff;
+color: var(--text-bright);
+}
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+strong,
+th {
+font-weight: 600;
+}
+q::before {
+content: none;
+}
+q::after {
+content: none;
+}
+blockquote {
+border-left: 4px solid #0096bfab;
+border-left: 4px solid var(--focus);
+margin: 1.5em 0;
+padding: 0.5em 1em;
+font-style: italic;
+}
+@media (prefers-color-scheme: dark) {
+blockquote {
+border-left: 4px solid #0096bfab;
+border-left: 4px solid var(--focus);
+}
+}
+q {
+border-left: 4px solid #0096bfab;
+border-left: 4px solid var(--focus);
+margin: 1.5em 0;
+padding: 0.5em 1em;
+font-style: italic;
+}
+@media (prefers-color-scheme: dark) {
+q {
+border-left: 4px solid #0096bfab;
+border-left: 4px solid var(--focus);
+}
+}
+blockquote > footer {
+font-style: normal;
+border: 0;
+}
+blockquote cite {
+font-style: normal;
+}
+address {
+font-style: normal;
+}
+a[href^='mailto\:']::before {
+content: '📧 ';
+}
+a[href^='tel\:']::before {
+content: '📞 ';
+}
+a[href^='sms\:']::before {
+content: '💬 ';
+}
+mark {
+background-color: #ff0;
+background-color: var(--highlight);
+border-radius: 2px;
+padding: 0 2px 0 2px;
+color: #000;
+}
+@media (prefers-color-scheme: dark) {
+mark {
+background-color: #efdb43;
+background-color: var(--highlight);
+}
+}
+a > code,
+a > strong {
+color: inherit;
+}
+button,
+select,
+input[type='submit'],
+input[type='reset'],
+input[type='button'],
+input[type='checkbox'],
+input[type='range'],
+input[type='radio'] {
+cursor: pointer;
+}
+input,
+select {
+display: block;
+}
+[type='checkbox'],
+[type='radio'] {
+display: initial;
+}
+input {
+color: #1d1d1d;
+color: var(--form-text);
+background-color: #efefef;
+background-color: var(--background);
+font-family: inherit;
+font-size: inherit;
+margin-right: 6px;
+margin-bottom: 6px;
+padding: 10px;
+border: none;
+border-radius: 6px;
+outline: none;
+}
+@media (prefers-color-scheme: dark) {
+input {
+background-color: #161f27;
+background-color: var(--background);
+}
+}
+@media (prefers-color-scheme: dark) {
+input {
+color: #fff;
+color: var(--form-text);
+}
+}
+button {
+color: #1d1d1d;
+color: var(--form-text);
+background-color: #efefef;
+background-color: var(--background);
+font-family: inherit;
+font-size: inherit;
+margin-right: 6px;
+margin-bottom: 6px;
+padding: 10px;
+border: none;
+border-radius: 6px;
+outline: none;
+}
+@media (prefers-color-scheme: dark) {
+button {
+background-color: #161f27;
+background-color: var(--background);
+}
+}
+@media (prefers-color-scheme: dark) {
+button {
+color: #fff;
+color: var(--form-text);
+}
+}
+textarea {
+color: #1d1d1d;
+color: var(--form-text);
+background-color: #efefef;
+background-color: var(--background);
+font-family: inherit;
+font-size: inherit;
+margin-right: 6px;
+margin-bottom: 6px;
+padding: 10px;
+border: none;
+border-radius: 6px;
+outline: none;
+}
+@media (prefers-color-scheme: dark) {
+textarea {
+background-color: #161f27;
+background-color: var(--background);
+}
+}
+@media (prefers-color-scheme: dark) {
+textarea {
+color: #fff;
+color: var(--form-text);
+}
+}
+select {
+color: #1d1d1d;
+color: var(--form-text);
+background-color: #efefef;
+background-color: var(--background);
+font-family: inherit;
+font-size: inherit;
+margin-right: 6px;
+margin-bottom: 6px;
+padding: 10px;
+border: none;
+border-radius: 6px;
+outline: none;
+}
+@media (prefers-color-scheme: dark) {
+select {
+background-color: #161f27;
+background-color: var(--background);
+}
+}
+@media (prefers-color-scheme: dark) {
+select {
+color: #fff;
+color: var(--form-text);
+}
+}
+button {
+background-color: #d0cfcf;
+background-color: var(--button-base);
+padding-right: 30px;
+padding-left: 30px;
+}
+@media (prefers-color-scheme: dark) {
+button {
+background-color: #0c151c;
+background-color: var(--button-base);
+}
+}
+input[type='submit'] {
+background-color: #d0cfcf;
+background-color: var(--button-base);
+padding-right: 30px;
+padding-left: 30px;
+}
+@media (prefers-color-scheme: dark) {
+input[type='submit'] {
+background-color: #0c151c;
+background-color: var(--button-base);
+}
+}
+input[type='reset'] {
+background-color: #d0cfcf;
+background-color: var(--button-base);
+padding-right: 30px;
+padding-left: 30px;
+}
+@media (prefers-color-scheme: dark) {
+input[type='reset'] {
+background-color: #0c151c;
+background-color: var(--button-base);
+}
+}
+input[type='button'] {
+background-color: #d0cfcf;
+background-color: var(--button-base);
+padding-right: 30px;
+padding-left: 30px;
+}
+@media (prefers-color-scheme: dark) {
+input[type='button'] {
+background-color: #0c151c;
+background-color: var(--button-base);
+}
+}
+button:hover {
+background: #9b9b9b;
+background: var(--button-hover);
+}
+@media (prefers-color-scheme: dark) {
+button:hover {
+background: #040a0f;
+background: var(--button-hover);
+}
+}
+input[type='submit']:hover {
+background: #9b9b9b;
+background: var(--button-hover);
+}
+@media (prefers-color-scheme: dark) {
+input[type='submit']:hover {
+background: #040a0f;
+background: var(--button-hover);
+}
+}
+input[type='reset']:hover {
+background: #9b9b9b;
+background: var(--button-hover);
+}
+@media (prefers-color-scheme: dark) {
+input[type='reset']:hover {
+background: #040a0f;
+background: var(--button-hover);
+}
+}
+input[type='button']:hover {
+background: #9b9b9b;
+background: var(--button-hover);
+}
+@media (prefers-color-scheme: dark) {
+input[type='button']:hover {
+background: #040a0f;
+background: var(--button-hover);
+}
+}
+input[type='color'] {
+min-height: 2rem;
+padding: 8px;
+cursor: pointer;
+}
+input[type='checkbox'],
+input[type='radio'] {
+height: 1em;
+width: 1em;
+}
+input[type='radio'] {
+border-radius: 100%;
+}
+input {
+vertical-align: top;
+}
+label {
+vertical-align: middle;
+margin-bottom: 4px;
+display: inline-block;
+}
+input:not([type='checkbox']):not([type='radio']),
+input[type='range'],
+select,
+button,
+textarea {
+-webkit-appearance: none;
+}
+textarea {
+display: block;
+margin-right: 0;
+box-sizing: border-box;
+resize: vertical;
+}
+textarea:not([cols]) {
+width: 100%;
+}
+textarea:not([rows]) {
+min-height: 40px;
+height: 140px;
+}
+select {
+background: #efefef url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23161f27'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E") calc(100% - 12px) 50% / 12px no-repeat;
+background: var(--background) var(--select-arrow) calc(100% - 12px) 50% / 12px no-repeat;
+padding-right: 35px;
+}
+@media (prefers-color-scheme: dark) {
+select {
+background: #161f27 url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23efefef'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E") calc(100% - 12px) 50% / 12px no-repeat;
+background: var(--background) var(--select-arrow) calc(100% - 12px) 50% / 12px no-repeat;
+}
+}
+@media (prefers-color-scheme: dark) {
+select {
+background: #161f27 url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23efefef'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E") calc(100% - 12px) 50% / 12px no-repeat;
+background: var(--background) var(--select-arrow) calc(100% - 12px) 50% / 12px no-repeat;
+}
+}
+@media (prefers-color-scheme: dark) {
+select {
+background: #161f27 url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23efefef'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E") calc(100% - 12px) 50% / 12px no-repeat;
+background: var(--background) var(--select-arrow) calc(100% - 12px) 50% / 12px no-repeat;
+}
+}
+@media (prefers-color-scheme: dark) {
+select {
+background: #161f27 url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23efefef'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E") calc(100% - 12px) 50% / 12px no-repeat;
+background: var(--background) var(--select-arrow) calc(100% - 12px) 50% / 12px no-repeat;
+}
+}
+select::-ms-expand {
+display: none;
+}
+select[multiple] {
+padding-right: 10px;
+background-image: none;
+overflow-y: auto;
+}
+input:focus {
+box-shadow: 0 0 0 2px #0096bfab;
+box-shadow: 0 0 0 2px var(--focus);
+}
+@media (prefers-color-scheme: dark) {
+input:focus {
+box-shadow: 0 0 0 2px #0096bfab;
+box-shadow: 0 0 0 2px var(--focus);
+}
+}
+select:focus {
+box-shadow: 0 0 0 2px #0096bfab;
+box-shadow: 0 0 0 2px var(--focus);
+}
+@media (prefers-color-scheme: dark) {
+select:focus {
+box-shadow: 0 0 0 2px #0096bfab;
+box-shadow: 0 0 0 2px var(--focus);
+}
+}
+button:focus {
+box-shadow: 0 0 0 2px #0096bfab;
+box-shadow: 0 0 0 2px var(--focus);
+}
+@media (prefers-color-scheme: dark) {
+button:focus {
+box-shadow: 0 0 0 2px #0096bfab;
+box-shadow: 0 0 0 2px var(--focus);
+}
+}
+textarea:focus {
+box-shadow: 0 0 0 2px #0096bfab;
+box-shadow: 0 0 0 2px var(--focus);
+}
+@media (prefers-color-scheme: dark) {
+textarea:focus {
+box-shadow: 0 0 0 2px #0096bfab;
+box-shadow: 0 0 0 2px var(--focus);
+}
+}
+input[type='checkbox']:active,
+input[type='radio']:active,
+input[type='submit']:active,
+input[type='reset']:active,
+input[type='button']:active,
+input[type='range']:active,
+button:active {
+transform: translateY(2px);
+}
+input:disabled,
+select:disabled,
+button:disabled,
+textarea:disabled {
+cursor: not-allowed;
+opacity: 0.5;
+}
+::-moz-placeholder {
+color: #949494;
+color: var(--form-placeholder);
+}
+:-ms-input-placeholder {
+color: #949494;
+color: var(--form-placeholder);
+}
+::-ms-input-placeholder {
+color: #949494;
+color: var(--form-placeholder);
+}
+::placeholder {
+color: #949494;
+color: var(--form-placeholder);
+}
+@media (prefers-color-scheme: dark) {
+::-moz-placeholder {
+color: #a9a9a9;
+color: var(--form-placeholder);
+}
+:-ms-input-placeholder {
+color: #a9a9a9;
+color: var(--form-placeholder);
+}
+::-ms-input-placeholder {
+color: #a9a9a9;
+color: var(--form-placeholder);
+}
+::placeholder {
+color: #a9a9a9;
+color: var(--form-placeholder);
+}
+}
+fieldset {
+border: 1px #0096bfab solid;
+border: 1px var(--focus) solid;
+border-radius: 6px;
+margin: 0;
+margin-bottom: 12px;
+padding: 10px;
+}
+@media (prefers-color-scheme: dark) {
+fieldset {
+border: 1px #0096bfab solid;
+border: 1px var(--focus) solid;
+}
+}
+legend {
+font-size: 0.9em;
+font-weight: 600;
+}
+input[type='range'] {
+margin: 10px 0;
+padding: 10px 0;
+background: transparent;
+}
+input[type='range']:focus {
+outline: none;
+}
+input[type='range']::-webkit-slider-runnable-track {
+width: 100%;
+height: 9.5px;
+-webkit-transition: 0.2s;
+transition: 0.2s;
+background: #efefef;
+background: var(--background);
+border-radius: 3px;
+}
+@media (prefers-color-scheme: dark) {
+input[type='range']::-webkit-slider-runnable-track {
+background: #161f27;
+background: var(--background);
+}
+}
+input[type='range']::-webkit-slider-thumb {
+box-shadow: 0 1px 1px #000, 0 0 1px #0d0d0d;
+height: 20px;
+width: 20px;
+border-radius: 50%;
+background: #dbdbdb;
+background: var(--border);
+-webkit-appearance: none;
+margin-top: -7px;
+}
+@media (prefers-color-scheme: dark) {
+input[type='range']::-webkit-slider-thumb {
+background: #526980;
+background: var(--border);
+}
+}
+input[type='range']:focus::-webkit-slider-runnable-track {
+background: #efefef;
+background: var(--background);
+}
+@media (prefers-color-scheme: dark) {
+input[type='range']:focus::-webkit-slider-runnable-track {
+background: #161f27;
+background: var(--background);
+}
+}
+input[type='range']::-moz-range-track {
+width: 100%;
+height: 9.5px;
+-moz-transition: 0.2s;
+transition: 0.2s;
+background: #efefef;
+background: var(--background);
+border-radius: 3px;
+}
+@media (prefers-color-scheme: dark) {
+input[type='range']::-moz-range-track {
+background: #161f27;
+background: var(--background);
+}
+}
+input[type='range']::-moz-range-thumb {
+box-shadow: 1px 1px 1px #000, 0 0 1px #0d0d0d;
+height: 20px;
+width: 20px;
+border-radius: 50%;
+background: #dbdbdb;
+background: var(--border);
+}
+@media (prefers-color-scheme: dark) {
+input[type='range']::-moz-range-thumb {
+background: #526980;
+background: var(--border);
+}
+}
+input[type='range']::-ms-track {
+width: 100%;
+height: 9.5px;
+background: transparent;
+border-color: transparent;
+border-width: 16px 0;
+color: transparent;
+}
+input[type='range']::-ms-fill-lower {
+background: #efefef;
+background: var(--background);
+border: 0.2px solid #010101;
+border-radius: 3px;
+box-shadow: 1px 1px 1px #000, 0 0 1px #0d0d0d;
+}
+@media (prefers-color-scheme: dark) {
+input[type='range']::-ms-fill-lower {
+background: #161f27;
+background: var(--background);
+}
+}
+input[type='range']::-ms-fill-upper {
+background: #efefef;
+background: var(--background);
+border: 0.2px solid #010101;
+border-radius: 3px;
+box-shadow: 1px 1px 1px #000, 0 0 1px #0d0d0d;
+}
+@media (prefers-color-scheme: dark) {
+input[type='range']::-ms-fill-upper {
+background: #161f27;
+background: var(--background);
+}
+}
+input[type='range']::-ms-thumb {
+box-shadow: 1px 1px 1px #000, 0 0 1px #0d0d0d;
+border: 1px solid #000;
+height: 20px;
+width: 20px;
+border-radius: 50%;
+background: #dbdbdb;
+background: var(--border);
+}
+@media (prefers-color-scheme: dark) {
+input[type='range']::-ms-thumb {
+background: #526980;
+background: var(--border);
+}
+}
+input[type='range']:focus::-ms-fill-lower {
+background: #efefef;
+background: var(--background);
+}
+@media (prefers-color-scheme: dark) {
+input[type='range']:focus::-ms-fill-lower {
+background: #161f27;
+background: var(--background);
+}
+}
+input[type='range']:focus::-ms-fill-upper {
+background: #efefef;
+background: var(--background);
+}
+@media (prefers-color-scheme: dark) {
+input[type='range']:focus::-ms-fill-upper {
+background: #161f27;
+background: var(--background);
+}
+}
+a {
+text-decoration: none;
+color: #0076d1;
+color: var(--links);
+}
+@media (prefers-color-scheme: dark) {
+a {
+color: #41adff;
+color: var(--links);
+}
+}
+a:hover {
+text-decoration: underline;
+}
+code {
+background: #efefef;
+background: var(--background);
+color: #000;
+color: var(--code);
+padding: 2.5px 5px;
+border-radius: 6px;
+font-size: 1em;
+}
+@media (prefers-color-scheme: dark) {
+code {
+color: #ffbe85;
+color: var(--code);
+}
+}
+@media (prefers-color-scheme: dark) {
+code {
+background: #161f27;
+background: var(--background);
+}
+}
+samp {
+background: #efefef;
+background: var(--background);
+color: #000;
+color: var(--code);
+padding: 2.5px 5px;
+border-radius: 6px;
+font-size: 1em;
+}
+@media (prefers-color-scheme: dark) {
+samp {
+color: #ffbe85;
+color: var(--code);
+}
+}
+@media (prefers-color-scheme: dark) {
+samp {
+background: #161f27;
+background: var(--background);
+}
+}
+time {
+background: #efefef;
+background: var(--background);
+color: #000;
+color: var(--code);
+padding: 2.5px 5px;
+border-radius: 6px;
+font-size: 1em;
+}
+@media (prefers-color-scheme: dark) {
+time {
+color: #ffbe85;
+color: var(--code);
+}
+}
+@media (prefers-color-scheme: dark) {
+time {
+background: #161f27;
+background: var(--background);
+}
+}
+pre > code {
+padding: 10px;
+display: block;
+overflow-x: auto;
+}
+var {
+color: #39a33c;
+color: var(--variable);
+font-style: normal;
+font-family: monospace;
+}
+@media (prefers-color-scheme: dark) {
+var {
+color: #d941e2;
+color: var(--variable);
+}
+}
+kbd {
+background: #efefef;
+background: var(--background);
+border: 1px solid #dbdbdb;
+border: 1px solid var(--border);
+border-radius: 2px;
+color: #363636;
+color: var(--text-main);
+padding: 2px 4px 2px 4px;
+}
+@media (prefers-color-scheme: dark) {
+kbd {
+color: #dbdbdb;
+color: var(--text-main);
+}
+}
+@media (prefers-color-scheme: dark) {
+kbd {
+border: 1px solid #526980;
+border: 1px solid var(--border);
+}
+}
+@media (prefers-color-scheme: dark) {
+kbd {
+background: #161f27;
+background: var(--background);
+}
+}
+img,
+video {
+max-width: 100%;
+height: auto;
+}
+hr {
+border: none;
+border-top: 1px solid #dbdbdb;
+border-top: 1px solid var(--border);
+}
+@media (prefers-color-scheme: dark) {
+hr {
+border-top: 1px solid #526980;
+border-top: 1px solid var(--border);
+}
+}
+table {
+border-collapse: collapse;
+margin-bottom: 10px;
+width: 100%;
+table-layout: auto;
+}
+.narrow table { width: auto; }
+table caption {
+text-align: left;
+}
+td,
+th {
+padding: 6px;
+text-align: left;
+vertical-align: top;
+word-wrap: break-word;
+}
+thead {
+border-bottom: 1px solid #dbdbdb;
+border-bottom: 1px solid var(--border);
+}
+@media (prefers-color-scheme: dark) {
+thead {
+border-bottom: 1px solid #526980;
+border-bottom: 1px solid var(--border);
+}
+}
+tfoot {
+border-top: 1px solid #dbdbdb;
+border-top: 1px solid var(--border);
+}
+@media (prefers-color-scheme: dark) {
+tfoot {
+border-top: 1px solid #526980;
+border-top: 1px solid var(--border);
+}
+}
+tbody tr:nth-child(even) {
+background-color: #efefef;
+background-color: var(--background);
+}
+@media (prefers-color-scheme: dark) {
+tbody tr:nth-child(even) {
+background-color: #161f27;
+background-color: var(--background);
+}
+}
+tbody tr:nth-child(even) button {
+background-color: #f7f7f7;
+background-color: var(--background-alt);
+}
+@media (prefers-color-scheme: dark) {
+tbody tr:nth-child(even) button {
+background-color: #1a242f;
+background-color: var(--background-alt);
+}
+}
+tbody tr:nth-child(even) button:hover {
+background-color: #fff;
+background-color: var(--background-body);
+}
+@media (prefers-color-scheme: dark) {
+tbody tr:nth-child(even) button:hover {
+background-color: #202b38;
+background-color: var(--background-body);
+}
+}
+::-webkit-scrollbar {
+height: 10px;
+width: 10px;
+}
+::-webkit-scrollbar-track {
+background: #efefef;
+background: var(--background);
+border-radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+::-webkit-scrollbar-track {
+background: #161f27;
+background: var(--background);
+}
+}
+::-webkit-scrollbar-thumb {
+background: rgb(170, 170, 170);
+background: var(--scrollbar-thumb);
+border-radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+::-webkit-scrollbar-thumb {
+background: #040a0f;
+background: var(--scrollbar-thumb);
+}
+}
+@media (prefers-color-scheme: dark) {
+::-webkit-scrollbar-thumb {
+background: #040a0f;
+background: var(--scrollbar-thumb);
+}
+}
+::-webkit-scrollbar-thumb:hover {
+background: #9b9b9b;
+background: var(--scrollbar-thumb-hover);
+}
+@media (prefers-color-scheme: dark) {
+::-webkit-scrollbar-thumb:hover {
+background: rgb(0, 0, 0);
+background: var(--scrollbar-thumb-hover);
+}
+}
+@media (prefers-color-scheme: dark) {
+::-webkit-scrollbar-thumb:hover {
+background: rgb(0, 0, 0);
+background: var(--scrollbar-thumb-hover);
+}
+}
+::-moz-selection {
+background-color: #9e9e9e;
+background-color: var(--selection);
+color: #000;
+color: var(--text-bright);
+}
+::selection {
+background-color: #9e9e9e;
+background-color: var(--selection);
+color: #000;
+color: var(--text-bright);
+}
+@media (prefers-color-scheme: dark) {
+::-moz-selection {
+color: #fff;
+color: var(--text-bright);
+}
+::selection {
+color: #fff;
+color: var(--text-bright);
+}
+}
+@media (prefers-color-scheme: dark) {
+::-moz-selection {
+background-color: #1c76c5;
+background-color: var(--selection);
+}
+::selection {
+background-color: #1c76c5;
+background-color: var(--selection);
+}
+}
+details {
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+background-color: #f7f7f7;
+background-color: var(--background-alt);
+padding: 10px 10px 0;
+margin: 1em 0;
+border-radius: 6px;
+overflow: hidden;
+}
+@media (prefers-color-scheme: dark) {
+details {
+background-color: #1a242f;
+background-color: var(--background-alt);
+}
+}
+details[open] {
+padding: 10px;
+}
+details > :last-child {
+margin-bottom: 0;
+}
+details[open] summary {
+margin-bottom: 10px;
+}
+summary {
+display: list-item;
+background-color: #efefef;
+background-color: var(--background);
+padding: 10px;
+margin: -10px -10px 0;
+cursor: pointer;
+outline: none;
+}
+@media (prefers-color-scheme: dark) {
+summary {
+background-color: #161f27;
+background-color: var(--background);
+}
+}
+summary:hover,
+summary:focus {
+text-decoration: underline;
+}
+details > :not(summary) {
+margin-top: 0;
+}
+summary::-webkit-details-marker {
+color: #363636;
+color: var(--text-main);
+}
+@media (prefers-color-scheme: dark) {
+summary::-webkit-details-marker {
+color: #dbdbdb;
+color: var(--text-main);
+}
+}
+dialog {
+background-color: #f7f7f7;
+background-color: var(--background-alt);
+color: #363636;
+color: var(--text-main);
+border: none;
+border-radius: 6px;
+border-color: #dbdbdb;
+border-color: var(--border);
+padding: 10px 30px;
+}
+@media (prefers-color-scheme: dark) {
+dialog {
+border-color: #526980;
+border-color: var(--border);
+}
+}
+@media (prefers-color-scheme: dark) {
+dialog {
+color: #dbdbdb;
+color: var(--text-main);
+}
+}
+@media (prefers-color-scheme: dark) {
+dialog {
+background-color: #1a242f;
+background-color: var(--background-alt);
+}
+}
+dialog > header:first-child {
+background-color: #efefef;
+background-color: var(--background);
+border-radius: 6px 6px 0 0;
+margin: -10px -30px 10px;
+padding: 10px;
+text-align: center;
+}
+@media (prefers-color-scheme: dark) {
+dialog > header:first-child {
+background-color: #161f27;
+background-color: var(--background);
+}
+}
+dialog::-webkit-backdrop {
+background: #0000009c;
+-webkit-backdrop-filter: blur(4px);
+backdrop-filter: blur(4px);
+}
+dialog::backdrop {
+background: #0000009c;
+-webkit-backdrop-filter: blur(4px);
+backdrop-filter: blur(4px);
+}
+footer {
+border-top: 1px solid #dbdbdb;
+border-top: 1px solid var(--border);
+padding-top: 10px;
+color: #70777f;
+color: var(--text-muted);
+}
+@media (prefers-color-scheme: dark) {
+footer {
+color: #a9b1ba;
+color: var(--text-muted);
+}
+}
+@media (prefers-color-scheme: dark) {
+footer {
+border-top: 1px solid #526980;
+border-top: 1px solid var(--border);
+}
+}
+body > footer {
+margin-top: 40px;
+}
+@media print {
+body,
+pre,
+code,
+summary,
+details,
+button,
+input,
+textarea {
+background-color: #fff;
+}
+button,
+input,
+textarea {
+border: 1px solid #000;
+}
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+pre,
+code,
+button,
+input,
+textarea,
+footer,
+summary,
+strong {
+color: #000;
+}
+summary::marker {
+color: #000;
+}
+summary::-webkit-details-marker {
+color: #000;
+}
+tbody tr:nth-child(even) {
+background-color: #f2f2f2;
+}
+a {
+color: #00f;
+text-decoration: underline;
+}
+}
+</style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Testing</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#eictar-testing" id="toc-eictar-testing">eictar —
+Testing</a>
+<ul>
+<li><a href="#contents" id="toc-contents">Contents</a></li>
+<li><a href="#unit-tests-in-each-package-go-test-...." id="toc-unit-tests-in-each-package-go-test-....">1. Unit tests (in each
+package, <code>go test ./...</code>)</a></li>
+<li><a href="#operational-tests-end-to-end-build-tag-operational" id="toc-operational-tests-end-to-end-build-tag-operational">2.
+Operational tests (end to end, build tag
+<code>operational</code>)</a></li>
+<li><a href="#supporting-tools" id="toc-supporting-tools">3. Supporting
+tools</a></li>
+<li><a href="#stress-tester" id="toc-stress-tester">4. Stress
+tester</a></li>
+<li><a href="#assurance-plan" id="toc-assurance-plan">5. Assurance
+plan</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="eictar-testing">eictar — Testing</h1>
+<p>Date: 2026-10-15 Applies to: v1 (format version 1.0)</p>
+<p>This document describes how eictar is tested, and the evidence that
+the tests give. <code>design.md</code> describes the format and the
+program, and <code>history.md</code> gives the milestones and the
+releases. This document was §13 of <code>design.md</code> until
+2026-10-15. Its section N was section 13.N there.</p>
+<h2 id="contents">Contents</h2>
+<p><a href="#1-unit-tests-in-each-package-go-test-">1. Unit tests</a> ·
+<a href="#2-operational-tests-end-to-end-build-tag-operational">2.
+Operational tests</a> · <a href="#3-supporting-tools">3. Supporting
+tools</a> · <a href="#4-stress-tester">4. Stress tester</a> · <a href="#5-assurance-plan">5. Assurance plan</a></p>
+<p>Tests are part of each deliverable. There are two levels: unit tests
+next to the code, and operational tests that run the built binary as a
+user does. A milestone in history.md is not complete until both levels
+cover it.</p>
+<p>Every item in the lists below exists now, except the items marked
+“later”.</p>
+<h2 id="unit-tests-in-each-package-go-test-....">1. Unit tests (in each
+package, <code>go test ./...</code>)</h2>
+<ul>
+<li><strong>Format round trip</strong>: members of all types, every
+codec, plaintext and encrypted, index sealed and not sealed.</li>
+<li><strong>Structure encoding</strong>: encode and decode of the
+header, the trailer and the crypto header, every CRC, every limit, and
+the refusal of each single-field corruption.</li>
+<li><strong>Codec conformance</strong>: one test suite for every
+registered codec. It covers round trips, empty input, incompressible
+input, chunk boundaries, the parameter checks, refusal of bad
+parameters, and the parallel-encoder test of design.md §8.2.</li>
+<li><strong>Key schedule</strong>: fixed vectors for the KEK, the
+wrapped data key, and every subkey. Also for a sealed chunk, a sealed
+index, a sealed dictionary and the keyed index digest. A failure here
+means that existing archives no longer open. It never means “update the
+vector”. The vector of the dictionary key was also calculated apart from
+the code, from the definition in <code>doc/format.md</code>.</li>
+<li><strong>Chunked AEAD</strong>: tag checks, a wrong key, a chunk
+moved to another index or member, a changed final flag, and truncation.
+Each must fail.</li>
+<li><strong>Crafted archives</strong>: the reader must refuse each of
+these:
+<ul>
+<li>a member path with <code>../</code>, or an absolute path</li>
+<li>a link to a place outside the destination, followed by a write
+through it</li>
+<li>a large chunk size</li>
+<li>a blob outside the body</li>
+<li>a regular file without a digest</li>
+<li>a member that shares content with a member of other content, or with
+no blob</li>
+<li>a dictionary that the index does not hold, or on a codec other than
+zstd</li>
+<li>KDF parameters above the limits</li>
+<li>a downgrade to plaintext</li>
+<li>changed metadata in an encrypted archive</li>
+</ul>
+The crafted-KDF test fails if the check is removed. This proves that the
+test catches the fault.</li>
+<li><strong>Path rules</strong>: <code>StorePath</code>,
+<code>IsStoredPath</code> and <code>Match</code>, with hostile inputs:
+<code>../</code> escapes, absolute paths, and paths that are not
+canonical.</li>
+<li><strong>Fuzzing</strong> (<code>go test -fuzz</code>): the header,
+the trailer, the crypto header, the index decoder, the decoders of the
+codecs, the openers of a sealed chunk, index and dictionary, whole
+archives changed from the golden ones, the pattern rules, the
+compression spec and the configuration file. A malformed archive must
+give an error. It must never cause a panic or an unbounded allocation.
+§5, step 4, gives the rule of each target.</li>
+<li><strong>Race</strong>: all tests under <code>-race</code>, with
+<code>-j</code> from 1 to 64.</li>
+<li><strong>Configuration</strong>: the precedence of the four levels,
+codec defaults, and the search order of the files. Unknown keys and
+variables are usage errors that name their line or variable, and so are
+a passphrase and the other refused keys. Also: the scope of a configured
+value, a group-writable file, <code>--no-config</code>, comments,
+<code>--show-config</code> with its sources, and the variable of
+<code>--passphrase-env</code>. A <code>.eictarrc</code> in the current
+directory has no effect.</li>
+<li><strong>Encoder memory</strong> (design.md §8.2):
+<ul>
+<li>the window of zstd fits the chunk</li>
+<li>the estimate of each codec</li>
+<li>a limit on the compressions at once</li>
+<li>the number of states for each amount of RAM and each memory
+limit</li>
+</ul></li>
+<li><strong>Codecs, worst case</strong>: each codec at its strongest
+setting compresses 4 MiB of zeroes in less than 10 s. The test proves
+why the xz binary tree is not used (design.md §10.2).</li>
+<li><strong>Lock</strong>: while one writer holds an archive, append,
+delete, compact, repair and create each stop with
+<code>ErrLocked</code>. A lock on a file that a rename replaced is
+refused (design.md §9.6).</li>
+<li><strong>Recompress</strong>: the content, the digests and the ids
+stay, and each sealed member gets a new salt. A tombstone behind a
+hardlink, and the holes of a sparse file, survive (design.md §9.3).</li>
+<li><strong>Progress meter</strong>: the status line, no drawing before
+the first byte, and no meter without a terminal (design.md §10.10).</li>
+<li><strong>Compare with the disk</strong>: each kind of difference,
+patterns and excludes, a file archived alone, an encrypted archive, the
+same result for each <code>-j</code>, and a link on disk that leads out
+of the directory (design.md §9.8).</li>
+<li><strong>Dry run</strong>: for create, update with each mode, extract
+with each overwrite policy, and delete, the paths of the dry run are the
+paths that the real run writes, and the archive does not change. Also
+the conflict policies, the key for the digests of an encrypted archive,
+an unsafe member path, and no destination made (design.md §9.9).</li>
+<li><strong>Strip components</strong>: the paths after the strip, a
+short path left out, the later member of a collision with its warning,
+two directories with one path, a hard link to a target that is extracted
+and to one that is not, patterns on the archive paths, the dry run,
+<code>--diff</code> with patterns, excludes and a hard link, a path that
+is not canonical, and exit 1 (design.md §10.14).</li>
+<li><strong>Security regressions</strong>: one test for each finding of
+<code>doc/Security_Audit.md</code>:
+<ul>
+<li>the decision for each class of xattr</li>
+<li>a member <code>.</code></li>
+<li>a file that becomes a link after the walk</li>
+<li>a directory that becomes a link during the walk, before and after
+the walk opens it</li>
+<li>the rule for links in the archive path</li>
+<li>the umask</li>
+<li>the expansion of the index</li>
+<li>a passphrase file that other users can read</li>
+</ul></li>
+<li><strong>Names on the terminal</strong>: each kind of escape of
+design.md §10.13. A name with an escape sequence in <code>-t</code>,
+<code>-tv</code>, a dry run and <code>--diff</code>: escaped on a
+terminal, and exact to a pipe. A message is escaped in both cases.</li>
+<li><strong>Man page and help</strong>: <code>doc/eictar.1</code> and
+<code>--help</code> name every long option of the parser, and the help
+gives each short form. No line of the help is wider than 80
+columns.</li>
+<li><strong>Platforms</strong>: each metadata test runs where
+<code>meta.Supports</code> says that its feature exists. An xattr from
+macOS and one from Linux, extracted on each platform, are applied or
+listed in the one notice as design.md §7.7 says. A pipe is created, or
+skipped with a notice on macOS.</li>
+<li><strong>Golden files</strong>: four archives in
+<code>src/internal/archive/testdata/golden/</code>.
+<code>plain.ect</code> and <code>encrypted.ect</code> each have three
+generations: a create, an append that replaces a member, and a delete.
+<code>dict.ect</code> is encrypted, with a sealed dictionary.
+<code>shared.ect</code> has a reference to a live owner and a reference
+to a tombstone. The tests open them, run <code>--verify</code> on them
+and extract them. Only a planned format change can write them again,
+with <code>-update-golden</code>.</li>
+<li><strong>Dictionaries</strong> (design.md §4.2):
+<ul>
+<li>a gain on similar files</li>
+<li>a frame that decodes only with its own dictionary</li>
+<li>a dictionary within its size, and training that fails cleanly</li>
+<li>reuse on <code>-r</code>, compact and recompress</li>
+<li>damage to a plain and to a sealed dictionary</li>
+</ul></li>
+<li><strong>Identical content</strong> (design.md §4.3):
+<ul>
+<li>copies that share one blob, and <code>--no-dedup</code></li>
+<li>sharing across generations, and with an earlier version</li>
+<li>a damaged old owner, which is not used</li>
+<li>delete, compact and recompress</li>
+</ul></li>
+<li><strong>Selection</strong>: <code>-R</code> and
+<code>--exclude-regex</code> on the walk and on each read, a whole-path
+match, and an <code>-R</code> that matches nothing. An
+<code>--exclude</code> glob with a <code>/</code> takes the contents of
+a directory on a read, for <code>-t</code> and <code>--diff</code>
+(design.md §10.11). The <code>.ect</code> name rule (design.md
+§10.12).</li>
+<li><strong>Mutation</strong>: append after the old trailer, each
+<code>--on-conflict</code> policy, and each <code>--update-mode</code>
+case of design.md §10.5. Also delete, <code>--verify</code>,
+<code>--info</code>, and the passphrase for each. Compact runs plain and
+encrypted, through a symbolic link, and with a hardlink to a tombstone.
+Two tests check <code>--keep-going</code>. A path that fails keeps its
+old member. A hardlink never points to a member that failed.</li>
+<li><strong>Crash consistency</strong>: an append, cut at each byte
+between the old and the new length. Each cut must fail to open, and
+<code>--repair</code> must give back the old file exactly. A torn
+trailer gives the same result. The writer only appends, and it syncs
+before the trailer. Thus a crash leaves a prefix of the writes, and the
+cuts cover each crash point.</li>
+</ul>
+<h2 id="operational-tests-end-to-end-build-tag-operational">2.
+Operational tests (end to end, build tag <code>operational</code>)</h2>
+<p>These tests run the compiled <code>eictar</code> binary in a
+temporary directory. They check its exit status, its output and the
+resulting files. They never call internal packages. They prove that the
+program works, not only that its parts work.</p>
+<ul>
+<li><strong>Lifecycle</strong>: create, list and extract, with a
+comparison against the original tree. Then append (with other codec
+settings), delete, <code>--info</code>, <code>--verify</code>, compact
+and <code>--verify</code> again, plain and encrypted.</li>
+<li><strong>Concurrency</strong>: the same input at several
+<code>-j</code> values gives the same content and the same listing.</li>
+<li><strong>Encryption</strong>: round trips with a sealed and with a
+plain index. A wrong passphrase gives exit 3. With no passphrase and no
+terminal, the message names the options to use. The environment-variable
+source works, with its warning. A plaintext archive with a passphrase
+source gives exit 3.</li>
+<li><strong>Paths and links</strong>: stripped absolute paths,
+<code>-d</code>, the archive that contains itself, symbolic links, and
+<code>-h</code>.</li>
+<li><strong>Damage</strong>: a changed byte gives exit 3, and a missing
+archive names the file.</li>
+<li><strong>Update modes</strong>: a touched file that
+<code>digest</code> skips and <code>newer</code> takes. The unit tests
+of §1 cover each mode and case.</li>
+<li><strong>Mixed archives</strong>: members from separate appends, with
+different codecs and parameters, all extracted in one pass.</li>
+<li><strong>Refused mutations</strong>: <code>--on-conflict=error</code>
+and a <code>--delete</code> pattern with no match give exit 2, and the
+archive is unchanged.</li>
+<li><strong>Listing</strong>: <code>-t</code> gives the paths, and
+<code>-tv</code> and <code>--long</code> give the same long listing.
+<code>-tvv</code> adds its columns and the line of totals.
+<code>--json</code> has every field of design.md §10.9.</li>
+<li><strong>Metadata</strong>: hardlinks, holes, xattrs, setuid bits,
+pipes, link times, a skipped socket, and difficult names (spaces,
+newlines, non-UTF-8, long names, leading dashes). The test compares the
+result with <code>os.Stat</code>, xattr reads and the allocated blocks,
+so that holes stay holes. It runs with a plain and with an encrypted
+archive. The ownership and device tests need root, and skip with a
+reason when the user is not root.</li>
+<li><strong>Crash consistency</strong>: a real append is killed with
+<code>SIGKILL</code> part way through. The list must fail with exit 3
+and name <code>--repair</code>. Then <code>--repair</code> must give
+back the old file exactly.</li>
+<li><strong><code>--verify</code></strong>: a changed byte in a blob
+gives exit 3, and the message names the member. <code>--quick</code>
+passes, because it reads no member data.</li>
+<li><strong>Configuration</strong>: a configuration file in
+<code>HOME</code> sets the codec, <code>-v</code> names the file, a
+misspelled variable gives exit 2, and <code>--show-config</code> runs
+with no operation. The unit tests cover the refusals. A file that
+another user owns needs a second user, so no test covers it yet.</li>
+<li><strong>Lock</strong>: two real appends at the same time. The second
+stops with exit 4, and the first completes.</li>
+<li><strong>Every codec</strong>: members from six codecs in one
+archive, from separate appends. One pass lists them, one runs
+<code>--verify</code>, and one extracts them.</li>
+<li><strong>Recompress</strong>: a bad spec gives exit 2 and changes
+nothing. A good one changes the codec of every member, and the extracted
+tree is the same.</li>
+<li><strong>Progress</strong>: with stderr not a terminal,
+<code>--progress</code> writes nothing there.</li>
+<li><strong>Change of passphrase</strong>: the new passphrase opens the
+archive, the old one gives exit 3, and the new KDF parameters are in
+effect.</li>
+<li><strong>Newer features</strong>:
+<ul>
+<li><code>-R</code> on create and on extract</li>
+<li>the <code>.ect</code> name</li>
+<li>a dictionary, in <code>--info</code> and in the listing</li>
+<li>shared content, in the listing, in <code>--info</code> and in
+<code>--json</code></li>
+<li><code>--diff</code>: no difference after <code>-xp</code>, except
+the pipe on macOS, and then a changed file and a missing file with exit
+1 (design.md §9.8)</li>
+</ul>
+The dry run (design.md §9.9) has no operational test. The tests of
+package <code>cli</code> run it through <code>Run</code>, and check its
+output and that nothing changes.</li>
+<li><strong>Large archive</strong>: an archive larger than 4 GiB, plain
+and encrypted. <code>make large</code> runs it. Other runs skip it,
+because it needs time and disk space. The format stores offsets and
+lengths as CBOR uints, which take 8 bytes above 2^32. The test takes
+each of these past 2^32: the size of one member, the offset of a blob,
+the offsets of data segments in a sparse file, the index offset, and
+<code>prev_index_offset</code>. The data is random and the codec is
+<code>none</code>, so the archive is as large as its data. The test
+checks the sizes in <code>--json</code>, <code>--verify</code>, a full
+extraction, <code>-O</code>, <code>--diff</code>, an append, a cut
+append and <code>--repair</code>, and a delete with
+<code>--compact</code>. It compares each file with SHA-256. A reader
+that keeps only 32 bits of a blob offset fails <code>--verify</code> in
+this test.</li>
+<li><strong>Scale</strong> (nightly, later): 100,000 small files, and
+one file larger than memory.</li>
+</ul>
+<h2 id="supporting-tools">3. Supporting tools</h2>
+<ul>
+<li><code>src/internal/testutil/</code> holds the fixture-tree builder,
+the tree comparison, and a helper that builds the binary once for each
+test run.</li>
+<li><strong>Code builds the fixtures.</strong> They are not committed as
+a tree, because git cannot keep modes, timestamps, hardlinks and holes
+exactly.</li>
+<li><strong>Tests that need root</strong> (ownership, device nodes) skip
+with a clear reason. A CI container with the necessary privilege must
+run them.</li>
+<li><strong>A skip passes quietly.</strong> <code>go test</code> does
+not show it without <code>-v</code>, and a platform avoids a test by
+skipping it. Thus <code>make skips</code> runs the tests with
+<code>-json</code>, and <code>tools/testskips</code> lists each skipped
+test with its reason, each failed test with its output, and the totals.
+A package that fails outside a test, as after a time-out, is listed with
+its output. Each CI job runs it after <code>make check</code>, so that a
+green job also says what it did not test, and a red job says which test
+failed, when it fails again in this second run. The job’s result stays
+the result of <code>make check</code>.</li>
+<li><strong>Coverage and mutation testing</strong> measure the tests
+(§5). <code>format</code>, <code>crypt</code> and <code>codec</code>
+need the strongest tests, because a fault there is silent and permanent.
+The benchmarks are <code>make bench</code> and <code>make compare</code>
+(design.md §8.4).</li>
+<li><strong>References to sections stay correct.</strong> The code and
+the documents refer to sections by number, such as
+<code>doc/design.md 9.6</code> in a comment and
+<code>testing.md §5</code> in a document. A section that moves leaves
+such a reference wrong. The test of <code>tools/docrefs</code> finds
+each reference, in the documents, the code, the <code>Makefile</code>
+and the workflows, that names a section or a document that is not there.
+A reference with no name of a document is to the document that holds it.
+In <code>Security_Audit.md</code>, it is to <code>design.md</code>.</li>
+</ul>
+<h2 id="stress-tester">4. Stress tester</h2>
+<p><code>make stress</code> builds and runs <code>tools/stress</code>,
+and <code>make stress-build</code> builds it alone, as
+<code>.build/stress</code>, with <code>.build/eictar-faults</code>:
+eictar built with <code>-tags faultinject</code>, for the disk faults.
+It tests the built binary with random data and random operations, and it
+compares each result with a model. The unit and operational tests check
+the cases that someone thought of. The stress tester finds the
+combinations that nobody did.</p>
+<p><strong>The model</strong> is a map from each stored path to what an
+extraction must give back. That is the type, the content, the size, the
+mode, the time, and the target of a link. It changes only as eictar’s
+rules say (design.md §9.2, §10.5). Replace, skip, error, the three
+update modes, and delete with eictar’s pattern rule are each a few lines
+of the tester.</p>
+<p><strong>A sequence</strong> creates an archive from a generated tree,
+and then takes steps. Before most steps, the tree changes. A file gets
+new content, a new time or a new mode, or it goes, or it becomes a link,
+or new entries come. Then one operation runs: append with each
+<code>--on-conflict</code>, update with each <code>--update-mode</code>,
+delete, compact, compact with <code>--recompress</code>, extraction by
+pattern or by <code>-R</code>, <code>--diff</code>, a dry run, or
+<code>--strip-components</code>. Each operation uses a random codec and
+random settings: chunk size, workers, memory limit and spill threshold.
+A zstd dictionary at level 10 or above gets chunks of 64 KiB or more.
+Each chunk with such a dictionary costs approximately 0.5 ms (design.md
+§15.2), and chunks of 512 bytes on a large tree take more than the limit
+of two minutes for one command, which counts as a hang.</p>
+<p>The last three steps test the operations that compare and plan:</p>
+<ul>
+<li><strong><code>--diff</code></strong> of a tree just extracted must
+find no difference. Then the tester makes one change to that tree: other
+bytes of the same size, a mode, a time, a file removed, a file added, or
+another link target. It keeps the time of the parent directory.
+<code>--diff</code> must then report that path with that kind of
+difference, and nothing else, with exit 1.</li>
+<li><strong>A dry run</strong> of <code>-r</code>, <code>-u</code>,
+<code>--delete</code> or <code>-x</code> must list the paths that the
+model says the real run writes or deletes. The archive must not change,
+and <code>-x -n</code> must not make its destination.</li>
+<li><strong><code>--strip-components</code></strong> 1 or 2: half the
+time, the tester first appends a twin of an entry under a new top
+directory, so that two members get one path. The model gives the
+expected tree and the collisions. The dry run must list the paths after
+the strip, the extraction must give the expected tree, and
+<code>--diff</code> with the option must find no difference. Each must
+warn for each collision and exit with 1 when there is one.</li>
+</ul>
+<p><strong>Each sequence has a profile,</strong> the kind of tree that
+it works on. The seed chooses it, and <code>-profile</code> forces
+one:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Profile</th>
+<th>Tree</th>
+<th>What it takes eictar through</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>mixed</code></td>
+<td>10 to 70 entries of every kind and size</td>
+<td>the general case</td>
+</tr>
+<tr class="even">
+<td><code>small</code></td>
+<td>150 to 500 small source files that share a header and a shape</td>
+<td>dictionaries that train, many members</td>
+</tr>
+<tr class="odd">
+<td><code>large</code></td>
+<td>3 to 6 files of 1 to 24 MiB, and copies of them</td>
+<td>many chunks, chunks of 16 and 32 MiB, windows, shared content</td>
+</tr>
+<tr class="even">
+<td><code>versions</code></td>
+<td>medium files with exact copies, and near-copies with a few bytes
+changed</td>
+<td>shared content that must tell equal from almost equal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The settings vary with the features.</strong> A zstd codec
+can have <code>train</code>: with a small size, alone, or at 1 MiB. It
+can have <code>long</code>: alone, or with a window that a large chunk
+holds. <code>-r</code> and <code>-u</code> can have <code>-R</code>,
+<code>--exclude-regex</code> and <code>--no-dedup</code>, and create can
+have <code>--no-dedup</code>. The model applies <code>-R</code> and
+<code>--exclude-regex</code> as eictar does. An <code>-R</code> that
+matches nothing must be refused like a conflict.</p>
+<p>At the end of each sequence, <code>--info</code> shows whether the
+archive holds a dictionary and shared content. The summary counts both,
+so that the coverage of these features is measured, not assumed.</p>
+<p>A third of the sequences are encrypted, some with a sealed index. In
+these, a step can also change the passphrase. After the change, the old
+passphrase must fail with exit 3.</p>
+<p><strong>After each step</strong> the tester makes five checks:</p>
+<ol type="1">
+<li><code>-t</code> lists exactly the model’s paths.</li>
+<li><code>--verify</code> passes.</li>
+<li>A full extraction gives back the model. The only extra paths allowed
+are the parent directories that extraction makes itself.</li>
+<li>The hardlinks of the extraction agree with the model. The model
+gives each file a link group. One run puts the names of one inode that
+it stores into one group. The names of a group must be one file, and the
+names of two groups must be two files. Each extraction of the tester .
+The second reader (§5, step 2) agrees. Its fields are those of
+<code>-t --json</code>, and its own extraction gives back the
+model.</li>
+</ol>
+<p>Some operations must be refused: a conflict under
+<code>--on-conflict=error</code>, an <code>-R</code> that matches
+nothing, and a delete pattern that matches nothing. Each must exit with
+2, and must leave the archive byte for byte as it was.</p>
+<p><strong>The data</strong> is random, text-like, repetitive or zeros,
+and it is often one byte on either side of a chunk boundary. The tree
+has deep directories, empty files, symbolic links, hardlinks, copies and
+sparse files. Its names have spaces, other scripts, and bytes that are
+not UTF-8 where the filesystem takes them. A name never holds a glob
+character, so that a path is a literal pattern.</p>
+<p><strong>The fault mode</strong> is on by default. It adds three
+tests:</p>
+<ul>
+<li><strong>A crash.</strong> After a change, the tester cuts the
+archive at a random point inside the new generation. The archive must be
+refused with exit 3 and a message that names <code>--repair</code>. Then
+<code>--repair</code> must give back the archive of before the change,
+byte for byte.</li>
+<li><strong>Damage.</strong> In a copy of the archive, the tester flips
+one to four bits, often in the index and the trailer.
+<code>--verify</code> and extraction must agree. Both must refuse the
+copy with exit 3. Otherwise both must accept it and give back the model
+exactly, because a bit in dead space harms nothing. Wrong content with
+exit 0 is the failure that this test looks for. The second reader must
+refuse the copy when eictar refuses it, and read each member when eictar
+accepts it.</li>
+<li><strong>A disk fault.</strong> The tester runs a change to the
+archive with <code>.build/eictar-faults</code>, and
+<code>EICTAR_FAULT</code> makes one operation on the archive file fail:
+the Nth open, create, write, short write, <code>fsync</code>, truncate,
+close, rename, remove or <code>fsync</code> of the directory. The change
+is an append, a delete, a compact, a recompress or a change of
+passphrase. A command that succeeds must leave the new state. A command
+that fails must exit with 4, and leave the old state or the new one,
+with no file beside the archive, except a temporary file whose removal
+was the fault. A change that commits with a rename must leave the old
+archive byte for byte, or the new one. A change in place may need
+<code>--repair</code>, which must then give back one of the two. One
+fault does not stop the rollback of a change in place, so that needs two
+faults or a crash after one, which the crash model of §5 covers. The
+tester prints a note and leaves the disk faults out when the binary is
+not there.</li>
+</ul>
+<p>Any other exit code, a panic, or a command that runs for more than
+two minutes is a failure.</p>
+<p><strong>The summary</strong> starts with the result:
+<code>PASS</code>, or <code>FAIL</code> with the sequence. Then it gives
+each check, and the number of times that it held. A check that the run
+did not reach has the note <code>[not reached in this run]</code>. Then
+it gives the number of each operation, and the coverage of the profiles,
+dictionaries and shared content. Last, it gives the five slowest
+commands of the run. Each line has the time, the options, the size of
+the source tree, and the <code>make stress</code> command that repeats
+its sequence. A slow command is not a failure. Only a command that takes
+more than two minutes fails, as a hang. The list shows a slow case
+before it becomes a hang, as the case of design.md §15.2 became. After a
+failure, the counts are the checks that held before it. To a file or a
+pipe, the progress line comes once a minute.</p>
+<p><strong>A failure stops the run.</strong> The sequence’s directory
+stays, with the source tree, <code>failure.txt</code> and
+<code>replay.sh</code>. <code>failure.txt</code> gives the seed and each
+step. <code>replay.sh</code> repeats the eictar commands. All randomness
+comes from the seed, and the file times come from a clock of the tester,
+never from the system clock. Thus
+<code>make stress STRESS=&quot;-seed N -sequences 1 -profile P&quot;</code>
+repeats a failed sequence exactly.</p>
+<p><strong>The tester is tested.</strong> A bug put into eictar on
+purpose, where <code>-u</code> took an equal time as newer, failed the
+sixth sequence. The report named the file and its wrong mode.</p>
+<p><strong>Findings.</strong> The first runs found three faults in
+eictar. Each one now has a test of its own:</p>
+<ul>
+<li>A chunk that its codec refused, for example after a failed zstd
+checksum, gave exit 4, as for an I/O error. It must give exit 3, for
+damage. Such an error is now <code>ErrCorruptData</code>.</li>
+<li>A pattern that matched a directory by its name, deeper in the tree,
+did not take the directory’s contents (design.md §10.11).</li>
+<li><code>-u --update-mode=digest</code> archived an unchanged sparse
+file again, when the filesystem reported its data regions in another way
+(design.md §10.5).</li>
+</ul>
+<p>The steps for <code>--diff</code>, <code>-n</code> and
+<code>--strip-components</code> found two more in their first runs:</p>
+<ul>
+<li><code>--diff</code> reported the directory of a member as a path
+that the archive lacks, when <code>-r a/b/c</code> had added the member
+by its own path, with no member for <code>a/b</code> (design.md
+§9.8).</li>
+<li><code>--diff --strip-components</code> compared a hard link with the
+file at its target’s path when a collision had left the target out.
+Extraction gives such a link a copy of the content (design.md
+§10.14).</li>
+</ul>
+<p>Longer runs found one more fault, and two faults in the tester:</p>
+<ul>
+<li>A damaged crypto header that gave less than 8 KiB of KDF memory for
+each thread gave exit 4. It must give exit 3, for damage (design.md
+§6.2).</li>
+<li><code>zstd:level=13,train=16K</code> with chunks of 512 bytes took
+124 s on a tree of 125 MiB, and the tester reported a hang. The output
+was correct. At level 9, the same command took 0.6 s. This is the cost
+that design.md §15.2 records.</li>
+<li>After 4 hours, the generator gave two new entries of one directory
+the same name, and the second one failed. A new entry now gets another
+name when its name is taken. After this fix, a run of 8 hours passed.
+<code>make   check</code> now runs the tests of <code>tools/</code>
+too.</li>
+</ul>
+<p>A run of ten minutes, over all the profiles, made 146 sequences. They
+ran approximately 14,000 eictar commands, with 256 crashes and 510
+damaged copies. 51 sequences ended with a dictionary, and 124 with
+shared content. With the new steps, a run of five minutes made 106
+sequences and 10988 commands. It ran 207 <code>--diff</code> steps, 305
+dry runs and 161 extractions with <code>--strip-components</code>.</p>
+<h2 id="assurance-plan">5. Assurance plan</h2>
+<p><strong>The goal is evidence that eictar can hold data in a
+mission-critical use.</strong> Tests cannot prove that a program is
+correct. Thus this plan collects evidence of different kinds, and each
+kind finds faults that the others do not find:</p>
+<ul>
+<li>the strength of the tests, measured</li>
+<li>a second implementation, from the specification only</li>
+<li>faults of the disk and of the machine, injected on purpose</li>
+<li>hostile input, generated</li>
+<li>models of the protocols, checked by a tool</li>
+</ul>
+<p>The critical promise is that a user gets back the data that went in,
+or gets an error. Wrong data with exit 0 is the worst failure. Each step
+below tests that promise from a different side.</p>
+<p><strong>Step 1. Measure the strength of the tests.</strong></p>
+<ul>
+<li><strong>Coverage of all the tests together.</strong> Unit coverage
+alone does not count the operational tests, because they run the binary.
+<code>make cover</code> builds the binary with coverage, runs the unit
+tests and the operational tests, and merges the two results.</li>
+<li><strong>Tests as root.</strong> Linux and macOS run the tests as an
+ordinary user, and the BSD virtual machines run them as root. A CI job
+runs the tests on Linux as root too. Then each platform family runs the
+code for the owner, the device nodes and the privileged xattrs at least
+once.</li>
+<li><strong>Mutation testing.</strong> <code>tools/mutate</code> makes
+one small change to the code at a time: a comparison, an operator, or a
+condition. Then it runs the tests. A change that no test finds is a
+<em>survivor</em>. A survivor in code that the tests run is a check that
+no test checks. <code>make mutate</code> runs it.</li>
+</ul>
+<p>The result of step 1 is a list of gaps, in order. That list decides
+where steps 2 to 4 start.</p>
+<p><strong>How <code>tools/mutate</code> works.</strong> It parses each
+file of the package that builds on this platform. It makes these
+changes, one at a time:</p>
+<ul>
+<li>a comparison to its boundary and to its opposite (<code>&lt;</code>
+to <code>&lt;=</code> and <code>&gt;=</code>)</li>
+<li><code>==</code> to <code>!=</code>, <code>&amp;&amp;</code> to
+<code>||</code>, and the reverse of each</li>
+<li>an arithmetic, bitwise or shift operator to its pair (<code>+</code>
+to <code>-</code>, <code>&lt;&lt;</code> to <code>&gt;&gt;</code>)</li>
+<li>a <code>!</code> removed, and <code>++</code> to
+<code>--</code></li>
+<li>the condition of each <code>if</code> to <code>false</code>, so that
+its check never runs</li>
+</ul>
+<p>A run of the tests first gives the coverage. A mutant in code that no
+test runs is <em>not covered</em>, and its tests do not run. A coverage
+profile has no block for the expressions of a <code>case</code>, for a
+declaration outside a function, or for the rest of a statement after a
+function literal in it. Thus a case expression takes the coverage of its
+<code>switch</code>, a declaration outside a function always counts as
+run, and the rest of a statement takes the coverage of its start. The
+last rule came late: in
+<code>if err := applyOwner(m, func(…) {…}); err != nil {</code>, the
+condition showed as not covered, and the accepted list hid it. Each
+other mutant goes to the compiler through an overlay in
+<code>GOFLAGS</code>, so the source tree never changes, and mutants run
+in parallel. A <code>go build</code> that a test runs inherits
+<code>GOFLAGS</code>. Thus the binary that the operational tests build
+has the mutant too, and with <code>-tags operational</code> and
+<code>-test</code> for their package, they count. With
+<code>-tags</code>, a second run without a mutant gives the coverage of
+that binary: it writes it to <code>GOCOVERDIR</code>, as for
+<code>make cover</code>, and the tool adds it to the coverage of the
+tests. A second run is necessary, because with <code>-cover</code>,
+<code>go test</code> gives each test process a coverage directory of its
+own. Each <code>go</code> command runs in a process group of its own,
+and the tool kills the group when the command ends. A mutant can make
+the binary loop for ever, and when its test stopped at the time limit,
+the binary stayed: one run left 18 of them, each on a core. A failed
+test finds the mutant. A test binary that does not end in three times
+the time of the first run stops, and that also finds the mutant. With
+<code>-j</code>, the mutants share the machine, so a slow run can pass
+that limit with no hang. Thus each mutant that stops runs again alone,
+and only a second stop finds it. On <code>archive</code>, before this
+rule, 156 of 388 mutants stopped under <code>-j 8</code>. A mutant that
+does not compile does not count. The score is the part of the counted
+mutants that the tests find. <code>-test</code> gives other packages
+whose tests run, so that a run can tell a gap of one package from a gap
+of the whole program.</p>
+<p><strong>The accepted list.</strong> Some mutants cannot be found by
+any test, or by no test of a run of <code>make mutate</code>.
+<code>tools/mutate/accepted.txt</code> lists them, and
+<code>make mutate</code> does not count them. An entry names the file,
+the function and the change, in the form that the report prints. Thus an
+entry stays correct when lines move. Each entry must give one of four
+reasons:</p>
+<ul>
+<li><em>Equivalent:</em> the change cannot change what eictar does, for
+example the error of <code>crypto/rand.Read</code>, which never returns
+one.</li>
+<li><em>Too costly:</em> a test needs what a unit test cannot have: more
+memory than a test can use, a file system on which a given call fails,
+or a count of the open descriptors of the process. The entry says what
+the test needs, and names what else stops the input or covers the
+risk.</li>
+<li><em>Needs root:</em> only root can run the code, such as a device
+node or an owner, and <code>make mutate</code> does not run as root. The
+entry names the test that the CI job as root runs.</li>
+<li><em>Another platform:</em> the code runs only on a platform where
+<code>make mutate</code> does not run. The entry names the
+platforms.</li>
+</ul>
+<p>An entry whose mutant the tests find, or that names no mutant, fails
+the run. Thus the list cannot keep an entry that is no longer true.</p>
+<p><strong>The first results, with the tests of the package
+itself:</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>Package</th>
+<th>Mutants</th>
+<th>Found</th>
+<th>Survived</th>
+<th>Not covered</th>
+<th>Score</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>format</code></td>
+<td>396</td>
+<td>246</td>
+<td>73</td>
+<td>70</td>
+<td>63.2%</td>
+</tr>
+<tr class="even">
+<td><code>crypt</code></td>
+<td>88</td>
+<td>48</td>
+<td>35</td>
+<td>4</td>
+<td>55.2%</td>
+</tr>
+<tr class="odd">
+<td><code>pipeline</code></td>
+<td>179</td>
+<td>102</td>
+<td>59</td>
+<td>12</td>
+<td>59.0%</td>
+</tr>
+</tbody>
+</table>
+<p>With the tests of <code>archive</code> too, <code>format</code> gets
+68.4% and <code>pipeline</code> 70.5%. Thus most of the gaps are gaps of
+the whole program. The coverage of the unit and the operational tests
+together is 90.3%, and the operational tests raise <code>cli</code> from
+86.8% to 95.3%.</p>
+<p>The survivors fall into these groups, in order of risk:</p>
+<ol type="1">
+<li><strong>Checks of a hostile archive that no test makes
+fail.</strong> No test of any package finds the removal of these checks
+of the crypto header: the version, the KDF, the cipher,
+<code>recipients</code>, and the lengths of the salt and the wrapped
+key. The same is true for these checks of the index: an unknown member
+type, a field on the wrong type, the chunk table, and a sparse segment
+that overflows. Fuzzing finds a panic, but it does not find a check that
+is gone. <em>Done.</em> Each case of the index tests now names the check
+that must refuse it, so that a later check cannot hide a check that is
+gone. A reader also decodes each bad index, and a test of each crypto
+header field changes that field only. This work found two rules of
+<code>doc/format.md</code> that the validator did not apply:
+<ul>
+<li>one chunk for an empty payload. format.md §5 says that the last
+chunk is never empty.</li>
+<li><code>chunk</code> on a member that is not <code>reg</code>, or on
+an empty payload (format.md §5, §8.3).</li>
+</ul>
+The validator refuses them now. No version of eictar wrote these shapes,
+so each archive that eictar wrote still opens. The work also found that
+the writer does not obey format.md §8.3: it puts <code>off</code>, with
+<code>len</code> 0, on a directory, a link, a device and an empty file.
+After 1.1.0, the writer, compact and recompress do not write it.
+format.md §8.3 now says that a reader accepts it and ignores it, because
+the archives of 1.1.0 and earlier have it.
+<code>TestNoOffsetWithoutABlob</code> and a validator test keep both
+rules.</li>
+<li><strong>Limits that no test reaches exactly.</strong>
+<code>&gt;</code> to <code>&gt;=</code> survives at each limit:
+<code>MaxIndexSize</code>, <code>MaxIndexMembers</code>,
+<code>MaxDicts</code>, <code>MaxXattrs</code>, the xattr name and value,
+the chunk size, the KDF time and memory, and the bounds of the trailer.
+<em>Done.</em> A test accepts each limit at its exact value, and an
+earlier test refuses the value one past it. The cap on the pairs of a
+CBOR map has a test too. <code>MaxIndexSize</code> and
+<code>MaxIndexMembers</code> are in the accepted list: a test needs more
+than 1 GiB, and another check stops the same input first.</li>
+<li><strong>The key schedule above generation 255.</strong>
+<code>uint64LE</code> survives with <code>&gt;&gt;</code> changed to
+<code>&lt;&lt;</code>, because each test vector uses a generation below
+256. An index key of a later generation has no fixed vector.
+<em>Done.</em> A test computes each key of <code>doc/format.md</code>
+§7.1, and the index digest, with the standard library only. It uses
+generations whose eight bytes are all in use. A vector pins generation
+<code>0x0102030405060708</code>.</li>
+<li><strong>Errors of the disk in the pipeline.</strong> No test makes a
+write, a seek or a spill of a spool fail. The v1.0.8 hang was in this
+code. Step 3 covers it. A sparse file that changes while it is read is
+also not tested (<code>builder.go</code>). <em>Done</em> in step 3, with
+a test of the sparse file.</li>
+<li><strong>Equivalent mutants.</strong> Some changes cannot change the
+result: the capacity of a <code>make</code>, or the error of
+<code>rand.Read</code>. A list of the accepted survivors, each with its
+reason, is necessary before the release gate can ask for zero survivors.
+<em>Done.</em> The accepted list has 24 entries for <code>format</code>,
+9 for <code>crypt</code> and 21 for <code>pipeline</code>. Before an
+entry went in, new tests found each mutant that a test can find: for
+example, a failed seal in <code>Index.Encode</code>,
+<code>SameCodec</code>, and a sealed index larger than 40 bytes.</li>
+</ol>
+<p><strong>The results now, with the tests of the package
+itself:</strong></p>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Package</th>
+<th>First score</th>
+<th>Raw score now</th>
+<th>Accepted</th>
+<th>Not explained</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>format</code></td>
+<td>63.2%</td>
+<td>94.0%</td>
+<td>24</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td><code>crypt</code></td>
+<td>55.2%</td>
+<td>89.7%</td>
+<td>9</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td><code>pipeline</code></td>
+<td>59.0%</td>
+<td>88.3%</td>
+<td>21</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td><code>archive</code>: <code>writer.go</code>,
+<code>reader.go</code>, <code>fs.go</code></td>
+<td>77.4%</td>
+<td>91.6%</td>
+<td>31</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td><code>archive</code>: <code>extract.go</code></td>
+<td>62.1%</td>
+<td>91.6%</td>
+<td>27</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td><code>archive</code>: <code>mutate.go</code></td>
+<td>74.2%</td>
+<td>88.7%</td>
+<td>42</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td><code>archive</code>: <code>walk.go</code>,
+<code>capture.go</code></td>
+<td>63.7%</td>
+<td>92.8%</td>
+<td>20</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td><code>archive</code>: <code>diff.go</code></td>
+<td>70.4%</td>
+<td>93.9%</td>
+<td>13</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td><code>archive</code>: <code>ops.go</code>, <code>dict.go</code></td>
+<td>63.1%</td>
+<td>94.2%</td>
+<td>22</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td><code>archive</code>: <code>plan.go</code>,
+<code>dedup.go</code></td>
+<td>59.2%</td>
+<td>96.7%</td>
+<td>4</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td><code>archive</code>: the small files</td>
+<td>79.2%</td>
+<td>98.6%</td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td><code>fsutil</code></td>
+<td>67.3%</td>
+<td>84.1%</td>
+<td>7</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td><code>meta</code></td>
+<td>51.0%</td>
+<td>93.0%</td>
+<td>10</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td><code>codec</code></td>
+<td>64.7%</td>
+<td>88.1%</td>
+<td>36</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td><code>cli</code>, with the operational tests</td>
+<td>67.9%</td>
+<td>96.1%</td>
+<td>31</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>The raw score counts an accepted mutant as a survivor.
+<code>make mutate</code> does not count it, and gives 100% for each row.
+Part of the increase in <code>format</code> comes from the change to the
+tool for case expressions: it tests 63 mutants that it showed as not
+covered before. The increase in <code>pipeline</code> comes from the
+fault tests of step 3.</p>
+<p>In <code>archive</code>, the work covers <code>writer.go</code>,
+<code>reader.go</code> and <code>fs.go</code>. The first run found
+77.4%, and the fault tests alone 55.4%. The survivors showed these gaps,
+which are now closed:</p>
+<ul>
+<li>The index validator did not check <code>enc</code> as format.md §8.3
+gives it: a salt of 16 bytes, and no <code>enc</code> on a member that
+is not <code>reg</code>. It does now. The writer also put an
+<code>enc</code> on an empty file, which has no blob. As for
+<code>off</code>, the writer and compact no longer write it, and a
+reader accepts it.</li>
+<li>The test of the pool of decoders had two kinds of zstd with
+different chunk sizes, so a key without the dictionary passed. Now only
+the dictionary tells them apart.</li>
+<li><code>validateMemberRanges</code> is one range check in
+<code>uint64</code>, with no sum that can wrap, and a test of each
+bound.</li>
+<li>No test gave the reader a live count that does not match, a trailer
+outside the body, an index of more than 1 GiB, an index that does not
+decode (the reader then crashed), KDF parameters that the machine cannot
+afford, a damaged dictionary, or a member sealed in a plain archive.
+<code>reader_test.go</code> gives each.</li>
+<li>No test refused a planted link through <code>-f</code>, because only
+root can make a link of another user. A test now replaces the rule
+(<code>mayFollowLink</code>). <code>writer_test.go</code> also tests bad
+options to <code>Create</code>, a payload that writes too little,
+<code>Close</code> twice, and an append that writes nothing, which must
+keep the time of the file.</li>
+</ul>
+<p>Of the 31 accepted mutants, 14 are checks of the reader that the
+index validator makes first, and 3 are errors of
+<code>crypto/rand.Read</code>, which ends the program instead.</p>
+<p>In <code>extract.go</code>, most survivors were errors of the
+destination that no test could make, so the fault test of step 3 came
+first (above). Then tests for the parts that no fault reaches: the
+owner, the access time, the notices for extended attributes that were
+not restored, directories finished deepest first, a name of 250 bytes,
+files with holes in chunks that do not fall on their segments,
+extraction to stdout, and the bound on workers. The index checks do not
+check paths (doc/format.md 8.6), so a test gives a directory, a link and
+a hardlink a path that is not in stored form. Of the 27 accepted
+mutants, 5 need root, 2 run on another platform, and the others change
+only the speed, or cannot happen after the index checks.</p>
+<p>In <code>mutate.go</code>, the tests now give: the tombstones that
+compact keeps, repair with windows as small as the magic of a trailer
+(so that a trailer falls across two of them), an archive with no
+complete generation, the checks of a change of passphrase, the choices
+of a recompress, and the counts and the notices of verify across several
+batches. Fault cases for an append, a compact and a recompress with a
+dictionary came with them. They found the repair fault of step 3, and
+one more: the meter of a recompress counted the content of the members
+that share it, which a recompress does not decode, so it never reached
+its total. Of the 42 accepted mutants, most change only the batches or
+the number of workers, or cannot happen after the index checks.</p>
+<p>The NetBSD job of CI found a race in a recompress after these tests.
+Each member is decoded by a goroutine into a pipe, which the pipeline
+reads. When the pipeline failed, <code>recompressOne</code> returned and
+the caller closed the reader, but the goroutine could still read the old
+archive. It then read a file that was closed, and the program stopped
+with a panic. Now <code>recompressOne</code> waits until the goroutine
+ends. <code>TestRecompressOneWaitsForTheDecoder</code> holds the read of
+the goroutine, and shows that <code>recompressOne</code> does not return
+before it.</p>
+<p>In <code>walk.go</code> and <code>capture.go</code>, the fault test
+of the source came first (step 3), and found three faults of the walk.
+Then tests for what no fault reaches: each kind of file, a device, the
+requested paths <code>.</code> and <code>..</code>, an absolute path
+with <code>-C</code>, a loop under <code>-h</code> named as a loop, the
+limits of an extended attribute, a file that became a pipe, which the
+open must refuse and not wait on, and <code>-u</code> with a file with
+holes, a link to another target and a change of type. A test of finding
+11 shows that a link is read through the directory that the walk holds:
+read by its path, it stored the link of the directory that took its
+place.</p>
+<p>In <code>diff.go</code>, the fault test of the source covers
+<code>--diff</code> too (step 3). The tests that came after give: a
+refused path, a root under a link that leads out of the base, the order
+of the differences of one path, a change of type, devices, owners,
+extended attributes against ACLs, a hardlink whose target is a
+tombstone, files that do not open, and patterns with
+<code>--strip-components</code>. Two live members with one path, from a
+forged index, are compared in index order, as extraction writes
+them.</p>
+<p>In <code>ops.go</code>, most of the mutants that survived were in
+helpers that only the command line uses, such as the descriptions of a
+listing. They have tests of their own now. The measurement of
+<code>train=auto</code> in <code>dict.go</code> is now made of parts
+that a test can reach: the samples held out, the candidate sizes, the
+net gain, and the order in which the candidates run. Tests replace the
+trainer, the encoder of the measurement and the source of dictionary
+ids, and make each one fail. The other tests give: the budget of
+samples, the samples of a tree and of a recompression, a dictionary of
+exactly the 1 MiB limit, and each check of a dictionary that is
+read.</p>
+<p>The dry runs of <code>plan.go</code> were tested by a comparison with
+their real runs, which reached only the paths that both write. Tests now
+give their refusals, their counts and sizes, <code>-O</code>, the
+current directory, devices, files that <code>-k</code> keeps, and
+failures with and without <code>--keep-going</code>. In
+<code>dedup.go</code>, the table of owners has tests of its own: which
+members own content, the key of a file with many data segments, an owner
+that this run wrote, and an old owner that fails its check.</p>
+<p>The small files of <code>archive</code> are <code>strip.go</code>,
+<code>progress.go</code>, the locks, the memory of the machine, the sync
+of a directory, and the seams <code>src.go</code> and
+<code>dest.go</code>. The fault tests replace the seams, so a test now
+opens a path that is not there through each seam on the disk: each gives
+the error, and no file with it. The amount of memory is read by
+<code>memTotal</code>, which a test gives lines of
+<code>/proc/meminfo</code> that are not usual. A lock that fails for
+another reason than a lock that is held, and a collision of a directory
+with a file after <code>--strip-components</code>, have tests too.</p>
+<p>With this, each file of <code>archive</code> has no unexplained
+survivor.</p>
+<p>In <code>fsutil</code>, five survivors were in <code>SafeJoin</code>,
+which nothing called: extraction checks each path with
+<code>IsStoredPath</code>, and writes through <code>os.Root</code>.
+<code>SafeJoin</code> is gone, and its hostile paths are now a test of
+<code>IsStoredPath</code>. The first score counts its mutants, and the
+score now does not. New tests give: a pattern with the characters of a
+glob, which matches its own name; a pattern with a “/”, which takes what
+is below it; the path “//”; and an expression of <code>-R</code> that
+compiles alone but not in the group that anchors it, at the limit of
+nesting.</p>
+<p>In <code>meta</code>, two tests skipped where a fault made them pass.
+The test of holes skipped when <code>DataSegments</code> called a file
+dense, so a fault that lost the holes made it skip. Now it skips only
+when <code>SEEK_HOLE</code> itself finds no hole. The test of names
+skipped when <code>UserName</code> gave no name. Now a test takes the
+names from the system database of Go. A seam for <code>lseek</code>
+gives the answers that a file system gives rarely: an error of each
+call, data in all of the file, data past its size, and a hole past its
+end. Other tests give: the escapes of <code>Mknod</code> and
+<code>Lchown</code> refused by the check of the name, not by a lack of
+privilege; a device as root, of each type, with its permissions and
+numbers; <code>O_NOFOLLOW</code>; an attribute that grew between its
+size and its read; the errors of the attributes; and ids 0, which are
+ids and not “no id”. The test of a device as root found a fault of
+<code>x/sys</code> on NetBSD, which made each device node 0:0 (design.md
+§15.1).</p>
+<p>In <code>codec</code>, the suite that runs for each codec did not
+reach the functions that take a codec by name, which <code>cli</code>
+and <code>archive</code> call. Tests now give their refusals of a name
+and of parameters, the window or dictionary that the parameters ask for
+against the chunk, the dictionary of each preset of xz, the estimates of
+memory for each speed of zstd, and the limits of <code>train</code> and
+of a size. A decode appends to a destination that has no room, little
+room, or room only with its prefix. A test makes a block of s2 that has
+the right length and the wrong content. Of the 36 accepted mutants, most
+are errors that cannot happen, such as a write to a
+<code>bytes.Buffer</code>, or checks that the next check covers. One is
+too costly: a zstd window larger than the chunk changes only the memory
+of the library.</p>
+<p>In <code>cli</code>, the operational tests count: they run the
+binary, and with the change to the tool above, the binary has the
+mutant. The first score, with the tests of the package alone, was 67.9%.
+The operational tests raised it to 77.2%, and the mutants that no test
+covered went from 95 to 18. The tests that came after give: the refusals
+of each operation, <code>-T</code> from a file and from the standard
+input, the long listing of a device, of a shared member and of a deleted
+owner, the alignment of <code>-vv</code>, the rows of
+<code>--info</code>, the messages of <code>--compact</code>,
+<code>--verify --quick</code> and <code>--repair</code>, the dry runs,
+the search for the configuration file, the edges of the escapes of a
+name, of a size and of the meter, and the owner of a configuration file.
+A test on Linux opens a pseudo-terminal, and types the passphrase: once,
+twice, two that do not match, and an empty one. Two functions that
+nothing called are gone: <code>CompressSpec.IsNone</code> and
+<code>passphraseSource.describe</code>.</p>
+<p>With this, each package has no unexplained survivor.</p>
+<p><strong>Step 2. A second reader, from <code>doc/format.md</code>
+only.</strong> An independent program reads an archive with the rules of
+<code>doc/format.md</code> and no code of eictar. On the golden archives
+and on the archives of the stress tester, it must give the same members
+and the same bytes as eictar. Thus the specification is complete, the
+writer obeys it, and a user has a way to read an archive that does not
+depend on eictar.</p>
+<p><em>Done.</em> <code>tools/ectread</code> is the second reader. It
+was written from <code>doc/format.md</code> alone, and it imports no
+package of eictar: a test checks this. It has its own CBOR decoder. It
+uses the same libraries as eictar for zstd, S2, LZMA2, BLAKE3, Argon2id
+and XChaCha20-Poly1305. Thus a fault in one of these libraries is common
+to the two readers. <code>make ectread</code> builds
+<code>.build/ectread</code>, which lists an archive as lines of JSON
+(<code>-t</code>), reads and checks each member (<code>-c</code>), or
+extracts it (<code>-x</code>).</p>
+<p>These tests compare the second reader with eictar:</p>
+<ul>
+<li><code>TestSecondReaderGoldens</code> and
+<code>TestSecondReaderCodecs</code> (operational) use the golden
+archives, and archives of each codec, plain and encrypted, with and
+without a sealed index. The archives have three generations, a
+dictionary, shared content, a sparse file, a pipe, and a hardlink whose
+target is a tombstone. A check makes sure that each archive has these.
+The fields of <code>-t --json</code> must be those that the reader
+decodes, and the tree that eictar extracts must hold the bytes that the
+reader decodes. Package <code>tools/ectread/compare</code> makes the two
+comparisons.</li>
+<li>The stress tester makes the same comparison after each step, and
+compares the extraction of the reader with its model. On a damaged copy,
+the reader must refuse what eictar refuses, and read what eictar reads
+(§4). After the fix below, a run of 10 minutes compared 2,469 states and
+375 damaged copies, with no difference.</li>
+<li><code>FuzzArchive</code> (step 4) runs the second reader on each
+changed golden archive. When eictar extracts the archive, the reader
+must read it with the same content. When eictar refuses it, the reader
+must refuse it too. A run of 3 minutes, on 541,000 archives, found no
+difference.</li>
+<li>The unit tests of the reader break each rule of
+<code>doc/format.md</code> §8.4 in the index of a golden archive. The
+reader must refuse each one.</li>
+</ul>
+<p>The second reader found two gaps in the specification and one fault
+in the writer:</p>
+<ul>
+<li>format.md §8.3 said that a member that is not <code>reg</code> has
+no <code>off</code>. But eictar 1.1.0 and earlier wrote an
+<code>off</code> on each member with no blob, of each type, as the
+golden archives show. The rule for the old writers now says so.</li>
+<li>format.md §8.1 said that the map keys are “sorted bytewise”, and not
+of what. The order is that of the encoded keys, so a shorter key comes
+first. No reader checks it.</li>
+<li>After a compact of an archive whose members were all deleted, the
+index held <code>members</code> as null, and format.md §8.2 asks for an
+array. The stress tester found it. The writer now writes an empty array
+(<code>TestIndexNoMembersIsAnArray</code>). A reader accepts null,
+because eictar 1.1.1 and earlier wrote it.</li>
+</ul>
+<p><strong>Step 3. Faults of the disk and of the machine.</strong> A
+layer under the writer makes a write, an <code>fsync</code> or a rename
+fail, or makes a write short. A power-loss mode records the writes, and
+drops or reorders the writes that were not synced. After each fault, the
+archive must open as the old generation or as the new one, or
+<code>--repair</code> must give back one of them. The stress tester
+injects these faults at random.</p>
+<p><em>Part 1, faults that the program sees, is done:</em></p>
+<ul>
+<li><p>In <code>archive</code>, each operation on an archive file and on
+its directory goes through a <code>fileSystem</code>
+(<code>fs.go</code>). In production, it is the operating system.
+<code>TestFaultsLeaveTheOldOrTheNewArchive</code> makes each of these
+operations fail in turn. It does this for create, create over an
+archive, append, delete, compact, recompress, repair and a change of
+passphrase, and for a create, an append, a compact and a recompress with
+a dictionary, plain and encrypted. A write that fails writes half of its
+bytes and gives <code>ENOSPC</code>. Each other operation gives
+<code>EIO</code>. After each fault, these rules apply:</p>
+<ul>
+<li>The archive holds its old state or its new state. Only a fault in
+the truncate that undoes an append can make a repair necessary.</li>
+<li>A run that reports success made the new state.</li>
+<li>A run that reports success had no fault. There are two exceptions: a
+<code>chown</code>, which a user that is not root cannot always do, and
+a <code>close</code> of a file that the run did not write.</li>
+<li>The error is the fault itself: an I/O error, not damage.</li>
+<li>No file stays open, and no temporary file stays behind.</li>
+</ul>
+<p><code>TestReadFaultsAreNeverSilent</code> does the same for extract
+and verify. Three faults put into the writer on purpose were each found.
+The rule on success came after a mutation run (below). It found two
+errors that the program ignored, and both are now fixed:</p>
+<ul>
+<li><code>Writer.SameFile</code> did a <code>stat</code> of the archive
+for each file of the walk, and gave “not the same file” when the
+<code>stat</code> failed. If the archive was inside a path to archive,
+it could then go into itself. The writer now does one <code>stat</code>
+when the archive opens, and a failure stops the run.</li>
+<li>Repair ignored the error of its last <code>close</code>. After the
+<code>fsync</code>, this error can still report a lost write, on NFS for
+example.</li>
+</ul>
+<p>The rule that the error is the fault found one more: a read that
+failed while repair loaded a generation counted as damage. Repair then
+said that the archive had no complete generation (exit 3), when the disk
+had failed (exit 4). Now only damage, or a version that this build does
+not read, rejects a generation. The second matters for an archive of
+archives stored without compression: it holds the trailers of its
+members, which a later version can have made.</p>
+<p>Under <code>-race</code>, each run of the dictionary case trains a
+dictionary, which is slow. Thus, under <code>-race</code>, that case
+tests one fault in seven. The runs without <code>-race</code>
+(<code>make skips</code>, <code>make check-norace</code>) test each
+fault.</p></li>
+<li><p>In <code>pipeline</code>, each spill file comes from
+<code>newSpillFile</code>. <code>TestPipelineFaults</code> makes each
+operation on a spill file fail in turn, and each call to the encoder, to
+<code>NewSealer</code> and to <code>Emit</code>. It does this with a
+small budget and with a large one, and with a disk that stays full. It
+found two faults, which are now fixed (design.md §8), each with a test
+that fails without the fix:</p>
+<ul>
+<li>When the encoder failed on a chunk that was not the last to return,
+the chunks after it waited for it for ever. The member never became
+complete, so the build left it out with no error, and its spill file and
+its budget stayed held. No codec of eictar gives such an error now: zstd
+and s2 give none, and deflate and xz fail on every chunk or on
+none.</li>
+<li>After the build stopped, a member that the reader read at that time
+could still submit its chunks, because <code>select</code> chooses at
+random. Its <code>AddFile</code> then gave no error, and it was emitted
+after the failure. <code>Finish</code> gave the error, so no archive was
+wrong.</li>
+</ul></li>
+<li><p>In extraction, each operation on the destination goes through a
+<code>destDir</code> (<code>dest.go</code>): in production an
+<code>os.Root</code>, so that no name leads out of the destination. The
+calls of <code>meta</code> on a descriptor (a pipe, a device, the times
+of a link, an extended attribute) go through it too.
+<code>TestExtractFaultsAreNeverSilent</code> makes each of about 100
+operations fail in turn: into an empty directory, over the tree, and
+with <code>--keep-going</code>. These rules apply:</p>
+<ul>
+<li>An extraction that reports success, with no failed member, had no
+fault, apart from the close of a handle that wrote nothing.</li>
+<li>The error is the fault itself: an I/O error, not damage, and not an
+unsafe path.</li>
+<li>No directory or file stays open, and no temporary file stays
+behind.</li>
+</ul>
+<p>It found one fault, which is now fixed: before a link, a pipe or a
+hardlink replaced a node, a failed <code>lstat</code> counted as
+“nothing there”. With the rule on the error, it also finds a fault that
+shows only later, as a link that was not made and then not
+found.</p></li>
+<li><p>The walk of a create, an append, a <code>--diff</code> and the
+training of a dictionary goes through a <code>srcDir</code>
+(<code>src.go</code>): in production an <code>os.Root</code>, so that
+each entry is found through the directory that holds it
+(doc/Security_Audit.md, finding 11). The reads of each file, of its
+holes and of its extended attributes go through it too.
+<code>TestCreateFaultsAreNeverSilent</code> makes each operation fail in
+turn, for a create, with <code>--keep-going</code>, <code>-h</code> and
+<code>--one-file-system</code>, for an append, with
+<code>--keep-going</code> and with <code>-u</code> by digest, and for a
+<code>--diff</code>, with and without <code>--keep-going</code>. The
+rules are those of extraction, and one more: without
+<code>--keep-going</code>, a fault stops the run with its error. A
+<code>--diff</code> that finds a difference has not failed, so a fault
+must not show as one. The test found four faults, which are now
+fixed:</p>
+<ul>
+<li>The <code>stat</code> that gives <code>--one-file-system</code> its
+device ignored a failure. The device was then 0, each directory was on
+another file system, and the archive was empty, with no error. Now the
+walk makes the <code>stat</code> only for
+<code>--one-file-system</code>, and a failure stops it.</li>
+<li>A requested path whose parent did not open was walked by its path,
+for any error. That is for a parent that the user cannot list: now only
+a permission error does it.</li>
+<li>Each error that opened a directory of the walk was “changed after
+the walk found it”. A fault of the disk is now itself, and only the
+errors of a change (gone, not a directory, a link) say that.</li>
+<li><code>--diff</code> did not check a hardlink whose target did not
+lstat, for any error, and found no difference. Only a target that is
+gone is not checked now: the walk reports it as missing. The first form
+of this fix counted the failure and gave no error, because the check of
+hardlinks comes after the run reads its first error. The rule on
+<code>--keep-going</code> found that before the fix was committed.</li>
+</ul></li>
+</ul>
+<p><em>Part 2, power loss, is done.</em> <code>crash_test.go</code> puts
+a model of the disk behind the same <code>fileSystem</code>. The
+operations reach the disk as in production. Beside them, the model keeps
+the content of each file at its last <code>fsync</code>, each write
+since then, and the names of the directory at its last directory
+<code>fsync</code>. After each change, it records what the path of the
+archive can hold if the power fails then:</p>
+<ul>
+<li>the names of the last directory <code>fsync</code>, or the current
+names;</li>
+<li>for the file at that name: its content at its last
+<code>fsync</code>; its current content; the content at its last
+<code>fsync</code> with half of what came after (a torn write); or its
+current content with one write since the last <code>fsync</code> lost
+(writes that reach the disk out of order).</li>
+</ul>
+<p><code>TestPowerLossLeavesTheOldOrTheNewArchive</code> runs the
+operations of part 1, and checks each state that the model recorded.
+These rules apply:</p>
+<ul>
+<li>The archive holds its old state or its new state.</li>
+<li>An operation that writes in place (append, delete, repair) can need
+<code>--repair</code> to give one of them back. An operation that
+commits with a rename (create, compact, recompress, a change of
+passphrase) must never need it.</li>
+<li>When the operation has reported success, the state that the
+<code>fsync</code> calls put on the disk is the new one.</li>
+</ul>
+<p>No operation broke a rule. Five faults put in on purpose were each
+found: no <code>fsync</code> of a new archive before its rename, no
+<code>fsync</code> of the directory after the rename, no
+<code>fsync</code> of a compacted archive, no <code>fsync</code> of the
+index before the trailer, and no <code>fsync</code> after repair cuts
+the file. The fourth one needs the model of lost writes. The index and
+the trailer reach the disk, but a write of a blob before them does not,
+so the archive opens as the new generation, and its members fail their
+digest.</p>
+<p>The model takes a file system that keeps a rename in order with the
+other changes to the directory, and that does not change bytes that no
+write touched. It does not model a disk that lies about
+<code>fsync</code>.</p>
+<p><em>Part 3, faults in the stress tester, is done.</em> A file of
+<code>archive</code> that is built only with
+<code>-tags faultinject</code> (<code>faultinject.go</code>) puts a
+layer on the same <code>fileSystem</code>.
+<code>EICTAR_FAULT=KIND:N</code> makes the Nth operation of a kind fail,
+and a line on stderr says that it happened. A release binary does not
+have the file. <code>make stress-build</code> builds
+<code>.build/eictar-faults</code> with it, and the stress tester runs a
+change of the archive with it at random (§4). Thus the faults meet the
+random trees, codecs, dictionaries and histories of the stress tester,
+which the unit tests of part 1 do not. A run of five minutes made 167
+changes with a fault, and in 33 of them the fault happened and the
+command failed. Each one exited with 4, and left the old state or the
+new one, with no file beside the archive. No rule broke.
+<code>make vet</code> checks the file with the tag, so that it cannot
+stop compiling.</p>
+<p>With this, step 3 is done.</p>
+<p><strong>Step 4. More fuzzing.</strong> A fuzz target opens, lists,
+verifies and extracts changed copies of the golden archives into a
+temporary root. Each run must end with exit 3, or with the exact
+content, and never with a panic or a write outside the root. More
+targets cover the chunk opener, the configuration parser, the
+compression spec, and the pattern rules against a simple reference
+matcher. Before a release, each target runs for hours, and the corpus is
+kept.</p>
+<p><em>Done.</em> <code>make fuzz</code> runs twelve targets
+(<code>FUZZ_TARGETS</code>). The six new ones:</p>
+<ul>
+<li><code>FuzzArchive</code> (<code>archive</code>) changes the bytes of
+a golden archive, then lists, verifies and extracts it into a temporary
+root. Each operation ends with an error that gives exit 3, or with
+success. A successful extraction gives exactly the content of a
+generation of a golden archive: a cut at the end of a generation makes
+an older archive that is valid. The target finds the content of each
+such cut before it starts. Verify and extraction agree. Nothing is
+written in the temporary directory outside the root. The target takes
+bytes alone, because the fuzzer changes one golden archive into another,
+and the header of a plain archive is not authenticated. Its first run
+found that fault in the target, not in eictar. A changed crypto header
+can ask for 4 GiB for the key derivation, so the target lets the machine
+have 32 MiB (<code>kdfMemory</code>). The derivation is then refused
+above 16 MiB.</li>
+<li><code>FuzzChunkOpen</code> and <code>FuzzIndexAndDictOpen</code>
+(<code>crypt</code>): a sealed chunk, index or dictionary opens only if
+the sealer makes the same bytes from its plaintext, in its place. It
+does not open at another index, with the other final flag, in another
+member, or for another generation or id.</li>
+<li><code>FuzzMatch</code> (<code>fsutil</code>) compares
+<code>Match</code> with a matcher that follows the four rules of
+design.md §10.11 and has a glob of its own. The patterns are of
+<code>a</code>, <code>b</code>, <code>*</code>, <code>?</code> and
+<code>/</code>. With one rule taken out of <code>Match</code>, it finds
+a difference in less than a second.</li>
+<li><code>FuzzCompressSpec</code> (<code>cli</code>): a spec that parses
+has a name, and no empty key or value, and its <code>String</code>
+parses back to the same spec.</li>
+<li><code>FuzzConfigFile</code> (<code>cli</code>): any content of a
+configuration file gives a usage error, an error of the read for a line
+that is too long, or settings that <code>--show-config</code>
+shows.</li>
+</ul>
+<p>In their first runs, <code>FuzzArchive</code> ran 5 minutes (about
+one million inputs), and <code>FuzzMatch</code> one minute (27 million).
+No fault of eictar came out. Go keeps the corpus in
+<code>.gobuildcache/fuzz</code>. The runs of hours before a release are
+for step 6.</p>
+<p><strong>Step 5. Models of the protocols.</strong> TLA+ models check
+three protocols, where faults of order and of timing hide:</p>
+<ul>
+<li>the commit of a generation, and <code>--repair</code> (design.md
+§9.1, §9.5)</li>
+<li>the lock, and the check that the path still names the locked file
+(design.md §9.6)</li>
+<li>the rules of the memory budget against a deadlock (design.md
+§8.1)</li>
+</ul>
+<p>The two hangs that the tests found were both in the memory
+budget.</p>
+<p><em>Done.</em> <code>make tla</code> checks four models in
+<code>spec/</code> with TLC, the model checker of TLA+. TLC needs Java
+and <code>tla2tools.jar</code> (from the releases of
+<code>github.com/tlaplus/tlaplus</code>) in the root of the project. Git
+does not keep the jar, and the CI does not run the models. Each model
+has configurations that take out one guarantee of the program, and TLC
+must find the fault in each. Thus a model that cannot see a fault makes
+<code>make tla</code> fail.</p>
+<ul>
+<li><code>Commit.tla</code>: an append, an update or a delete (design.md
+§9.1), and the cut-back after an error. The disk keeps each write and
+truncate in a cache until an <code>fsync</code>. At a power failure, any
+subset of the cached operations is on the disk, in order, and a write
+can be torn. In each state, after a power failure, the archive gives the
+old generation or the new one, at worst after <code>--repair</code>. A
+success is durable. An error leaves the old archive when the truncate
+worked. TLC finds the fault when the <code>fsync</code> before the
+trailer, after the trailer, or after the cut-back is gone.</li>
+<li><code>Replace.tla</code>: a compact, a change of passphrase and a
+create, which rename a temporary file over the path (design.md §9.3,
+§9.7). The path gives the old archive or the complete new one, and a
+success is durable. Without the <code>fsync</code> of the new file, the
+path can name an incomplete archive. Without the <code>fsync</code> of
+the directory, a success is not durable. That is the case on Windows
+(design.md §15.1).</li>
+<li><code>Writers.tla</code>: appends, compacts and creates at the same
+time, with the lock and the check of the path (design.md §9.6). No
+append that reported success is lost, unless a create replaced the
+archive after it. TLC finds a lost append without the check of the path,
+and when a compact reads its archive before it takes the lock, a fault
+that the code had before.</li>
+<li><code>Budget.tla</code>: the memory budget of a create (design.md
+§8.1). No state stops for ever, each member reaches the archive, the
+budget stays within its limit, and all of it comes back. TLC finds a
+deadlock without the spill before the wait (the hang that M8 fixed),
+with a spool that waits for budget, and with a budget of one chunk.</li>
+</ul>
+<p>The models found one fault in the program. A create that found no
+archive at the path held no lock. A second create could then make an
+archive there, and an append could start on it. The first create renamed
+its own archive over it, and the append, which reported success, was
+lost. Now the rename of such a create fails when a file is at the path,
+and the create stops with exit 4 (design.md §9.6).
+<code>TestCreateDoesNotReplaceAnArchiveThatAppeared</code> fails without
+the fix.</p>
+<p>The models also showed that design.md §9.1 listed one
+<code>fsync</code> more than the code makes: the blobs and the index
+have one <code>fsync</code> together. The text now follows the code.</p>
+<p>The models have limits. A model is not the code, and only the tests
+check that the code does what its model does. The models are small:
+three members of three chunks, up to three workers, and up to six
+writers. They take a rename to be atomic, and a disk that does not lie
+about <code>fsync</code>, as the test of power loss does (step 3).</p>
+<p><strong>Step 6. The release gate.</strong> Before a tag, these must
+pass:</p>
+<ul>
+<li><code>make check</code> on each platform, as CI does</li>
+<li>a run of the stress tester of at least 8 hours</li>
+<li>each fuzz target for at least one hour</li>
+<li><code>make mutate</code> on each package, with no survivor that is
+not explained</li>
+<li><code>govulncheck</code> on the modules and the standard
+library</li>
+<li>the TLA+ models</li>
+</ul>
+<p><em>Done.</em> <code>make gate</code> runs each step that one machine
+can run, in this order: <code>make check</code>, <code>make tla</code>,
+<code>make vuln</code>, <code>make mutate</code> on each package,
+<code>make fuzz</code> with one hour for each target, and
+<code>make stress</code> for 8 hours. The CI workflow gives
+<code>make check</code> on the other platforms (design.md §12.3). The
+quick steps come first, so that a fault in them stops the gate before
+the long steps start. The gate stops at the first step that fails,
+because a fix makes a new commit, and the gate must run again on that
+commit.</p>
+<p>The gate runs on a git worktree of the commit, in
+<code>.tmp/gate/</code>. Thus the result belongs to that commit, and not
+to the changes in the working tree, and work can continue while the gate
+runs. Also, a mutant can write files in the directory of its package,
+where <code>go test</code> runs it. In the gate, these files stay in the
+worktree, which the gate removes. The worktree uses the caches of the
+project, so the fuzz corpus grows from one gate to the next. The gate
+writes the output of each step to a log in
+<code>.build/gate/SHA/</code>, and a record with the commit, the
+toolchain, and the result and time of each step. The last line of the
+record is <code>PASS</code> only when every step ran and passed. The
+release steps of design.md §12.3 ask for this line. When a step fails,
+the worktree stays for the examination. For example, it holds the input
+of a fuzz target that failed, in <code>testdata/fuzz</code>.</p>
+<p><code>make vuln</code> runs <code>govulncheck</code>
+(<code>golang.org/x/vuln</code>, at a fixed version). It finds only the
+vulnerabilities that the code calls, so a vulnerability in a function
+that eictar does not use does not stop a release. The scan uses the
+toolchain that builds, because the standard library is part of the
+binary. The release workflow runs <code>make vuln</code> too, with the
+toolchain that builds the release binaries.</p>
+<p>The first run of the gate found a vulnerability. GO-2026-6604 lets
+<code>os.Root.MkdirAll</code> follow a junction out of the root on
+Windows. An extraction uses <code>os.Root</code> to keep each member in
+the destination (design.md §7.6). Go 1.27.2 fixes it. The toolchain of
+the development machine was 1.27.1, so the gate stopped at
+<code>make vuln</code>. The release workflow takes the newest patch
+release of the version in <code>go.mod</code>, so a release built after
+Go 1.27.2 has the fix.</p>
+<p>The first run also found a mutant in <code>pipeline</code> that the
+tests found only by chance of timing. A member is complete when the
+reader drops its claim and every chunk is in the spool. Either one can
+come last, but in a build the last chunk usually comes after the reader.
+Thus a fault in the check of the reader showed in the runs of step 1,
+and not in this run. <code>TestMemberCompletesInEitherOrder</code> now
+gives both orders.</p>
+<p>In <code>archive</code>, the run found two more gaps:</p>
+<ul>
+<li>The rename of step 5, which does not replace a file, had one
+survivor and four mutants that no test ran. A check after
+<code>link(2)</code> did the same as the check that follows it, so it is
+gone. The path for a file system with no hard links had no test.
+<code>TestRenameNew</code> now gives both kinds of file system: the name
+is free, the name is in use, and the check fails.</li>
+<li>Two entries of the accepted list in <code>capture.go</code> said
+that a file with one name never has the identity of another file. That
+is false under <code>-h</code>: a symbolic link and its target are one
+file with one name. A test of the dry run from step 1 finds both
+mutants, so the entries are gone. Thus the rule that an entry must stay
+true worked.</li>
+</ul>
+<p>The step took 3 hours and 21 minutes, of which <code>archive</code>
+took 3 hours.</p>
+<p>The work on the gate also found that the operational tests left the
+binary that they built in <code>.tmp/</code>, which no one clears. Each
+mutant of <code>cli</code> runs them, so the runs of step 1 left 2,700
+binaries, or 23 GB. A <code>TestMain</code> now removes the binary after
+the tests (<code>RemoveBinary</code>). A test that stops at its time
+limit still leaves its binary. In the gate, the worktree goes with
+it.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1. Strength of the tests</td>
+<td>done: each package has no survivor that is not explained</td>
+</tr>
+<tr class="even">
+<td>2. Second reader</td>
+<td>done: <code>tools/ectread</code>, with no difference from
+eictar</td>
+</tr>
+<tr class="odd">
+<td>3. Faults of the disk and the machine</td>
+<td>done: faults that the program sees, power loss, and faults in the
+stress tester</td>
+</tr>
+<tr class="even">
+<td>4. More fuzzing</td>
+<td>done: twelve targets</td>
+</tr>
+<tr class="odd">
+<td>5. Models of the protocols</td>
+<td>done: four models; they found one fault</td>
+</tr>
+<tr class="even">
+<td>6. Release gate</td>
+<td>done: <code>make gate</code></td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

@@ -1,5 +1,5 @@
 // Command mutate measures how strong the tests of a package are
-// (doc/design.md 13.5).
+// (doc/testing.md 5).
 //
 // It makes one small change to the code at a time - a comparison, an
 // operator, or a condition - and runs the tests. A change that no test finds

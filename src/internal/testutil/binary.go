@@ -14,7 +14,7 @@ import (
 //
 // The operational tests drive the compiled program rather than calling into
 // the packages, so that what is tested is what a user runs: argument parsing,
-// exit codes and streams included (doc/design.md 13.2).
+// exit codes and streams included (doc/testing.md 2).
 func Binary(tb testing.TB) string {
 	tb.Helper()
 
@@ -41,7 +41,7 @@ func Binary(tb testing.TB) string {
 		if os.Getenv("GOCOVERDIR") != "" {
 			// make cover: the binary writes its coverage into GOCOVERDIR
 			// at exit, which the environment of each run passes on
-			// (doc/design.md 13.5).
+			// (doc/testing.md 5).
 			args = append(args, "-cover", "-coverpkg=./src/...")
 		}
 		cmd := exec.Command(goTool(), append(args, "./src/cmd/eictar")...)

@@ -1116,7 +1116,7 @@ func TestCorruptChunkIsDamage(t *testing.T) {
 // directory by its name at any depth, and then takes what is below it, as a
 // full path does. It used to take the nested directory and leave its
 // contents behind: live members under a deleted directory, and a listing
-// that --exclude did not clean (doc/design.md 13.4).
+// that --exclude did not clean (doc/testing.md 4).
 func TestNameMatchTakesTheDirectoryContents(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Dir("t", 0o755).Dir("t/a", 0o755).Dir("t/a/cache", 0o755)

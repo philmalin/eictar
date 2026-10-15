@@ -2,7 +2,7 @@
 
 package archive
 
-// Faults for the stress tester (doc/design.md 13.5, step 3). A binary built
+// Faults for the stress tester (doc/testing.md 5, step 3). A binary built
 // with -tags faultinject makes one operation on an archive file fail, as
 // EICTAR_FAULT says: KIND:N makes the Nth operation of that kind fail with
 // EIO. KIND is one of

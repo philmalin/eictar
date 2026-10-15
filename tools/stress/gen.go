@@ -29,8 +29,8 @@ type gen struct {
 	profile string
 }
 
-// The profiles are the kinds of tree that a sequence works on (doc/design.md
-// 13.4). Each one takes eictar down other paths:
+// The profiles are the kinds of tree that a sequence works on (doc/testing.md
+// 4). Each one takes eictar down other paths:
 //
 //	mixed     a few dozen entries of every kind and size: the default
 //	small     hundreds of small, similar source files: dictionaries that

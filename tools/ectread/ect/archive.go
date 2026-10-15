@@ -1,5 +1,5 @@
 // Package ect reads an eictar archive with the rules of doc/format.md, and
-// with no code of eictar (doc/design.md 13.5, step 2). It is a second reader:
+// with no code of eictar (doc/testing.md 5, step 2). It is a second reader:
 // its results must agree with those of eictar.
 package ect
 

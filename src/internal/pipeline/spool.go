@@ -27,7 +27,7 @@ type Spool struct {
 }
 
 // spillFile is the temporary file of a spool that moved to disk. It is an
-// *os.File, except in the fault tests (doc/design.md 13.5, step 3).
+// *os.File, except in the fault tests (doc/testing.md 5, step 3).
 type spillFile interface {
 	io.Reader
 	io.Writer

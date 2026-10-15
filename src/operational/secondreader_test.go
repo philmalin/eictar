@@ -17,7 +17,7 @@ import (
 	"github.com/philmalin/eictar/tools/ectread/ect"
 )
 
-// The second reader (doc/design.md 13.5, step 2) reads the archives that
+// The second reader (doc/testing.md 5, step 2) reads the archives that
 // eictar writes, from doc/format.md alone. eictar and the reader must give
 // the same members, with the same fields, and the same bytes.
 

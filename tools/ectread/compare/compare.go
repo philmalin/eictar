@@ -1,5 +1,5 @@
 // Package compare checks that eictar and the second reader (package ect)
-// agree on an archive (doc/design.md 13.5, step 2): the listing of
+// agree on an archive (doc/testing.md 5, step 2): the listing of
 // eictar -t --json against the index that the reader decoded, and a tree
 // that eictar extracted against the content that the reader decodes. It
 // runs nothing: the caller gives what eictar wrote.

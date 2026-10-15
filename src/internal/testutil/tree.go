@@ -3,7 +3,7 @@
 //
 // Fixtures are built by code rather than committed to the repository, because
 // a checkout cannot carry modes, hardlinks, sparse holes or exact timestamps
-// faithfully (doc/design.md 13.3).
+// faithfully (doc/testing.md 3).
 package testutil
 
 import (

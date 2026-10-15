@@ -1,5 +1,5 @@
 #!/bin/sh
-# The release gate (doc/design.md 13.5, step 6): make gate runs this.
+# The release gate (doc/testing.md 5, step 6): make gate runs this.
 #
 # It checks out the commit GATE_REF in a git worktree under .tmp/gate/, and
 # runs each step there, so that the result belongs to that commit and not
@@ -69,7 +69,7 @@ step_stress() { mk stress STRESS="-duration $GATE_STRESSTIME"; }
 
 # Each package alone, so that the log gives a result for each. The tests of
 # cli count with the operational tests, which build the binary with the
-# mutant (doc/design.md 13.5, step 1). Four threads for each of eight
+# mutant (doc/testing.md 5, step 1). Four threads for each of eight
 # mutants keep the machine busy and no more.
 step_mutate() {
 	for p in $GATE_MUTATE; do

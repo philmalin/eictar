@@ -23,7 +23,7 @@ import (
 const largeEnv = "EICTAR_TEST_LARGE"
 
 // TestLargeArchive takes an archive past 4 GiB through each operation that
-// reads or writes an offset or a length (doc/design.md 13.2). The format
+// reads or writes an offset or a length (doc/testing.md 2). The format
 // stores them as CBOR uints, which take 8 bytes above 2^32. A fault that
 // keeps 32 bits of one appears only in an archive of this size:
 //

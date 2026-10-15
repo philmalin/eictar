@@ -2,7 +2,7 @@
 
 // Command stress tests eictar end to end with random data and random
 // operations, and compares every result with a model of what the archive
-// must hold (doc/design.md 13.4).
+// must hold (doc/testing.md 4).
 //
 //	make stress                                 # a few minutes
 //	make stress STRESS="-duration 30m"

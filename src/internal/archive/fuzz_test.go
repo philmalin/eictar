@@ -20,7 +20,7 @@ import (
 	"github.com/philmalin/eictar/tools/ectread/ect"
 )
 
-// The fuzz target of step 4 (doc/design.md 13.5): changed copies of the
+// The fuzz target of step 4 (doc/testing.md 5): changed copies of the
 // golden archives, listed, verified and extracted into a temporary root.
 
 // fuzzGolden is a golden archive, and the fingerprint of the content of each
@@ -268,7 +268,7 @@ func nearest(data []byte) []byte {
 	return best
 }
 
-// secondReaderAgrees runs the second reader (doc/design.md 13.5, step 2) on
+// secondReaderAgrees runs the second reader (doc/testing.md 5, step 2) on
 // the archive at path. It must read each member when eictar extracted the
 // archive into root, with the content that eictar extracted, and refuse the
 // archive when eictar refused it. As for eictar, the passphrase is given only

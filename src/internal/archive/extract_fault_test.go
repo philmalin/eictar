@@ -17,8 +17,8 @@ import (
 	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
-// faultDest is a destination of an extraction with faults (doc/design.md
-// 13.5, step 3). Each operation steps fs, the counter of the archive fault
+// faultDest is a destination of an extraction with faults (doc/testing.md
+// 5, step 3). Each operation steps fs, the counter of the archive fault
 // tests (faultFS). The operation that fs makes fail does nothing and gives
 // its error. A write that fails writes half of its bytes first, as a full
 // disk does.

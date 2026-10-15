@@ -13,7 +13,7 @@ import (
 // destination itself, or a directory below it that a worker opened. In
 // production it is an *os.Root, so that no name can lead out of the
 // destination. The fault tests wrap one, to make an operation fail
-// (doc/design.md 13.5, step 3).
+// (doc/testing.md 5, step 3).
 type destDir interface {
 	MkdirAll(name string, perm fs.FileMode) error
 	// Open opens a directory or a file to read, and to change its metadata.

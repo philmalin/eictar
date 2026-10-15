@@ -16,7 +16,7 @@ const slowestKept = 5
 
 // slowCommand is one eictar command that took a long time. It is not a
 // failure: the summary lists the slowest, so that a slow case is seen before
-// it becomes a hang (doc/design.md 13.4).
+// it becomes a hang (doc/testing.md 4).
 type slowCommand struct {
 	took    time.Duration
 	seed    uint64

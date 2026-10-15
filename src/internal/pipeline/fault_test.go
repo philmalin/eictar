@@ -20,7 +20,7 @@ import (
 
 // faults counts the operations of a build that can fail - each operation on
 // a spill file, and each call to the encoder, to NewSealer and to Emit - and
-// makes operation failAt fail (doc/design.md 13.5, step 3).
+// makes operation failAt fail (doc/testing.md 5, step 3).
 type faults struct {
 	mu     sync.Mutex
 	n      int

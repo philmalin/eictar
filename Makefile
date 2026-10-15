@@ -79,11 +79,11 @@ test: | $(TMPDIR)
 test-race: | $(TMPDIR)
 	$(GO) test -race -timeout $(TESTTIMEOUT) $(PKGS) ./tools/...
 
-# Drives the compiled binary end to end; see doc/design.md 13.2.
+# Drives the compiled binary end to end; see doc/testing.md 2.
 operational: | $(TMPDIR)
 	$(GO) test -tags operational ./src/operational/
 
-# An archive larger than 4 GiB through each operation (doc/design.md 13.2).
+# An archive larger than 4 GiB through each operation (doc/testing.md 2).
 # LARGE is the size of its large file in GiB. The test needs approximately
 # four times that much free space in .tmp/.
 LARGE ?= 4
@@ -91,7 +91,7 @@ large: | $(TMPDIR)
 	EICTAR_TEST_LARGE=$(LARGE) $(GO) test -count=1 -tags operational -run TestLargeArchive -timeout 2h -v ./src/operational/
 
 # The coverage of the unit tests and the operational tests together
-# (doc/design.md 13.5). The operational tests run a binary that is built with
+# (doc/testing.md 5). The operational tests run a binary that is built with
 # coverage, and each run writes its counts into GOCOVERDIR. The report is in
 # .tmp/cover: cover.txt for each function, and cover.html.
 COVERDIR := $(CURDIR)/.tmp/cover
@@ -111,7 +111,7 @@ cover: | $(TMPDIR)
 	@$(GO) tool covdata percent -i=$(COVERDIR)/unit,$(COVERDIR)/operational -pkg=$(COVERPKG)
 	@tail -1 $(COVERDIR)/cover.txt
 
-# Mutation testing (doc/design.md 13.5): one small change at a time to the
+# Mutation testing (doc/testing.md 5): one small change at a time to the
 # code of each package in MUTATE, and its tests. A change that no test finds
 # is a survivor. MUTATE_FLAGS passes options, for example:
 #   make mutate MUTATE=./src/internal/archive MUTATE_FLAGS="-files '^dict' -j 8"
@@ -128,7 +128,7 @@ MUTATE_ACCEPTED ?= tools/mutate/accepted.txt
 mutate: | $(TMPDIR)
 	$(GO) run ./tools/mutate -accepted $(MUTATE_ACCEPTED) $(MUTATE_FLAGS) $(MUTATE)
 
-# Each fuzz target, as package:name (doc/design.md 13.5, step 4).
+# Each fuzz target, as package:name (doc/testing.md 5, step 4).
 FUZZ_TARGETS := format:FuzzHeaderUnmarshal format:FuzzTrailerUnmarshal \
 	format:FuzzDecodeIndex format:FuzzUnmarshalCryptoHeader \
 	codec:FuzzDecoders codec:FuzzZstdDictionary \
@@ -161,8 +161,8 @@ skips: | $(TMPDIR)
 	@echo "=== operational tests"
 	@$(GO) test -count=1 -json -tags operational ./src/operational/ | $(GO) run ./tools/testskips
 
-# Random end-to-end testing against a model of the archive (doc/design.md
-# 13.4). STRESS passes options, for example:
+# Random end-to-end testing against a model of the archive (doc/testing.md
+# 4). STRESS passes options, for example:
 #   make stress STRESS="-duration 30m"
 #   make stress STRESS="-seed 1234 -sequences 1"
 # make stress-build builds the tester alone, to run it as .build/stress
@@ -176,7 +176,7 @@ stress-build: | $(TMPDIR)
 	$(GO) build -trimpath -o $(STRESS_BIN) ./tools/stress
 	$(GO) build -trimpath -tags faultinject -o .build/eictar-faults ./src/cmd/eictar
 
-# The TLA+ models of the protocols (doc/design.md 13.5, step 5), checked
+# The TLA+ models of the protocols (doc/testing.md 5, step 5), checked
 # with TLC. Each entry is MODEL:CONFIG:RESULT. RESULT is ok, or the property
 # that TLC must find broken, or deadlock: those configurations take out a
 # guarantee of the program, to show that the model finds the fault.
@@ -217,7 +217,7 @@ tla: | $(TMPDIR)
 		fi; \
 	done
 
-# The second reader, written from doc/format.md alone (doc/design.md 13.5,
+# The second reader, written from doc/format.md alone (doc/testing.md 5,
 # step 2). .build/ectread -h lists its options.
 ectread: | $(TMPDIR)
 	$(GO) build -trimpath -o .build/ectread ./tools/ectread
@@ -231,7 +231,7 @@ GOVULNCHECK ?= golang.org/x/vuln/cmd/govulncheck@v1.8.0
 vuln: | $(TMPDIR)
 	$(GO) run $(GOVULNCHECK) ./src/...
 
-# The release gate (doc/design.md 13.5, step 6): every step below, on a
+# The release gate (doc/testing.md 5, step 6): every step below, on a
 # worktree of the commit GATE_REF, with a record in .build/gate/. With the
 # defaults it takes about a day. Try it with less, for example:
 #   make gate GATE_STEPS="check vuln"

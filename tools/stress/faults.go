@@ -133,7 +133,7 @@ var diskFaultKinds = []string{"open", "create", "write", "short", "sync", "trunc
 
 // diskFault runs a change to the archive with the binary of -tags
 // faultinject, and makes one operation on the archive file fail: the Nth of
-// a kind, at random (doc/design.md 13.5, step 3). The rules:
+// a kind, at random (doc/testing.md 5, step 3). The rules:
 //
 //   - A command that reports success leaves the new state.
 //   - A command that fails leaves the old state or the new one. A change

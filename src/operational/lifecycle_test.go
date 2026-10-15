@@ -472,7 +472,7 @@ func TestProgressNeedsATerminal(t *testing.T) {
 
 // TestWorkerCountsAgree drives the binary at several worker counts and checks
 // the extracted trees match, which is the user-visible form of the property
-// doc/design.md 13.2 asks for.
+// doc/testing.md 2 asks for.
 func TestWorkerCountsAgree(t *testing.T) {
 	tree := fixture(t)
 	dir := t.TempDir()

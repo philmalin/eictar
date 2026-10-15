@@ -278,6 +278,11 @@ Windows release is a `.zip` file with `eictar.exe`.
 - [`doc/format.md`](doc/format.md): the archive format, for a person who
   writes another reader.
 - [`doc/design.md`](doc/design.md): the design and the reasons for it.
+- [`doc/testing.md`](doc/testing.md): the tests, and the evidence that
+  they give: mutation testing, a second reader, faults of the disk, fuzzing,
+  models of the protocols, and the release gate.
+- [`doc/history.md`](doc/history.md): the milestones, and the changes of
+  each release.
 
 ## License
 

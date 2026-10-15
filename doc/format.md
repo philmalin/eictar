@@ -18,7 +18,7 @@ The passphrase of the encrypted examples is `golden`. The fixed test vectors
 of the key schedule are in `src/internal/crypt/crypt_test.go`.
 
 `tools/ectread` is a second reader, written from this document alone. The
-tests compare it with eictar (`doc/design.md` §13.5, step 2).
+tests compare it with eictar (`doc/testing.md` §5, step 2).
 
 ## 1. Conventions
 

@@ -1,4 +1,4 @@
-# Mutants that make mutate does not count (doc/design.md 13.5): no test can
+# Mutants that make mutate does not count (doc/testing.md 5): no test can
 # find them, or no test of this run can.
 #
 # Each entry is the name that make mutate prints for the mutant, then one or

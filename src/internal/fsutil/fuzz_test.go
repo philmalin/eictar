@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The pattern rules against a simple reference matcher (doc/design.md 13.5,
+// The pattern rules against a simple reference matcher (doc/testing.md 5,
 // step 4). The reference follows the four rules of doc/design.md 10.11, with
 // a glob of its own, and none of the code of Match.
 

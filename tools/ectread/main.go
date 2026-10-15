@@ -1,5 +1,5 @@
 // ectread is a second reader of eictar archives, written from doc/format.md
-// alone (doc/design.md 13.5, step 2). It lists an archive, checks it, or
+// alone (doc/testing.md 5, step 2). It lists an archive, checks it, or
 // extracts it, with no code of eictar.
 //
 //	ectread [-p FILE] -t ARCHIVE      one JSON line for each live member

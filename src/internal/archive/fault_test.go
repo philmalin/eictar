@@ -20,7 +20,7 @@ import (
 )
 
 // faultFS is the file system of the archive files (fs.go) with faults
-// (doc/design.md 13.5, step 3). It counts each operation on an archive file
+// (doc/testing.md 5, step 3). It counts each operation on an archive file
 // or on its directory, and makes operation failAt fail. A write that fails
 // writes half of its bytes first and gives ENOSPC, as a full disk does. Each
 // other operation that fails gives EIO, and does nothing.
@@ -446,7 +446,7 @@ func writeCases(t *testing.T) []faultCase {
 // TestFaultsLeaveTheOldOrTheNewArchive makes each operation on an archive
 // file fail in turn, for each operation that writes an archive. After each
 // fault, the archive must hold its old state or its new state, or --repair
-// must give one of them back (doc/design.md 13.5, step 3). An operation that
+// must give one of them back (doc/testing.md 5, step 3). An operation that
 // reports success must have made the new state. No file stays open, and no
 // temporary file stays behind unless its removal was what failed.
 func TestFaultsLeaveTheOldOrTheNewArchive(t *testing.T) {

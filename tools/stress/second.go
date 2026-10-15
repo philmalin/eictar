@@ -13,7 +13,7 @@ import (
 	"github.com/philmalin/eictar/tools/ectread/ect"
 )
 
-// The second reader (doc/design.md 13.5, step 2) reads each state of the
+// The second reader (doc/testing.md 5, step 2) reads each state of the
 // archive too. It is written from doc/format.md alone, so a rule that the
 // writer breaks, or that the specification does not give, shows as a
 // difference here.
