@@ -1168,8 +1168,9 @@ The first run of the gate found a vulnerability. GO-2026-6604 lets
 extraction uses `os.Root` to keep each member in the destination (design.md §7.6).
 Go 1.27.2 fixes it. The toolchain of the development machine was 1.27.1,
 so the gate stopped at `make vuln`. The release workflow takes the newest
-patch release of the version in `go.mod`, so a release built after Go
-1.27.2 has the fix.
+patch release of the version in `go.mod` (`check-latest` of `setup-go`),
+so a release built after Go 1.27.2 has the fix. Without `check-latest`,
+an older 1.27.x in the cache of the runner satisfies `go.mod`.
 
 The first run also found a mutant in `pipeline` that the tests found only
 by chance of timing. A member is complete when the reader drops its claim

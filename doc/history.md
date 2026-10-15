@@ -429,5 +429,7 @@ versions read what it writes.
 - The release gate: `make gate` runs every check of testing.md §5 on one commit,
   and `make vuln` scans for known vulnerabilities. The release workflow
   runs `make vuln` too. A release needs Go 1.27.2 or later, which fixes
-  GO-2026-6604 in `os.Root` on Windows.
+  GO-2026-6604 in `os.Root` on Windows. The release workflow fetches the
+  newest patch release of Go, and does not use an older one from the cache
+  of the runner.
 

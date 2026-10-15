@@ -2950,8 +2950,10 @@ Windows. An extraction uses <code>os.Root</code> to keep each member in
 the destination (design.md §7.6). Go 1.27.2 fixes it. The toolchain of
 the development machine was 1.27.1, so the gate stopped at
 <code>make vuln</code>. The release workflow takes the newest patch
-release of the version in <code>go.mod</code>, so a release built after
-Go 1.27.2 has the fix.</p>
+release of the version in <code>go.mod</code> (<code>check-latest</code>
+of <code>setup-go</code>), so a release built after Go 1.27.2 has the
+fix. Without <code>check-latest</code>, an older 1.27.x in the cache of
+the runner satisfies <code>go.mod</code>.</p>
 <p>The first run also found a mutant in <code>pipeline</code> that the
 tests found only by chance of timing. A member is complete when the
 reader drops its claim and every chunk is in the spool. Either one can

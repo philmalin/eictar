@@ -1944,7 +1944,9 @@ reported success. Now that create stops with exit 4 (design.md
 testing.md §5 on one commit, and <code>make vuln</code> scans for known
 vulnerabilities. The release workflow runs <code>make vuln</code> too. A
 release needs Go 1.27.2 or later, which fixes GO-2026-6604 in
-<code>os.Root</code> on Windows.</li>
+<code>os.Root</code> on Windows. The release workflow fetches the newest
+patch release of Go, and does not use an older one from the cache of the
+runner.</li>
 </ul>
 </body>
 </html>

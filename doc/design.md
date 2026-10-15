@@ -3255,8 +3255,9 @@ The gate runs on the machine of the developer, not on GitHub, because it
 takes about a day.
 
 A push of the tag starts the release workflow
-(`.github/workflows/release.yml`). The workflow runs `make check` on Linux,
-and `make vuln` with the toolchain that builds the binaries.
+(`.github/workflows/release.yml`). The workflow uses the newest patch
+release of the Go version in `go.mod`. It runs `make check` on Linux, and
+`make vuln` with the toolchain that builds the binaries.
 Then `make release` builds one binary for each platform of §15.1, on amd64
 and on arm64, with the man page, `README.md`, `LICENSE`, `TRADEMARKS.md` and
 `THIRD_PARTY.md`. The licenses of the modules in the binary require their

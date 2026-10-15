@@ -24,9 +24,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # go.mod gives 1.27, and a 1.27.x in the cache of the runner satisfies
+      # it. The binaries need the latest patch release, which has the fixes
+      # of the standard library.
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          check-latest: true
       - run: make check GO=go
       # The known vulnerabilities, with the toolchain that builds the
       # binaries. A fault of the standard library that a newer patch release

@@ -9721,7 +9721,8 @@ publish the draft release.</li>
 <p>The gate runs on the machine of the developer, not on GitHub, because
 it takes about a day.</p>
 <p>A push of the tag starts the release workflow
-(<code>.github/workflows/release.yml</code>). The workflow runs
+(<code>.github/workflows/release.yml</code>). The workflow uses the
+newest patch release of the Go version in <code>go.mod</code>. It runs
 <code>make check</code> on Linux, and <code>make vuln</code> with the
 toolchain that builds the binaries. Then <code>make release</code>
 builds one binary for each platform of §15.1, on amd64 and on arm64,
