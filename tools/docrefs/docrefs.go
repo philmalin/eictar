@@ -47,6 +47,8 @@ var codeFiles = []string{".go", ".sh", ".yml", ".tla", ".cfg", ".txt", ".1"}
 
 // Check returns each reference under root, in the documents of root/doc and
 // in README.md, and in the code, that names a section that is not there.
+// The names of the files in the result have / as the separator on each
+// system.
 func Check(root string) ([]string, error) {
 	docs := map[string]map[string]bool{}
 	names, err := filepath.Glob(filepath.Join(root, "doc", "*.md"))
@@ -61,7 +63,7 @@ func Check(root string) ([]string, error) {
 		}
 		doc := strings.TrimSuffix(filepath.Base(name), ".md")
 		docs[doc] = Sections(string(b))
-		texts[filepath.Join("doc", filepath.Base(name))] = string(b)
+		texts["doc/"+filepath.Base(name)] = string(b)
 	}
 	if b, err := os.ReadFile(filepath.Join(root, "README.md")); err == nil {
 		texts["README.md"] = string(b)
@@ -85,6 +87,7 @@ func Check(root string) ([]string, error) {
 			return err
 		}
 		rel, _ := filepath.Rel(root, path)
+		rel = filepath.ToSlash(rel)
 		if d.IsDir() {
 			if rel != "." && (strings.HasPrefix(d.Name(), ".") && d.Name() != ".github" || d.Name() == "testdata") {
 				return filepath.SkipDir
