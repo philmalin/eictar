@@ -2581,7 +2581,7 @@ difference.</li>
 <code>doc/format.md</code> §8.4 in the index of a golden archive. The
 reader must refuse each one.</li>
 </ul>
-<p>The second reader found two gaps in the specification and one fault
+<p>The second reader found three gaps in the specification and one fault
 in the writer:</p>
 <ul>
 <li>format.md §8.3 said that a member that is not <code>reg</code> has
@@ -2593,7 +2593,15 @@ of what. The order is that of the encoded keys, so a shorter key comes
 first. No reader checks it.</li>
 <li>After a compact of an archive whose members were all deleted, the
 index held <code>members</code> as null, and format.md §8.2 asks for an
-array. The stress tester found it. The writer now writes an empty array
+array. The stress tester found it. The writer now writes an empty
+array.</li>
+<li>format.md §6 gave no bound on the window of a zstd frame. eictar
+refused a window larger than the chunk size and 1 MiB, and the second
+reader took any window. Thus a frame that asks for 24 MiB, in a chunk of
+a few bytes, was damage to eictar and correct to the reader.
+<code>FuzzArchive</code> found it in the second run of the gate (step
+6). format.md now gives eictar’s bound, and the reader refuses a larger
+window. A test makes sure that eictar’s writer never asks for more.
 (<code>TestIndexNoMembersIsAnArray</code>). A reader accepts null,
 because eictar 1.1.1 and earlier wrote it.</li>
 </ul>
@@ -2985,6 +2993,13 @@ binaries, or 23 GB. A <code>TestMain</code> now removes the binary after
 the tests (<code>RemoveBinary</code>). A test that stops at its time
 limit still leaves its binary. In the gate, the worktree goes with
 it.</p>
+<p>The second run of the gate, on 2026-10-17, passed <code>check</code>,
+<code>tla</code>, <code>vuln</code> and <code>mutate</code> (3 hours and
+35 minutes). Then <code>FuzzArchive</code> found a zstd frame that
+eictar refused and the second reader read, after 52 minutes of the fuzz
+step. The cause was a gap in <code>doc/format.md</code> (step 2). The
+input is in <code>src/internal/archive/testdata/fuzz/FuzzArchive</code>,
+so each test run tries it again.</p>
 <table>
 <colgroup>
 <col style="width: 50%" />

@@ -83,6 +83,7 @@ const (
 	maxDicts   = 1024
 	maxDictSz  = 1048576
 	maxChunk   = 268435456
+	maxWindow  = 1048576 // the smallest bound on a zstd window (format.md 6)
 	maxXName   = 255
 	maxXValue  = 65536
 	maxXCount  = 1024

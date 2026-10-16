@@ -9851,6 +9851,8 @@ times its compressed size, or 64 MiB, whichever is more</li>
 <li>array elements: the input length, and
 <code>MaxIndexMembers</code></li>
 <li>the chunk size: <code>MaxChunkSize</code>, 256 MiB (§5.2)</li>
+<li>the window of a zstd frame: the chunk size, or 1 MiB, whichever is
+more (<code>doc/format.md</code> §6)</li>
 <li>the crypto header length: 64 KiB</li>
 </ul>
 Extraction also reduces its number of workers, so that

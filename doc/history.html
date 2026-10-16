@@ -1947,6 +1947,10 @@ release needs Go 1.27.2 or later, which fixes GO-2026-6604 in
 <code>os.Root</code> on Windows. The release workflow fetches the newest
 patch release of Go, and does not use an older one from the cache of the
 runner.</li>
+<li><code>doc/format.md</code> §6 gives the bound on the window of a
+zstd frame that eictar applied without a statement:
+<code>max(1 MiB, chunk)</code>. The second reader applies it too. The
+bound does not change what eictar reads or writes.</li>
 </ul>
 </body>
 </html>

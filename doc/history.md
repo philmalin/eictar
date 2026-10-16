@@ -432,4 +432,8 @@ versions read what it writes.
   GO-2026-6604 in `os.Root` on Windows. The release workflow fetches the
   newest patch release of Go, and does not use an older one from the cache
   of the runner.
+- `doc/format.md` §6 gives the bound on the window of a zstd frame that
+  eictar applied without a statement: `max(1 MiB, chunk)`. The second
+  reader applies it too. The bound does not change what eictar reads or
+  writes.
 

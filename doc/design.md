@@ -3374,6 +3374,8 @@ section N of `testing.md`.
     compressed size, or 64 MiB, whichever is more
   - array elements: the input length, and `MaxIndexMembers`
   - the chunk size: `MaxChunkSize`, 256 MiB (§5.2)
+  - the window of a zstd frame: the chunk size, or 1 MiB, whichever is
+    more (`doc/format.md` §6)
   - the crypto header length: 64 KiB
 
   Extraction also reduces its number of workers, so that

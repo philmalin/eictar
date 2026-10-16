@@ -139,7 +139,9 @@ func (f zstdFactory) NewDecoder(maxPlain int) (Decoder, error) {
 func (zstdFactory) newDictDecoder(maxPlain int, dictionary []byte) (Decoder, error) {
 	// The bound goes into the decoder itself: a frame that would exceed it is
 	// refused while decoding, not after the memory has been handed over.
-	// The library requires at least a window's worth.
+	// The library also refuses a window larger than the bound, so a frame
+	// that asks for a window of more than max(1 MiB, the chunk size) is
+	// damage (doc/format.md 6).
 	maxMem := max(uint64(maxPlain), 1<<20)
 
 	opts := []zstd.DOption{

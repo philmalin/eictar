@@ -846,7 +846,7 @@ These tests compare the second reader with eictar:
 - The unit tests of the reader break each rule of `doc/format.md` §8.4 in
   the index of a golden archive. The reader must refuse each one.
 
-The second reader found two gaps in the specification and one fault in the
+The second reader found three gaps in the specification and one fault in the
 writer:
 
 - format.md §8.3 said that a member that is not `reg` has no `off`. But eictar 1.1.0
@@ -857,7 +857,14 @@ writer:
   reader checks it.
 - After a compact of an archive whose members were all deleted, the index
   held `members` as null, and format.md §8.2 asks for an array. The stress tester
-  found it. The writer now writes an empty array
+  found it. The writer now writes an empty array.
+- format.md §6 gave no bound on the window of a zstd frame. eictar refused
+  a window larger than the chunk size and 1 MiB, and the second reader
+  took any window. Thus a frame that asks for 24 MiB, in a chunk of a few
+  bytes, was damage to eictar and correct to the reader. `FuzzArchive`
+  found it in the second run of the gate (step 6). format.md now gives
+  eictar's bound, and the reader refuses a larger window. A test makes
+  sure that eictar's writer never asks for more.
   (`TestIndexNoMembersIsAnArray`). A reader accepts null, because eictar
   1.1.1 and earlier wrote it.
 
@@ -1200,6 +1207,13 @@ binary that they built in `.tmp/`, which no one clears. Each mutant of
 `TestMain` now removes the binary after the tests (`RemoveBinary`). A test
 that stops at its time limit still leaves its binary. In the gate, the
 worktree goes with it.
+
+The second run of the gate, on 2026-10-17, passed `check`, `tla`, `vuln`
+and `mutate` (3 hours and 35 minutes). Then `FuzzArchive` found a zstd
+frame that eictar refused and the second reader read, after 52 minutes of
+the fuzz step. The cause was a gap in `doc/format.md` (step 2). The input
+is in `src/internal/archive/testdata/fuzz/FuzzArchive`, so each test run
+tries it again.
 
 | Step | Status |
 |---|---|

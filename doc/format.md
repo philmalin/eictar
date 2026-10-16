@@ -149,6 +149,14 @@ length)` bytes.** The stream does not state its dictionary size, and a reader
 must not take a larger number from anywhere else. The chunks are
 independent, so no match reaches back further than the start of its chunk.
 
+**For `zstd`, a reader refuses a frame whose window is more than
+`max(1048576, chunk)` bytes.** `chunk` is the chunk size of the member
+(§5). The window is the `Window_Size` of the frame header (RFC 8878,
+section 3.1.1.1.2). A frame with the `Single_Segment_flag` has no window
+descriptor, and its `Frame_Content_Size` takes the place of the window. A
+writer makes no frame with a larger window. Without the bound, a frame of a
+few bytes can ask the reader for a window of terabytes.
+
 A decoder reads at most the expected plaintext length, and then one more
 byte to prove that the stream ends there. A chunk that decodes to more or to
 less is refused.

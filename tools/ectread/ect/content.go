@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/klauspost/compress/s2"
@@ -80,7 +81,7 @@ func (a *Archive) Payload(m *Member, w io.Writer) error {
 			if o.Codec < 0 {
 				return refusef("member id %d, chunk %d: %d bytes with no codec, not %d", o.ID, i, len(b), want)
 			}
-			if b, err = a.decode(a.Codecs[o.Codec], b, want); err != nil {
+			if b, err = a.decode(a.Codecs[o.Codec], b, want, o.Chunk); err != nil {
 				return refusef("member id %d, chunk %d: %v", o.ID, i, err)
 			}
 		}
@@ -178,11 +179,12 @@ func (e *expander) Write(p []byte) (int, error) {
 }
 
 // decode decodes one compressed chunk to exactly want bytes (format.md 6).
-func (a *Archive) decode(c Codec, b []byte, want uint64) ([]byte, error) {
+// chunk is the chunk size of the member.
+func (a *Archive) decode(c Codec, b []byte, want, chunk uint64) ([]byte, error) {
 	br := bytes.NewReader(b)
 	switch c.Name {
 	case "zstd":
-		return a.decodeZstd(c, b, want)
+		return a.decodeZstd(c, b, want, chunk)
 	case "flate":
 		return exact(flate.NewReader(br), br, want)
 	case "gzip":
@@ -237,7 +239,7 @@ func exact(r io.Reader, src *bytes.Reader, want uint64) ([]byte, error) {
 	return out, nil
 }
 
-func (a *Archive) decodeZstd(c Codec, b []byte, want uint64) ([]byte, error) {
+func (a *Archive) decodeZstd(c Codec, b []byte, want, chunk uint64) ([]byte, error) {
 	var h zstd.Header
 	if err := h.Decode(b); err != nil {
 		return nil, err
@@ -247,6 +249,9 @@ func (a *Archive) decodeZstd(c Codec, b []byte, want uint64) ([]byte, error) {
 	}
 	if h.DictionaryID != c.Dict {
 		return nil, errors.New("the frame names another dictionary")
+	}
+	if !h.SingleSegment && h.WindowSize > max(maxWindow, chunk) {
+		return nil, fmt.Errorf("the frame asks for a window of %d bytes", h.WindowSize)
 	}
 	opts := []zstd.DOption{zstd.WithDecoderConcurrency(1)}
 	if c.Dict != 0 {
