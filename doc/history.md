@@ -436,4 +436,15 @@ versions read what it writes.
   eictar applied without a statement: `max(1 MiB, chunk)`. The second
   reader applies it too. The bound does not change what eictar reads or
   writes.
+- **Security:** `klauspost/compress` goes from v1.20.1 to v1.20.2, which
+  fixes GHSA-fpmh-frq8-7rj8. A crafted zstd chunk made the decoder panic,
+  so eictar stopped with a crash in place of exit 3. Two crafted chunks
+  are enough, because the bad state stays in the library for the next
+  chunk. A test decodes the input of the advisory, in eictar and in the
+  second reader.
+- The reader matched a CBOR map key to a field of another case: it read
+  `salT` as `salt` in the crypto header, and `Path` as `path` in the index.
+  Now a key is a field only when its bytes are equal, as
+  `doc/format.md` §8.1 says. No writer of eictar made such a key, so each
+  archive of eictar reads as before.
 

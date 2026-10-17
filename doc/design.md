@@ -3279,8 +3279,11 @@ commit uses the same code. Dependabot (`.github/dependabot.yml`) opens a
 pull request each month: one for the Go modules, and one for the GitHub
 Actions of the workflows. An update of a module follows these steps:
 
-1. Read what changed in the packages that eictar uses. The decoders read
-   untrusted archives, so a change there can be a security fix.
+1. Read what changed in the packages that eictar uses, and the security
+   advisories of the module. The decoders read untrusted archives, so a
+   change there can be a security fix. `govulncheck` does not see an
+   advisory that is not in the Go vulnerability database yet (testing.md
+   §5, step 6).
 2. Run `make check`, and `make fuzz` for some minutes. The golden archives
    show that the format did not change.
 3. Update `THIRD_PARTY.md`: the versions, and the license texts if they

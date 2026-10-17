@@ -9747,8 +9747,11 @@ same code. Dependabot (<code>.github/dependabot.yml</code>) opens a pull
 request each month: one for the Go modules, and one for the GitHub
 Actions of the workflows. An update of a module follows these steps:</p>
 <ol type="1">
-<li>Read what changed in the packages that eictar uses. The decoders
-read untrusted archives, so a change there can be a security fix.</li>
+<li>Read what changed in the packages that eictar uses, and the security
+advisories of the module. The decoders read untrusted archives, so a
+change there can be a security fix. <code>govulncheck</code> does not
+see an advisory that is not in the Go vulnerability database yet
+(testing.md §5, step 6).</li>
 <li>Run <code>make check</code>, and <code>make fuzz</code> for some
 minutes. The golden archives show that the format did not change.</li>
 <li>Update <code>THIRD_PARTY.md</code>: the versions, and the license

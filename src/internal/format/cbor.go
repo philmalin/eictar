@@ -87,6 +87,10 @@ func decModeFor(inputLen int) (cbor.DecMode, error) {
 		TagsMd:      cbor.TagsForbidden,
 		// A duplicate key lets two readers disagree about the same index.
 		DupMapKey: cbor.DupMapKeyEnforcedAPF,
+		// The default also takes "Path" for "path". A key is a field only
+		// when its bytes are the field's name: any other key is one that the
+		// reader does not know, and ignores (doc/format.md 8.3).
+		FieldNameMatching: cbor.FieldNameMatchingCaseSensitive,
 	}.DecMode()
 	if err != nil {
 		return nil, fmt.Errorf("format: building the CBOR decoder: %w", err)

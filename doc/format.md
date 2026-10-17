@@ -280,7 +280,9 @@ The index is encoded in these steps:
    their encoded form (RFC 8949, section 4.2.1), so a shorter key comes
    first. A reader does not check the order. Arrays and maps have a
    definite length. There are no tags and no duplicate keys. Text strings
-   can hold any bytes, because a path is not always UTF-8.
+   can hold any bytes, because a path is not always UTF-8. A key is one of
+   the keys in the tables only when its bytes are equal: `Path` is not
+   `path`.
 2. Zstandard, one frame, when bit 1 of trailer_flags is 1. A writer always
    sets it.
 3. The seal of §7.4, when bit 0 of trailer_flags is 1.
@@ -355,7 +357,8 @@ eictar 1.1.0 and earlier wrote one there, with a salt that no key uses. A
 reader accepts it, and ignores it. A member that is not `reg` never has
 `enc`. When `enc` is present, its `salt` has 16 bytes.
 
-A reader ignores a map key that it does not know. A writer that adds a key
+A reader ignores a map key that it does not know, also a key that differs
+from a known key only in case (§8.1). A writer that adds a key
 that an older reader must not ignore changes `format_minor` or
 `format_major`.
 

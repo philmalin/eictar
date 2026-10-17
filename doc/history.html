@@ -1951,6 +1951,18 @@ runner.</li>
 zstd frame that eictar applied without a statement:
 <code>max(1 MiB, chunk)</code>. The second reader applies it too. The
 bound does not change what eictar reads or writes.</li>
+<li><strong>Security:</strong> <code>klauspost/compress</code> goes from
+v1.20.1 to v1.20.2, which fixes GHSA-fpmh-frq8-7rj8. A crafted zstd
+chunk made the decoder panic, so eictar stopped with a crash in place of
+exit 3. Two crafted chunks are enough, because the bad state stays in
+the library for the next chunk. A test decodes the input of the
+advisory, in eictar and in the second reader.</li>
+<li>The reader matched a CBOR map key to a field of another case: it
+read <code>salT</code> as <code>salt</code> in the crypto header, and
+<code>Path</code> as <code>path</code> in the index. Now a key is a
+field only when its bytes are equal, as <code>doc/format.md</code> §8.1
+says. No writer of eictar made such a key, so each archive of eictar
+reads as before.</li>
 </ul>
 </body>
 </html>

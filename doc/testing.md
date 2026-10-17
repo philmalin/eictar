@@ -846,8 +846,8 @@ These tests compare the second reader with eictar:
 - The unit tests of the reader break each rule of `doc/format.md` §8.4 in
   the index of a golden archive. The reader must refuse each one.
 
-The second reader found three gaps in the specification and one fault in the
-writer:
+The second reader found three gaps in the specification, one fault in the
+reader of eictar, and one fault in the writer:
 
 - format.md §8.3 said that a member that is not `reg` has no `off`. But eictar 1.1.0
   and earlier wrote an `off` on each member with no blob, of each type, as
@@ -857,7 +857,9 @@ writer:
   reader checks it.
 - After a compact of an archive whose members were all deleted, the index
   held `members` as null, and format.md §8.2 asks for an array. The stress tester
-  found it. The writer now writes an empty array.
+  found it. The writer now writes an empty array
+  (`TestIndexNoMembersIsAnArray`). A reader accepts null, because eictar
+  1.1.1 and earlier wrote it.
 - format.md §6 gave no bound on the window of a zstd frame. eictar refused
   a window larger than the chunk size and 1 MiB, and the second reader
   took any window. Thus a frame that asks for 24 MiB, in a chunk of a few
@@ -865,8 +867,13 @@ writer:
   found it in the second run of the gate (step 6). format.md now gives
   eictar's bound, and the reader refuses a larger window. A test makes
   sure that eictar's writer never asks for more.
-  (`TestIndexNoMembersIsAnArray`). A reader accepts null, because eictar
-  1.1.1 and earlier wrote it.
+- eictar took a map key for a field of another case: `salT` for `salt` in
+  the crypto header, `Path` for `path` in the index. The CBOR library does
+  this by default. format.md §8.3 says that a reader ignores a key that it
+  does not know, so the second reader found no salt and refused the
+  archive, but eictar read it. `FuzzArchive` found it after the gate, in a
+  run of 5 minutes. eictar now matches a key only by its exact bytes
+  (`TestKeysMatchExactly`), and format.md §8.1 says so.
 
 **Step 3. Faults of the disk and of the machine.** A layer under the writer
 makes a write, an `fsync` or a rename fail, or makes a write short. A
@@ -1169,6 +1176,13 @@ in a function that eictar does not use does not stop a release. The scan
 uses the toolchain that builds, because the standard library is part of
 the binary. The release workflow runs `make vuln` too, with the toolchain
 that builds the release binaries.
+
+The scan knows only the entries of the Go vulnerability database. An
+advisory that a module publishes on GitHub can come days before its entry,
+or with no entry. GHSA-fpmh-frq8-7rj8, a panic of the zstd decoder of
+`klauspost/compress` v1.20.1 and earlier on a crafted frame, had no entry
+when the gate passed `make vuln`. Thus a release also needs a read of the
+advisories and the release notes of each module (design.md §12.3, step 1).
 
 The first run of the gate found a vulnerability. GO-2026-6604 lets
 `os.Root.MkdirAll` follow a junction out of the root on Windows. An
