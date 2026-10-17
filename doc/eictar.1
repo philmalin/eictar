@@ -311,7 +311,9 @@ KiB, MiB, GiB or TiB, also written K, M, G and T.
 .SS Encryption
 .TP
 .BR \-e ", " \-\-encrypt
-Encrypt the new archive. The program asks for the passphrase two times. Only
+Encrypt the new archive. The program asks for the passphrase two times. At
+a prompt, Ctrl-D at the start of the line, or a terminal that closes, stops
+the program with exit code 4. Only
 .B \-c
 takes this option: every later operation uses the passphrase of the archive,
 until

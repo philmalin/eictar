@@ -319,13 +319,21 @@ func (f zstdFactory) train(p Params, samples [][]byte, size int, id uint32) ([]b
 	return nil, fmt.Errorf("the dictionary trainer could not keep the dictionary within %d bytes", size)
 }
 
+// buildZstdDict is the trainer of the library. A test replaces it with one
+// that panics: since klauspost/compress v1.20.2, no input that is known
+// makes the trainer panic.
+var buildZstdDict = dict.BuildZstdDict
+
+// trainOnce trains one dictionary. A panic of the trainer is an error: the
+// trainer of v1.20.1 panicked on too little input, and the files are input
+// that a user does not choose for the trainer.
 func (zstdFactory) trainOnce(samples [][]byte, content int, id uint32, level int) (out []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			out, err = nil, fmt.Errorf("the dictionary trainer failed: %v", r)
 		}
 	}()
-	out, err = dict.BuildZstdDict(samples, dict.Options{
+	out, err = buildZstdDict(samples, dict.Options{
 		MaxDictSize: content,
 		HashBytes:   6,
 		ZstdDictID:  id,

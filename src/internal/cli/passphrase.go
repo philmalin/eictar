@@ -91,7 +91,7 @@ func (p passphraseSource) prompt() ([]byte, error) {
 	// The prompt goes to stderr so that it cannot land in a redirected
 	// listing or in extracted content.
 	fmt.Fprint(errOut, label+": ")
-	first, err := term.ReadPassword(fd)
+	first, err := readPassword(fd)
 	fmt.Fprintln(errOut)
 	if err != nil {
 		return nil, fmt.Errorf("reading the passphrase: %w", err)
@@ -102,7 +102,7 @@ func (p passphraseSource) prompt() ([]byte, error) {
 
 	if p.confirm {
 		fmt.Fprint(errOut, label+" (again): ")
-		second, err := term.ReadPassword(fd)
+		second, err := readPassword(fd)
 		fmt.Fprintln(errOut)
 		if err != nil {
 			return nil, fmt.Errorf("reading the passphrase: %w", err)

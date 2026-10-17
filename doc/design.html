@@ -8396,6 +8396,13 @@ only when an archive needs a passphrase. Thus a plaintext archive never
 prompts, and a usage error never asks for a secret. The prompt goes to
 stderr, so it cannot go into a redirected listing or into extracted
 content.</p>
+<p><strong>The end of the input stops the prompt with an error.</strong>
+That is Ctrl-D at the start of the line, or a terminal that closes, such
+as an SSH session that ends. After a hangup, each read of the terminal
+gives 0 bytes and no error. <code>term.ReadPassword</code> of
+<code>golang.org/x/term</code> then reads again for ever, at the full
+speed of a CPU. Thus on Unix the program reads the line itself
+(<code>password_unix.go</code>), and stops at a read of 0 bytes.</p>
 <p><code>--passphrase-env</code> prints a warning. Any process that can
 read this process’s environment can see the value.</p>
 <p><strong>A passphrase source means “this archive is

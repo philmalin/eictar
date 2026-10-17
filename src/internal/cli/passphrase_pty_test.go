@@ -3,12 +3,14 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -138,5 +140,32 @@ func TestPromptOnTheProcessTerminal(t *testing.T) {
 	prompts, _ := io.ReadAll(r)
 	if string(got) != "pw" || err != nil || string(prompts) != "Passphrase: \n" {
 		t.Errorf("%q, %v, prompts %q", got, err, prompts)
+	}
+}
+
+// TestPromptAfterAHangup: after the other end of a terminal closes, termios
+// fails, but each read gives 0 bytes and no error. A prompt that has set
+// the terminal and then reads must stop there, with an error: in
+// term.ReadPassword it read for ever, and TestPromptReadFails waited for 30
+// minutes in CI when the close came between the two.
+func TestPromptAfterAHangup(t *testing.T) {
+	master, slave := openPTY(t)
+	fd := int(slave.Fd())
+	master.Close()
+	if n, err := unix.Read(fd, make([]byte, 1)); n != 0 || err != nil {
+		t.Skipf("this kernel gives %d, %v to a read after a hangup", n, err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := readPasswordLine(func(b []byte) (int, error) { return unix.Read(fd, b) })
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, io.EOF) {
+			t.Errorf("got %v, want io.EOF", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the read of the line did not stop")
 	}
 }

@@ -18,10 +18,10 @@ func TestZstdFramesStayInTheWindowBound(t *testing.T) {
 	for i := range text {
 		text[i] = "abcdefgh  \n"[rng.IntN(11)]
 	}
-	for _, p := range []Params{{"level": "1"}, {"level": "3"}, {"level": "12"}, {"level": "19"}, {"long": "27"}} {
+	for _, p := range []Params{{"level": "1"}, {"level": "3"}, {"level": "12"}, {"level": "19"}, {"level": "1", "long": "27"}} {
 		for _, chunk := range []int{512, 1000, 1024, 1025, 3 << 20, 5 << 20} {
-			if chunk > 1<<20 && (p["level"] == "12" || p["level"] == "19") {
-				continue // slow, and level 1 makes the same frames: larger than the window
+			if chunk > 1<<20 && p["level"] != "1" {
+				continue // slow under -race, and level 1 makes the same kinds of frame
 			}
 			for _, maxChunk := range []int{chunk, 0} {
 				enc, err := NewEncoderWith("zstd", p, EncoderOptions{Concurrency: 1, MaxChunk: maxChunk})

@@ -448,3 +448,9 @@ versions read what it writes.
   `doc/format.md` §8.1 says. No writer of eictar made such a key, so each
   archive of eictar reads as before.
 
+- The passphrase prompt read for ever, at the full speed of a CPU, when the
+  terminal closed while it waited. The prompt used `term.ReadPassword`,
+  which reads again after a read of 0 bytes. On Unix, the program now reads
+  the line itself, and the end of the input stops it with exit 4
+  (design.md §10.3). A CI run found it: `TestPromptReadFails` waited for 30
+  minutes.

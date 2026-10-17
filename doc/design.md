@@ -2344,6 +2344,13 @@ archive never prompts, and a usage error never asks for a secret. The prompt
 goes to stderr, so it cannot go into a redirected listing or into extracted
 content.
 
+**The end of the input stops the prompt with an error.** That is Ctrl-D
+at the start of the line, or a terminal that closes, such as an SSH session
+that ends. After a hangup, each read of the terminal gives 0 bytes and no
+error. `term.ReadPassword` of `golang.org/x/term` then reads again for ever,
+at the full speed of a CPU. Thus on Unix the program reads the line itself
+(`password_unix.go`), and stops at a read of 0 bytes.
+
 `--passphrase-env` prints a warning. Any process that can read this
 process's environment can see the value.
 

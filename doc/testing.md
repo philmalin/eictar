@@ -1229,6 +1229,29 @@ the fuzz step. The cause was a gap in `doc/format.md` (step 2). The input
 is in `src/internal/archive/testdata/fuzz/FuzzArchive`, so each test run
 tries it again.
 
+A CI run on Linux stopped after 30 minutes in `TestPromptReadFails`, and
+the next run passed. A goroutine dump showed the prompt in a loop of reads.
+After a terminal hangs up, each read gives 0 bytes and no error, and
+`term.ReadPassword` reads again for ever. The test closes the terminal
+while the prompt waits, and the fault showed only when the close came
+between the set of the terminal and the first read. A loop of 3,000 runs
+under `-race` stopped in the same way in 4 minutes.
+`TestPromptAfterAHangup` now gives the hangup before the read every time,
+and eictar reads the line itself (design.md §10.3). The mutation step
+found three survivors in the new code: the settings of the terminal, and
+an error of each call that reads or sets them. `TestReadPasswordSetsTheTerminal`
+now tests them. A terminal that cannot turn off the echo stops the prompt
+before it reads.
+
+The third run of the gate, with `klauspost/compress` v1.20.2, stopped in
+`mutate` after 10 minutes. The `recover` in the training of a dictionary
+had a survivor. The trainer of v1.20.1 panicked on too little input, and
+`TestTrainingFailsCleanly` gave that input. The trainer of v1.20.2 returns
+an error for it, so no test made a panic. The `recover` stays, for a panic
+that is not known yet. `TestTrainerPanicIsAnError` replaces the trainer
+with one that panics. Thus an update of a module can take away what a test
+tests, and the mutation step finds it.
+
 | Step | Status |
 |---|---|
 | 1. Strength of the tests | done: each package has no survivor that is not explained |

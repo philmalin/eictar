@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/klauspost/compress/dict"
 )
 
 // sourceLike makes n small files that share most of their text, as the files
@@ -167,5 +169,18 @@ func TestTrainedDictionaryFitsItsSize(t *testing.T) {
 		if len(d) > size {
 			t.Errorf("asked for %d bytes, got %d", size, len(d))
 		}
+	}
+}
+
+// TestTrainerPanicIsAnError: a panic of the library's trainer is an error of
+// the training, not a crash of the run. Since v1.20.2 of the library, no
+// input that is known makes it panic, so the test gives a trainer that does.
+func TestTrainerPanicIsAnError(t *testing.T) {
+	saved := buildZstdDict
+	t.Cleanup(func() { buildZstdDict = saved })
+	buildZstdDict = func([][]byte, dict.Options) ([]byte, error) { panic("index out of range") }
+	_, err := TrainDict("zstd", nil, sourceLike(10), 16<<10, 40000)
+	if err == nil || !strings.Contains(err.Error(), "the dictionary trainer failed: index out of range") {
+		t.Errorf("got %v, want the panic as an error", err)
 	}
 }
