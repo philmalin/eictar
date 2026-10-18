@@ -3,30 +3,35 @@ package fsutil
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // The pattern rules against a simple reference matcher (doc/testing.md 5,
 // step 4). The reference follows the four rules of doc/design.md 10.11, with
 // a glob of its own, and none of the code of Match.
 
-// refGlob matches one name: * is any run of characters, and ? is one.
+// refGlob matches one name: * is any run of characters, and ? is one. It
+// fills a table of which start of the pattern matches which start of the
+// name, so its time is len(pattern) times len(name). A glob that tries each
+// place for each * takes exponential time: the gate's FuzzMatch found
+// "**************?b", which took 47 seconds.
 func refGlob(pattern, name string) bool {
-	switch {
-	case pattern == "":
-		return name == ""
-	case pattern[0] == '*':
-		for i := 0; i <= len(name); i++ {
-			if refGlob(pattern[1:], name[i:]) {
-				return true
+	// ok[j]: the pattern so far matches name[:j].
+	ok := make([]bool, len(name)+1)
+	ok[0] = true
+	for i := range len(pattern) {
+		next := make([]bool, len(name)+1)
+		for j := range next {
+			switch {
+			case pattern[i] == '*':
+				next[j] = ok[j] || j > 0 && next[j-1]
+			case j > 0 && (pattern[i] == '?' || pattern[i] == name[j-1]):
+				next[j] = ok[j-1]
 			}
 		}
-		return false
-	case name == "":
-		return false
-	case pattern[0] == '?' || pattern[0] == name[0]:
-		return refGlob(pattern[1:], name[1:])
+		ok = next
 	}
-	return false
+	return ok[len(name)]
 }
 
 // refMatch is doc/design.md 10.11: the path itself, a directory that the
@@ -90,4 +95,32 @@ func FuzzMatch(f *testing.F) {
 			t.Errorf("Match(%q, %q) = %v, the rules give %v", pattern, member, got, want)
 		}
 	})
+}
+
+// TestRefGlob: the reference glob gives the rules, and a pattern of many *
+// takes little time (FuzzMatch/b5a1eff3bd401e36 took 47 seconds).
+func TestRefGlob(t *testing.T) {
+	for _, tc := range []struct {
+		pattern, name string
+		want          bool
+	}{
+		{"", "", true}, {"", "a", false}, {"*", "", true}, {"*", "ab", true},
+		{"?", "", false}, {"?", "a", true}, {"?", "ab", false}, {"a*b", "ab", true},
+		{"a*b", "aab", true}, {"a*b", "aba", false}, {"*a*", "bab", true},
+		{"*a*", "bbb", false}, {"??*", "a", false}, {"a?", "ab", true}, {"b", "a", false},
+	} {
+		if got := refGlob(tc.pattern, tc.name); got != tc.want {
+			t.Errorf("refGlob(%q, %q) = %v, want %v", tc.pattern, tc.name, got, tc.want)
+		}
+	}
+	done := make(chan bool, 1)
+	go func() { done <- refMatch("**************?b", "abbbbbbbbbbbbbbbbbbaaba") }()
+	select {
+	case got := <-done:
+		if got {
+			t.Error(`"**************?b" matched "abbbbbbbbbbbbbbbbbbaaba"`)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("refMatch took more than 5 seconds for a pattern of 14 stars")
+	}
 }

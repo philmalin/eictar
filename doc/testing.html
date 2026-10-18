@@ -2834,10 +2834,11 @@ does not open at another index, with the other final flag, in another
 member, or for another generation or id.</li>
 <li><code>FuzzMatch</code> (<code>fsutil</code>) compares
 <code>Match</code> with a matcher that follows the four rules of
-design.md §10.11 and has a glob of its own. The patterns are of
-<code>a</code>, <code>b</code>, <code>*</code>, <code>?</code> and
-<code>/</code>. With one rule taken out of <code>Match</code>, it finds
-a difference in less than a second.</li>
+design.md §10.11 and has a glob of its own, which fills a table and does
+not backtrack. The patterns are of <code>a</code>, <code>b</code>,
+<code>*</code>, <code>?</code> and <code>/</code>. With one rule taken
+out of <code>Match</code>, it finds a difference in less than a
+second.</li>
 <li><code>FuzzCompressSpec</code> (<code>cli</code>): a spec that parses
 has a name, and no empty key or value, and its <code>String</code>
 parses back to the same spec.</li>
@@ -3038,6 +3039,18 @@ v1.20.2 returns an error for it, so no test made a panic. The
 <code>TestTrainerPanicIsAnError</code> replaces the trainer with one
 that panics. Thus an update of a module can take away what a test tests,
 and the mutation step finds it.</p>
+<p>The fourth run of the gate passed <code>check</code>,
+<code>tla</code>, <code>vuln</code> and <code>mutate</code> (3 hours and
+41 minutes). Then <code>FuzzMatch</code> stopped after 9 hours of the
+fuzz step, with a worker that did not reply. The fault was in the test,
+not in eictar. The glob of the reference tried each place for each
+<code>*</code>, and the pattern <code>**************?b</code> took 47
+seconds. <code>Match</code> uses <code>path.Match</code>, which takes a
+run of <code>*</code> as one. Now the reference glob fills a table, and
+its time is the length of the pattern times the length of the name.
+<code>TestRefGlob</code> gives the rules and a limit of 5 seconds for
+that pattern. The input is in
+<code>src/internal/fsutil/testdata/fuzz/FuzzMatch</code>.</p>
 <table>
 <colgroup>
 <col style="width: 50%" />

@@ -1067,7 +1067,8 @@ the corpus is kept.
   its plaintext, in its place. It does not open at another index, with the
   other final flag, in another member, or for another generation or id.
 - `FuzzMatch` (`fsutil`) compares `Match` with a matcher that follows the
-  four rules of design.md §10.11 and has a glob of its own. The patterns are of `a`,
+  four rules of design.md §10.11 and has a glob of its own, which fills a
+  table and does not backtrack. The patterns are of `a`,
   `b`, `*`, `?` and `/`. With one rule taken out of `Match`, it finds a
   difference in less than a second.
 - `FuzzCompressSpec` (`cli`): a spec that parses has a name, and no empty
@@ -1251,6 +1252,16 @@ an error for it, so no test made a panic. The `recover` stays, for a panic
 that is not known yet. `TestTrainerPanicIsAnError` replaces the trainer
 with one that panics. Thus an update of a module can take away what a test
 tests, and the mutation step finds it.
+
+The fourth run of the gate passed `check`, `tla`, `vuln` and `mutate`
+(3 hours and 41 minutes). Then `FuzzMatch` stopped after 9 hours of the
+fuzz step, with a worker that did not reply. The fault was in the test, not
+in eictar. The glob of the reference tried each place for each `*`, and the
+pattern `**************?b` took 47 seconds. `Match` uses `path.Match`, which
+takes a run of `*` as one. Now the reference glob fills a table, and its
+time is the length of the pattern times the length of the name.
+`TestRefGlob` gives the rules and a limit of 5 seconds for that pattern.
+The input is in `src/internal/fsutil/testdata/fuzz/FuzzMatch`.
 
 | Step | Status |
 |---|---|
