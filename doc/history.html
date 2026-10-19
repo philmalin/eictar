@@ -1930,45 +1930,60 @@ and the tests check the key schedule against it.</li>
 </ul>
 <p>The format is still 1.0. v1.1.1 reads every earlier archive, and
 earlier versions read what it writes.</p>
-<p><strong>After v1.1.1, not yet in a release.</strong></p>
+<p><strong>v1.1.2 is a security release.</strong> It is the first
+release that passed the release gate (testing.md §5, step 6). The gate
+ran each check of the plan on the code of the release, in 24 hours: 1
+hour of fuzzing for each target, and 8 hours of stress.</p>
+<p>The security fix:</p>
 <ul>
-<li><p>After a compact of an archive whose members were all deleted, the
-index held <code>members</code> as null. <code>doc/format.md</code> §8.2
-asks for an array, and the writer now writes an empty array. Each
-version reads both forms.</p></li>
-<li><p>A create of an archive that did not exist could rename over one
-that a second create made in the meantime, and lose an append to it that
-had reported success. Now that create stops with exit 4 (design.md
-§9.6).</p></li>
-<li><p>The release gate: <code>make gate</code> runs every check of
-testing.md §5 on one commit, and <code>make vuln</code> scans for known
-vulnerabilities. The release workflow runs <code>make vuln</code> too. A
-release needs Go 1.27.2 or later, which fixes GO-2026-6604 in
-<code>os.Root</code> on Windows. The release workflow fetches the newest
-patch release of Go, and does not use an older one from the cache of the
-runner.</p></li>
-<li><p><code>doc/format.md</code> §6 gives the bound on the window of a
-zstd frame that eictar applied without a statement:
-<code>max(1 MiB, chunk)</code>. The second reader applies it too. The
-bound does not change what eictar reads or writes.</p></li>
-<li><p><strong>Security:</strong> <code>klauspost/compress</code> goes
-from v1.20.1 to v1.20.2, which fixes GHSA-fpmh-frq8-7rj8. A crafted zstd
-chunk made the decoder panic, so eictar stopped with a crash in place of
-exit 3. Two crafted chunks are enough, because the bad state stays in
-the library for the next chunk. A test decodes the input of the
-advisory, in eictar and in the second reader.</p></li>
-<li><p>The reader matched a CBOR map key to a field of another case: it
-read <code>salT</code> as <code>salt</code> in the crypto header, and
-<code>Path</code> as <code>path</code> in the index. Now a key is a
-field only when its bytes are equal, as <code>doc/format.md</code> §8.1
-says. No writer of eictar made such a key, so each archive of eictar
-reads as before.</p></li>
-<li><p>The passphrase prompt read for ever, at the full speed of a CPU,
+<li><code>klauspost/compress</code> goes from v1.20.1 to v1.20.2, which
+fixes GHSA-fpmh-frq8-7rj8. A crafted zstd chunk made the decoder panic,
+so eictar stopped with a crash in place of exit 3. Two crafted chunks
+are enough, because the bad state stays in the library for the next
+chunk. A test decodes the input of the advisory, in eictar and in the
+second reader.</li>
+</ul>
+<p>The other fixes:</p>
+<ul>
+<li>A create of an archive that did not exist could rename over one that
+a second create made in the meantime, and lose an append to it that had
+reported success. Now that create stops with exit 4 (design.md
+§9.6).</li>
+<li>The passphrase prompt read for ever, at the full speed of a CPU,
 when the terminal closed while it waited. The prompt used
 <code>term.ReadPassword</code>, which reads again after a read of 0
 bytes. On Unix, the program now reads the line itself, and the end of
 the input stops it with exit 4 (design.md §10.3). A CI run found it:
-<code>TestPromptReadFails</code> waited for 30 minutes.</p></li>
+<code>TestPromptReadFails</code> waited for 30 minutes.</li>
+<li>The reader matched a CBOR map key to a field of another case: it
+read <code>salT</code> as <code>salt</code> in the crypto header, and
+<code>Path</code> as <code>path</code> in the index. Now a key is a
+field only when its bytes are equal, as <code>doc/format.md</code> §8.1
+says. No writer of eictar made such a key, so each archive of eictar
+reads as before.</li>
 </ul>
+<p>The format:</p>
+<ul>
+<li>After a compact of an archive whose members were all deleted, the
+index held <code>members</code> as null. <code>doc/format.md</code> §8.2
+asks for an array, and the writer now writes an empty array. Each
+version reads both forms.</li>
+<li><code>doc/format.md</code> §6 gives the bound on the window of a
+zstd frame that eictar applied without a statement:
+<code>max(1 MiB, chunk)</code>. The second reader applies it too. The
+bound does not change what eictar reads or writes.</li>
+</ul>
+<p>The release:</p>
+<ul>
+<li><code>make gate</code> runs every check of testing.md §5 on one
+commit, and <code>make vuln</code> scans for known vulnerabilities. The
+release workflow runs <code>make vuln</code> too.</li>
+<li>A release needs Go 1.27.2 or later, which fixes GO-2026-6604 in
+<code>os.Root</code> on Windows. The release workflow fetches the newest
+patch release of Go, and does not use an older one from the cache of the
+runner.</li>
+</ul>
+<p>The format is still 1.0. v1.1.2 reads every earlier archive, and
+earlier versions read what it writes.</p>
 </body>
 </html>

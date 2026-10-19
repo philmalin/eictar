@@ -418,39 +418,56 @@ The format:
 The format is still 1.0. v1.1.1 reads every earlier archive, and earlier
 versions read what it writes.
 
-**After v1.1.1, not yet in a release.**
+**v1.1.2 is a security release.** It is the first release that passed the
+release gate (testing.md §5, step 6). The gate ran each check of the plan
+on the code of the release, in 24 hours: 1 hour of fuzzing for each
+target, and 8 hours of stress.
 
-- After a compact of an archive whose members were all deleted, the index
-  held `members` as null. `doc/format.md` §8.2 asks for an array, and the
-  writer now writes an empty array. Each version reads both forms.
+The security fix:
+
+- `klauspost/compress` goes from v1.20.1 to v1.20.2, which fixes
+  GHSA-fpmh-frq8-7rj8. A crafted zstd chunk made the decoder panic, so
+  eictar stopped with a crash in place of exit 3. Two crafted chunks are
+  enough, because the bad state stays in the library for the next chunk.
+  A test decodes the input of the advisory, in eictar and in the second
+  reader.
+
+The other fixes:
+
 - A create of an archive that did not exist could rename over one that a
   second create made in the meantime, and lose an append to it that had
   reported success. Now that create stops with exit 4 (design.md §9.6).
-- The release gate: `make gate` runs every check of testing.md §5 on one commit,
-  and `make vuln` scans for known vulnerabilities. The release workflow
-  runs `make vuln` too. A release needs Go 1.27.2 or later, which fixes
-  GO-2026-6604 in `os.Root` on Windows. The release workflow fetches the
-  newest patch release of Go, and does not use an older one from the cache
-  of the runner.
-- `doc/format.md` §6 gives the bound on the window of a zstd frame that
-  eictar applied without a statement: `max(1 MiB, chunk)`. The second
-  reader applies it too. The bound does not change what eictar reads or
-  writes.
-- **Security:** `klauspost/compress` goes from v1.20.1 to v1.20.2, which
-  fixes GHSA-fpmh-frq8-7rj8. A crafted zstd chunk made the decoder panic,
-  so eictar stopped with a crash in place of exit 3. Two crafted chunks
-  are enough, because the bad state stays in the library for the next
-  chunk. A test decodes the input of the advisory, in eictar and in the
-  second reader.
-- The reader matched a CBOR map key to a field of another case: it read
-  `salT` as `salt` in the crypto header, and `Path` as `path` in the index.
-  Now a key is a field only when its bytes are equal, as
-  `doc/format.md` §8.1 says. No writer of eictar made such a key, so each
-  archive of eictar reads as before.
-
 - The passphrase prompt read for ever, at the full speed of a CPU, when the
   terminal closed while it waited. The prompt used `term.ReadPassword`,
   which reads again after a read of 0 bytes. On Unix, the program now reads
   the line itself, and the end of the input stops it with exit 4
   (design.md §10.3). A CI run found it: `TestPromptReadFails` waited for 30
   minutes.
+- The reader matched a CBOR map key to a field of another case: it read
+  `salT` as `salt` in the crypto header, and `Path` as `path` in the index.
+  Now a key is a field only when its bytes are equal, as
+  `doc/format.md` §8.1 says. No writer of eictar made such a key, so each
+  archive of eictar reads as before.
+
+The format:
+
+- After a compact of an archive whose members were all deleted, the index
+  held `members` as null. `doc/format.md` §8.2 asks for an array, and the
+  writer now writes an empty array. Each version reads both forms.
+- `doc/format.md` §6 gives the bound on the window of a zstd frame that
+  eictar applied without a statement: `max(1 MiB, chunk)`. The second
+  reader applies it too. The bound does not change what eictar reads or
+  writes.
+
+The release:
+
+- `make gate` runs every check of testing.md §5 on one commit, and
+  `make vuln` scans for known vulnerabilities. The release workflow runs
+  `make vuln` too.
+- A release needs Go 1.27.2 or later, which fixes GO-2026-6604 in
+  `os.Root` on Windows. The release workflow fetches the newest patch
+  release of Go, and does not use an older one from the cache of the
+  runner.
+
+The format is still 1.0. v1.1.2 reads every earlier archive, and earlier
+versions read what it writes.
