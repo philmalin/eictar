@@ -1264,6 +1264,15 @@ time is the length of the pattern times the length of the name.
 `TestRefGlob` gives the rules and a limit of 5 seconds for that pattern.
 The input is in `src/internal/fsutil/testdata/fuzz/FuzzMatch`.
 
+The fifth run of the gate, with `klauspost/compress` v1.20.3, stopped in
+`mutate` after 5 minutes. In `pipeline`, the mutant that ignores a failed
+write in `Spool.spill` survived, and the earlier runs had killed it.
+`TestPipelineFaults` makes the operation of number k fail, but three
+workers run at the same time, so the numbers change from run to run. The
+fault fell on this write only in some orders of the workers, and the load
+of the mutation step changed the order. `TestSpillWriteFails` now makes
+this write fail on each run.
+
 | Step | Status |
 |---|---|
 | 1. Strength of the tests | done: each package has no survivor that is not explained |

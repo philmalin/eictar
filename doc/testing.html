@@ -3053,6 +3053,16 @@ its time is the length of the pattern times the length of the name.
 <code>TestRefGlob</code> gives the rules and a limit of 5 seconds for
 that pattern. The input is in
 <code>src/internal/fsutil/testdata/fuzz/FuzzMatch</code>.</p>
+<p>The fifth run of the gate, with <code>klauspost/compress</code>
+v1.20.3, stopped in <code>mutate</code> after 5 minutes. In
+<code>pipeline</code>, the mutant that ignores a failed write in
+<code>Spool.spill</code> survived, and the earlier runs had killed it.
+<code>TestPipelineFaults</code> makes the operation of number k fail,
+but three workers run at the same time, so the numbers change from run
+to run. The fault fell on this write only in some orders of the workers,
+and the load of the mutation step changed the order.
+<code>TestSpillWriteFails</code> now makes this write fail on each
+run.</p>
 <table>
 <colgroup>
 <col style="width: 50%" />

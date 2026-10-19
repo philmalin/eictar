@@ -2,8 +2,10 @@ package pipeline
 
 import (
 	"bytes"
+	"errors"
 	"math/rand"
 	"os"
+	"syscall"
 	"testing"
 )
 
@@ -162,5 +164,68 @@ func TestSpoolThresholdIsInclusive(t *testing.T) {
 	}
 	if !s.Spilled() {
 		t.Error("a spool past the threshold did not spill")
+	}
+}
+
+// failOnceFile is a spill file whose first Write writes half of p and fails,
+// as a full disk does. The writes after it succeed.
+type failOnceFile struct {
+	spillFile
+	failed, closed bool
+}
+
+func (f *failOnceFile) Write(p []byte) (int, error) {
+	if !f.failed {
+		f.failed = true
+		n, _ := f.spillFile.Write(p[:len(p)/2])
+		return n, syscall.ENOSPC
+	}
+	return f.spillFile.Write(p)
+}
+
+func (f *failOnceFile) Close() error {
+	f.closed = true
+	return f.spillFile.Close()
+}
+
+// TestSpillWriteFails: when the spool moves its buffer to disk and the write
+// of the buffer fails, the Write that caused the spill fails. The spool
+// stays in memory, the spill file is closed, and Close gives the budget
+// back. TestPipelineFaults found this only when the order of the workers
+// put the fault on this write, and the gate's mutation step on 36b4475 had
+// a survivor here.
+func TestSpillWriteFails(t *testing.T) {
+	var file *failOnceFile
+	saved := newSpillFile
+	t.Cleanup(func() { newSpillFile = saved })
+	newSpillFile = func(dir string) (spillFile, error) {
+		f, err := saved(dir)
+		if err != nil {
+			return nil, err
+		}
+		file = &failOnceFile{spillFile: f}
+		return file, nil
+	}
+
+	b := NewBudget(1 << 20)
+	s := NewSpool(b, 1024, t.TempDir())
+	if _, err := s.Write(bytes.Repeat([]byte("a"), 500)); err != nil {
+		t.Fatalf("the write below the threshold: %v", err)
+	}
+	_, err := s.Write(bytes.Repeat([]byte("b"), 600))
+	if !errors.Is(err, syscall.ENOSPC) {
+		t.Fatalf("the write that spilled: %v, want ENOSPC", err)
+	}
+	if file == nil || !file.closed {
+		t.Error("the spill file stayed open after its write failed")
+	}
+	if s.Spilled() {
+		t.Error("the spool moved to a file whose write failed")
+	}
+	if err := s.Close(); err != nil {
+		t.Errorf("Close: %v", err)
+	}
+	if n := b.InUse(); n != 0 {
+		t.Errorf("%d bytes of budget still held", n)
 	}
 }
