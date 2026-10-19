@@ -256,7 +256,8 @@ parts work.
   this second run. The job's result stays the result of `make check`.
 - **Coverage and mutation testing** measure the tests (§5). `format`,
   `crypt` and `codec` need the strongest tests, because a fault there is
-  silent and permanent. The benchmarks are `make bench` and `make compare`
+  silent and permanent. The benchmarks are `make bench`, `make compare`,
+  and `BenchmarkCodecs` and `BenchmarkDictSmallChunks` in `codec`
   (design.md §8.4).
 - **References to sections stay correct.** The code and the documents
   refer to sections by number, such as `doc/design.md 9.6` in a comment

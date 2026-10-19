@@ -471,3 +471,16 @@ The release:
 
 The format is still 1.0. v1.1.2 reads every earlier archive, and earlier
 versions read what it writes.
+
+**After v1.1.2, not yet in a release.**
+
+- `klauspost/compress` goes from v1.20.2 to v1.20.3. On one core, zstd
+  decodes 40% faster on source code, and 17% faster on binary data. Level
+  3 encodes 10% to 14% faster. The other levels, gzip and s2 have the same
+  speed. zstd output is up to 0.4% smaller, and the gzip and s2 output
+  does not change. The slow dictionary at level 10 and above stays
+  (design.md §15.2).
+- `BenchmarkCodecs` measures each codec without the file system
+  (design.md §8.4). `bench/compare.sh` ran eictar with the configuration file of the
+  user, so a setting there changed the codec of a row. It now runs eictar
+  with `--no-config`, and its `zstd:level=3` rows give the level.

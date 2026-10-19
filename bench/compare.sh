@@ -5,12 +5,14 @@
 #
 # For each pair it reports the archive size, the create time and the extract
 # time. It needs tar, zstd, xz and gzip on PATH, and a built .build/eictar
-# (make build). Scratch files go to .tmp/bench, inside the project.
+# (make build), or the binary that EICTAR names. Scratch files go to
+# .tmp/bench, inside the project. eictar runs with --no-config, so that a
+# configuration file does not change the codec of a row.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 SRC=${1:-.gocache}
-EICTAR=$PWD/.build/eictar
+EICTAR=${EICTAR:-$PWD/.build/eictar}
 WORK=$PWD/.tmp/bench
 [ -x "$EICTAR" ] || { echo "build eictar first: make build" >&2; exit 1; }
 
@@ -42,12 +44,12 @@ row() {
 
 T="tar -C '$PARENT' -cf - '$BASE'"
 X="tar -C '$WORK/out' -xf -"
-E="'$EICTAR' -cf"
-EX="'$EICTAR' -xf"
-PASS=$WORK/pass; echo "benchmark passphrase" > "$PASS"
+E="'$EICTAR' --no-config -cf"
+EX="'$EICTAR' --no-config -xf"
+PASS=$WORK/pass; (umask 077; echo "benchmark passphrase" > "$PASS")
 
 row "tar | zstd -3 -T0"          "$WORK/a.tar.zst" "$T | zstd -q -3 -T0 -o '$WORK/a.tar.zst'"  "zstd -q -dc '$WORK/a.tar.zst' | $X"
-row "eictar zstd:level=3"        "$WORK/a.e"       "$E '$WORK/a.e' -C '$PARENT' '$BASE'"         "$EX '$WORK/a.e' -d '$WORK/out'"
+row "eictar zstd:level=3"        "$WORK/a.e"       "$E '$WORK/a.e' -C '$PARENT' -Z zstd:level=3 '$BASE'"       "$EX '$WORK/a.e' -d '$WORK/out'"
 row "tar | zstd -19 -T0"         "$WORK/b.tar.zst" "$T | zstd -q -19 -T0 -o '$WORK/b.tar.zst'" "zstd -q -dc '$WORK/b.tar.zst' | $X"
 row "eictar zstd:level=19"       "$WORK/b.e"       "$E '$WORK/b.e' -C '$PARENT' -Z zstd:level=19 '$BASE'" "$EX '$WORK/b.e' -d '$WORK/out'"
 row "tar | xz -6 -T0"            "$WORK/c.tar.xz"  "$T | xz -q -6 -T0 > '$WORK/c.tar.xz'"      "xz -q -dc '$WORK/c.tar.xz' | $X"
@@ -55,5 +57,5 @@ row "eictar xz:preset=6"         "$WORK/c.e"       "$E '$WORK/c.e' -C '$PARENT' 
 row "tar | gzip -6"              "$WORK/d.tar.gz"  "$T | gzip -6 > '$WORK/d.tar.gz'"            "gzip -dc '$WORK/d.tar.gz' | $X"
 row "eictar gzip:level=6"        "$WORK/d.e"       "$E '$WORK/d.e' -C '$PARENT' -z '$BASE'"      "$EX '$WORK/d.e' -d '$WORK/out'"
 row "eictar s2"                  "$WORK/e.e"       "$E '$WORK/e.e' -C '$PARENT' -Z s2 '$BASE'"   "$EX '$WORK/e.e' -d '$WORK/out'"
-row "eictar zstd:level=3 -e"     "$WORK/f.e"       "$E '$WORK/f.e' -C '$PARENT' -e --passphrase-file '$PASS' '$BASE'" \
+row "eictar zstd:level=3 -e"     "$WORK/f.e"       "$E '$WORK/f.e' -C '$PARENT' -Z zstd:level=3 -e --passphrase-file '$PASS' '$BASE'" \
 	"$EX '$WORK/f.e' -d '$WORK/out' --passphrase-file '$PASS'"

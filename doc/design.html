@@ -7507,6 +7507,15 @@ chunk is copied out at its own size. A new buffer of the chunk size (4
 MiB) for each file, also a file of 8 KiB, clears 8 GB of memory for 2000
 small files. That took 20% of the CPU time. The one buffer makes create
 2.8 times faster with zstd, and 7 times faster with no compression.</p>
+<p><code>BenchmarkCodecs</code> in <code>codec</code> measures each
+codec alone: the encode and the decode of one chunk of 4 MiB, with no
+archive and no file system. It also gives the size of the result.
+<code>EICTAR_CODEC_DATA</code> names a file of real data for the chunk.
+The benchmarks of the archive package spend most of their time in the
+file system, so a change of a compression library shows first in
+<code>BenchmarkCodecs</code>. <code>bench/compare.sh</code> runs eictar
+with <code>--no-config</code>, so that a configuration file does not
+change a row.</p>
 <h2 id="changes-and-checks">9. Changes and checks</h2>
 <p>This section describes the operations on an existing archive. Append,
 update, delete, compact, repair and the change of passphrase change it
@@ -9761,6 +9770,9 @@ see an advisory that is not in the Go vulnerability database yet
 (testing.md §5, step 6).</li>
 <li>Run <code>make check</code>, and <code>make fuzz</code> for some
 minutes. The golden archives show that the format did not change.</li>
+<li>Measure the codecs with the old and the new version, with
+<code>BenchmarkCodecs</code> on real data (§8.4). Use the same machine
+and the same cores for both.</li>
 <li>Update <code>THIRD_PARTY.md</code>: the versions, and the license
 texts if they changed. Until then, a test fails.</li>
 </ol>
@@ -10290,14 +10302,15 @@ against the library.</p></li>
 <code>zstd:train</code> at level 10 to 22 makes create of many small
 files very slow. Level 12, the default, is in this range. 20000 small
 JSON files took 24.2 s and 263 s of CPU, against 1.3 s without a
-dictionary. At this speed, the library (klauspost/compress v1.20.1,
-<code>bestFastEncoder.Reset</code>) copies the tables that it made from
-the dictionary, about 34 MiB, at the start of each chunk. A small file
-is one chunk, so the copy costs much more than the compression. A large
-chunk hides the copy. The speeds below 10 copy only the parts of their
-tables that the last chunk changed. A small <code>--chunk-size</code>
-has the same cost on large files: a tree of 125 MiB in chunks of 512
-bytes took 124 s at level 13, and 0.6 s at level 9 (testing.md §4).</p>
+dictionary. At this speed, the library (klauspost/compress v1.20.1 to
+v1.20.3, <code>bestFastEncoder.Reset</code>) copies the tables that it
+made from the dictionary, about 34 MiB, at the start of each chunk. A
+small file is one chunk, so the copy costs much more than the
+compression. A large chunk hides the copy. The speeds below 10 copy only
+the parts of their tables that the last chunk changed. A small
+<code>--chunk-size</code> has the same cost on large files: a tree of
+125 MiB in chunks of 512 bytes took 124 s at level 13, and 0.6 s at
+level 9 (testing.md §4).</p>
 <p>A lower speed for small chunks is not a good fix. With a 32 KiB
 dictionary on the same files, level 7 for small chunks made the archive
 4.6% larger, and level 3 made it 7.9% larger.</p>
@@ -10336,7 +10349,10 @@ with <code>zstd:train</code> at level 12:</p>
 bytes as a new encoder. eictar does not carry a changed copy of the
 library: <code>go install</code> refuses a module with a
 <code>replace</code> directive. The item waits for a fix in the
-library.</p></li>
+library.</p>
+<p><code>BenchmarkDictSmallChunks</code> in <code>codec</code> measures
+the cost: with v1.20.3, small chunks with a dictionary encode at 0.9
+MB/s at level 12, and at 150 MB/s at level 9.</p></li>
 </ul>
 <h2 id="implementation-milestones">16. Implementation milestones</h2>
 <p>The milestones M1 to M11 and the notes of each release are in

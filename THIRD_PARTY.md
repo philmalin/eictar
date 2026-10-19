@@ -16,7 +16,7 @@ at the version in the table.
 | Module | Version | Used for | License |
 |---|---|---|---|
 | [`github.com/fxamacker/cbor/v2`](https://pkg.go.dev/github.com/fxamacker/cbor/v2@v2.9.4) | v2.9.4 | The index and the crypto header, in CBOR | MIT |
-| [`github.com/klauspost/compress`](https://pkg.go.dev/github.com/klauspost/compress@v1.20.2) | v1.20.2 | The zstd, s2, gzip and flate codecs | BSD-3-Clause; MIT for zstd/internal/xxhash |
+| [`github.com/klauspost/compress`](https://pkg.go.dev/github.com/klauspost/compress@v1.20.3) | v1.20.3 | The zstd, s2, gzip and flate codecs | BSD-3-Clause; MIT for zstd/internal/xxhash |
 | [`github.com/klauspost/cpuid/v2`](https://pkg.go.dev/github.com/klauspost/cpuid/v2@v2.4.0) | v2.4.0 | CPU feature detection, for klauspost/compress | MIT |
 | [`github.com/spf13/pflag`](https://pkg.go.dev/github.com/spf13/pflag@v1.0.10) | v1.0.10 | Command-line parsing | BSD-3-Clause |
 | [`github.com/ulikunitz/xz`](https://pkg.go.dev/github.com/ulikunitz/xz@v0.5.17) | v0.5.17 | The xz (LZMA2) codec | BSD-3-Clause |
@@ -55,7 +55,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### github.com/klauspost/compress v1.20.2
+### github.com/klauspost/compress v1.20.3
 
 The module (the part of its LICENSE that covers the packages that eictar uses; the gzhttp and s2/cmd packages are not in the binary):
 

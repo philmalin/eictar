@@ -1646,6 +1646,14 @@ also a file of 8 KiB, clears 8 GB of memory for 2000 small files. That took
 20% of the CPU time. The one buffer makes create 2.8 times faster with zstd,
 and 7 times faster with no compression.
 
+`BenchmarkCodecs` in `codec` measures each codec alone: the encode and the
+decode of one chunk of 4 MiB, with no archive and no file system. It also
+gives the size of the result. `EICTAR_CODEC_DATA` names a file of real
+data for the chunk. The benchmarks of the archive package spend most of
+their time in the file system, so a change of a compression library shows
+first in `BenchmarkCodecs`. `bench/compare.sh` runs eictar with
+`--no-config`, so that a configuration file does not change a row.
+
 
 ## 9. Changes and checks
 
@@ -3293,7 +3301,10 @@ Actions of the workflows. An update of a module follows these steps:
    §5, step 6).
 2. Run `make check`, and `make fuzz` for some minutes. The golden archives
    show that the format did not change.
-3. Update `THIRD_PARTY.md`: the versions, and the license texts if they
+3. Measure the codecs with the old and the new version, with
+   `BenchmarkCodecs` on real data (§8.4). Use the same machine and the
+   same cores for both.
+4. Update `THIRD_PARTY.md`: the versions, and the license texts if they
    changed. Until then, a test fails.
 
 ## 13. Testing
@@ -3709,7 +3720,7 @@ before any work starts.
   create of many small files very slow. Level 12, the default, is in this
   range. 20000 small JSON files took 24.2 s and 263 s of CPU, against 1.3 s
   without a dictionary. At this speed, the library (klauspost/compress
-  v1.20.1, `bestFastEncoder.Reset`) copies the tables that it made from the
+  v1.20.1 to v1.20.3, `bestFastEncoder.Reset`) copies the tables that it made from the
   dictionary, about 34 MiB, at the start of each chunk. A small file is one
   chunk, so the copy costs much more than the compression. A large chunk
   hides the copy. The speeds below 10 copy only the parts of their tables
@@ -3736,6 +3747,10 @@ before any work starts.
   bytes as a new encoder. eictar does not carry a changed copy of the
   library: `go install` refuses a module with a `replace` directive. The item
   waits for a fix in the library.
+
+  `BenchmarkDictSmallChunks` in `codec` measures the cost: with v1.20.3,
+  small chunks with a dictionary encode at 0.9 MB/s at level 12, and at
+  150 MB/s at level 9.
 
 
 ## 16. Implementation milestones

@@ -1775,8 +1775,10 @@ the result of <code>make check</code>.</li>
 <li><strong>Coverage and mutation testing</strong> measure the tests
 (§5). <code>format</code>, <code>crypt</code> and <code>codec</code>
 need the strongest tests, because a fault there is silent and permanent.
-The benchmarks are <code>make bench</code> and <code>make compare</code>
-(design.md §8.4).</li>
+The benchmarks are <code>make bench</code>, <code>make compare</code>,
+and <code>BenchmarkCodecs</code> and
+<code>BenchmarkDictSmallChunks</code> in <code>codec</code> (design.md
+§8.4).</li>
 <li><strong>References to sections stay correct.</strong> The code and
 the documents refer to sections by number, such as
 <code>doc/design.md 9.6</code> in a comment and
