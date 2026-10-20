@@ -3,3 +3,7 @@
 .tmp/
 .build/
 tla2tools.jar
+
+# The workspace of the compress fork: local only (fork.work).
+fork.work
+fork.work.sum

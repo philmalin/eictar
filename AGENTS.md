@@ -42,7 +42,11 @@ written in Go.  The design and the archive format are specified in doc/.
 # CRITICAL DIRECTORY RESTRICTION
 
 You are ONLY allowed to read, list, grep, edit, or otherwise access files and
-directories INSIDE the current project root.
+directories INSIDE the current project root and those under /data/projects.
+We have:
+
+-  /data/projects/external are external git repos (not owned by me)
+-  /data/projects/fork are forked git repos that we can experiment with.
 
 NEVER use absolute paths outside this directory.
 NEVER use ".." to go above the project root.
