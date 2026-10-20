@@ -472,7 +472,12 @@ The release:
 The format is still 1.0. v1.1.2 reads every earlier archive, and earlier
 versions read what it writes.
 
-**After v1.1.2, not yet in a release.**
+**v1.1.3 makes zstd faster.** It passed the release gate (testing.md §5,
+step 6) on c40b3ee: 1 hour of fuzzing for each target, and 8 hours of
+stress. The commits after c40b3ee change only documents and
+`build-fork.sh`, which is not part of the program.
+
+The changes:
 
 - `klauspost/compress` goes from v1.20.2 to v1.20.3. On one core, zstd
   decodes 40% faster on source code, and 17% faster on binary data. Level
@@ -488,3 +493,15 @@ versions read what it writes.
   and of a fix in a fork of the library. With the fork, `zstd:train` on
   20000 JSON files takes 3.3 s, against 23.8 s. `build-fork.sh` makes a
   local build with the fork. A release keeps the library in go.mod.
+
+The tests:
+
+- The mutation step of the gate on 36b4475 found a change in
+  `Spool.spill` that no test detected. `TestPipelineFaults` made the write
+  of the buffer fail only in some orders of its workers.
+  `TestSpillWriteFails` now makes this write fail every time. It requires
+  the error from the `Write` that spilled, and requires that the spill file
+  is closed.
+
+The format is still 1.0. v1.1.3 reads every earlier archive, and earlier
+versions read what it writes.

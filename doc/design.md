@@ -1,9 +1,9 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete, and v1.1.2 is the current release. The CI workflow passes
+Status: M1 to M11 are complete, and v1.1.3 is the current release. The CI workflow passes
 on Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows (§15.1). The six steps of
 the assurance plan (testing.md §5) are complete.
-Date: 2026-10-19
+Date: 2026-10-21
 Applies to: v1 (format version 1.0)
 
 This document describes the on-disk format, the concurrency model, the
