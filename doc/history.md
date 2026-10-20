@@ -484,3 +484,7 @@ versions read what it writes.
   (design.md §8.4). `bench/compare.sh` ran eictar with the configuration file of the
   user, so a setting there changed the codec of a row. It now runs eictar
   with `--no-config`, and its `zstd:level=3` rows give the level.
+- design.md §15.2 has new measurements of the slow dictionary at level 12,
+  and of a fix in a fork of the library. With the fork, `zstd:train` on
+  20000 JSON files takes 3.3 s, against 23.8 s. `build-fork.sh` makes a
+  local build with the fork. A release keeps the library in go.mod.

@@ -1998,6 +1998,11 @@ system (design.md §8.4). <code>bench/compare.sh</code> ran eictar with
 the configuration file of the user, so a setting there changed the codec
 of a row. It now runs eictar with <code>--no-config</code>, and its
 <code>zstd:level=3</code> rows give the level.</li>
+<li>design.md §15.2 has new measurements of the slow dictionary at level
+12, and of a fix in a fork of the library. With the fork,
+<code>zstd:train</code> on 20000 JSON files takes 3.3 s, against 23.8 s.
+<code>build-fork.sh</code> makes a local build with the fork. A release
+keeps the library in go.mod.</li>
 </ul>
 </body>
 </html>

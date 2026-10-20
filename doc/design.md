@@ -3718,7 +3718,7 @@ before any work starts.
   input, so it needs a differential fuzz test against the library.
 - **Dictionaries at the best speed.** `zstd:train` at level 10 to 22 makes
   create of many small files very slow. Level 12, the default, is in this
-  range. 20000 small JSON files took 24.2 s and 263 s of CPU, against 1.3 s
+  range. 20000 small JSON files take 23.8 s and 265 s of CPU, against 0.7 s
   without a dictionary. At this speed, the library (klauspost/compress
   v1.20.1 to v1.20.3, `bestFastEncoder.Reset`) copies the tables that it made from the
   dictionary, about 34 MiB, at the start of each chunk. A small file is one
@@ -3732,25 +3732,48 @@ before any work starts.
   dictionary on the same files, level 7 for small chunks made the archive
   4.6% larger, and level 3 made it 7.9% larger.
 
-  The fix belongs in the library. A test copy of `bestFastEncoder` kept a
-  list of the table entries that each chunk writes, and its reset put back
-  only those entries. When the list became long, it copied the full tables.
-  The change gave these results with `zstd:train` at level 12:
+  The fix belongs in the library. On 2026-10-04, a test copy of
+  `bestFastEncoder` put back only the table entries that each chunk wrote.
+  It made create 5 to 14 times faster. Its record does not give all the
+  settings of the measurement, so its numbers are not used here.
 
-  | Tree | Library v1.20.1 | With the change |
-  |---|---|---|
-  | 20000 JSON files | 24.2 s, 263 s of CPU | 3.0 s, 5.5 s of CPU |
-  | 3000 JSON files | 8.5 s, 43 s of CPU | 1.3 s, 2.0 s of CPU |
-  | 1500 YAML files | 10.0 s, 32 s of CPU | 0.7 s, 1.0 s of CPU |
+  The fix is now on the branch `zstd-best-dict-reset` of a fork of the
+  library (github.com/philmalin/compress), for a pull request to the library.
+  The tables are divided into shards of 16 entries. Encode sets a bit in a
+  bitmap for each shard that it writes. Reset copies back only these shards,
+  or the full tables when most shards have their bit set. Encode sets the
+  bits only after a Reset with a dictionary, so an encode without a
+  dictionary does the same work as before.
 
-  The archive sizes did not change, and a reused encoder wrote the same
-  bytes as a new encoder. eictar does not carry a changed copy of the
-  library: `go install` refuses a module with a `replace` directive. The item
-  waits for a fix in the library.
+  The table gives the results on 2026-10-21, with `zstd:train` at level 12
+  and the default `-j`, on 32 CPUs. Each value is the median of 3 runs:
 
-  `BenchmarkDictSmallChunks` in `codec` measures the cost: with v1.20.3,
-  small chunks with a dictionary encode at 0.9 MB/s at level 12, and at
-  150 MB/s at level 9.
+  | Tree | v1.20.3 | Fork, `bool` for each 128 entries | Fork, bit for each 16 entries |
+  |---|---|---|---|
+  | 20000 JSON files | 23.8 s, 265 s of CPU | 4.5 s, 24.7 s of CPU | 3.3 s, 11.5 s of CPU |
+  | 3000 JSON files | 8.4 s, 47 s of CPU | 1.9 s, 7.6 s of CPU | 1.5 s, 5.4 s of CPU |
+  | 1500 YAML files | 6.0 s, 24 s of CPU | 1.0 s, 4.2 s of CPU | 0.8 s, 3.5 s of CPU |
+
+  The first version of the fork kept one `bool` for each shard of 128
+  entries. Its Reset read all the flags two times for each chunk, and this
+  read cost more than the copy. Smaller shards made it slower. With one bit
+  for each shard, the read became small, and smaller shards became faster.
+  Shards of 8 and 16 entries were the fastest of the sizes from 4 to 128.
+
+  Without a dictionary, the three builds take the same time: 0.7 s and
+  5.5 s of CPU on the 20000 files. The release binary reads the archives of
+  the fork without error with `--verify` and `--diff`. In the benchmarks of
+  the library, the best speed without a dictionary did not change (A/B,
+  10 rounds on one core, compared with `benchstat`).
+
+  eictar does not carry a changed copy of the library: `go install` refuses a
+  module with a `replace` directive. A release uses the library in go.mod.
+  `build-fork.sh` makes a local build with the fork. The item waits for the
+  fix in a release of the library.
+
+  `BenchmarkDictSmallChunks` in `codec` measures the cost on one core. Small
+  chunks with a dictionary encode at 150 MB/s at level 9. At level 12, they
+  encode at 2.4 MB/s with v1.20.3, and at 87 MB/s with the fork.
 
 
 ## 16. Implementation milestones
