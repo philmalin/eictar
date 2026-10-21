@@ -92,7 +92,7 @@ func TestBashCompletion(t *testing.T) {
 
 	type tc struct {
 		words []string // the command line; the last word is the one to complete
-		want  string   // COMPREPLY, joined with commas
+		want  string   // COMPREPLY, joined with commas, in any order
 	}
 	cases := []tc{
 		{[]string{"eictar", "--upd"}, "--update,--update-mode"},
@@ -150,8 +150,16 @@ comp() { COMP_WORDS=("$@"); COMP_CWORD=$(($# - 1)); _eictar; local IFS=,; echo "
 	if len(got) != len(cases) {
 		t.Fatalf("bash wrote %d lines for %d cases:\n%s", len(got), len(cases), out)
 	}
+	// Compare as sets: compgen gives file names in the order of the
+	// directory, which changes with the file system, and bash sorts the
+	// list before it shows it.
+	set := func(s string) string {
+		l := strings.Split(s, ",")
+		slices.Sort(l)
+		return strings.Join(l, ",")
+	}
 	for i, c := range cases {
-		if got[i] != c.want {
+		if set(got[i]) != set(c.want) {
 			t.Errorf("completion of %q: got %q, want %q", c.words, got[i], c.want)
 		}
 	}
