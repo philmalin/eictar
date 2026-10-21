@@ -69,6 +69,12 @@ make check            # the unit and operational tests
 man ./doc/eictar.1    # the manual page
 ```
 
+Tab completion for bash is in `completions/eictar.bash`, and in each
+release archive for Linux, macOS and the BSDs. To load it in each new shell
+with the bash-completion package, copy it to
+`~/.local/share/bash-completion/completions/eictar`. Without that package,
+add `source /path/to/eictar.bash` to `~/.bashrc`.
+
 ## Common tasks
 
 ### Create, list and extract

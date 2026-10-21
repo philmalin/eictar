@@ -2519,6 +2519,15 @@ without the leading dash (`eictar cf archive.ect path`) is **not**
 supported. It makes the first positional argument unclear, and modern `tar`
 keeps it only for compatibility.
 
+`completions/eictar.bash` gives tab completion in bash. It is a static
+script, not output of the binary, so a completion runs no part of eictar
+and reads no archive. It completes the options, the values of options with
+a fixed set of values (codecs, `--update-mode`, `--on-conflict`),
+directories for `-C` and `-d`, directories and `.ect` files for `-f`, and
+file names. It needs bash 3.2, the version on macOS, and no other package.
+Two tests keep it correct (testing.md §1). One compares its lists with the
+parser, the codecs and the modes. The other runs it in bash.
+
 
 ### 10.9 Listing format
 

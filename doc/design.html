@@ -8883,6 +8883,16 @@ old <code>tar</code> form without the leading dash
 (<code>eictar cf archive.ect path</code>) is <strong>not</strong>
 supported. It makes the first positional argument unclear, and modern
 <code>tar</code> keeps it only for compatibility.</p>
+<p><code>completions/eictar.bash</code> gives tab completion in bash. It
+is a static script, not output of the binary, so a completion runs no
+part of eictar and reads no archive. It completes the options, the
+values of options with a fixed set of values (codecs,
+<code>--update-mode</code>, <code>--on-conflict</code>), directories for
+<code>-C</code> and <code>-d</code>, directories and <code>.ect</code>
+files for <code>-f</code>, and file names. It needs bash 3.2, the
+version on macOS, and no other package. Two tests keep it correct
+(testing.md §1). One compares its lists with the parser, the codecs and
+the modes. The other runs it in bash.</p>
 <h3 id="listing-format">10.9 Listing format</h3>
 <p><code>-t</code> has three levels of detail, as in <code>tar</code>.
 Plain <code>-t</code> prints one path on each line. <code>-tv</code> (or

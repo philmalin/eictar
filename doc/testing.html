@@ -1603,6 +1603,15 @@ terminal, and exact to a pipe. A message is escaped in both cases.</li>
 <code>--help</code> name every long option of the parser, and the help
 gives each short form. No line of the help is wider than 80
 columns.</li>
+<li><strong>Bash completion</strong>:
+<code>completions/eictar.bash</code> lists each option of the parser
+with its short form, each codec, and the values of
+<code>--update-mode</code> and <code>--on-conflict</code>, and nothing
+more. A second test runs the script in bash. After each option that
+takes a value, the script must offer values and not options. After any
+other option, it must offer options. The test also covers
+<code>-f</code>, <code>-cf</code>, <code>--file=NAME</code>, a name with
+a space, and environment variable names. Windows skips it.</li>
 <li><strong>Platforms</strong>: each metadata test runs where
 <code>meta.Supports</code> says that its feature exists. An xattr from
 macOS and one from Linux, extracted on each platform, are applied or

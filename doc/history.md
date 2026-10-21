@@ -505,3 +505,10 @@ The tests:
 
 The format is still 1.0. v1.1.3 reads every earlier archive, and earlier
 versions read what it writes.
+
+**After v1.1.3, not yet in a release.**
+
+- `completions/eictar.bash` gives tab completion in bash (design.md §10.8).
+  It completes the options, the codecs and the other fixed values, and file
+  names. Each release archive for a Unix system holds it, next to the man
+  page. Two tests keep it in step with the parser.

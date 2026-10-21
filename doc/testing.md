@@ -121,6 +121,13 @@ Every item in the lists below exists now, except the items marked "later".
 - **Man page and help**: `doc/eictar.1` and `--help` name every long option
   of the parser, and the help gives each short form. No line of the help is
   wider than 80 columns.
+- **Bash completion**: `completions/eictar.bash` lists each option of the
+  parser with its short form, each codec, and the values of `--update-mode`
+  and `--on-conflict`, and nothing more. A second test runs the script in
+  bash. After each option that takes a value, the script must offer values
+  and not options. After any other option, it must offer options. The test
+  also covers `-f`, `-cf`, `--file=NAME`, a name with a space, and
+  environment variable names. Windows skips it.
 - **Platforms**: each metadata test runs where `meta.Supports` says that its
   feature exists. An xattr from macOS and one from Linux, extracted on each
   platform, are applied or listed in the one notice as design.md §7.7 says. A pipe is
