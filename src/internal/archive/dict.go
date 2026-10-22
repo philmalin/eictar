@@ -286,8 +286,10 @@ func runTrials(n, slots int, trial func(i int) (dictTrial, error)) (int, error) 
 
 // bestTrial walks the trials in order of size, and returns the size with the
 // largest net gain, or 0 when none gains. A larger size must add more than
-// trialMargin to the best gain: the measurement varies by about 1% from run
-// to run, and below that, the smaller dictionary is as good and is cheaper.
+// trialMargin to the best gain: with the trainer of the library's release,
+// which is not deterministic, the measurement varies by about 1% from run
+// to run (doc/design.md 4.2), and below that, the smaller dictionary is as
+// good and is cheaper.
 // It stops at the second trial in a row that does not improve on the best,
 // and says so.
 func bestTrial(trials []dictTrial) (best int, stop bool) {
@@ -502,7 +504,9 @@ func (r *Reader) dictFor(m *format.Member) ([]byte, error) {
 // sampleTree is the pass before a create or an append (doc/design.md 4.2).
 // It walks the paths with the same filters as the real walk, and takes the
 // start of each regular file. Over the budget, it takes every k-th file, so
-// that the choice depends only on the tree. An error here is not reported:
+// that the choice of samples depends only on the tree. The dictionary from
+// these samples can still change from run to run, with the trainer of the
+// library's release (doc/design.md 4.2). An error here is not reported:
 // the real walk meets the same file and reports it there.
 //
 // It walks two times. The first walk counts the files and their sizes, which

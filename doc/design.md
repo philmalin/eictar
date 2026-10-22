@@ -348,9 +348,32 @@ are more than 100 times the dictionary size, it takes every k-th file, with
 the smallest k that fits. The pass walks two times: the first finds the
 files and their sizes, and the second reads the samples that the first
 chose, while the walk holds their directories (§14.5). For `train=auto`, the budget is 100 times 1 MiB,
-the largest size. Thus the choice of samples depends only on the tree. The
-trainer is not deterministic: the same samples can give a different
-dictionary, and the archive size changed by up to 0.1% from run to run.
+the largest size. Thus the choice of samples depends only on the tree.
+
+**The trainer of klauspost/compress v1.20.3 is not deterministic.** The
+same samples give a different dictionary on each run. The builder in
+`dict/builder.go` collects its candidate strings from Go maps, and the order
+of a map changes from run to run. Its main sort does not use a strict
+order, and two other sorts have no rule for ties. Thus the order of the map
+decides the result. On 1500 YAML files, 10 runs gave 10 different
+dictionaries. The archive size changed by up to 0.1%, and `train=auto`
+chose 8 KiB on some runs and 12 KiB on others. The archives with 8 KiB were
+about 3% larger. A poor choice
+costs ratio, not correctness: the archive stores the dictionary that it
+uses.
+
+The branch `dict-deterministic` of the fork of the library (§15.2) corrects
+this. It sorts the candidates by hash before the main sort, and breaks ties
+by hash. A test in the library builds each kind of dictionary four times
+and compares the bytes. On seven trees, the fixed trainer chose the same
+size on each run. Each archive size was in the range of the release
+builds. A local build with `build-fork.sh` has the fix. A release build
+does not have it until a release of the library has it.
+
+The archive is still not the same byte for byte from run to run. With more
+than one worker, the members go into the archive in the order that they
+finish (§8), so their offsets change. With `-j 1` and the fixed trainer,
+two runs gave the same size.
 
 Then the writer trains the dictionary, and the normal walk compresses the
 files with it. A file that changes between the two walks costs ratio only.
@@ -404,8 +427,9 @@ default form (§10.2). The writer:
    sample bytes of the tree divided by the held-out bytes, less the size of
    the dictionary.
 5. Walks the candidates in order of size. A larger candidate wins only when
-   its net gain is more than 2% above the best. The measurement changes by
-   about 1% from run to run, and a smaller dictionary costs less time. The
+   its net gain is more than 2% above the best. With the trainer of the
+   release, the measurement changes by about 1% from run to run, and a
+   smaller dictionary costs less time. The
    walk stops at the second candidate in a row that does not win.
 6. Uses no dictionary when no candidate has a positive net gain, and prints
    a notice.
@@ -3779,6 +3803,11 @@ before any work starts.
   module with a `replace` directive. A release uses the library in go.mod.
   `build-fork.sh` makes a local build with the fork. The item waits for the
   fix in a release of the library.
+
+  The branch `dict-deterministic` of the fork has a second fix, for a
+  separate pull request: the dictionary trainer gives the same dictionary
+  from the same samples (§4.2). The branch `zstd-best-dict-reset` also has
+  this fix, so a build with `build-fork.sh` has both.
 
   `BenchmarkDictSmallChunks` in `codec` measures the cost on one core. Small
   chunks with a dictionary encode at 150 MB/s at level 9. At level 12, they
