@@ -80,6 +80,7 @@ func TestParseOperations(t *testing.T) {
 		{[]string{"--compact", "-f", "a"}, OpCompact},
 		{[]string{"--verify", "-f", "a"}, OpVerify},
 		{[]string{"--diff", "-f", "a"}, OpDiff},
+		{[]string{"--diff-extract", "-f", "a"}, OpDiffExtract},
 		{[]string{"--repair", "-f", "a"}, OpRepair},
 		{[]string{"--info", "-f", "a"}, OpInfo},
 		{[]string{"--list-codecs"}, OpListCodecs},

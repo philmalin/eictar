@@ -23,6 +23,7 @@ _eictar_long='--create
 --compact
 --verify
 --diff
+--diff-extract
 --repair
 --info
 --list-codecs
@@ -66,6 +67,7 @@ _eictar_long='--create
 --newer-only
 --to-stdout
 --strip-components
+--scratch-dir
 --update-mode
 --on-conflict
 --keep-going
@@ -146,7 +148,7 @@ _eictar() {
 		COMPREPLY=($(compgen -d -- "$cur") $(compgen -f -X '!*.ect' -- "$cur"))
 		return
 		;;
-	-C | --directory | -d | --destination)
+	-C | --directory | -d | --destination | --scratch-dir)
 		COMPREPLY=($(compgen -d -- "$cur"))
 		return
 		;;

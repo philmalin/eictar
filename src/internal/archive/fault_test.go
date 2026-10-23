@@ -31,6 +31,10 @@ type faultFS struct {
 	// failOp, when it is set, makes the first operation of that kind fail
 	// in place of operation failAt.
 	failOp string
+	// failIf, when it is set, makes the first operation fail for which it
+	// is true. Unlike failAt, it names the same operation in each run,
+	// whatever order the goroutines of the run take.
+	failIf func(op, name string) bool
 	failed string // the operation that failed, if one did
 	// harmless means that a run can ignore the failed operation: a chown,
 	// which a run that is not root cannot always do, or a close of a file
@@ -50,6 +54,10 @@ func (fs *faultFS) step(op, name string) error {
 	defer fs.mu.Unlock()
 	fs.n++
 	switch {
+	case fs.failIf != nil:
+		if fs.failed != "" || !fs.failIf(op, name) {
+			return nil
+		}
 	case fs.failOp != "":
 		if op != fs.failOp || fs.failed != "" {
 			return nil

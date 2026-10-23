@@ -32,9 +32,9 @@ var allOps []Operation
 // adding are the operations that walk the filesystem into an archive.
 var adding = []Operation{OpCreate, OpAppend, OpUpdate}
 
-// walking are the operations that walk the filesystem: adding, and --diff,
-// which must walk it as create did.
-var walking = append([]Operation{OpDiff}, adding...)
+// walking are the operations that walk the filesystem: adding, and --diff and
+// --diff-extract, which must walk it as create did.
+var walking = append([]Operation{OpDiff, OpDiffExtract}, adding...)
 
 // configKeys are the options a configuration can set, and the operations
 // each one applies to. On any other operation a value from the configuration
@@ -69,6 +69,7 @@ var configKeys = map[string][]Operation{
 	"no-xattrs":            append([]Operation{OpExtract}, walking...),
 	"no-acls":              append([]Operation{OpExtract}, walking...),
 	"no-owner":             append([]Operation{OpExtract}, walking...),
+	"scratch-dir":          {OpDiffExtract},
 
 	"keep-existing": {OpExtract},
 	"overwrite":     {OpExtract},

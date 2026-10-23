@@ -2027,6 +2027,21 @@ earlier versions read what it writes.</p>
 fixed values, and file names. Each release archive for a Unix system
 holds it, next to the man page. Two tests keep it in step with the
 parser.</li>
+<li><code>--diff-extract</code> is for the time before you remove the
+source of an archive (design.md §9.10). It does all that
+<code>--diff</code> does. It also extracts each member, with the code of
+<code>-x</code>, into a scratch directory, compares the copy with the
+file byte by byte and by its metadata, and removes it. Thus it finds a
+fault of the digest code, or of extraction, that <code>--verify</code>
+and <code>--diff</code> cannot find. <code>--scratch-dir</code> chooses
+where the scratch directory goes. Times are compared to the precision of
+its file system. The stress tester runs it in half of its
+<code>--diff</code> steps.</li>
+<li><code>tools/mutate</code>: the name of a mutant that removes a
+<code>!</code>, the first of its function, ended with a space. A line of
+<code>accepted.txt</code> cannot keep a space at its end, so no entry
+could accept such a mutant. The name now ends at the arrow.
+<code>TestKeys</code> covers it.</li>
 </ul>
 </body>
 </html>

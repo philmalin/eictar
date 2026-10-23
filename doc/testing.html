@@ -1571,6 +1571,19 @@ the first byte, and no meter without a terminal (design.md §10.10).</li>
 patterns and excludes, a file archived alone, an encrypted archive, the
 same result for each <code>-j</code>, and a link on disk that leads out
 of the directory (design.md §9.8).</li>
+<li><strong>Compare with an extraction</strong>:
+<code>--diff-extract</code> finds a change that a digest with a fault
+hides from <code>--verify</code> and <code>--diff</code>. It finds a
+wrong byte, mode, time or attribute in the extracted copy. It compares
+times to the precision of the scratch file system, and leaves out an
+attribute that the scratch refuses, with a notice. It reports each cause
+once. It refuses a scratch directory in the tree, and stops with a
+message on a full scratch. Damage gives exit 3, also under
+<code>--keep-going</code>. The result is the same for each
+<code>-j</code>. Each operation on the scratch directory, and each on
+the tree, fails in turn, and each fault fails the run. As root, a wrong
+owner and other device numbers of a copy are differences (design.md
+§9.10).</li>
 <li><strong>Dry run</strong>: for create, update with each mode, extract
 with each overwrite policy, and delete, the paths of the dry run are the
 paths that the real run writes, and the archive does not change. Also
@@ -1739,6 +1752,9 @@ effect.</li>
 <li><code>--diff</code>: no difference after <code>-xp</code>, except
 the pipe on macOS, and then a changed file and a missing file with exit
 1 (design.md §9.8)</li>
+<li><code>--diff-extract</code>: no difference in the source tree, no
+scratch directory after the run, and a changed file with exit 1
+(design.md §9.10)</li>
 </ul>
 The dry run (design.md §9.9) has no operational test. The tests of
 package <code>cli</code> run it through <code>Run</code>, and check its
@@ -1833,7 +1849,11 @@ find no difference. Then the tester makes one change to that tree: other
 bytes of the same size, a mode, a time, a file removed, a file added, or
 another link target. It keeps the time of the parent directory.
 <code>--diff</code> must then report that path with that kind of
-difference, and nothing else, with exit 1.</li>
+difference, and nothing else, with exit 1. Half the time, the step runs
+<code>--diff-extract</code> in place of <code>--diff</code>, with the
+scratch directory beside the tree. Then each copy must also equal its
+file, the one change must still give one line, and no scratch directory
+must stay.</li>
 <li><strong>A dry run</strong> of <code>-r</code>, <code>-u</code>,
 <code>--delete</code> or <code>-x</code> must list the paths that the
 model says the real run writes or deletes. The archive must not change,

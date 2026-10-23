@@ -21,7 +21,8 @@ import (
 	"github.com/philmalin/eictar/src/internal/meta"
 )
 
-// DiffConfig drives --diff (doc/design.md 9.8).
+// DiffConfig drives --diff (doc/design.md 9.8), and with Extract,
+// --diff-extract (doc/design.md 9.10).
 type DiffConfig struct {
 	Archive string
 	// BaseDir is -C: the directory that holds the tree. "" is the working
@@ -45,6 +46,16 @@ type DiffConfig struct {
 	Workers   int
 	KeepGoing bool
 	Reporter  Reporter
+
+	// Extract is --diff-extract: each member is also extracted into a
+	// scratch directory, and the copy is compared with the disk.
+	Extract bool
+	// ScratchDir is --scratch-dir: the directory in which the scratch
+	// directory is made. "" is os.TempDir().
+	ScratchDir string
+	// MemoryLimit bounds the decoders of --diff-extract, as it bounds
+	// those of extraction. 0 takes the default of extraction.
+	MemoryLimit int64
 }
 
 // The kinds of a Difference, in the order that a path reports them.
@@ -73,12 +84,18 @@ var diffRank = map[string]int{
 // Difference is one way in which a path on disk is not what the archive
 // holds. Archive and Disk give the two values, where they have a short form.
 // Names lists the extended attributes that differ.
+//
+// Extracted marks a difference between the disk and the copy that
+// --diff-extract extracted. Archive then holds the value of the copy, and
+// Offset, for content, the first byte that differs.
 type Difference struct {
-	Path    string
-	Kind    string
-	Archive string
-	Disk    string
-	Names   []string
+	Path      string
+	Kind      string
+	Archive   string
+	Disk      string
+	Names     []string
+	Extracted bool
+	Offset    int64
 }
 
 // DiffResult says what --diff found.
@@ -90,6 +107,9 @@ type DiffResult struct {
 	// Paths counts the paths with at least one difference.
 	Paths  int
 	Failed int
+	// Damaged counts the failed members whose decode found damage in the
+	// archive. Only --diff-extract decodes.
+	Damaged int
 	// Collided counts the members left out because a later member has the
 	// same path after --strip-components.
 	Collided int
@@ -201,9 +221,22 @@ func DiffArchive(cfg DiffConfig) (DiffResult, error) {
 	}
 	defer d.root.Close()
 
+	if cfg.Extract {
+		if d.scratch, err = newScratch(cfg, r, base, sortedKeys(roots)); err != nil {
+			return res, err
+		}
+		defer d.scratch.close() // after an error; the normal path closes it below
+	}
+
 	d.startWorkers()
 	walkErr := d.walk(sortedKeys(roots))
 	d.stopWorkers()
+	if d.scratch != nil {
+		d.scratch.notices(cfg.Reporter)
+		if err := d.scratch.close(); err != nil {
+			d.fail(err)
+		}
+	}
 	if walkErr != nil {
 		return res, walkErr
 	}
@@ -238,11 +271,15 @@ func DiffArchive(cfg DiffConfig) (DiffResult, error) {
 		if a.Path != b.Path {
 			return a.Path < b.Path
 		}
+		// One path never has a kind both from the archive and from a copy
+		// of --diff-extract: the copy is not compared for a kind that the
+		// archive found.
 		return diffRank[a.Kind] < diffRank[b.Kind]
 	})
 	res.Differences = d.diffs
 	res.Compared = d.compared
 	res.Failed = d.failed
+	res.Damaged = d.damaged
 	for i := range res.Differences {
 		if i == 0 || res.Differences[i].Path != res.Differences[i-1].Path {
 			res.Paths++
@@ -310,6 +347,8 @@ type differ struct {
 	want     map[string]*format.Member // the selected members, by path
 	archive  os.FileInfo               // the archive file, which the walk skips
 	progress Progress
+	// scratch is where --diff-extract extracts its copies; nil for --diff.
+	scratch *scratch
 
 	// The walk's own state, on the walking goroutine only.
 	seen      map[string]bool // the members found on disk
@@ -324,16 +363,25 @@ type differ struct {
 	mu       sync.Mutex
 	diffs    []Difference
 	failed   int
+	damaged  int
 	firstErr error
 }
 
 // contentJob is one file to read and compare with its member's digest. The
 // walk opens the file, through the directory that it walked, and the worker
 // reads it and closes it.
+//
+// With extract, the worker also extracts content into the scratch directory
+// and compares the copy with the file (doc/design.md 9.10). m is the member
+// of the path, and found holds the kinds that the comparison with the
+// archive found: the copy is not compared again for those.
 type contentJob struct {
 	content *format.Member
 	e       entry
 	f       srcFile
+	m       *format.Member
+	extract bool
+	found   map[string]bool
 }
 
 // linkCheck is a hardlink member found on disk, whose target is checked after
@@ -355,6 +403,9 @@ func (d *differ) fail(err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.failed++
+	if IsDamage(err) {
+		d.damaged++
+	}
 	if d.cfg.KeepGoing {
 		if d.cfg.Reporter != nil {
 			d.cfg.Reporter.Warn("%v", err)
@@ -372,21 +423,51 @@ func (d *differ) stopped() error {
 	return d.firstErr
 }
 
-func (d *differ) startWorkers() {
+// workers is the number of workers: -j, or GOMAXPROCS. Each worker of
+// --diff-extract decodes, as a worker of extraction does, so the memory
+// bound of extraction limits them too.
+func (d *differ) workers() int {
 	workers := d.cfg.Workers
 	if workers <= 0 {
 		workers = runtime.GOMAXPROCS(0)
 	}
+	if d.scratch == nil {
+		return workers
+	}
+	var files []*format.Member
+	for _, m := range d.want {
+		if c := contentOf(m, d.byID); c.Type.HasPayload() {
+			files = append(files, c)
+		}
+	}
+	return boundByMemory(workers, largestChunk(files, d.r.Owner), d.cfg.MemoryLimit)
+}
+
+func (d *differ) startWorkers() {
+	workers := d.workers()
 	d.jobs = make(chan contentJob, workers)
 	newHash := func() hash.Hash { return newDigest(d.r.keys) }
 	for range workers {
 		d.wg.Add(1)
 		go func() {
 			defer d.wg.Done()
+			var fw *fileWorker
+			if d.scratch != nil {
+				fw = d.scratch.x.newFileWorker()
+				defer fw.close()
+			}
 			for job := range d.jobs {
 				if d.stopped() != nil {
 					job.f.Close()
 					continue // drain
+				}
+				if job.extract {
+					d.extractFile(fw, job)
+					job.f.Close()
+					if d.progress != nil {
+						d.progress.Advance(int64(job.content.Size))
+					}
+					continue
 				}
 				same, err := sameContentOf(job.content, job.f, job.e, newHash)
 				job.f.Close()
@@ -539,6 +620,14 @@ func (d *differ) visit(e entry) error {
 	}
 	diffs, content, err := compareEntry(m, contentOf(m, d.byID), e, d.cfg.Metadata, open, openErr)
 	d.add(diffs...)
+	found := map[string]bool{}
+	for _, df := range diffs {
+		found[df.Kind] = true
+	}
+	if d.scratch != nil && err == nil && !found[DiffType] && content == nil &&
+		m.Type != format.TypeReg && m.Type != format.TypeHardlink {
+		d.extractNode(m, e, found)
+	}
 	if err == nil && content != nil && f == nil {
 		err = openErr
 	}
@@ -554,7 +643,7 @@ func (d *differ) visit(e entry) error {
 		d.links = append(d.links, linkCheck{m: m, info: e.Info})
 	}
 	if content != nil {
-		d.jobs <- contentJob{content: content, e: e, f: f}
+		d.jobs <- contentJob{content: content, e: e, f: f, m: m, extract: d.extracts(m), found: found}
 		return nil
 	}
 	if f != nil {

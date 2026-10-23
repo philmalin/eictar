@@ -512,3 +512,15 @@ versions read what it writes.
   It completes the options, the codecs and the other fixed values, and file
   names. Each release archive for a Unix system holds it, next to the man
   page. Two tests keep it in step with the parser.
+- `--diff-extract` is for the time before you remove the source of an
+  archive (design.md §9.10). It does all that `--diff` does. It also
+  extracts each member, with the code of `-x`, into a scratch directory,
+  compares the copy with the file byte by byte and by its metadata, and
+  removes it. Thus it finds a fault of the digest code, or of extraction,
+  that `--verify` and `--diff` cannot find. `--scratch-dir` chooses where
+  the scratch directory goes. Times are compared to the precision of its
+  file system. The stress tester runs it in half of its `--diff` steps.
+- `tools/mutate`: the name of a mutant that removes a `!`, the first of its
+  function, ended with a space. A line of `accepted.txt` cannot keep a
+  space at its end, so no entry could accept such a mutant. The name now
+  ends at the arrow. `TestKeys` covers it.

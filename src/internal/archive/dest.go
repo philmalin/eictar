@@ -25,6 +25,7 @@ type destDir interface {
 	Chmod(name string, mode fs.FileMode) error
 	Chtimes(name string, atime, mtime time.Time) error
 	Symlink(oldname, newname string) error
+	Readlink(name string) (string, error)
 	Link(oldname, newname string) error
 	Remove(name string) error
 	Rename(oldname, newname string) error

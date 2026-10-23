@@ -93,6 +93,17 @@ Every item in the lists below exists now, except the items marked "later".
 - **Compare with the disk**: each kind of difference, patterns and excludes,
   a file archived alone, an encrypted archive, the same result for each
   `-j`, and a link on disk that leads out of the directory (design.md §9.8).
+- **Compare with an extraction**: `--diff-extract` finds a change that a
+  digest with a fault hides from `--verify` and `--diff`. It finds a wrong
+  byte, mode, time or attribute in the extracted copy. It compares times to
+  the precision of the scratch file system, and leaves out an attribute
+  that the scratch refuses, with a notice. It reports each cause once. It
+  refuses a scratch directory in the tree, and stops with a message on a
+  full scratch. Damage gives exit 3, also under `--keep-going`. The result
+  is the same for each `-j`. Each operation on the scratch directory, and
+  each on the tree, fails in turn, and each fault fails the run. As root,
+  a wrong owner and other device numbers of a copy are differences
+  (design.md §9.10).
 - **Dry run**: for create, update with each mode, extract with each
   overwrite policy, and delete, the paths of the dry run are the paths that
   the real run writes, and the archive does not change. Also the conflict
@@ -228,6 +239,8 @@ parts work.
   - shared content, in the listing, in `--info` and in `--json`
   - `--diff`: no difference after `-xp`, except the pipe on macOS, and then
     a changed file and a missing file with exit 1 (design.md §9.8)
+  - `--diff-extract`: no difference in the source tree, no scratch
+    directory after the run, and a changed file with exit 1 (design.md §9.10)
 
   The dry run (design.md §9.9) has no operational test. The tests of package `cli`
   run it through `Run`, and check its output and that nothing changes.
@@ -309,7 +322,11 @@ The last three steps test the operations that compare and plan:
   tester makes one change to that tree: other bytes of the same size, a
   mode, a time, a file removed, a file added, or another link target. It
   keeps the time of the parent directory. `--diff` must then report that
-  path with that kind of difference, and nothing else, with exit 1.
+  path with that kind of difference, and nothing else, with exit 1. Half
+  the time, the step runs `--diff-extract` in place of `--diff`, with the
+  scratch directory beside the tree. Then each copy must also equal its
+  file, the one change must still give one line, and no scratch directory
+  must stay.
 - **A dry run** of `-r`, `-u`, `--delete` or `-x` must list the paths that
   the model says the real run writes or deletes. The archive must not
   change, and `-x -n` must not make its destination.

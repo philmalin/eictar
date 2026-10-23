@@ -444,12 +444,16 @@ func (w *Writer) Encoder() codec.Encoder { return w.enc }
 // CodecRef is the catalog index members should record, or format.NoCodec.
 func (w *Writer) CodecRef() int { return w.codecRef }
 
+func (w *Writer) newDigest() hash.Hash { return newDigest(w.keys) }
+
 // newDigest is the hash of a member's content: BLAKE3 keyed with the
 // content key in an encrypted archive, plain BLAKE3 otherwise
 // (doc/design.md 6.2).
-func (w *Writer) newDigest() hash.Hash { return newDigest(w.keys) }
-
-func newDigest(keys *crypt.Keys) hash.Hash {
+//
+// It is a variable so that a test can give it a fault that create, --verify
+// and --diff all share, and that only --diff-extract finds (doc/design.md
+// 9.10).
+var newDigest = func(keys *crypt.Keys) hash.Hash {
 	var key []byte
 	if keys != nil {
 		key = keys.ContentKey()

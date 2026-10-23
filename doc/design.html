@@ -7543,8 +7543,8 @@ change a row.</p>
 <p>This section describes the operations on an existing archive. Append,
 update, delete, compact, repair and the change of passphrase change it
 (§9.1 to §9.3, §9.5 to §9.7). <code>--verify</code>, <code>--info</code>
-(§9.4), <code>--diff</code> (§9.8) and a dry run (§9.9) change
-nothing.</p>
+(§9.4), <code>--diff</code> (§9.8), a dry run (§9.9) and
+<code>--diff-extract</code> (§9.10) change nothing.</p>
 <p>Each mutation writes a new index generation. The body is append-only.
 The writer never writes over bytes that a valid trailer describes.</p>
 <p>A mutation of an encrypted archive needs the passphrase. New members
@@ -7767,9 +7767,9 @@ and then a rename, with a short window between them.</li>
 the message “another eictar is changing this archive”. It does not wait.
 A backup job that waits can hang with no message.</li>
 <li>List, extract, <code>--verify</code>, <code>--info</code>,
-<code>--diff</code> and every dry run (<code>-n</code>) take no lock.
-The trailer is the commit point, so a reader sees one complete
-generation.</li>
+<code>--diff</code>, <code>--diff-extract</code> and every dry run
+(<code>-n</code>) take no lock. The trailer is the commit point, so a
+reader sees one complete generation.</li>
 </ul>
 <p><strong>A lock is on one inode, and compact and create rename a new
 inode over the path.</strong> Suppose that a process opens the path
@@ -7843,8 +7843,8 @@ change time are not compared, because extraction does not restore
 them.</p>
 <p>The content check reads no member data. Thus <code>--diff</code> does
 not check the archive itself. <code>--verify</code> does that (§9.4).
-<code>--diff-extract</code>, a design that is not implemented, also
-extracts each member and compares the bytes (§9.10).</p>
+<code>--diff-extract</code> also extracts each member, and compares the
+copy with the disk byte by byte (§9.10).</p>
 <p><strong>Which paths it compares.</strong> The archive does not record
 the paths that create was given. Thus <code>--diff</code> gets the start
 of each walk from the members. A walk starts at the highest directory of
@@ -8033,13 +8033,13 @@ under <code>--keep-going</code>. A conflict under
 path exits with 3 (§10.7).</p>
 <h3 id="compare-with-an-extraction---diff-extract">9.10 Compare with an
 extraction (<code>--diff-extract</code>)</h3>
-<p><strong>Status: a design. It is not implemented.</strong></p>
 <p><code>--diff-extract</code> is for the time before you remove the
 source of an archive. It extracts each member with the real extraction
 code, one at a time, into a scratch directory. It compares each
 extracted copy with the file on disk, byte by byte, and then removes the
 copy. It also does all that <code>--diff</code> does (§9.8). It is slow:
-each byte is decoded, written, read again and compared.</p>
+each byte is decoded, written, read again and compared. The code is in
+<code>diffextract.go</code>.</p>
 <p><strong>Why <code>--diff</code> and <code>--verify</code> are not
 sufficient.</strong> Together, they show that the disk, the stored
 digests and the decoded content agree. Both depend on the stored
@@ -8083,20 +8083,22 @@ its byte offset in the message.</li>
 below).</li>
 <li>Removes the copy, also when a step failed.</li>
 </ol>
-<p>The worker also calculates the digest of the source, as
-<code>--diff</code> does, because it reads each byte of the source in
-any case. Thus the output holds the result of <code>--diff</code>
-too.</p>
+<p>The worker also compares the digest of the source with the member’s,
+as <code>--diff</code> does. For a dense member, the one read of step 3
+gives the digest too. The digest of a sparse member covers only its
+data, so the worker reads such a file two times.</p>
 <p><strong>The other member types.</strong> Each type goes through its
 own extraction code, in the scratch directory:</p>
 <ul>
 <li>A directory: the worker makes an empty directory, and applies the
 metadata, as extraction does at its end (§8.3). It compares the
 metadata, then removes the directory.</li>
-<li>A symbolic link: the worker makes the link, and compares its target
-and its time with the link on disk.</li>
+<li>A symbolic link: the worker makes the link, and compares its target.
+It also compares the time of the link, when the platform can set
+it.</li>
 <li>A pipe: the worker makes the pipe, and compares its mode and its
-time.</li>
+time. macOS has no safe call to make a pipe (§15.1). There, the pipe is
+compared with the archive only, with one notice for the run.</li>
 <li>A device node: only as root, because only root can make one. Without
 root, the comparison is that of <code>--diff</code>, the device numbers,
 with one notice for the run.</li>
@@ -8111,6 +8113,8 @@ own.</li>
 holes as zeros, so it compares the content, not the layout of the
 holes.</li>
 </ul>
+<p>On Windows, only files and directories are extracted, and the mode is
+not compared (§15.1).</p>
 <p><strong>What the metadata comparison includes.</strong> The copy can
 have only what extraction restores. Thus the copy is extracted as with
 <code>-p</code>: the full mode, the ACLs and the user attributes. As
@@ -8121,6 +8125,27 @@ compared only by <code>--diff</code>, between the record in the archive
 and the disk. <code>--no-owner</code>, <code>--no-xattrs</code> and
 <code>--no-acls</code> leave out what they name, from both
 comparisons.</p>
+<p><strong>Each cause is reported one time.</strong> When the source
+differs from the archive in one item, <code>--diff</code> reports it.
+The copy then differs from the source in the same item, for the same
+reason. The program does not report that item of the copy again. Thus a
+line <code>after extraction</code> always shows a fault that the
+comparison with the archive did not show.</p>
+<p><strong>The precision of times.</strong> Before the first copy, the
+program sets the time of a probe file in the scratch directory to a time
+with nanoseconds. Then it reads the time back. The difference gives the
+precision of the file system: 1 ns, 100 ns, 1 µs, 1 ms, 10 ms, 1 s or 2
+s. Two times that differ by less than this precision are the same. Thus
+a scratch directory on FAT, which keeps times to 2 s, gives no false
+differences of time. A file system that does not keep a time to within 2
+s cannot be used, and the run stops with a message that names
+<code>--scratch-dir</code>. The probe also finds whether the platform
+can set the time of a link.</p>
+<p><strong>Attributes that the scratch file system refuses.</strong>
+Extraction counts them (§7.7), and the copy does not have them. The
+comparison of the copy leaves them out. They are compared only by
+<code>--diff</code>, and one notice at the end of the run names
+them.</p>
 <p><strong>The scratch directory.</strong> The program makes one
 directory with mode 0700, named <code>eictar-diff-</code> and a random
 suffix, and removes it at the end. It holds at most one copy for each
@@ -8135,7 +8160,8 @@ the copies of an encrypted archive are plaintext.</li>
 <li><strong>Not in the compared tree.</strong> A scratch directory
 inside a walk root is a usage error (exit 2). Its creation changes the
 time of its parent, and that is a difference. The walk also finds the
-copies.</li>
+copies. The program compares the paths after it resolves their
+links.</li>
 <li><strong>A full disk.</strong> A copy that does not fit is an error
 of the member, as in extraction. Without <code>--keep-going</code>, it
 stops the run with exit 4. The message names <code>--scratch-dir</code>.
@@ -8151,7 +8177,7 @@ with at most <code>-j</code> copies in it. Its name tells what it
 is.</li>
 </ul>
 <p><strong>The output.</strong> The lines of <code>--diff</code> do not
-change. A difference that the extracted copy shows ends with
+change. A difference that the extracted copy shows says
 <code>after extraction</code>, with the values of the source and the
 copy:</p>
 <pre><code>src/main.go: content differs after extraction, at byte 1048576
@@ -8160,10 +8186,10 @@ src/run.sh: mode differs after extraction: source 0755, extracted 0644</code></p
 so the output does not change with <code>-j</code>. The exit status is
 that of <code>--diff</code>: 0 with no difference, and 1 with a
 difference. A member that fails its digest or its tag is damage in the
-archive, and gives exit 3, as <code>--verify</code> does. An error of
-the scratch directory, or of a read, gives exit 4.
-<code>--keep-going</code> changes these exits as for
-<code>--diff</code>.</p>
+archive, and gives exit 3, as <code>--verify</code> does. Under
+<code>--keep-going</code>, the run goes on past damage, but the exit is
+still 3. An error of the scratch directory, or of a read, gives exit 4,
+or 1 under <code>--keep-going</code>.</p>
 <p><strong>Speed and memory.</strong> One member is extracted by one
 worker, so <code>-j</code> makes many files faster, but not one large
 file. Each worker holds its decoders, as in extraction, and two blocks
@@ -8177,35 +8203,51 @@ file outside it. The mode of 0700 keeps other users out of the
 directory, also when a copy has the setuid bit.</p>
 <p><strong>Tests.</strong> The claim of this section is that
 <code>--diff-extract</code> finds faults that <code>--diff</code> and
-<code>--verify</code> do not find. The tests show each case:</p>
+<code>--verify</code> do not find. <code>diffextract_test.go</code>
+shows each case:</p>
 <ul>
-<li>A digest that covers only the first chunk, in a build with the
-<code>faultinject</code> tag. Create, <code>--verify</code> and
-<code>--diff</code> pass, and <code>--diff-extract</code> reports the
-content.</li>
-<li>Faults of the destination (<code>faultDest</code> in
-<code>extract_fault_test.go</code>): one wrong byte, a wrong mode, a
-wrong time and a missing attribute, each in the extracted copy. Each
-gives one line <code>after extraction</code>.</li>
-<li>A full scratch disk: exit 4, and the scratch directory is
-removed.</li>
-<li>A scratch directory in the tree: exit 2.</li>
-<li>The same output with <code>-j 1</code> and with the default.</li>
-<li>An operational test: create, then <code>--diff-extract</code> of the
-source, with no difference, and no scratch directory after the run.</li>
+<li><code>TestDiffExtractFindsWhatTheDigestMisses</code>: a digest that
+covers only the first 4 KiB, through the variable
+<code>newDigest</code>. A byte after it changes. <code>--verify</code>
+and <code>--diff</code> pass, and <code>--diff-extract</code> reports
+the content, at the byte that changed.</li>
+<li><code>TestDiffExtractFindsFaultsOfExtraction</code> and
+<code>TestDiffExtractFindsAMissingAttribute</code>: a scratch directory
+that writes one wrong byte, a wrong mode or a wrong time, and a
+<code>setXattr</code> that sets nothing. Each gives one line
+<code>after extraction</code>.</li>
+<li><code>TestDiffExtractComparesTimesToThePrecisionOfTheScratch</code>:
+a scratch directory that keeps times to 2 s gives no difference of
+time.</li>
+<li><code>TestDiffExtractOfAnAttributeThatTheScratchRefuses</code>: no
+difference, and one notice.</li>
+<li><code>TestDiffExtractFaultsAreNeverSilent</code> and
+<code>TestDiffExtractSourceFaultsAreNeverSilent</code>: each operation
+on the scratch directory, and each on the tree, fails in turn. Each
+fault fails the run with that fault, no handle stays open, and the
+scratch directory goes.</li>
+<li><code>TestDiffExtractAsRoot</code>, in the CI job as root: a wrong
+owner of a copy, and other numbers of a device node, are each a
+difference.</li>
+<li><code>TestDiffExtractReportsEachCauseOnce</code>,
+<code>TestDiffExtractOfAFullScratch</code>,
+<code>TestDiffExtractOfADamagedArchive</code>,
+<code>TestDiffExtractRefusesAScratchInTheTree</code>,
+<code>TestDiffExtractDoesNotDependOnWorkers</code>, and the tests of
+links, hardlinks, sparse files, pipes, attributes, <code>$TMPDIR</code>
+and <code>compareContent</code>.</li>
+<li><code>TestDiffExtractThroughRun</code> (package <code>cli</code>):
+the summary line, and the exit codes of <code>--scratch-dir</code>.</li>
 </ul>
-<p><strong>Open questions.</strong></p>
-<ul>
-<li><strong>Time precision.</strong> A scratch directory on a file
-system with coarse times, such as FAT, cannot hold the time of the
-source. The comparison then reports each time. One choice is to compare
-the time only to the precision of the scratch file system. Another is to
-refuse such a scratch directory.</li>
-<li><strong>Attributes that the scratch file system refuses.</strong>
-Extraction counts them for one notice (§7.7). The comparison of the copy
-then cannot include them. One choice is to give the same notice, and to
-compare them only by <code>--diff</code>.</li>
-</ul>
+<p>Each test of a fault fails when the check that it covers is removed.
+In <code>make mutate</code>, the tests find each change of
+<code>diffextract.go</code>, except 28 in
+<code>tools/mutate/accepted.txt</code>: the code of the owner and of
+device nodes, which needs root, the code for Windows, and one change
+that cannot change the result. The operational test
+<code>TestDiffExtractOfTheBinary</code> runs the built binary on a
+created archive, and finds no difference and no scratch directory after
+the run.</p>
 <hr />
 <h1 id="part-iii-interface">Part III — Interface</h1>
 <h2 id="command-line-interface">10. Command line interface</h2>
@@ -8314,13 +8356,22 @@ replaced (§9.2).</td>
 </tr>
 <tr class="even">
 <td></td>
+<td><code>--diff-extract</code></td>
+<td>Do what <code>--diff</code> does, and also extract each member into
+a scratch directory and compare the copy with the disk byte by byte
+(§9.10)</td>
+<td>patterns (default: all)</td>
+<td>after v1.1.3</td>
+</tr>
+<tr class="odd">
+<td></td>
 <td><code>--repair</code></td>
 <td>Restore the last complete generation after an interrupted write
 (§9.5)</td>
 <td>none</td>
 <td>M6</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--info</code></td>
 <td>Show the archive header, the codecs, the dictionaries, the counts,
@@ -8328,7 +8379,7 @@ the shared content and the dead space</td>
 <td>none</td>
 <td>M6</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--change-passphrase</code></td>
 <td>Seal the data key under a new passphrase, and write the archive
@@ -8336,7 +8387,7 @@ again without its dead space (§9.7)</td>
 <td>none</td>
 <td>M9</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--list-codecs</code></td>
 <td>Show each codec with its parameters, defaults and ranges</td>
@@ -8750,8 +8801,10 @@ Create, append, update, list, extract and diff.</td>
 <tr class="odd">
 <td><code>-h</code></td>
 <td><code>--dereference</code></td>
-<td>follow links and store what they point to. With <code>--diff</code>,
-compare what they point to. Create, append, update and diff.</td>
+<td>follow links and store what they point to. With <code>--diff</code>
+and <code>--diff-extract</code>, compare what they point to. Create,
+append, update, <code>--diff</code> and
+<code>--diff-extract</code>.</td>
 <td>M2</td>
 </tr>
 <tr class="even">
@@ -8793,7 +8846,8 @@ the umask. Also restore ACLs for any user, and privileged xattrs as root
 <td><code>--no-xattrs</code>, <code>--no-acls</code>,
 <code>--no-owner</code></td>
 <td>on create, append and update, do not record that metadata. On
-extract, do not apply it. On diff, do not compare it.</td>
+extract, do not apply it. On <code>--diff</code> and
+<code>--diff-extract</code>, do not compare it.</td>
 <td>M5</td>
 </tr>
 <tr class="even">
@@ -8823,8 +8877,9 @@ extract, do not apply it. On diff, do not compare it.</td>
 <tr class="even">
 <td></td>
 <td><code>--strip-components N</code></td>
-<td>with <code>-x</code> and <code>--diff</code>, remove the first N
-components of each path (§10.14). Not with <code>-O</code>.</td>
+<td>with <code>-x</code>, <code>--diff</code> and
+<code>--diff-extract</code>, remove the first N components of each path
+(§10.14). Not with <code>-O</code>.</td>
 <td>v1.0.7</td>
 </tr>
 <tr class="odd">
@@ -8862,43 +8917,50 @@ member data (§9.4)</td>
 </tr>
 <tr class="odd">
 <td></td>
+<td><code>--scratch-dir DIR</code></td>
+<td>with <code>--diff-extract</code>, make the scratch directory in DIR,
+not in <code>$TMPDIR</code> or <code>/tmp</code> (§9.10)</td>
+<td>after v1.1.3</td>
+</tr>
+<tr class="even">
+<td></td>
 <td><code>--on-conflict MODE</code></td>
 <td>with <code>-r</code>: <code>replace</code> (default),
 <code>skip</code> or <code>error</code> (§9.2)</td>
 <td>M6</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--update-mode MODE</code></td>
 <td>with <code>-u</code>: <code>newer</code> (default),
 <code>different</code> or <code>digest</code> (§10.5)</td>
 <td>M6</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--recompress SPEC</code></td>
 <td>with <code>--compact</code>, encode again with SPEC</td>
 <td>M7</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--config FILE</code></td>
 <td>use FILE as the configuration file (§11)</td>
 <td>M7</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--no-config</code></td>
 <td>read no configuration file</td>
 <td>M7</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td></td>
 <td><code>--show-config</code></td>
 <td>show the settings in effect and where each came from, then exit</td>
 <td>M7</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td></td>
 <td><code>--version</code>, <code>--help</code></td>
 <td></td>
@@ -9027,10 +9089,10 @@ Thus a default value never causes this error.</p>
 <tr class="even">
 <td>1</td>
 <td>the operation completed, but one or more members failed under
-<code>--keep-going</code>. Also, <code>--diff</code> found a difference
-between the archive and the disk (§9.8). Also,
-<code>--strip-components</code> gave two members the same path, and one
-was left out (§10.14).</td>
+<code>--keep-going</code>. Also, <code>--diff</code> or
+<code>--diff-extract</code> found a difference between the archive and
+the disk (§9.8, §9.10). Also, <code>--strip-components</code> gave two
+members the same path, and one was left out (§10.14).</td>
 </tr>
 <tr class="odd">
 <td>2</td>
@@ -9038,9 +9100,11 @@ was left out (§10.14).</td>
 <code>-f</code>, a bad compression spec. Also a pattern that matches no
 member, for <code>-t</code>, <code>-x</code>, <code>--verify</code>,
 <code>--diff</code> and <code>--delete</code>, an <code>-R</code> that
-matches no path or member, a regular expression that does not compile,
-and a path that is already in the archive under
-<code>--on-conflict=error</code>. Nothing is changed or extracted.</td>
+matches no path or member, a regular expression that does not compile, a
+path that is already in the archive under
+<code>--on-conflict=error</code>, and a scratch directory of
+<code>--diff-extract</code> in the compared tree. Nothing is changed or
+extracted.</td>
 </tr>
 <tr class="even">
 <td>3</td>

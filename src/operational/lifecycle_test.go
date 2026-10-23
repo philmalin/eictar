@@ -1128,3 +1128,31 @@ func TestDiffThroughTheBinary(t *testing.T) {
 		}
 	}
 }
+
+// TestDiffExtractOfTheBinary: --diff-extract of the tree that an archive
+// came from extracts each member into a scratch directory and finds no
+// difference, and the run removes the scratch directory. A change of one
+// byte is a difference, with exit 1 (doc/design.md 9.10).
+func TestDiffExtractOfTheBinary(t *testing.T) {
+	tree := metadataFixture(t)
+	archive := filepath.Join(t.TempDir(), "meta.ect")
+	runOK(t, tree.Root, "-cf", archive, "work")
+	scratch := t.TempDir()
+
+	res := testutil.Run(t, tree.Root, "--diff-extract", "-f", archive, "--scratch-dir", scratch)
+	if res.ExitCode != exitOK || !strings.Contains(res.Stdout, "no differences") {
+		t.Errorf("--diff-extract: exit %d\nstdout: %s\nstderr: %s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+	if left, _ := os.ReadDir(scratch); len(left) != 0 {
+		t.Errorf("the scratch directory is still there: %v", left)
+	}
+
+	if err := os.WriteFile(filepath.Join(tree.Root, "work/attrs.txt"), []byte("Attributes"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	res = testutil.Run(t, tree.Root, "--diff-extract", "-f", archive, "--scratch-dir", scratch)
+	if res.ExitCode != exitPartial || !strings.Contains(res.Stdout, "work/attrs.txt: content differs") {
+		t.Errorf("--diff-extract after a change: exit %d, want %d\nstdout: %s\nstderr: %s",
+			res.ExitCode, exitPartial, res.Stdout, res.Stderr)
+	}
+}

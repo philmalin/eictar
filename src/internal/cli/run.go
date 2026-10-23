@@ -191,7 +191,7 @@ func dispatch(o *Options, stdout, stderr io.Writer) error {
 		return runChangePassphrase(o, stdout, stderr)
 	case OpVerify:
 		return runVerify(o, stdout, stderr)
-	case OpDiff:
+	case OpDiff, OpDiffExtract:
 		return runDiff(o, stdout, stderr)
 	case OpRepair:
 		return runRepair(o, stdout, stderr)
@@ -232,10 +232,12 @@ func exitCodeFor(err error) int {
 	if errors.As(err, &partial) || errors.As(err, &differ) || errors.As(err, &collided) {
 		return ExitPartial
 	}
-	// A pattern that matches nothing, and a path that is already in the
-	// archive under --on-conflict=error, are mistakes in what was asked for;
-	// nothing was changed (doc/design.md 9.2 and 10.7).
-	if errors.Is(err, archive.ErrNoMatch) || errors.Is(err, archive.ErrConflict) {
+	// A pattern that matches nothing, a path that is already in the archive
+	// under --on-conflict=error, and a scratch directory of --diff-extract
+	// in the compared tree are mistakes in what was asked for; nothing was
+	// changed (doc/design.md 9.2, 9.10 and 10.7).
+	if errors.Is(err, archive.ErrNoMatch) || errors.Is(err, archive.ErrConflict) ||
+		errors.Is(err, archive.ErrScratchInTree) {
 		return ExitUsage
 	}
 	// A damaged archive is reported separately from an I/O failure, so a
@@ -273,6 +275,8 @@ Operations (exactly one):
       --change-passphrase   seal the archive's key under a new passphrase
       --verify              check every digest and tag, without extracting
       --diff                compare the members with the files on disk
+      --diff-extract        as --diff, and extract each member to a scratch
+                            directory and compare it byte by byte (slow)
       --repair              cut the archive back after a crash
       --info                show the settings, counts and dead space
       --list-codecs         list the codecs and their parameters
@@ -317,14 +321,17 @@ Changes:
       --update-mode MODE    with -u: newer (default), different or digest
       --recompress SPEC     with --compact: encode every member again
       --quick               with --verify: check the structure only
+      --scratch-dir DIR     with --diff-extract: make the scratch directory
+                            in DIR (default $TMPDIR)
 
 Extraction:
   -k, --keep-existing       never replace an existing file
       --overwrite           replace existing files (the default)
       --newer-only          replace only when the member is newer
   -O, --to-stdout           write the content to standard output
-      --strip-components N  with -x or --diff: remove the first N components
-                            of each path; a shorter path is left out
+      --strip-components N  with -x, --diff or --diff-extract: remove the
+                            first N components of each path; a shorter path
+                            is left out
   -p, --preserve-permissions  modes exactly, with setuid and no umask; ACLs,
                             and privileged xattrs as root (trusted archives)
       --preserve-owner      restore the owner (root only)

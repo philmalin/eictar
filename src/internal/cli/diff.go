@@ -6,11 +6,15 @@ import (
 	"strings"
 
 	"github.com/philmalin/eictar/src/internal/archive"
+	"github.com/philmalin/eictar/src/internal/format"
 )
 
 // runDiff is --diff (doc/design.md 9.8): it compares the archive with the
-// tree on disk, and changes nothing.
+// tree on disk, and changes nothing. --diff-extract (doc/design.md 9.10) also
+// extracts each member into a scratch directory, and compares the copy with
+// the disk.
 func runDiff(o *Options, stdout, stderr io.Writer) error {
+	extract := o.Op == OpDiffExtract
 	exclude, err := gatherExcludes(o)
 	if err != nil {
 		return err
@@ -39,6 +43,10 @@ func runDiff(o *Options, stdout, stderr io.Writer) error {
 		Workers:   o.Workers,
 		KeepGoing: o.KeepGoing,
 		Reporter:  progress,
+
+		Extract:     extract,
+		ScratchDir:  o.ScratchDir,
+		MemoryLimit: int64(o.MemoryLimit),
 	})
 	done()
 	if err != nil {
@@ -52,6 +60,10 @@ func runDiff(o *Options, stdout, stderr io.Writer) error {
 		fmt.Fprintln(stdout, differenceLine(d, show))
 	}
 	switch {
+	case res.Damaged > 0:
+		// Under --keep-going, damage found by a decode is still damage,
+		// as for --verify (doc/design.md 9.10).
+		return fmt.Errorf("%d members of the archive did not decode: %w", res.Damaged, format.ErrCorruptData)
 	case res.Failed > 0:
 		return &partialError{failed: res.Failed}
 	case res.Paths > 0:
@@ -60,7 +72,11 @@ func runDiff(o *Options, stdout, stderr io.Writer) error {
 		return &collisionError{collided: res.Collided}
 	}
 	if !o.Quiet {
-		fmt.Fprintf(stdout, "%s: no differences, %d members compared\n", o.Archive, res.Compared)
+		how := "compared"
+		if extract {
+			how = "extracted and compared"
+		}
+		fmt.Fprintf(stdout, "%s: no differences, %d members %s\n", o.Archive, res.Compared, how)
 	}
 	return nil
 }
@@ -78,6 +94,9 @@ func differenceLine(d archive.Difference, show func(string) string) string {
 		names[i] = show(n)
 	}
 	d.Names = names
+	if d.Extracted {
+		return copyLine(d)
+	}
 	what := map[string]string{
 		archive.DiffType:   "type differs",
 		archive.DiffSize:   "size differs",
@@ -104,6 +123,31 @@ func differenceLine(d archive.Difference, show func(string) string) string {
 		return fmt.Sprintf("%s: %s: archive %q, disk %q", d.Path, what[d.Kind], d.Archive, d.Disk)
 	}
 	return fmt.Sprintf("%s: %s: archive %s, disk %s", d.Path, what[d.Kind], d.Archive, d.Disk)
+}
+
+// copyLine renders a difference between the disk and the copy that
+// --diff-extract extracted, with the value of the source on disk and of the
+// copy. Its path and names are already shown as differenceLine shows them.
+func copyLine(d archive.Difference) string {
+	what := map[string]string{
+		archive.DiffSize:   "size differs",
+		archive.DiffLink:   "link target differs",
+		archive.DiffDevice: "device numbers differ",
+		archive.DiffMode:   "mode differs",
+		archive.DiffOwner:  "owner differs",
+		archive.DiffMTime:  "mtime differs",
+	}
+	switch d.Kind {
+	case archive.DiffContent:
+		return fmt.Sprintf("%s: content differs after extraction, at byte %d", d.Path, d.Offset)
+	case archive.DiffXattrs:
+		return fmt.Sprintf("%s: extended attributes differ after extraction: %s", d.Path, strings.Join(d.Names, ", "))
+	case archive.DiffACLs:
+		return fmt.Sprintf("%s: ACLs differ after extraction: %s", d.Path, strings.Join(d.Names, ", "))
+	case archive.DiffLink:
+		return fmt.Sprintf("%s: %s after extraction: source %q, extracted %q", d.Path, what[d.Kind], d.Disk, d.Archive)
+	}
+	return fmt.Sprintf("%s: %s after extraction: source %s, extracted %s", d.Path, what[d.Kind], d.Disk, d.Archive)
 }
 
 // differError reports that the archive and the disk differ. As for diff(1)

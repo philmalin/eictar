@@ -19,7 +19,7 @@ eictar \- archive files, each compressed and optionally encrypted on its own
 .IR path ...
 .br
 .B eictar
-.BR \-t | \-x | \-\-verify | \-\-diff
+.BR \-t | \-x | \-\-verify | \-\-diff | \-\-diff\-extract
 .B \-f
 .I archive
 .RI [ options ]
@@ -153,6 +153,41 @@ without
 .B \-p
 has its mode less the umask, and that is a difference.
 .TP
+.B \-\-diff\-extract
+Do all that
+.B \-\-diff
+does. Also extract each member into a scratch directory, one at a time,
+with the code of
+.BR \-x .
+Compare each copy with the file on disk, byte by byte, and then remove the
+copy. This finds a fault that
+.B \-\-verify
+and
+.B \-\-diff
+cannot find: a fault of the digest, or of the code that writes a file and
+its metadata. Use it before you remove the source of an archive. It is
+slow: each byte is decoded, written, read again and compared.
+.IP
+A copy gets what
+.B \-p
+restores: the full mode, the ACLs and the extended attributes. As root, it
+also gets the owner. A difference of a copy ends with
+.BR "after extraction" .
+The times are compared to the precision of the file system of the scratch
+directory. A member that does not decode is damage, with exit status 3,
+also under
+.BR \-\-keep\-going .
+.IP
+The scratch directory is made in
+.B $TMPDIR
+or
+.BR /tmp ,
+or in the directory that
+.B \-\-scratch\-dir
+gives, with mode 0700. It holds at most one copy for each worker, and the
+program removes it at the end. A scratch directory in the compared tree is
+a usage error. The copies of an encrypted archive are plaintext.
+.TP
 .B \-\-repair
 After a crash during a change, cut the file back to the last complete
 generation. An archive that opens correctly is not changed.
@@ -253,9 +288,10 @@ Store what a symbolic link points to, not the link. With
 compare what it points to. For
 .BR \-c ,
 .BR \-r ,
-.B \-u
-and
+.BR \-u ,
 .B \-\-diff
+and
+.B \-\-diff\-extract
 only.
 .TP
 .B \-\-one\-file\-system
@@ -384,6 +420,21 @@ encode every member again with
 With
 .BR \-\-verify :
 check only the structure, and read no member data.
+.TP
+.BI \-\-scratch\-dir " dir"
+With
+.BR \-\-diff\-extract :
+make the scratch directory in
+.IR dir ,
+not in
+.B $TMPDIR
+or
+.BR /tmp .
+It needs space for the
+.B \-j
+largest files. On many systems,
+.B /tmp
+is in RAM.
 .SS Extraction
 .TP
 .BR \-k ", " \-\-keep\-existing
@@ -424,7 +475,9 @@ the contents of both go into one directory. A hard link to a member that is
 not extracted gets a copy of its content.
 .IP
 With
-.BR \-\-diff ,
+.B \-\-diff
+and
+.BR \-\-diff\-extract ,
 compare the tree that extraction with this option writes. With
 .BR \-n ,
 show the paths after the strip. Not with
@@ -455,7 +508,9 @@ Create device nodes. Only root can do this.
 .BR \-\-no\-xattrs ", " \-\-no\-acls ", " \-\-no\-owner
 When adding, do not record this metadata. When extracting, do not restore
 it. With
-.BR \-\-diff ,
+.B \-\-diff
+and
+.BR \-\-diff\-extract ,
 do not compare it.
 .SS Output and work
 .TP
@@ -600,6 +655,7 @@ gives the totals, and the files that share another's data.
 .BR \-x ,
 .BR \-\-verify ,
 .BR \-\-diff ,
+.BR \-\-diff\-extract ,
 .B \-\-delete
 and
 .B \-\-exclude
@@ -846,7 +902,9 @@ Success.
 The operation completed, but some members failed under
 .BR \-\-keep\-going .
 Also, for
-.BR \-\-diff ,
+.B \-\-diff
+and
+.BR \-\-diff\-extract ,
 the archive and the disk are different. Also, with
 .BR \-\-strip\-components ,
 two members had the same path, and one was left out.
@@ -856,8 +914,10 @@ A usage error: a bad option, a bad configuration, a pattern or an
 .B \-R
 that matches nothing, a regular expression that is not valid, or a conflict
 under
-.BR \-\-on\-conflict=error .
-Nothing was changed.
+.BR \-\-on\-conflict=error ,
+or a scratch directory of
+.B \-\-diff\-extract
+in the compared tree. Nothing was changed.
 .TP
 .B 3
 The archive failed a check: damaged data, a wrong passphrase, a failed
@@ -1024,6 +1084,15 @@ Show what changed in Documents since the last update:
 .nf
 .RS
 eictar \-\-diff \-f home.ect \-C ~
+.RE
+.fi
+.PP
+Before you remove Documents, extract each member and compare it with the
+file, byte by byte:
+.PP
+.nf
+.RS
+eictar \-\-diff\-extract \-f home.ect \-C ~ Documents
 .RE
 .fi
 .PP

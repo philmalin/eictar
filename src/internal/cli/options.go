@@ -34,6 +34,7 @@ const (
 	OpListCodecs
 	OpChangePassphrase
 	OpDiff
+	OpDiffExtract
 )
 
 var operationNames = map[Operation]string{
@@ -52,6 +53,7 @@ var operationNames = map[Operation]string{
 
 	OpChangePassphrase: "--change-passphrase",
 	OpDiff:             "--diff",
+	OpDiffExtract:      "--diff-extract",
 }
 
 func (o Operation) String() string {
@@ -159,8 +161,11 @@ type Options struct {
 	// StripComponents is --strip-components: with -x and --diff, remove
 	// this many leading components from each path (doc/design.md 10.14).
 	StripComponents int
-	UpdateMode      string
-	OnConflict      string
+	// ScratchDir is --scratch-dir: with --diff-extract, the directory in which
+	// the scratch directory is made (doc/design.md 9.10).
+	ScratchDir string
+	UpdateMode string
+	OnConflict string
 
 	KeepGoing bool
 	// DryRun is -n: show what the operation would write, and write nothing
@@ -239,6 +244,7 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs.BoolVar(&ops.compact, "compact", false, "reclaim space from tombstoned members")
 	fs.BoolVar(&ops.verify, "verify", false, "check integrity without extracting")
 	fs.BoolVar(&ops.diff, "diff", false, "compare the archive with the files on disk")
+	fs.BoolVar(&ops.diffExtract, "diff-extract", false, "as --diff, and extract each member to compare it byte by byte")
 	fs.BoolVar(&ops.repair, "repair", false, "recover from a damaged trailer")
 	fs.BoolVar(&ops.info, "info", false, "print archive information")
 	fs.BoolVar(&ops.listCodecs, "list-codecs", false, "list compression codecs and their parameters")
@@ -292,7 +298,8 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs.BoolVar(&ops.overwrite, "overwrite", false, "overwrite existing files (the default)")
 	fs.BoolVar(&ops.newerOnly, "newer-only", false, "overwrite only when the member is newer")
 	fs.BoolVarP(&o.ToStdout, "to-stdout", "O", false, "write extracted content to stdout")
-	fs.IntVar(&o.StripComponents, "strip-components", 0, "with -x or --diff, remove this many leading components from each path")
+	fs.IntVar(&o.StripComponents, "strip-components", 0, "with -x, --diff or --diff-extract, remove this many leading components from each path")
+	fs.StringVar(&o.ScratchDir, "scratch-dir", "", "with --diff-extract, make the scratch directory here (default $TMPDIR)")
 
 	fs.StringVar(&o.UpdateMode, "update-mode", o.UpdateMode, "with -u: newer, different or digest")
 	fs.StringVar(&o.OnConflict, "on-conflict", o.OnConflict, "with -r: replace, skip or error")
@@ -327,13 +334,13 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 // operation selectors, the compression shorthands and the overwrite policy,
 // none of which map one-to-one onto an Options field.
 type operationFlags struct {
-	create, append_, list, extract, update bool
-	delete_, compact, verify, repair, info bool
-	listCodecs, changePassphrase, diff     bool
-	gzip, xz, zstd                         bool
-	keepExisting, overwrite, newerOnly     bool
-	compress                               *string
-	sizes                                  sizeTargets
+	create, append_, list, extract, update          bool
+	delete_, compact, verify, repair, info          bool
+	listCodecs, changePassphrase, diff, diffExtract bool
+	gzip, xz, zstd                                  bool
+	keepExisting, overwrite, newerOnly              bool
+	compress                                        *string
+	sizes                                           sizeTargets
 }
 
 type sizeTargets []struct {
@@ -453,7 +460,7 @@ func Parse(argv []string) (*Options, error) {
 func noOperation(ops *operationFlags) bool {
 	return !(ops.create || ops.append_ || ops.list || ops.extract || ops.update ||
 		ops.delete_ || ops.compact || ops.verify || ops.repair || ops.info || ops.listCodecs ||
-		ops.changePassphrase || ops.diff)
+		ops.changePassphrase || ops.diff || ops.diffExtract)
 }
 
 func resolveOperation(ops *operationFlags) (Operation, error) {
@@ -470,6 +477,7 @@ func resolveOperation(ops *operationFlags) (Operation, error) {
 		{ops.compact, OpCompact},
 		{ops.verify, OpVerify},
 		{ops.diff, OpDiff},
+		{ops.diffExtract, OpDiffExtract},
 		{ops.repair, OpRepair},
 		{ops.info, OpInfo},
 		{ops.listCodecs, OpListCodecs},
@@ -484,7 +492,7 @@ func resolveOperation(ops *operationFlags) (Operation, error) {
 	}
 	switch len(found) {
 	case 0:
-		return OpNone, &UsageError{fmt.Errorf("no operation selected: one of -c, -r, -t, -x, -u, --delete, --compact, --change-passphrase, --verify, --diff, --repair, --info or --list-codecs is required")}
+		return OpNone, &UsageError{fmt.Errorf("no operation selected: one of -c, -r, -t, -x, -u, --delete, --compact, --change-passphrase, --verify, --diff, --diff-extract, --repair, --info or --list-codecs is required")}
 	case 1:
 		return found[0], nil
 	default:
@@ -658,7 +666,8 @@ func (o *Options) validate() error {
 		{"preserve-permissions", []Operation{OpExtract}},
 		{"preserve-owner", []Operation{OpExtract}},
 		{"preserve-devices", []Operation{OpExtract}},
-		{"strip-components", []Operation{OpExtract, OpDiff}},
+		{"strip-components", []Operation{OpExtract, OpDiff, OpDiffExtract}},
+		{"scratch-dir", []Operation{OpDiffExtract}},
 		{"no-owner", append([]Operation{OpExtract}, walking...)},
 		{"no-xattrs", append([]Operation{OpExtract}, walking...)},
 		{"no-acls", append([]Operation{OpExtract}, walking...)},

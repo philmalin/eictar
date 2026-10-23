@@ -1683,8 +1683,8 @@ first in `BenchmarkCodecs`. `bench/compare.sh` runs eictar with
 
 This section describes the operations on an existing archive. Append,
 update, delete, compact, repair and the change of passphrase change it
-(§9.1 to §9.3, §9.5 to §9.7). `--verify`, `--info` (§9.4), `--diff` (§9.8)
-and a dry run (§9.9) change nothing.
+(§9.1 to §9.3, §9.5 to §9.7). `--verify`, `--info` (§9.4), `--diff` (§9.8),
+a dry run (§9.9) and `--diff-extract` (§9.10) change nothing.
 
 Each mutation writes a new index generation. The body is append-only. The
 writer never writes over bytes that a valid trailer describes.
@@ -1913,8 +1913,8 @@ Each writer takes an advisory lock on the archive file:
 - If another process holds the lock, the program stops with exit 4 and the
   message "another eictar is changing this archive". It does not wait. A
   backup job that waits can hang with no message.
-- List, extract, `--verify`, `--info`, `--diff` and every dry run (`-n`)
-  take no lock. The trailer is the commit point, so a reader sees one
+- List, extract, `--verify`, `--info`, `--diff`, `--diff-extract` and every
+  dry run (`-n`) take no lock. The trailer is the commit point, so a reader sees one
   complete generation.
 
 **A lock is on one inode, and compact and create rename a new inode over the
@@ -1991,9 +1991,8 @@ access time and the change time are not compared, because extraction does
 not restore them.
 
 The content check reads no member data. Thus `--diff` does not check the
-archive itself. `--verify` does that (§9.4). `--diff-extract`, a design
-that is not implemented, also extracts each member and compares the bytes
-(§9.10).
+archive itself. `--verify` does that (§9.4). `--diff-extract` also extracts
+each member, and compares the copy with the disk byte by byte (§9.10).
 
 **Which paths it compares.** The archive does not record the paths that
 create was given. Thus `--diff` gets the start of each walk from the
@@ -2173,14 +2172,12 @@ path exits with 3 (§10.7).
 
 ### 9.10 Compare with an extraction (`--diff-extract`)
 
-**Status: a design. It is not implemented.**
-
 `--diff-extract` is for the time before you remove the source of an
 archive. It extracts each member with the real extraction code, one at a
 time, into a scratch directory. It compares each extracted copy with the
 file on disk, byte by byte, and then removes the copy. It also does all that
 `--diff` does (§9.8). It is slow: each byte is decoded, written, read again
-and compared.
+and compared. The code is in `diffextract.go`.
 
 **Why `--diff` and `--verify` are not sufficient.** Together, they show that
 the disk, the stored digests and the decoded content agree. Both depend on
@@ -2220,9 +2217,10 @@ disk, and compares the metadata with the member, as before. Then a worker:
 4. Compares the metadata of the copy with that of the source (see below).
 5. Removes the copy, also when a step failed.
 
-The worker also calculates the digest of the source, as `--diff` does,
-because it reads each byte of the source in any case. Thus the output holds
-the result of `--diff` too.
+The worker also compares the digest of the source with the member's, as
+`--diff` does. For a dense member, the one read of step 3 gives the digest
+too. The digest of a sparse member covers only its data, so the worker
+reads such a file two times.
 
 **The other member types.** Each type goes through its own extraction code,
 in the scratch directory:
@@ -2230,9 +2228,11 @@ in the scratch directory:
 - A directory: the worker makes an empty directory, and applies the
   metadata, as extraction does at its end (§8.3). It compares the
   metadata, then removes the directory.
-- A symbolic link: the worker makes the link, and compares its target and
-  its time with the link on disk.
+- A symbolic link: the worker makes the link, and compares its target. It
+  also compares the time of the link, when the platform can set it.
 - A pipe: the worker makes the pipe, and compares its mode and its time.
+  macOS has no safe call to make a pipe (§15.1). There, the pipe is
+  compared with the archive only, with one notice for the run.
 - A device node: only as root, because only root can make one. Without
   root, the comparison is that of `--diff`, the device numbers, with one
   notice for the run.
@@ -2245,6 +2245,9 @@ in the scratch directory:
 - A sparse file is extracted with its holes. The comparison reads the holes
   as zeros, so it compares the content, not the layout of the holes.
 
+On Windows, only files and directories are extracted, and the mode is not
+compared (§15.1).
+
 **What the metadata comparison includes.** The copy can have only what
 extraction restores. Thus the copy is extracted as with `-p`: the full
 mode, the ACLs and the user attributes. As root, it also gets the owner and
@@ -2253,6 +2256,27 @@ includes these items, and the modification time. Items that extraction
 cannot restore without root are compared only by `--diff`, between the
 record in the archive and the disk. `--no-owner`, `--no-xattrs` and
 `--no-acls` leave out what they name, from both comparisons.
+
+**Each cause is reported one time.** When the source differs from the
+archive in one item, `--diff` reports it. The copy then differs from the
+source in the same item, for the same reason. The program does not report
+that item of the copy again. Thus a line `after extraction` always shows a
+fault that the comparison with the archive did not show.
+
+**The precision of times.** Before the first copy, the program sets the
+time of a probe file in the scratch directory to a time with nanoseconds.
+Then it reads the time back. The difference gives the precision of the
+file system: 1 ns, 100 ns, 1 µs, 1 ms, 10 ms, 1 s or 2 s. Two times that
+differ by less than this precision are the same. Thus a scratch directory
+on FAT, which keeps times to 2 s, gives no false differences of time. A
+file system that does not keep a time to within 2 s cannot be used, and
+the run stops with a message that names `--scratch-dir`. The probe also
+finds whether the platform can set the time of a link.
+
+**Attributes that the scratch file system refuses.** Extraction counts
+them (§7.7), and the copy does not have them. The comparison of the copy
+leaves them out. They are compared only by `--diff`, and one notice at the
+end of the run names them.
 
 **The scratch directory.** The program makes one directory with mode 0700,
 named `eictar-diff-` and a random suffix, and removes it at the end. It
@@ -2265,7 +2289,8 @@ largest files that are compared at the same time.
   an encrypted archive are plaintext.
 - **Not in the compared tree.** A scratch directory inside a walk root is a
   usage error (exit 2). Its creation changes the time of its parent, and
-  that is a difference. The walk also finds the copies.
+  that is a difference. The walk also finds the copies. The program
+  compares the paths after it resolves their links.
 - **A full disk.** A copy that does not fit is an error of the member, as in
   extraction. Without `--keep-going`, it stops the run with exit 4. The
   message names `--scratch-dir`. On many systems `/tmp` is in RAM, so a
@@ -2279,7 +2304,7 @@ largest files that are compared at the same time.
   copies in it. Its name tells what it is.
 
 **The output.** The lines of `--diff` do not change. A difference that the
-extracted copy shows ends with `after extraction`, with the values of the
+extracted copy shows says `after extraction`, with the values of the
 source and the copy:
 
 ```
@@ -2290,9 +2315,10 @@ src/run.sh: mode differs after extraction: source 0755, extracted 0644
 The program sorts all the lines by path, as `--diff` does, so the output
 does not change with `-j`. The exit status is that of `--diff`: 0 with no
 difference, and 1 with a difference. A member that fails its digest or its
-tag is damage in the archive, and gives exit 3, as `--verify` does. An
-error of the scratch directory, or of a read, gives exit 4. `--keep-going`
-changes these exits as for `--diff`.
+tag is damage in the archive, and gives exit 3, as `--verify` does. Under
+`--keep-going`, the run goes on past damage, but the exit is still 3. An
+error of the scratch directory, or of a read, gives exit 4, or 1 under
+`--keep-going`.
 
 **Speed and memory.** One member is extracted by one worker, so `-j` makes
 many files faster, but not one large file. Each worker holds its decoders,
@@ -2307,31 +2333,42 @@ a member path cannot put a file outside it. The mode of 0700 keeps other
 users out of the directory, also when a copy has the setuid bit.
 
 **Tests.** The claim of this section is that `--diff-extract` finds faults
-that `--diff` and `--verify` do not find. The tests show each case:
+that `--diff` and `--verify` do not find. `diffextract_test.go` shows each
+case:
 
-- A digest that covers only the first chunk, in a build with the
-  `faultinject` tag. Create, `--verify` and `--diff` pass, and
-  `--diff-extract` reports the content.
-- Faults of the destination (`faultDest` in `extract_fault_test.go`): one
-  wrong byte, a wrong mode, a wrong time and a missing attribute, each in
-  the extracted copy. Each gives one line `after extraction`.
-- A full scratch disk: exit 4, and the scratch directory is removed.
-- A scratch directory in the tree: exit 2.
-- The same output with `-j 1` and with the default.
-- An operational test: create, then `--diff-extract` of the source, with
-  no difference, and no scratch directory after the run.
+- `TestDiffExtractFindsWhatTheDigestMisses`: a digest that covers only the
+  first 4 KiB, through the variable `newDigest`. A byte after it changes.
+  `--verify` and `--diff` pass, and `--diff-extract` reports the content,
+  at the byte that changed.
+- `TestDiffExtractFindsFaultsOfExtraction` and
+  `TestDiffExtractFindsAMissingAttribute`: a scratch directory that writes
+  one wrong byte, a wrong mode or a wrong time, and a `setXattr` that sets
+  nothing. Each gives one line `after extraction`.
+- `TestDiffExtractComparesTimesToThePrecisionOfTheScratch`: a scratch
+  directory that keeps times to 2 s gives no difference of time.
+- `TestDiffExtractOfAnAttributeThatTheScratchRefuses`: no difference, and
+  one notice.
+- `TestDiffExtractFaultsAreNeverSilent` and
+  `TestDiffExtractSourceFaultsAreNeverSilent`: each operation on the
+  scratch directory, and each on the tree, fails in turn. Each fault fails
+  the run with that fault, no handle stays open, and the scratch directory
+  goes.
+- `TestDiffExtractAsRoot`, in the CI job as root: a wrong owner of a copy,
+  and other numbers of a device node, are each a difference.
+- `TestDiffExtractReportsEachCauseOnce`, `TestDiffExtractOfAFullScratch`,
+  `TestDiffExtractOfADamagedArchive`, `TestDiffExtractRefusesAScratchInTheTree`,
+  `TestDiffExtractDoesNotDependOnWorkers`, and the tests of links, hardlinks,
+  sparse files, pipes, attributes, `$TMPDIR` and `compareContent`.
+- `TestDiffExtractThroughRun` (package `cli`): the summary line, and the
+  exit codes of `--scratch-dir`.
 
-**Open questions.**
-
-- **Time precision.** A scratch directory on a file system with coarse
-  times, such as FAT, cannot hold the time of the source. The comparison
-  then reports each time. One choice is to compare the time only to the
-  precision of the scratch file system. Another is to refuse such a
-  scratch directory.
-- **Attributes that the scratch file system refuses.** Extraction counts
-  them for one notice (§7.7). The comparison of the copy then cannot
-  include them. One choice is to give the same notice, and to compare them
-  only by `--diff`.
+Each test of a fault fails when the check that it covers is removed. In
+`make mutate`, the tests find each change of `diffextract.go`, except 28
+in `tools/mutate/accepted.txt`: the code of the owner and of device nodes,
+which needs root, the code for Windows, and one change that cannot change
+the result. The operational test `TestDiffExtractOfTheBinary` runs the built binary on a
+created archive, and finds no difference and no scratch directory after the
+run.
 
 ---
 
@@ -2373,6 +2410,7 @@ a missing or doubled operation gets a short error on stderr and exit 2.
 | | `--compact` | Write the archive again without the tombstoned blobs | none | M6 |
 | | `--verify` | Check integrity without extraction | patterns (default: all) | M6 |
 | | `--diff` | Compare the members with the tree on disk, and change nothing (§9.8) | patterns (default: all) | v1.0.6 |
+| | `--diff-extract` | Do what `--diff` does, and also extract each member into a scratch directory and compare the copy with the disk byte by byte (§9.10) | patterns (default: all) | after v1.1.3 |
 | | `--repair` | Restore the last complete generation after an interrupted write (§9.5) | none | M6 |
 | | `--info` | Show the archive header, the codecs, the dictionaries, the counts, the shared content and the dead space | none | M6 |
 | | `--change-passphrase` | Seal the data key under a new passphrase, and write the archive again without its dead space (§9.7) | none | M9 |
@@ -2575,22 +2613,23 @@ whose encryption was removed (§14).
 | `-X` | `--exclude-from FILE` | one glob on each line. Blank lines are ignored. There is no comment syntax, because a file name can start with `#`. | M5 |
 | `-R` | `--regex RE` | can be repeated. Keep only the paths that match a regular expression (§10.11). Create, append, update, list, extract, verify, delete and diff. | after M9 |
 | | `--exclude-regex RE` | can be repeated. Leave out the paths that match. An excluded directory is not entered, and on a read it takes its contents (§10.11). Create, append, update, list, extract and diff. | after M9 |
-| `-h` | `--dereference` | follow links and store what they point to. With `--diff`, compare what they point to. Create, append, update and diff. | M2 |
+| `-h` | `--dereference` | follow links and store what they point to. With `--diff` and `--diff-extract`, compare what they point to. Create, append, update, `--diff` and `--diff-extract`. | M2 |
 | | `--no-dedup` | store each copy of the same content in full (§4.3). Create, append and update. | M11 |
 | | `--one-file-system` | do not enter other filesystems. A mount point is recorded, empty. Create, append, update and diff. | M5 |
 | `-p` | `--preserve-permissions` | restore modes exactly, with setuid, setgid and sticky, and not less the umask. Also restore ACLs for any user, and privileged xattrs as root (§7.7). Extract only. | M5 |
 | | `--preserve-owner` | restore the owner (§7.7). Extract only. Without root, exit 2. | M5 |
 | | `--preserve-devices` | create device nodes. Extract only. Without root, exit 2. | M5 |
-| | `--no-xattrs`, `--no-acls`, `--no-owner` | on create, append and update, do not record that metadata. On extract, do not apply it. On diff, do not compare it. | M5 |
+| | `--no-xattrs`, `--no-acls`, `--no-owner` | on create, append and update, do not record that metadata. On extract, do not apply it. On `--diff` and `--diff-extract`, do not compare it. | M5 |
 | `-k` | `--keep-existing` | never overwrite an existing file on extract | M2 |
 | | `--overwrite` | overwrite (the default) | M2 |
 | | `--newer-only` | overwrite only when the member is newer | M2 |
 | `-O` | `--to-stdout` | write the extracted content to stdout | M2 |
-| | `--strip-components N` | with `-x` and `--diff`, remove the first N components of each path (§10.14). Not with `-O`. | v1.0.7 |
+| | `--strip-components N` | with `-x`, `--diff` and `--diff-extract`, remove the first N components of each path (§10.14). Not with `-O`. | v1.0.7 |
 | | `--keep-going` | continue after an error on one member, and exit with 1. On create, append and update, an entry that the walk cannot read is such an error: a directory that cannot be read is archived empty, and a file that went away is left out. macOS needs read permission to list the extended attributes of a directory, so there such a directory is left out too, and counts as a second failure. A path given on the command line that cannot be read still stops the run. | M2 |
 | | `--long` | the long listing, the same as `-tv` (§10.9) | M2 |
 | | `--json` | listing for programs, with every field of §10.9. A path that is not valid UTF-8 also has `path_base64`, because a JSON string cannot hold its bytes. | M2 |
 | | `--quick` | with `--verify`, check only the structure and read no member data (§9.4) | M6 |
+| | `--scratch-dir DIR` | with `--diff-extract`, make the scratch directory in DIR, not in `$TMPDIR` or `/tmp` (§9.10) | after v1.1.3 |
 | | `--on-conflict MODE` | with `-r`: `replace` (default), `skip` or `error` (§9.2) | M6 |
 | | `--update-mode MODE` | with `-u`: `newer` (default), `different` or `digest` (§10.5) | M6 |
 | | `--recompress SPEC` | with `--compact`, encode again with SPEC | M7 |
@@ -2680,8 +2719,8 @@ value never causes this error.
 | Code | Meaning |
 |------|---------|
 | 0 | success |
-| 1 | the operation completed, but one or more members failed under `--keep-going`. Also, `--diff` found a difference between the archive and the disk (§9.8). Also, `--strip-components` gave two members the same path, and one was left out (§10.14). |
-| 2 | usage error: an unknown option, no operation, two operations, no `-f`, a bad compression spec. Also a pattern that matches no member, for `-t`, `-x`, `--verify`, `--diff` and `--delete`, an `-R` that matches no path or member, a regular expression that does not compile, and a path that is already in the archive under `--on-conflict=error`. Nothing is changed or extracted. |
+| 1 | the operation completed, but one or more members failed under `--keep-going`. Also, `--diff` or `--diff-extract` found a difference between the archive and the disk (§9.8, §9.10). Also, `--strip-components` gave two members the same path, and one was left out (§10.14). |
+| 2 | usage error: an unknown option, no operation, two operations, no `-f`, a bad compression spec. Also a pattern that matches no member, for `-t`, `-x`, `--verify`, `--diff` and `--delete`, an `-R` that matches no path or member, a regular expression that does not compile, a path that is already in the archive under `--on-conflict=error`, and a scratch directory of `--diff-extract` in the compared tree. Nothing is changed or extracted. |
 | 3 | the archive failed a check. Causes: corrupt data, an unsafe member path, a wrong passphrase or a failed tag. Also a plaintext archive when a passphrase source was given, and an archive path through a link that the program does not follow (§9). |
 | 4 | any other failure, usually an I/O error on the archive or the filesystem |
 | 70 | an option that is not built yet (`EX_SOFTWARE`). The message names the milestone. No option of this build gives it. |

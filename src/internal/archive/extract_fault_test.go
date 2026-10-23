@@ -130,6 +130,13 @@ func (d *faultDest) Symlink(oldname, newname string) error {
 	return d.d.Symlink(oldname, newname)
 }
 
+func (d *faultDest) Readlink(name string) (string, error) {
+	if err := d.fs.step("readlink", name); err != nil {
+		return "", err
+	}
+	return d.d.Readlink(name)
+}
+
 func (d *faultDest) Link(oldname, newname string) error {
 	if err := d.fs.step("link", newname); err != nil {
 		return err

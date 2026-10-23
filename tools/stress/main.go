@@ -164,6 +164,8 @@ var checkNames = []struct{ key, rule string }{
 	{"disk-fault", "disk fault: one operation on the archive file fails (-r, --delete, --compact, --recompress, a change of passphrase); the command exits with 4, and the archive holds the old state or the new one, with no file left beside it"},
 	{"diff-clean", "--diff of a tree just extracted finds no difference"},
 	{"diff-change", "--diff after one change to that tree reports that path and that kind of change, and nothing else"},
+	{"diff-extract-clean", "--diff-extract of a tree just extracted finds no difference in the archive or in any copy, and removes its scratch directory"},
+	{"diff-extract-change", "--diff-extract after one change to that tree reports that path and that kind of change once, and nothing else"},
 	{"dry-run", "-n lists exactly the paths of the real run (-r, -u, --delete, -x), changes nothing, and makes no destination"},
 	{"strip", "--strip-components gives the stripped model; each collision has its warning, and the run exits with 1"},
 	{"strip-diff", "--diff --strip-components of that tree finds no difference"},

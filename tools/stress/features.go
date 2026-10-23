@@ -123,9 +123,15 @@ func (s *sequence) extractDryRun() error {
 // diffStep extracts the archive, and runs --diff on the result: there must
 // be no difference. Then it makes one change to the extracted tree, and
 // --diff must report that path, with that kind of difference, and nothing
-// else.
+// else. Half the time, the step runs --diff-extract instead (doc/design.md
+// 9.10), with the scratch directory beside the tree: each copy must also
+// equal the file, and the one change must still give one line.
 func (s *sequence) diffStep() error {
-	s.stats.ops["diff"]++
+	op := []string{"--diff"}
+	if s.rnd.IntN(2) == 0 {
+		op = []string{"--diff-extract", "--scratch-dir", s.dir}
+	}
+	s.stats.ops[op[0][2:]]++
 	out := filepath.Join(s.dir, "out-diff")
 	if err := removeAll(out); err != nil {
 		return err
@@ -133,14 +139,17 @@ func (s *sequence) diffStep() error {
 	if _, err := s.r.expect(true, "-xf", s.archive, "-d", out); err != nil {
 		return fmt.Errorf("extract for --diff: %w", err)
 	}
-	res, err := s.r.run(true, "--diff", "-f", s.archive, "-C", out)
+	res, err := s.r.run(true, append(op, "-f", s.archive, "-C", out)...)
 	if err != nil {
 		return err
 	}
 	if res.code != 0 || !strings.Contains(res.stdout, ": no differences, ") {
-		return fmt.Errorf("--diff of a tree just extracted: exit %d, want 0 and no differences:\n%s", res.code, res)
+		return fmt.Errorf("%s of a tree just extracted: exit %d, want 0 and no differences:\n%s", op[0], res.code, res)
 	}
-	s.stats.checks["diff-clean"]++
+	if err := noScratchLeft(s.dir); err != nil {
+		return err
+	}
+	s.stats.checks[op[0][2:]+"-clean"]++
 
 	p, want, err := s.changeExtracted(out)
 	if err != nil || p == "" {
@@ -148,16 +157,29 @@ func (s *sequence) diffStep() error {
 		return err
 	}
 	s.note("diff after a change of %q: want %q", p, want)
-	res, err = s.r.run(true, "--diff", "-f", s.archive, "-C", out)
+	res, err = s.r.run(true, append(op, "-f", s.archive, "-C", out)...)
 	if err != nil {
 		return err
 	}
 	got := lines(res.stdout)
 	if res.code != 1 || len(got) != 1 || !strings.HasPrefix(got[0], want) {
-		return fmt.Errorf("--diff after one change: exit %d, want 1 and the one line %q...:\n%s", res.code, want, res)
+		return fmt.Errorf("%s after one change: exit %d, want 1 and the one line %q...:\n%s", op[0], res.code, want, res)
 	}
-	s.stats.checks["diff-change"]++
+	if err := noScratchLeft(s.dir); err != nil {
+		return err
+	}
+	s.stats.checks[op[0][2:]+"-change"]++
 	return nil
+}
+
+// noScratchLeft makes sure that --diff-extract removed its scratch
+// directory from dir.
+func noScratchLeft(dir string) error {
+	left, err := filepath.Glob(filepath.Join(dir, "eictar-diff-*"))
+	if err != nil || len(left) == 0 {
+		return err
+	}
+	return fmt.Errorf("--diff-extract left its scratch directory: %q", left)
 }
 
 // changeExtracted makes one change under the extracted tree out, and keeps

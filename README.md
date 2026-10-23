@@ -42,8 +42,9 @@ $ eictar -xf home.ect -d /tmp/restore Documents/numbers.txt
   removes the old generations.
 - **Checks**: each file has a BLAKE3 digest. `--verify` checks every digest
   and every authentication tag without an extraction. `--diff` compares the
-  archive with the files on disk. `--repair` recovers an archive after a
-  crash in the middle of a change.
+  archive with the files on disk. `--diff-extract` also extracts each file
+  and compares it byte by byte, before you remove the source. `--repair`
+  recovers an archive after a crash in the middle of a change.
 - **Metadata**: permissions, owners, times, hardlinks, symbolic links, sparse
   files, extended attributes and POSIX ACLs (on Linux), pipes and device nodes.
 - **Parallel work**: `-j` workers compress and encrypt, inside a memory
@@ -214,6 +215,19 @@ eictar --diff -f home -C ~    # what changed on disk since the archive
 eictar --info -f home         # size, codecs, dictionaries, shared content, dead space
 eictar -tvvf home             # the long listing, with digests and totals
 ```
+
+Before you remove the files that you archived, use `--diff-extract`. It
+extracts each member into a scratch directory, compares the copy with the
+file byte by byte, and removes the copy. It is slow, but it does not
+depend on the digests, and it uses the same code as a restore:
+
+```
+eictar --diff-extract -f home -C ~ Documents
+```
+
+The scratch directory goes in `$TMPDIR`, or `/tmp`. `--scratch-dir DIR`
+chooses another. It needs space for the largest files that the workers
+compare at the same time.
 
 In `-tv`, a file that shares the data of an identical file ends with
 `same as PATH`.
