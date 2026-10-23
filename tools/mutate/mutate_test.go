@@ -234,6 +234,8 @@ func (t *T) m(a, b int) bool {
 }
 
 var v = func() int { return 1 + 2 }()
+
+func f(x, y bool) bool { return !x && !y }
 `
 	ms, err := mutants("/x/p.go", []byte(src))
 	if err != nil {
@@ -247,9 +249,14 @@ var v = func() int { return 1 + 2 }()
 		"src/p/p.go: T.m: operator: < → <= #2",
 		"src/p/p.go: T.m: operator: < → >= #2",
 		"src/p/p.go: v: operator: + → -",
+		// The removal of a ! replaces it with nothing. The name has no
+		// space at its end, which a line of the accepted list cannot keep.
+		"src/p/p.go: f: operator: && → ||",
+		"src/p/p.go: f: remove !: ! →",
+		"src/p/p.go: f: remove !: ! → #2",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Errorf("keys:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+		t.Errorf("keys:\n%q\nwant:\n%q", got, want)
 	}
 }
 

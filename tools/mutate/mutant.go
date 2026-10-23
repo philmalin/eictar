@@ -296,5 +296,7 @@ func recvType(e ast.Expr) string {
 // mutation gives the change as the accepted list names it, with the white
 // space of a condition that spans lines made into single spaces.
 func (m mutant) mutation() string {
-	return m.kind + ": " + strings.Join(strings.Fields(m.orig), " ") + " → " + m.repl
+	// A removal has an empty replacement. The name then ends at the arrow,
+	// with no space, as a line of the accepted list ends.
+	return strings.TrimRight(m.kind+": "+strings.Join(strings.Fields(m.orig), " ")+" → "+m.repl, " ")
 }

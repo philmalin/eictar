@@ -564,13 +564,122 @@ src/internal/archive/diff.go: differ.visit: operator: && → || #4
 src/internal/archive/diff.go: differ.visit: if false: e.Kind == kindDir → false #2
 	Equivalent. The attributes of a directory are then read by its path,
 	which gives the same ones while the tree does not change.
-src/internal/archive/diff.go: differ.visit: operator: == → != #7
-	Equivalent. See the entry above.
-src/internal/archive/diff.go: differ.visit: operator: && → || #7
+src/internal/archive/diff.go: differ.visit: operator: && → || #12
 	Equivalent. A member that is not a hardlink then goes to the check of
 	hardlinks, which finds no target for it (no member has the id 0).
 src/internal/archive/diff.go: compareEntry: if false: e.Kind == kindSocket → false
 	Equivalent. memberTypeFor gives the socket type for a socket too.
+
+# --- archive: --diff-extract (diffextract.go) ---
+
+src/internal/archive/diffextract.go: newScratch: operator: && → ||
+	Needs root. Only root restores an owner: as any other user, the copy
+	keeps the owner of the source. TestDiffExtractAsRoot, in the CI job as
+	root, compares the owner of a copy, also with --no-owner.
+src/internal/archive/diffextract.go: newScratch: remove !: ! →
+	Needs root. Only root restores an owner: as any other user, the copy
+	keeps the owner of the source. TestDiffExtractAsRoot, in the CI job as
+	root, compares the owner of a copy, also with --no-owner.
+src/internal/archive/diffextract.go: scratch.probe: if false: !copiesNodes → false
+	Another platform: Windows, where copiesNodes is false. Everywhere else
+	it is true, so the change cannot change what the code does.
+src/internal/archive/diffextract.go: differ.extractFile: if false: len(job.content.Sparse) == 0 → false
+	Equivalent. sameContentOf hashes the whole of a dense file, as the
+	read of the comparison does, and the comparison then reads it again.
+	The result is the same: only one read more.
+src/internal/archive/diffextract.go: differ.extractNode: if false: !copiesNodes && m.Type != format.TypeDir → false
+	Another platform: Windows, where copiesNodes is false. Everywhere else
+	it is true, so the change cannot change what the code does.
+src/internal/archive/diffextract.go: differ.extractNode: operator: != → ==
+	Another platform: Windows, where copiesNodes is false. Everywhere else
+	it is true, so the change cannot change what the code does.
+src/internal/archive/diffextract.go: differ.extractNode: if false: !found[DiffDevice] && cs.OK && e.Sys.OK && (cs.Major != e.Sys.Major || cs.Minor != e.Sys.Minor) → false
+	Needs root. Only root makes a device node. TestDiffExtractAsRoot, in
+	the CI job as root, gives the copy of /dev/null other numbers, and
+	requires the difference.
+src/internal/archive/diffextract.go: differ.extractNode: remove !: ! → #3
+	Needs root. Only root makes a device node. TestDiffExtractAsRoot, in
+	the CI job as root, gives the copy of /dev/null other numbers, and
+	requires the difference.
+src/internal/archive/diffextract.go: differ.extractNode: operator: && → || #4
+	Needs root. Only root makes a device node. TestDiffExtractAsRoot, in
+	the CI job as root, gives the copy of /dev/null other numbers, and
+	requires the difference.
+src/internal/archive/diffextract.go: differ.extractNode: operator: && → || #5
+	Needs root. Only root makes a device node. TestDiffExtractAsRoot, in
+	the CI job as root, gives the copy of /dev/null other numbers, and
+	requires the difference.
+src/internal/archive/diffextract.go: differ.extractNode: operator: && → || #6
+	Needs root. Only root makes a device node. TestDiffExtractAsRoot, in
+	the CI job as root, gives the copy of /dev/null other numbers, and
+	requires the difference.
+src/internal/archive/diffextract.go: differ.extractNode: operator: != → == #7
+	Needs root. Only root makes a device node. TestDiffExtractAsRoot, in
+	the CI job as root, gives the copy of /dev/null other numbers, and
+	requires the difference.
+src/internal/archive/diffextract.go: differ.extractNode: operator: || → &&
+	Needs root. Only root makes a device node. TestDiffExtractAsRoot, in
+	the CI job as root, gives the copy of /dev/null other numbers, and
+	requires the difference.
+src/internal/archive/diffextract.go: differ.extractNode: operator: != → == #8
+	Needs root. Only root makes a device node. TestDiffExtractAsRoot, in
+	the CI job as root, gives the copy of /dev/null other numbers, and
+	requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: if false: s.x.cfg.Restore.Owner && m.UID != nil && m.GID != nil && !found[DiffOwner] → false
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: operator: && → || #3
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: operator: != → == #3
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: operator: && → || #4
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: operator: != → == #4
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: operator: && → || #5
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: remove !: ! → #2
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: if false: cs.OK && e.Sys.OK && (cs.UID != e.Sys.UID || cs.GID != e.Sys.GID) → false
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: operator: && → || #6
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: operator: && → || #7
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: operator: != → == #5
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: operator: || → &&
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: operator: != → == #6
+	Needs root. The owner of a copy is compared only when root restored
+	it. TestDiffExtractAsRoot, in the CI job as root, gives a copy a wrong
+	owner, and requires the difference.
+src/internal/archive/diffextract.go: differ.compareCopy: operator: || → && #4
+	Another platform: Windows, where copiesNodes is false. Everywhere else
+	it is true, so the change cannot change what the code does.
 
 # --- archive: the operations and the dictionaries (ops.go, dict.go) ---
 
@@ -875,6 +984,8 @@ src/internal/cli/options.go: noOperation: operator: || → && #10
 src/internal/cli/options.go: noOperation: operator: || → && #11
 	Equivalent. See the first entry of noOperation.
 src/internal/cli/options.go: noOperation: operator: || → && #12
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #13
 	Equivalent. See the first entry of noOperation.
 src/internal/cli/passphrase.go: passphraseSource.warnIfInsecureSource: if false: warn == nil → false
 	Equivalent. Each caller gives the Warn of a reporter, never nil.
