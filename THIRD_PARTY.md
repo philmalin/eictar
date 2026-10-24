@@ -15,21 +15,21 @@ at the version in the table.
 
 | Module | Version | Used for | License |
 |---|---|---|---|
-| [`github.com/fxamacker/cbor/v2`](https://pkg.go.dev/github.com/fxamacker/cbor/v2@v2.9.4) | v2.9.4 | The index and the crypto header, in CBOR | MIT |
+| [`github.com/fxamacker/cbor/v2`](https://pkg.go.dev/github.com/fxamacker/cbor/v2@v2.9.6) | v2.9.6 | The index and the crypto header, in CBOR | MIT |
 | [`github.com/klauspost/compress`](https://pkg.go.dev/github.com/klauspost/compress@v1.20.3) | v1.20.3 | The zstd, s2, gzip and flate codecs | BSD-3-Clause; MIT for zstd/internal/xxhash |
 | [`github.com/klauspost/cpuid/v2`](https://pkg.go.dev/github.com/klauspost/cpuid/v2@v2.4.0) | v2.4.0 | CPU feature detection, for klauspost/compress | MIT |
 | [`github.com/spf13/pflag`](https://pkg.go.dev/github.com/spf13/pflag@v1.0.10) | v1.0.10 | Command-line parsing | BSD-3-Clause |
 | [`github.com/ulikunitz/xz`](https://pkg.go.dev/github.com/ulikunitz/xz@v0.5.17) | v0.5.17 | The xz (LZMA2) codec | BSD-3-Clause |
 | [`github.com/x448/float16`](https://pkg.go.dev/github.com/x448/float16@v0.8.4) | v0.8.4 | Half-precision floats, for fxamacker/cbor | MIT |
-| [`golang.org/x/crypto`](https://pkg.go.dev/golang.org/x/crypto@v0.57.0) | v0.57.0 | Argon2id, XChaCha20-Poly1305 and HKDF | BSD-3-Clause |
-| [`golang.org/x/sys`](https://pkg.go.dev/golang.org/x/sys@v0.48.0) | v0.48.0 | System calls: extended attributes, file locks, holes, device nodes | BSD-3-Clause |
-| [`golang.org/x/term`](https://pkg.go.dev/golang.org/x/term@v0.46.0) | v0.46.0 | Reading a passphrase from the terminal | BSD-3-Clause |
+| [`golang.org/x/crypto`](https://pkg.go.dev/golang.org/x/crypto@v0.58.0) | v0.58.0 | Argon2id, XChaCha20-Poly1305 and HKDF | BSD-3-Clause |
+| [`golang.org/x/sys`](https://pkg.go.dev/golang.org/x/sys@v0.49.0) | v0.49.0 | System calls: extended attributes, file locks, holes, device nodes | BSD-3-Clause |
+| [`golang.org/x/term`](https://pkg.go.dev/golang.org/x/term@v0.47.0) | v0.47.0 | Reading a passphrase from the terminal | BSD-3-Clause |
 | [`lukechampine.com/blake3`](https://pkg.go.dev/lukechampine.com/blake3@v1.4.1) | v1.4.1 | BLAKE3, the content and index digests | MIT |
 | Go standard library and runtime | the Go release of the build (1.27) | everything else | BSD-3-Clause |
 
 ## License texts
 
-### github.com/fxamacker/cbor/v2 v2.9.4
+### github.com/fxamacker/cbor/v2 v2.9.6
 
 ```text
 MIT License
@@ -298,7 +298,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### golang.org/x/crypto v0.57.0
+### golang.org/x/crypto v0.58.0
 
 ```text
 Copyright 2009 The Go Authors.
@@ -330,7 +330,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### golang.org/x/sys v0.48.0
+### golang.org/x/sys v0.49.0
 
 ```text
 Copyright 2009 The Go Authors.
@@ -362,7 +362,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### golang.org/x/term v0.46.0
+### golang.org/x/term v0.47.0
 
 ```text
 Copyright 2009 The Go Authors.

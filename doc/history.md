@@ -524,3 +524,12 @@ versions read what it writes.
   function, ended with a space. A line of `accepted.txt` cannot keep a
   space at its end, so no entry could accept such a mutant. The name now
   ends at the arrow. `TestKeys` covers it.
+- The modules from Dependabot: `fxamacker/cbor` goes from v2.9.4 to
+  v2.9.6, `x/crypto` from v0.57.0 to v0.58.0, `x/sys` from v0.48.0 to
+  v0.49.0, and `x/term` from v0.46.0 to v0.47.0. v2.9.5 of cbor was
+  retracted. The changes of the cbor decoder are for tags, nulls and
+  simple values, and for the storage of map entries. They do not change
+  the result for an index that eictar accepts. The changes of `x/crypto` add assembly for
+  loong64 only. In `x/sys`, `Listxattr` on FreeBSD and NetBSD now returns
+  its error. Before, it gave an empty list. eictar calls `ExtattrList*`,
+  not `Listxattr`, so this fault did not have an effect on eictar.

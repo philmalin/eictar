@@ -2042,6 +2042,17 @@ its file system. The stress tester runs it in half of its
 <code>accepted.txt</code> cannot keep a space at its end, so no entry
 could accept such a mutant. The name now ends at the arrow.
 <code>TestKeys</code> covers it.</li>
+<li>The modules from Dependabot: <code>fxamacker/cbor</code> goes from
+v2.9.4 to v2.9.6, <code>x/crypto</code> from v0.57.0 to v0.58.0,
+<code>x/sys</code> from v0.48.0 to v0.49.0, and <code>x/term</code> from
+v0.46.0 to v0.47.0. v2.9.5 of cbor was retracted. The changes of the
+cbor decoder are for tags, nulls and simple values, and for the storage
+of map entries. They do not change the result for an index that eictar
+accepts. The changes of <code>x/crypto</code> add assembly for loong64
+only. In <code>x/sys</code>, <code>Listxattr</code> on FreeBSD and
+NetBSD now returns its error. Before, it gave an empty list. eictar
+calls <code>ExtattrList*</code>, not <code>Listxattr</code>, so this
+fault did not have an effect on eictar.</li>
 </ul>
 </body>
 </html>
