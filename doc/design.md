@@ -45,7 +45,8 @@ requirement starts in the statement. Then it comes into §1.1 of this document.
 [14. Security](#14-security-considerations) ·
 [15. Future work](#15-future-work) ·
 [16. Milestones](#16-implementation-milestones) (now `history.md`) ·
-[Appendix A](#appendix-a-why-these-primitives-compared-with-aes)
+[Appendix A](#appendix-a-why-these-primitives-compared-with-aes) ·
+[Appendix B](#appendix-b-the-zstd-levels-of-the-library-compared-with-the-zstd-command)
 
 To learn the format alone, read Part I. To add a feature, read Part II and the
 milestone in history.md that owns the feature.
@@ -2489,7 +2490,8 @@ Go sources and module files, with 32 CPUs, gave these results:
 **The default level is 12**, the best speed. It is approximately 5% smaller
 than level 3, and a create takes approximately 3.4 times as long. The speed
 of extraction does not change. The default is 12, not 19, so that it stays a sensible level if the
-library gets finer levels.
+library gets finer levels. Appendix B compares the four speeds with the 22 levels of the C
+library, and gives the work that finer levels need.
 
 **A window larger than the chunk has no effect.** The chunks are
 independent (§4), so no match reaches back past the start of its chunk.
@@ -4015,6 +4017,11 @@ before any work starts.
   `BenchmarkDictSmallChunks` in `codec` measures the cost on one core. Small
   chunks with a dictionary encode at 150 MB/s at level 9. At level 12, they
   encode at 2.4 MB/s with v1.20.3, and at 87 MB/s with the fork.
+- **Finer zstd levels.** Levels 10 to 22 use one encoder of the library
+  (§10). Appendix B compares it with the C library. At level 12, the default, the C library
+  is at most 5% smaller. At levels 16 to 19, it is 7% to 15% smaller,
+  because of optimal parsing. The work belongs in the library. Parameters
+  for each level are the small step, and optimal parsing is the large one.
 
 
 ## 16. Implementation milestones
@@ -4133,3 +4140,157 @@ Compared with the usual pair of AES-256-GCM and PBKDF2, this design has equal
 cipher strength. It is slower on x86 with hardware AES, but compression hides
 that difference. It is safer on every platform without AES instructions. It
 resists passphrase attacks much better.
+
+
+## Appendix B. The zstd levels of the library, compared with the zstd command
+
+This appendix supports §10 ("The zstd library has four speeds, not 22
+levels"). It answers two questions. How much smaller can a zstd archive be
+than the best speed of `klauspost/compress` gives? And what work in the
+library gets that gain?
+
+### B.1 How the two encoders choose a level
+
+The C library (the `zstd` command) has 22 levels. Each level is a row of
+seven parameters: the window, the size of the hash table, the size of the
+chain table, the depth of the search, the shortest match, the target length
+of a match, and the strategy. Thus each level is a small step from the one
+before it.
+
+The strategy is the method that finds the matches. There are nine:
+
+- `fast` and `dfast` look up one or two hash tables.
+- `greedy`, `lazy` and `lazy2` follow a hash chain to a set depth. They also
+  try the next one or two positions before they accept a match.
+- `btlazy2` keeps a binary tree of earlier positions, and finds longer
+  matches.
+- `btopt`, `btultra` and `btultra2` do optimal parsing. For each block, they
+  find the series of matches and literals with the lowest cost in bits. A
+  price model that learns from the data gives the cost. `btultra2` does two
+  passes. Levels 16 to 22 use these strategies.
+
+`klauspost/compress` has four encoders: fastest, default, better and best
+(§10). Each one has fixed parameters in the code. The best encoder has a
+hash table of 2^22 entries for 8-byte matches, and one of 2^18 entries for
+4-byte matches. Each entry keeps one earlier position. The encoder tries a
+fixed set of candidates at each position, and gives each one a cost from the
+predefined tables of the format. It is near `lazy2` of the C library, with a
+short chain. It does no optimal parsing.
+
+### B.2 Method
+
+The measurement was on 2026-10-25, on an AMD Ryzen AI Max+ 395 (16 cores,
+32 threads). It compared the `zstd` command v1.6.0 with `klauspost/compress`
+v1.20.3, the version in go.mod.
+
+Each encoder compressed each file of a corpus as one frame, as eictar
+compresses each chunk (§4). A file larger than 4 MiB, the default chunk
+size, was first cut into pieces of 4 MiB. Thus the two encoders got the
+same inputs, and the inputs were the chunks that eictar makes. There were
+four corpora:
+
+| Corpus | Files | Bytes | Content |
+|---|---|---|---|
+| source | 6900 | 104.9 MB | `golang.org/x` from the module cache: Go source, and some test data |
+| binary | 158 | 107.3 MB | Objects from the Go build cache, and the eictar binary |
+| json | 20000 | 39.0 MB | Small generated JSON files, 1.9 KB on average |
+| logs | 60 | 60.6 MB | Generated log files, 1 MB each |
+
+The C side ran `zstd --single-thread -L -c --filelist LIST`, for levels 1
+to 19, 20 and 22, with `--ultra` above 19. `--single-thread` keeps the read,
+the compression and the write on one thread. The output passed `zstd -t`.
+The Go side was a small program that read each file and called `EncodeAll`.
+It used one encoder state, a window of 4 MiB and the checksum, as eictar does.
+It decoded each frame of its first run and compared it with the input.
+
+Each corpus ran on its own physical core (`taskset`), and the four corpora
+ran at the same time. Each time is the median of three runs, and includes
+the read of the files from the page cache. The sizes include the frame
+headers and the checksums. The decode speed was not measured.
+
+### B.3 Results
+
+The first table gives the size at the best speed of the library, and the
+change in size at six levels of the C library. A negative number is a
+smaller output:
+
+| Corpus | Go best | C 3 | C 9 | C 12 | C 15 | C 16 | C 19 |
+|---|---|---|---|---|---|---|---|
+| source | 21.56 MB | +10.0% | +0.2% | −1.0% | −3.5% | −6.5% | −7.4% |
+| binary | 26.15 MB | +8.1% | −0.3% | −1.2% | −3.3% | −7.8% | −14.8% |
+| json | 13.59 MB | +3.1% | +0.6% | +0.4% | +0.1% | +0.1% | +0.1% |
+| logs | 14.77 MB | +9.3% | −2.3% | −4.8% | −7.1% | −10.7% | −11.9% |
+
+The second table gives the speeds of the same encoders on one core, in MB of
+input each second:
+
+| Corpus | Go best | C 3 | C 9 | C 12 | C 15 | C 16 | C 19 |
+|---|---|---|---|---|---|---|---|
+| source | 50 | 406 | 101 | 50 | 23 | 12 | 5.5 |
+| binary | 34 | 458 | 121 | 60 | 25 | 13 | 5.7 |
+| json | 36 | 160 | 76 | 32 | 16 | 11 | 9.2 |
+| logs | 44 | 360 | 86 | 54 | 19 | 8.7 | 6.1 |
+
+The third table gives, for each encoder of the library, the lowest C level
+that is as small or smaller. It gives the speeds of the two in MB/s:
+
+| Corpus | fastest | default | better | best |
+|---|---|---|---|---|
+| source | C 1: 394, 495 | C 1: 310, 495 | C 5: 235, 205 | C 10: 50, 88 |
+| binary | C 1: 434, 603 | C 2: 323, 524 | C 5: 244, 233 | C 8: 34, 123 |
+| json | C 1: 169, 174 | C 5: 149, 115 | C 6: 99, 104 | none: 36 |
+| logs | C 2: 361, 420 | C 3: 264, 360 | C 5: 213, 195 | C 7: 44, 122 |
+
+Levels 20 and 22 gave the same size as level 19, to 0.02%. Their larger
+windows have no effect, because no input is larger than 4 MiB.
+
+### B.4 What the results show
+
+1. **The best speed is near C level 8 to 10 in size, but is 1.8 to 3.7 times
+   slower than that level.** At the same speed, C level 12 is 1.0% to 4.8%
+   smaller, except on the small JSON files.
+2. **Most of the gain is in optimal parsing.** From level 15 to level 16,
+   the output decreases by 3% to 5% on source, binary and logs. Level 19 is
+   7.4% to 14.8% smaller than the best speed. It is 6 to 9 times slower.
+3. **Small files get no gain.** On the JSON files, each level from 6 up is
+   within 0.6% of the best speed. The best speed is the smallest. A frame of
+   2 KB is too short for a better parser to find more matches. A dictionary
+   (`zstd:train`, §4.2) is the tool for these files.
+4. **The lower speeds are near the C levels.** better is as small as C
+   level 5 or 6, at about the same speed. On source, binary and logs,
+   fastest and default are 14% to 38% slower than the C level of the same
+   size.
+
+### B.5 What the work in the library involves
+
+A change to the encoders does not change the format. The output stays
+standard zstd frames, so each decoder, and each earlier eictar, reads it.
+The `level` key of eictar already takes 1 to 22 (§10), so the interface does
+not change. Only the output of a level changes. There are three steps, in
+order of size:
+
+1. **Parameters for each level, in the encoders that exist.** The best
+   encoder can take the depth of its chain, the size of its tables and the
+   number of candidates from the level. Then levels 10 to 15 become steps
+   between C levels 9 and 15. The results give a gain of 1% to 3.5% on
+   source and binary, and up to 7% on logs. The tables are arrays of a
+   fixed size now, and the search loop is tuned for them. Tables of a size
+   chosen at run time can make the loop slower.
+2. **The speed of the best encoder.** The best speed is as small as C level
+   8 to 10, but is as slow as C level 12, or slower. Thus a faster search at the
+   same size is possible. This is a separate gain from step 1.
+3. **Optimal parsing.** A binary-tree match finder and a parser with a
+   price model, as `btopt` and `btultra` of the C library, give the gain of
+   levels 16 to 19: 6.5% to 14.8% on these corpora. In the C library, this
+   code is several thousand lines. It is the largest step, and the only one
+   that gets near C level 19.
+
+The speeds in B.3 are for one core. eictar compresses chunks in parallel
+(§8), so a slow level costs less time on a machine with many CPUs. Each of
+these steps belongs in the library, as a pull request, for the same reason
+as the dictionary fix (§15.2).
+
+The other method is to call the C library through cgo. It is not a good fit
+for eictar. A release is one static binary for each platform, built with
+`CGO_ENABLED=0` and cross-compiled for the BSDs and Windows. cgo removes
+these properties.

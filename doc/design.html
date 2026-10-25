@@ -5308,6 +5308,17 @@ the usual choices</a></li>
 <li><a href="#a.3-the-argon2id-default" id="toc-a.3-the-argon2id-default">A.3 The Argon2id default</a></li>
 <li><a href="#a.4-summary" id="toc-a.4-summary">A.4 Summary</a></li>
 </ul></li>
+<li><a href="#appendix-b.-the-zstd-levels-of-the-library-compared-with-the-zstd-command" id="toc-appendix-b.-the-zstd-levels-of-the-library-compared-with-the-zstd-command">Appendix
+B. The zstd levels of the library, compared with the zstd command</a>
+<ul>
+<li><a href="#b.1-how-the-two-encoders-choose-a-level" id="toc-b.1-how-the-two-encoders-choose-a-level">B.1 How the two
+encoders choose a level</a></li>
+<li><a href="#b.2-method" id="toc-b.2-method">B.2 Method</a></li>
+<li><a href="#b.3-results" id="toc-b.3-results">B.3 Results</a></li>
+<li><a href="#b.4-what-the-results-show" id="toc-b.4-what-the-results-show">B.4 What the results show</a></li>
+<li><a href="#b.5-what-the-work-in-the-library-involves" id="toc-b.5-what-the-work-in-the-library-involves">B.5 What the work in
+the library involves</a></li>
+</ul></li>
 </ul></li>
 </ul>
 </nav>
@@ -5343,8 +5354,9 @@ with the format. <a href="#7-path-handling">7. Path handling</a> · <a href="#8-
 Configuration</a></p>
 <p><strong>Part IV — Implementation.</strong> How the work is organized.
 <a href="#12-package-layout">12. Package layout</a> · <a href="#13-testing">13. Testing</a> (now <code>testing.md</code>) · <a href="#14-security-considerations">14. Security</a> · <a href="#15-future-work">15. Future work</a> · <a href="#16-implementation-milestones">16. Milestones</a> (now
-<code>history.md</code>) · <a href="#appendix-a-why-these-primitives-compared-with-aes">Appendix
-A</a></p>
+<code>history.md</code>) · <a href="#appendix-a-why-these-primitives-compared-with-aes">Appendix A</a>
+· <a href="#appendix-b-the-zstd-levels-of-the-library-compared-with-the-zstd-command">Appendix
+B</a></p>
 <p>To learn the format alone, read Part I. To add a feature, read Part
 II and the milestone in history.md that owns the feature.</p>
 <h2 id="scope">1. Scope</h2>
@@ -8529,7 +8541,8 @@ CPUs, gave these results:</p>
 approximately 5% smaller than level 3, and a create takes approximately
 3.4 times as long. The speed of extraction does not change. The default
 is 12, not 19, so that it stays a sensible level if the library gets
-finer levels.</p>
+finer levels. Appendix B compares the four speeds with the 22 levels of
+the C library, and gives the work that finer levels need.</p>
 <p><strong>A window larger than the chunk has no effect.</strong> The
 chunks are independent (§4), so no match reaches back past the start of
 its chunk. <code>long=27</code> needs <code>--chunk-size 128MiB</code>
@@ -10664,6 +10677,12 @@ dictionary from the same samples (§4.2). The branch
 the cost on one core. Small chunks with a dictionary encode at 150 MB/s
 at level 9. At level 12, they encode at 2.4 MB/s with v1.20.3, and at 87
 MB/s with the fork.</p></li>
+<li><p><strong>Finer zstd levels.</strong> Levels 10 to 22 use one
+encoder of the library (§10). Appendix B compares it with the C library.
+At level 12, the default, the C library is at most 5% smaller. At levels
+16 to 19, it is 7% to 15% smaller, because of optimal parsing. The work
+belongs in the library. Parameters for each level are the small step,
+and optimal parsing is the large one.</p></li>
 </ul>
 <h2 id="implementation-milestones">16. Implementation milestones</h2>
 <p>The milestones M1 to M11 and the notes of each release are in
@@ -10821,5 +10840,333 @@ passes), because these numbers come from the file.</p>
 has equal cipher strength. It is slower on x86 with hardware AES, but
 compression hides that difference. It is safer on every platform without
 AES instructions. It resists passphrase attacks much better.</p>
+<h2 id="appendix-b.-the-zstd-levels-of-the-library-compared-with-the-zstd-command">Appendix
+B. The zstd levels of the library, compared with the zstd command</h2>
+<p>This appendix supports §10 (“The zstd library has four speeds, not 22
+levels”). It answers two questions. How much smaller can a zstd archive
+be than the best speed of <code>klauspost/compress</code> gives? And
+what work in the library gets that gain?</p>
+<h3 id="b.1-how-the-two-encoders-choose-a-level">B.1 How the two
+encoders choose a level</h3>
+<p>The C library (the <code>zstd</code> command) has 22 levels. Each
+level is a row of seven parameters: the window, the size of the hash
+table, the size of the chain table, the depth of the search, the
+shortest match, the target length of a match, and the strategy. Thus
+each level is a small step from the one before it.</p>
+<p>The strategy is the method that finds the matches. There are
+nine:</p>
+<ul>
+<li><code>fast</code> and <code>dfast</code> look up one or two hash
+tables.</li>
+<li><code>greedy</code>, <code>lazy</code> and <code>lazy2</code> follow
+a hash chain to a set depth. They also try the next one or two positions
+before they accept a match.</li>
+<li><code>btlazy2</code> keeps a binary tree of earlier positions, and
+finds longer matches.</li>
+<li><code>btopt</code>, <code>btultra</code> and <code>btultra2</code>
+do optimal parsing. For each block, they find the series of matches and
+literals with the lowest cost in bits. A price model that learns from
+the data gives the cost. <code>btultra2</code> does two passes. Levels
+16 to 22 use these strategies.</li>
+</ul>
+<p><code>klauspost/compress</code> has four encoders: fastest, default,
+better and best (§10). Each one has fixed parameters in the code. The
+best encoder has a hash table of 2^22 entries for 8-byte matches, and
+one of 2^18 entries for 4-byte matches. Each entry keeps one earlier
+position. The encoder tries a fixed set of candidates at each position,
+and gives each one a cost from the predefined tables of the format. It
+is near <code>lazy2</code> of the C library, with a short chain. It does
+no optimal parsing.</p>
+<h3 id="b.2-method">B.2 Method</h3>
+<p>The measurement was on 2026-10-25, on an AMD Ryzen AI Max+ 395 (16
+cores, 32 threads). It compared the <code>zstd</code> command v1.6.0
+with <code>klauspost/compress</code> v1.20.3, the version in go.mod.</p>
+<p>Each encoder compressed each file of a corpus as one frame, as eictar
+compresses each chunk (§4). A file larger than 4 MiB, the default chunk
+size, was first cut into pieces of 4 MiB. Thus the two encoders got the
+same inputs, and the inputs were the chunks that eictar makes. There
+were four corpora:</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Corpus</th>
+<th>Files</th>
+<th>Bytes</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>source</td>
+<td>6900</td>
+<td>104.9 MB</td>
+<td><code>golang.org/x</code> from the module cache: Go source, and some
+test data</td>
+</tr>
+<tr class="even">
+<td>binary</td>
+<td>158</td>
+<td>107.3 MB</td>
+<td>Objects from the Go build cache, and the eictar binary</td>
+</tr>
+<tr class="odd">
+<td>json</td>
+<td>20000</td>
+<td>39.0 MB</td>
+<td>Small generated JSON files, 1.9 KB on average</td>
+</tr>
+<tr class="even">
+<td>logs</td>
+<td>60</td>
+<td>60.6 MB</td>
+<td>Generated log files, 1 MB each</td>
+</tr>
+</tbody>
+</table>
+<p>The C side ran
+<code>zstd --single-thread -L -c --filelist LIST</code>, for levels 1 to
+19, 20 and 22, with <code>--ultra</code> above 19.
+<code>--single-thread</code> keeps the read, the compression and the
+write on one thread. The output passed <code>zstd -t</code>. The Go side
+was a small program that read each file and called
+<code>EncodeAll</code>. It used one encoder state, a window of 4 MiB and
+the checksum, as eictar does. It decoded each frame of its first run and
+compared it with the input.</p>
+<p>Each corpus ran on its own physical core (<code>taskset</code>), and
+the four corpora ran at the same time. Each time is the median of three
+runs, and includes the read of the files from the page cache. The sizes
+include the frame headers and the checksums. The decode speed was not
+measured.</p>
+<h3 id="b.3-results">B.3 Results</h3>
+<p>The first table gives the size at the best speed of the library, and
+the change in size at six levels of the C library. A negative number is
+a smaller output:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Corpus</th>
+<th>Go best</th>
+<th>C 3</th>
+<th>C 9</th>
+<th>C 12</th>
+<th>C 15</th>
+<th>C 16</th>
+<th>C 19</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>source</td>
+<td>21.56 MB</td>
+<td>+10.0%</td>
+<td>+0.2%</td>
+<td>−1.0%</td>
+<td>−3.5%</td>
+<td>−6.5%</td>
+<td>−7.4%</td>
+</tr>
+<tr class="even">
+<td>binary</td>
+<td>26.15 MB</td>
+<td>+8.1%</td>
+<td>−0.3%</td>
+<td>−1.2%</td>
+<td>−3.3%</td>
+<td>−7.8%</td>
+<td>−14.8%</td>
+</tr>
+<tr class="odd">
+<td>json</td>
+<td>13.59 MB</td>
+<td>+3.1%</td>
+<td>+0.6%</td>
+<td>+0.4%</td>
+<td>+0.1%</td>
+<td>+0.1%</td>
+<td>+0.1%</td>
+</tr>
+<tr class="even">
+<td>logs</td>
+<td>14.77 MB</td>
+<td>+9.3%</td>
+<td>−2.3%</td>
+<td>−4.8%</td>
+<td>−7.1%</td>
+<td>−10.7%</td>
+<td>−11.9%</td>
+</tr>
+</tbody>
+</table>
+<p>The second table gives the speeds of the same encoders on one core,
+in MB of input each second:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Corpus</th>
+<th>Go best</th>
+<th>C 3</th>
+<th>C 9</th>
+<th>C 12</th>
+<th>C 15</th>
+<th>C 16</th>
+<th>C 19</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>source</td>
+<td>50</td>
+<td>406</td>
+<td>101</td>
+<td>50</td>
+<td>23</td>
+<td>12</td>
+<td>5.5</td>
+</tr>
+<tr class="even">
+<td>binary</td>
+<td>34</td>
+<td>458</td>
+<td>121</td>
+<td>60</td>
+<td>25</td>
+<td>13</td>
+<td>5.7</td>
+</tr>
+<tr class="odd">
+<td>json</td>
+<td>36</td>
+<td>160</td>
+<td>76</td>
+<td>32</td>
+<td>16</td>
+<td>11</td>
+<td>9.2</td>
+</tr>
+<tr class="even">
+<td>logs</td>
+<td>44</td>
+<td>360</td>
+<td>86</td>
+<td>54</td>
+<td>19</td>
+<td>8.7</td>
+<td>6.1</td>
+</tr>
+</tbody>
+</table>
+<p>The third table gives, for each encoder of the library, the lowest C
+level that is as small or smaller. It gives the speeds of the two in
+MB/s:</p>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Corpus</th>
+<th>fastest</th>
+<th>default</th>
+<th>better</th>
+<th>best</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>source</td>
+<td>C 1: 394, 495</td>
+<td>C 1: 310, 495</td>
+<td>C 5: 235, 205</td>
+<td>C 10: 50, 88</td>
+</tr>
+<tr class="even">
+<td>binary</td>
+<td>C 1: 434, 603</td>
+<td>C 2: 323, 524</td>
+<td>C 5: 244, 233</td>
+<td>C 8: 34, 123</td>
+</tr>
+<tr class="odd">
+<td>json</td>
+<td>C 1: 169, 174</td>
+<td>C 5: 149, 115</td>
+<td>C 6: 99, 104</td>
+<td>none: 36</td>
+</tr>
+<tr class="even">
+<td>logs</td>
+<td>C 2: 361, 420</td>
+<td>C 3: 264, 360</td>
+<td>C 5: 213, 195</td>
+<td>C 7: 44, 122</td>
+</tr>
+</tbody>
+</table>
+<p>Levels 20 and 22 gave the same size as level 19, to 0.02%. Their
+larger windows have no effect, because no input is larger than 4
+MiB.</p>
+<h3 id="b.4-what-the-results-show">B.4 What the results show</h3>
+<ol type="1">
+<li><strong>The best speed is near C level 8 to 10 in size, but is 1.8
+to 3.7 times slower than that level.</strong> At the same speed, C level
+12 is 1.0% to 4.8% smaller, except on the small JSON files.</li>
+<li><strong>Most of the gain is in optimal parsing.</strong> From level
+15 to level 16, the output decreases by 3% to 5% on source, binary and
+logs. Level 19 is 7.4% to 14.8% smaller than the best speed. It is 6 to
+9 times slower.</li>
+<li><strong>Small files get no gain.</strong> On the JSON files, each
+level from 6 up is within 0.6% of the best speed. The best speed is the
+smallest. A frame of 2 KB is too short for a better parser to find more
+matches. A dictionary (<code>zstd:train</code>, §4.2) is the tool for
+these files.</li>
+<li><strong>The lower speeds are near the C levels.</strong> better is
+as small as C level 5 or 6, at about the same speed. On source, binary
+and logs, fastest and default are 14% to 38% slower than the C level of
+the same size.</li>
+</ol>
+<h3 id="b.5-what-the-work-in-the-library-involves">B.5 What the work in
+the library involves</h3>
+<p>A change to the encoders does not change the format. The output stays
+standard zstd frames, so each decoder, and each earlier eictar, reads
+it. The <code>level</code> key of eictar already takes 1 to 22 (§10), so
+the interface does not change. Only the output of a level changes. There
+are three steps, in order of size:</p>
+<ol type="1">
+<li><strong>Parameters for each level, in the encoders that
+exist.</strong> The best encoder can take the depth of its chain, the
+size of its tables and the number of candidates from the level. Then
+levels 10 to 15 become steps between C levels 9 and 15. The results give
+a gain of 1% to 3.5% on source and binary, and up to 7% on logs. The
+tables are arrays of a fixed size now, and the search loop is tuned for
+them. Tables of a size chosen at run time can make the loop slower.</li>
+<li><strong>The speed of the best encoder.</strong> The best speed is as
+small as C level 8 to 10, but is as slow as C level 12, or slower. Thus
+a faster search at the same size is possible. This is a separate gain
+from step 1.</li>
+<li><strong>Optimal parsing.</strong> A binary-tree match finder and a
+parser with a price model, as <code>btopt</code> and
+<code>btultra</code> of the C library, give the gain of levels 16 to 19:
+6.5% to 14.8% on these corpora. In the C library, this code is several
+thousand lines. It is the largest step, and the only one that gets near
+C level 19.</li>
+</ol>
+<p>The speeds in B.3 are for one core. eictar compresses chunks in
+parallel (§8), so a slow level costs less time on a machine with many
+CPUs. Each of these steps belongs in the library, as a pull request, for
+the same reason as the dictionary fix (§15.2).</p>
+<p>The other method is to call the C library through cgo. It is not a
+good fit for eictar. A release is one static binary for each platform,
+built with <code>CGO_ENABLED=0</code> and cross-compiled for the BSDs
+and Windows. cgo removes these properties.</p>
 </body>
 </html>
