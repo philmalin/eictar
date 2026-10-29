@@ -230,7 +230,7 @@ func writeInfo(w io.Writer, path string, in *archive.ArchiveInfo) {
 		row("index", "%d bytes", in.IndexLength)
 	}
 	row("members", "%d live, %d tombstoned", in.Live, in.Dead)
-	row("content", "%d bytes, stored in %d bytes", in.Plain, in.Blobs)
+	row("content", "%d bytes, stored in %d bytes%s", in.Plain, in.Blobs, storedPercent(in.Plain, in.Blobs))
 	if in.Shared > 0 {
 		row("shared content", "%s, %d bytes not stored", plural(in.Shared, "member"), in.NotStored)
 	}
@@ -252,4 +252,41 @@ func writeInfo(w io.Writer, path string, in *archive.ArchiveInfo) {
 			d.Dict.ID, d.Dict.Size, d.Dict.Generation, plural(d.Members, "live member"))
 	}
 	tw.Flush()
+}
+
+// runEncryptArchive encrypts an archive that was made without -e, and writes
+// it again as compact does (doc/design.md 9.11). The passphrase and the
+// --kdf-* options are those of a create. The reminder about the old file is
+// printed even with -q: it is the one thing that the user must know.
+func runEncryptArchive(o *Options, stdout, stderr io.Writer) error {
+	rep := &reporter{out: stdout, errOut: stderr, verbose: o.Verbose, quiet: o.Quiet}
+	src := passphraseFor(o, true)
+	cfg := archive.CompactConfig{
+		Archive:  o.Archive,
+		Reporter: rep,
+		Encrypt: &archive.EncryptArchiveConfig{
+			Passphrase: func() ([]byte, error) {
+				src.warnIfInsecureSource(rep.Warn)
+				return src.get()
+			},
+			Params:       crypt.KDFParams{Time: o.KDFTime, Memory: o.KDFMemory, Threads: o.KDFThreads},
+			EncryptIndex: o.EncryptIdx,
+			Workers:      o.Workers,
+			MemoryLimit:  int64(o.MemoryLimit),
+		},
+	}
+	var done func()
+	cfg.Reporter, done = withProgress(o, rep, stderr)
+	res, err := archive.CompactArchive(cfg)
+	done()
+	if err != nil {
+		return err
+	}
+	if !o.Quiet {
+		fmt.Fprintf(stdout, "%s: encrypted; %s sealed, %d -> %d bytes, %d tombstones removed\n",
+			o.Archive, plural(res.Sealed, "member"), res.OldSize, res.NewSize, res.Dropped)
+	}
+	fmt.Fprintln(stderr, "eictar: "+printable(o.Archive)+": the old plaintext file can still be read "+
+		"from free disk space, snapshots and backups; to keep plaintext off the disk, create with -e")
+	return nil
 }

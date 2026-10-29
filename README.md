@@ -117,6 +117,7 @@ eictar -cef secret --encrypt-index Documents    # also hides the names and sizes
 eictar -tf secret                               # asks for the passphrase
 eictar -xf secret --passphrase-file ~/.secret   # for a script: the first line of the file
 eictar --change-passphrase -f secret            # asks for the old one, then the new one
+eictar --encrypt-archive -f plain               # encrypts an archive made without -e
 ```
 
 You choose encryption when you create the archive. Every later operation
@@ -124,6 +125,10 @@ uses the same passphrase, and eictar asks for it for every operation, a
 listing too. Without `--encrypt-index`, the names, sizes and times are still
 readable with other tools, but the content is not. Use `--encrypt-index` to
 keep them secret too.
+
+`--encrypt-archive` encrypts an archive that was made without `-e`. The
+old plaintext file can still be read from free disk space, snapshots and
+backups. Thus `-e` at create is the safe way to keep data private.
 
 ### Compression
 

@@ -189,6 +189,8 @@ func dispatch(o *Options, stdout, stderr io.Writer) error {
 		return runCompact(o, stdout, stderr)
 	case OpChangePassphrase:
 		return runChangePassphrase(o, stdout, stderr)
+	case OpEncryptArchive:
+		return runEncryptArchive(o, stdout, stderr)
 	case OpVerify:
 		return runVerify(o, stdout, stderr)
 	case OpDiff, OpDiffExtract:
@@ -233,11 +235,12 @@ func exitCodeFor(err error) int {
 		return ExitPartial
 	}
 	// A pattern that matches nothing, a path that is already in the archive
-	// under --on-conflict=error, and a scratch directory of --diff-extract
-	// in the compared tree are mistakes in what was asked for; nothing was
-	// changed (doc/design.md 9.2, 9.10 and 10.7).
+	// under --on-conflict=error, a scratch directory of --diff-extract in
+	// the compared tree, and --encrypt-archive of an encrypted archive are
+	// mistakes in what was asked for; nothing was changed (doc/design.md
+	// 9.2, 9.10, 9.11 and 10.7).
 	if errors.Is(err, archive.ErrNoMatch) || errors.Is(err, archive.ErrConflict) ||
-		errors.Is(err, archive.ErrScratchInTree) {
+		errors.Is(err, archive.ErrScratchInTree) || errors.Is(err, archive.ErrAlreadyEncrypted) {
 		return ExitUsage
 	}
 	// A damaged archive is reported separately from an I/O failure, so a
@@ -273,6 +276,7 @@ Operations (exactly one):
       --delete              mark matching members as deleted
       --compact             write the archive again without dead space
       --change-passphrase   seal the archive's key under a new passphrase
+      --encrypt-archive     encrypt an archive that was made without -e
       --verify              check every digest and tag, without extracting
       --diff                compare the members with the files on disk
       --diff-extract        as --diff, and extract each member to a scratch
@@ -308,13 +312,15 @@ Compression:
 
 Encryption:
   -e, --encrypt             encrypt a new archive (asks for a passphrase)
-      --encrypt-index       also encrypt the index: names, sizes, times
+      --encrypt-index       also encrypt the index: names, sizes, times;
+                            for -c and --encrypt-archive
       --passphrase-file F   read the passphrase from the first line of F
       --passphrase-env VAR  read the passphrase from the variable VAR
       --new-passphrase-file F, --new-passphrase-env VAR
                             the new passphrase, for --change-passphrase
       --kdf-time N, --kdf-memory KIB, --kdf-threads N
-                            the Argon2id cost, for -c and --change-passphrase
+                            the Argon2id cost, for -c, --change-passphrase
+                            and --encrypt-archive
 
 Changes:
       --on-conflict MODE    with -r: replace (default), skip or error

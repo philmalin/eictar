@@ -93,6 +93,15 @@ Every item in the lists below exists now, except the items marked "later".
 - **Compare with the disk**: each kind of difference, patterns and excludes,
   a file archived alone, an encrypted archive, the same result for each
   `-j`, and a link on disk that leads out of the directory (design.md §9.8).
+- **Encryption of an archive**: `--encrypt-archive` keeps each member, its
+  metadata and its content, seals each chunk and each dictionary, and gives
+  each digest its keyed value (design.md §9.11). No chunk, dictionary, index
+  or path of the plaintext archive stays in the file. The uuid and the
+  creation time stay. An encrypted archive stops the run before a prompt. A
+  damaged blob or dictionary, and a blob that changes between the passes,
+  stop it, and the archive does not change. A catalog that shrinks, the
+  number of workers, and the progress meter. The fault and power-loss tests
+  run it.
 - **Compare with an extraction**: `--diff-extract` finds a change that a
   digest with a fault hides from `--verify` and `--diff`. It finds a wrong
   byte, mode, time or attribute in the extracted copy. It compares times to
@@ -232,6 +241,9 @@ parts work.
   there.
 - **Change of passphrase**: the new passphrase opens the archive, the old one
   gives exit 3, and the new KDF parameters are in effect.
+- **Encryption of an archive**: `--encrypt-archive` with `--encrypt-index`.
+  The result does not list without the passphrase, and `--verify` and
+  `--diff` pass with it. A second run gives exit 2.
 - **Newer features**:
   - `-R` on create and on extract
   - the `.ect` name
@@ -309,8 +321,10 @@ Before most steps, the tree changes. A file gets new content, a new time or
 a new mode, or it goes, or it becomes a link, or new entries come. Then one
 operation runs: append with each `--on-conflict`, update with each
 `--update-mode`, delete, compact, compact with `--recompress`, extraction
-by pattern or by `-R`, `--diff`, a dry run, or `--strip-components`. Each
-operation uses a random codec and random settings: chunk size, workers,
+by pattern or by `-R`, `--diff`, a dry run, or `--strip-components`. An
+encrypted archive can get a change of passphrase. A plaintext archive can
+get `--encrypt-archive`, and the archive then stays encrypted: it must not
+list without the passphrase. Each operation uses a random codec and random settings: chunk size, workers,
 memory limit and spill threshold. A zstd dictionary at level 10 or above
 gets chunks of 64 KiB or more. Each chunk with such a dictionary costs
 approximately 0.5 ms (design.md §15.2), and chunks of 512 bytes on a large tree take
@@ -403,7 +417,8 @@ pattern.
   `.build/eictar-faults`, and `EICTAR_FAULT` makes one operation on the
   archive file fail: the Nth open, create, write, short write, `fsync`,
   truncate, close, rename, remove or `fsync` of the directory. The change is
-  an append, a delete, a compact, a recompress or a change of passphrase. A
+  an append, a delete, a compact, a recompress, a change of passphrase or
+  `--encrypt-archive`. A
   command that succeeds must leave the new state. A command that fails must
   exit with 4, and leave the old state or the new one, with no file beside
   the archive, except a temporary file whose removal was the fault. A
@@ -1032,7 +1047,8 @@ and checks each state that the model recorded. These rules apply:
 - The archive holds its old state or its new state.
 - An operation that writes in place (append, delete, repair) can need
   `--repair` to give one of them back. An operation that commits with a
-  rename (create, compact, recompress, a change of passphrase) must never
+  rename (create, compact, recompress, a change of passphrase,
+  `--encrypt-archive`) must never
   need it.
 - When the operation has reported success, the state that the `fsync`
   calls put on the disk is the new one.

@@ -83,6 +83,10 @@ type PassphraseFunc func() ([]byte, error)
 // yields an archive that opens without asking for one (doc/design.md 14.4).
 var ErrNotEncrypted = errors.New("the archive is not encrypted")
 
+// ErrAlreadyEncrypted means an archive that --encrypt-archive was to encrypt
+// is encrypted already (doc/design.md 9.11).
+var ErrAlreadyEncrypted = errors.New("the archive is already encrypted")
+
 // OpenOptions configures Open.
 type OpenOptions struct {
 	// Passphrase supplies the key for an encrypted archive. Nil means an
@@ -90,6 +94,10 @@ type OpenOptions struct {
 	Passphrase PassphraseFunc
 	// RequireEncryption refuses an archive that is not encrypted.
 	RequireEncryption bool
+	// RequirePlaintext refuses an archive that is encrypted, with
+	// ErrAlreadyEncrypted, before the crypto header is read and before any
+	// passphrase is asked (--encrypt-archive, doc/design.md 9.11).
+	RequirePlaintext bool
 
 	// keys, when set, are used instead of a passphrase. They stay the
 	// caller's: the reader does not zero them. Repair uses this to derive the
@@ -159,6 +167,9 @@ func (r *Reader) load(opt OpenOptions) error {
 		return fmt.Errorf("%s: %w%s", r.path, err, repairHint)
 	}
 
+	if r.hdr.Encrypted() && opt.RequirePlaintext {
+		return fmt.Errorf("%s: %w; to change its passphrase, use --change-passphrase", r.path, ErrAlreadyEncrypted)
+	}
 	if r.hdr.Encrypted() && opt.keys != nil {
 		r.keys, r.borrowedKeys = opt.keys, true
 	} else if r.hdr.Encrypted() {
@@ -357,12 +368,13 @@ func (r *Reader) CodecName(m *format.Member) (string, error) {
 // The digest check covers the whole member, so a truncated or altered blob is
 // caught even when every individual chunk decodes cleanly.
 func (r *Reader) WriteMember(m *format.Member, dst io.Writer) error {
-	return r.writeMember(m, dst, nil)
+	return r.writeMember(m, dst, nil, nil)
 }
 
 // writeMember is WriteMember with the decoders of one goroutine. With a nil
-// set, it takes a decoder from the shared pool of the Reader.
-func (r *Reader) writeMember(m *format.Member, dst io.Writer, set *decoderSet) error {
+// set, it takes a decoder from the shared pool of the Reader. A non-nil onRaw
+// gets each chunk as it is on disk, before it is unsealed or decoded.
+func (r *Reader) writeMember(m *format.Member, dst io.Writer, set *decoderSet, onRaw func([]byte)) error {
 	if !m.Type.HasPayload() {
 		return nil
 	}
@@ -474,6 +486,9 @@ func (r *Reader) writeMember(m *format.Member, dst io.Writer, set *decoderSet) e
 		raw = raw[:onDisk]
 		if _, err := r.f.ReadAt(raw, off); err != nil {
 			return fmt.Errorf("%s: reading chunk %d of %q: %w", r.path, i, m.Path, err)
+		}
+		if onRaw != nil {
+			onRaw(raw)
 		}
 
 		// Unseal first: everything below works on the compressed form, and

@@ -448,6 +448,23 @@ func writeCases(t *testing.T) []faultCase {
 			Rewrap: &RewrapConfig{Passphrase: passphrase("battery staple"), Params: crypt.KDFParams{Time: 2}}})
 		return err
 	}, both})
+	// --encrypt-archive: a plaintext archive before, an encrypted one after.
+	encryptArchive := func(path string) error {
+		_, err := CompactArchive(CompactConfig{Archive: path,
+			Encrypt: &EncryptArchiveConfig{Passphrase: passphrase("battery staple"), Params: testKDF, EncryptIndex: true, Workers: 2}})
+		return err
+	}
+	plainThenNew := []OpenOptions{openFor(false), {Passphrase: passphrase("battery staple")}}
+	cases = append(cases,
+		faultCase{"encryption of an archive", appended(false), encryptArchive, plainThenNew},
+		faultCase{"encryption of an archive with a dictionary", func(t *testing.T, dir string) string {
+			path := filepath.Join(dir, "m.ect")
+			if err := create(dicts, false, codec.Params{"train": "4K"}, "src")(path); err != nil {
+				t.Fatal(err)
+			}
+			return "m.ect"
+		}, encryptArchive, plainThenNew},
+	)
 	return cases
 }
 
@@ -484,7 +501,14 @@ func TestFaultsLeaveTheOldOrTheNewArchive(t *testing.T) {
 			}
 			t.Logf("%d operations", count.n)
 			if strings.Contains(tc.name, "dictionary") {
-				r, err := OpenWith(filepath.Join(dir, name), tc.opens[0])
+				// The archive after can need another of the opens: an encryption
+				// makes a plaintext archive need the new passphrase.
+				var r *Reader
+				for _, o := range tc.opens {
+					if r, err = OpenWith(filepath.Join(dir, name), o); err == nil {
+						break
+					}
+				}
 				if err != nil {
 					t.Fatal(err)
 				}

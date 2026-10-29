@@ -1571,6 +1571,16 @@ the first byte, and no meter without a terminal (design.md §10.10).</li>
 patterns and excludes, a file archived alone, an encrypted archive, the
 same result for each <code>-j</code>, and a link on disk that leads out
 of the directory (design.md §9.8).</li>
+<li><strong>Encryption of an archive</strong>:
+<code>--encrypt-archive</code> keeps each member, its metadata and its
+content, seals each chunk and each dictionary, and gives each digest its
+keyed value (design.md §9.11). No chunk, dictionary, index or path of
+the plaintext archive stays in the file. The uuid and the creation time
+stay. An encrypted archive stops the run before a prompt. A damaged blob
+or dictionary, and a blob that changes between the passes, stop it, and
+the archive does not change. A catalog that shrinks, the number of
+workers, and the progress meter. The fault and power-loss tests run
+it.</li>
 <li><strong>Compare with an extraction</strong>:
 <code>--diff-extract</code> finds a change that a digest with a fault
 hides from <code>--verify</code> and <code>--diff</code>. It finds a
@@ -1742,6 +1752,10 @@ tree is the same.</li>
 <li><strong>Change of passphrase</strong>: the new passphrase opens the
 archive, the old one gives exit 3, and the new KDF parameters are in
 effect.</li>
+<li><strong>Encryption of an archive</strong>:
+<code>--encrypt-archive</code> with <code>--encrypt-index</code>. The
+result does not list without the passphrase, and <code>--verify</code>
+and <code>--diff</code> pass with it. A second run gives exit 2.</li>
 <li><strong>Newer features</strong>:
 <ul>
 <li><code>-R</code> on create and on extract</li>
@@ -1836,12 +1850,16 @@ or new entries come. Then one operation runs: append with each
 <code>--on-conflict</code>, update with each <code>--update-mode</code>,
 delete, compact, compact with <code>--recompress</code>, extraction by
 pattern or by <code>-R</code>, <code>--diff</code>, a dry run, or
-<code>--strip-components</code>. Each operation uses a random codec and
-random settings: chunk size, workers, memory limit and spill threshold.
-A zstd dictionary at level 10 or above gets chunks of 64 KiB or more.
-Each chunk with such a dictionary costs approximately 0.5 ms (design.md
-§15.2), and chunks of 512 bytes on a large tree take more than the limit
-of two minutes for one command, which counts as a hang.</p>
+<code>--strip-components</code>. An encrypted archive can get a change
+of passphrase. A plaintext archive can get
+<code>--encrypt-archive</code>, and the archive then stays encrypted: it
+must not list without the passphrase. Each operation uses a random codec
+and random settings: chunk size, workers, memory limit and spill
+threshold. A zstd dictionary at level 10 or above gets chunks of 64 KiB
+or more. Each chunk with such a dictionary costs approximately 0.5 ms
+(design.md §15.2), and chunks of 512 bytes on a large tree take more
+than the limit of two minutes for one command, which counts as a
+hang.</p>
 <p>The last three steps test the operations that compare and plan:</p>
 <ul>
 <li><strong><code>--diff</code></strong> of a tree just extracted must
@@ -1965,17 +1983,17 @@ archive with <code>.build/eictar-faults</code>, and
 <code>EICTAR_FAULT</code> makes one operation on the archive file fail:
 the Nth open, create, write, short write, <code>fsync</code>, truncate,
 close, rename, remove or <code>fsync</code> of the directory. The change
-is an append, a delete, a compact, a recompress or a change of
-passphrase. A command that succeeds must leave the new state. A command
-that fails must exit with 4, and leave the old state or the new one,
-with no file beside the archive, except a temporary file whose removal
-was the fault. A change that commits with a rename must leave the old
-archive byte for byte, or the new one. A change in place may need
-<code>--repair</code>, which must then give back one of the two. One
-fault does not stop the rollback of a change in place, so that needs two
-faults or a crash after one, which the crash model of §5 covers. The
-tester prints a note and leaves the disk faults out when the binary is
-not there.</li>
+is an append, a delete, a compact, a recompress, a change of passphrase
+or <code>--encrypt-archive</code>. A command that succeeds must leave
+the new state. A command that fails must exit with 4, and leave the old
+state or the new one, with no file beside the archive, except a
+temporary file whose removal was the fault. A change that commits with a
+rename must leave the old archive byte for byte, or the new one. A
+change in place may need <code>--repair</code>, which must then give
+back one of the two. One fault does not stop the rollback of a change in
+place, so that needs two faults or a crash after one, which the crash
+model of §5 covers. The tester prints a note and leaves the disk faults
+out when the binary is not there.</li>
 </ul>
 <p>Any other exit code, a panic, or a command that runs for more than
 two minutes is a failure.</p>
@@ -2799,7 +2817,7 @@ These rules apply:</p>
 <li>An operation that writes in place (append, delete, repair) can need
 <code>--repair</code> to give one of them back. An operation that
 commits with a rename (create, compact, recompress, a change of
-passphrase) must never need it.</li>
+passphrase, <code>--encrypt-archive</code>) must never need it.</li>
 <li>When the operation has reported success, the state that the
 <code>fsync</code> calls put on the disk is the new one.</li>
 </ul>

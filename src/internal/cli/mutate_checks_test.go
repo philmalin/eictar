@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/philmalin/eictar/src/internal/archive"
 )
 
 // Tests of mutate.go: the refusals and messages of append, compact, a
@@ -180,6 +182,9 @@ func TestInfoRows(t *testing.T) {
 	if got := row(out, "codecs"); got != "none (2 members)" {
 		t.Errorf("stored: codecs %q", got)
 	}
+	if got := row(out, "content"); !strings.HasSuffix(got, " (100.0%)") {
+		t.Errorf("stored: content %q", got)
+	}
 
 	if err := os.Mkdir(filepath.Join(dir, "empty"), 0o755); err != nil {
 		t.Fatal(err)
@@ -187,6 +192,19 @@ func TestInfoRows(t *testing.T) {
 	out = info("--compress", "none", "empty")
 	if got := row(out, "codecs"); got != "-" {
 		t.Errorf("no content: codecs %q", got)
+	}
+	if got := row(out, "content"); got != "0 bytes, stored in 0 bytes" {
+		t.Errorf("no content: content %q", got)
+	}
+}
+
+// TestInfoContentPercent: the content row gives the stored size as a
+// percentage of the plain size, to one decimal.
+func TestInfoContentPercent(t *testing.T) {
+	var b strings.Builder
+	writeInfo(&b, "a.ect", &archive.ArchiveInfo{Plain: 110361, Blobs: 35871})
+	if !strings.Contains(b.String(), "content:     110361 bytes, stored in 35871 bytes (32.5%)\n") {
+		t.Errorf("%s", b.String())
 	}
 }
 

@@ -300,6 +300,9 @@ type CompactConfig struct {
 	// Rewrap, when set, seals the data key under a new passphrase
 	// (--change-passphrase, doc/design.md 9.7).
 	Rewrap *RewrapConfig
+	// Encrypt, when set, encrypts an archive made without -e
+	// (--encrypt-archive, doc/design.md 9.11).
+	Encrypt *EncryptArchiveConfig
 }
 
 // RewrapConfig is the new passphrase of --change-passphrase. Passphrase is
@@ -327,6 +330,7 @@ type CompactResult struct {
 	Dropped          int  // tombstones removed from the index
 	NothingToDo      bool // no dead space and no removable tombstone
 	Recompressed     int  // members encoded again
+	Sealed           int  // members whose blob --encrypt-archive sealed
 }
 
 // CompactArchive writes the archive again without its dead space
@@ -349,7 +353,13 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	if err != nil {
 		return res, fmt.Errorf("resolving %s: %w", cfg.Archive, err)
 	}
-	r, err := openLocked(path, cfg.Open)
+	open := cfg.Open
+	if cfg.Encrypt != nil {
+		// The archive must be plaintext. An encrypted one stops here, before
+		// any prompt.
+		open = OpenOptions{RequirePlaintext: true}
+	}
+	r, err := openLocked(path, open)
 	if err != nil {
 		return res, err
 	}
@@ -361,7 +371,7 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	if cfg.Rewrap != nil && r.crypto == nil {
 		return res, fmt.Errorf("%s: %w; there is no passphrase to change", cfg.Archive, ErrNotEncrypted)
 	}
-	if cfg.Recompress == nil && cfg.Rewrap == nil && res.Dropped == 0 && deadSpace(r) == 0 {
+	if cfg.Recompress == nil && cfg.Rewrap == nil && cfg.Encrypt == nil && res.Dropped == 0 && deadSpace(r) == 0 {
 		res.NothingToDo = true
 		res.NewSize = r.size
 		return res, nil
@@ -391,15 +401,29 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	// The header and the crypto header are copied as they are: same uuid, same
 	// salt, same KDF parameters, so the same passphrase opens the result. A
 	// change of passphrase writes a new crypto header instead, and a header
-	// that gives its new length.
+	// that gives its new length. --encrypt-archive writes a header with the
+	// encrypted flag, and the first crypto header of the archive, for new keys.
 	hdr := r.hdr
+	keys, encryptIndex := r.keys, r.tr.IndexEncrypted()
 	var body int64
-	if cfg.Rewrap == nil {
+	switch {
+	case cfg.Encrypt != nil:
+		head, newHdr, newKeys, err := encryptHeaders(r, cfg.Encrypt)
+		if err != nil {
+			return res, err
+		}
+		defer newKeys.Zero()
+		if _, err := tmp.Write(head); err != nil {
+			return res, fmt.Errorf("writing the header: %w", err)
+		}
+		hdr, body = newHdr, int64(len(head))
+		keys, encryptIndex = newKeys, cfg.Encrypt.EncryptIndex
+	case cfg.Rewrap == nil:
 		body = r.hdr.BodyOffset()
 		if _, err := io.Copy(tmp, io.NewSectionReader(r.f, 0, body)); err != nil {
 			return res, fmt.Errorf("copying the header: %w", err)
 		}
-	} else {
+	default:
 		head, newHdr, err := rewrapHeaders(r, cfg.Rewrap)
 		if err != nil {
 			return res, err
@@ -420,12 +444,18 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 			Generation: r.tr.Generation + 1,
 			Codecs:     r.index.Codecs,
 		},
-		keys:         r.keys,
-		encryptIndex: r.tr.IndexEncrypted(),
+		keys:         keys,
+		encryptIndex: encryptIndex,
 		off:          body,
 	}
 	progress := progressOf(cfg.Reporter)
-	if cfg.Recompress == nil {
+	switch {
+	case cfg.Encrypt != nil:
+		if progress != nil {
+			progress.Total(payloadAndBlobs(keep))
+		}
+		res.Sealed, err = encryptBlobs(r, w, keep, cfg.Encrypt, progress)
+	case cfg.Recompress == nil:
 		if progress != nil {
 			var total int64
 			for _, m := range keep {
@@ -437,7 +467,7 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 		if err = copyDicts(r, w, keep); err == nil {
 			err = copyBlobs(r, w, keep, progress)
 		}
-	} else {
+	default:
 		if progress != nil {
 			progress.Total(ownPayloadTotal(keep))
 		}
@@ -716,6 +746,15 @@ func recompressOne(r *Reader, w *Writer, b *pipeline.Builder, m format.Member, p
 // reported. pending holds only an error for each member, not content.
 func decodeInParallel(r *Reader, work []*format.Member, workers int, memoryLimit int64,
 	progress Progress, report func(*format.Member, error)) {
+	decodeInParallelWith(r, work, workers, memoryLimit, func(m *format.Member, set *decoderSet) error {
+		return r.writeMember(m, countWriter(io.Discard, progress), set, nil)
+	}, report)
+}
+
+// decodeInParallelWith is decodeInParallel with the work for each member
+// given as decode, which a worker calls with its own decoders.
+func decodeInParallelWith(r *Reader, work []*format.Member, workers int, memoryLimit int64,
+	decode func(*format.Member, *decoderSet) error, report func(*format.Member, error)) {
 	if workers < 1 {
 		workers = runtime.GOMAXPROCS(0)
 	}
@@ -759,7 +798,7 @@ func decodeInParallel(r *Reader, work []*format.Member, workers int, memoryLimit
 				}
 				errs := make([]error, starts[b+1]-starts[b])
 				for k := range errs {
-					errs[k] = r.writeMember(work[starts[b]+k], countWriter(io.Discard, progress), set)
+					errs[k] = decode(work[starts[b]+k], set)
 				}
 				results <- outcome{b, errs}
 			}

@@ -180,7 +180,7 @@ func TestDecoderSet(t *testing.T) {
 	for i := range r.index.Members {
 		if m := &r.index.Members[i]; m.Type.HasPayload() {
 			var got bytes.Buffer
-			if err := r.writeMember(m, &got, set); err != nil {
+			if err := r.writeMember(m, &got, set, nil); err != nil {
 				t.Fatalf("%s: %v", m.Path, err)
 			}
 			want, err := os.ReadFile(filepath.Join(root, m.Path))
@@ -232,7 +232,7 @@ func TestDecoderKindsAreBounded(t *testing.T) {
 		m.ChunkSize = uint32(m.Size) + uint32(k)
 		checkMember(t, r, &m, tree.Root)
 		var got bytes.Buffer
-		if err := r.writeMember(&m, &got, set); err != nil {
+		if err := r.writeMember(&m, &got, set, nil); err != nil {
 			t.Fatalf("chunk size %d, with a set: %v", m.ChunkSize, err)
 		}
 	}

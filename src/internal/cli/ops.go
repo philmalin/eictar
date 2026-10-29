@@ -551,6 +551,16 @@ func savedPercent(plain, stored uint64) string {
 	return fmt.Sprintf("%.1f%%", 100*(float64(plain)-float64(stored))/float64(plain))
 }
 
+// storedPercent gives the stored size as a percentage of the plain size, for
+// the content row of --info: " (32.5%)". With no content there is no
+// percentage.
+func storedPercent(plain, stored uint64) string {
+	if plain == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" (%.1f%%)", 100*float64(stored)/float64(plain))
+}
+
 // totalsLine sums the listed members for -tvv. Files are the members with a
 // blob; a hardlink shares one and adds nothing. The percentage uses the data
 // that was stored, so the holes of a sparse file do not count as saved.

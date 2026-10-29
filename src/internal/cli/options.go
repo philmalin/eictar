@@ -35,6 +35,7 @@ const (
 	OpChangePassphrase
 	OpDiff
 	OpDiffExtract
+	OpEncryptArchive
 )
 
 var operationNames = map[Operation]string{
@@ -54,6 +55,7 @@ var operationNames = map[Operation]string{
 	OpChangePassphrase: "--change-passphrase",
 	OpDiff:             "--diff",
 	OpDiffExtract:      "--diff-extract",
+	OpEncryptArchive:   "--encrypt-archive",
 }
 
 func (o Operation) String() string {
@@ -71,7 +73,7 @@ func (o Operation) NeedsArchive() bool { return o != OpListCodecs && o != OpNone
 // to add members.
 func (o Operation) WritesArchive() bool {
 	switch o {
-	case OpCreate, OpAppend, OpUpdate, OpDelete, OpCompact, OpRepair, OpChangePassphrase:
+	case OpCreate, OpAppend, OpUpdate, OpDelete, OpCompact, OpRepair, OpChangePassphrase, OpEncryptArchive:
 		return true
 	}
 	return false
@@ -249,6 +251,7 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs.BoolVar(&ops.info, "info", false, "print archive information")
 	fs.BoolVar(&ops.listCodecs, "list-codecs", false, "list compression codecs and their parameters")
 	fs.BoolVar(&ops.changePassphrase, "change-passphrase", false, "seal the archive's key under a new passphrase")
+	fs.BoolVar(&ops.encryptArchive, "encrypt-archive", false, "encrypt an archive that was made without -e")
 
 	fs.StringVarP(&o.Archive, "file", "f", o.Archive, "the archive to operate on")
 	fs.StringArrayVarP(&o.Chdir, "directory", "C", nil, "change to this directory first")
@@ -337,6 +340,7 @@ type operationFlags struct {
 	create, append_, list, extract, update          bool
 	delete_, compact, verify, repair, info          bool
 	listCodecs, changePassphrase, diff, diffExtract bool
+	encryptArchive                                  bool
 	gzip, xz, zstd                                  bool
 	keepExisting, overwrite, newerOnly              bool
 	compress                                        *string
@@ -460,7 +464,7 @@ func Parse(argv []string) (*Options, error) {
 func noOperation(ops *operationFlags) bool {
 	return !(ops.create || ops.append_ || ops.list || ops.extract || ops.update ||
 		ops.delete_ || ops.compact || ops.verify || ops.repair || ops.info || ops.listCodecs ||
-		ops.changePassphrase || ops.diff || ops.diffExtract)
+		ops.changePassphrase || ops.diff || ops.diffExtract || ops.encryptArchive)
 }
 
 func resolveOperation(ops *operationFlags) (Operation, error) {
@@ -482,6 +486,7 @@ func resolveOperation(ops *operationFlags) (Operation, error) {
 		{ops.info, OpInfo},
 		{ops.listCodecs, OpListCodecs},
 		{ops.changePassphrase, OpChangePassphrase},
+		{ops.encryptArchive, OpEncryptArchive},
 	}
 
 	var found []Operation
@@ -492,7 +497,7 @@ func resolveOperation(ops *operationFlags) (Operation, error) {
 	}
 	switch len(found) {
 	case 0:
-		return OpNone, &UsageError{fmt.Errorf("no operation selected: one of -c, -r, -t, -x, -u, --delete, --compact, --change-passphrase, --verify, --diff, --diff-extract, --repair, --info or --list-codecs is required")}
+		return OpNone, &UsageError{fmt.Errorf("no operation selected: one of -c, -r, -t, -x, -u, --delete, --compact, --change-passphrase, --encrypt-archive, --verify, --diff, --diff-extract, --repair, --info or --list-codecs is required")}
 	case 1:
 		return found[0], nil
 	default:
@@ -644,7 +649,7 @@ func (o *Options) validate() error {
 			o.Progress = false
 		}
 	}
-	if o.EncryptIdx && !o.Encrypt {
+	if o.EncryptIdx && !o.Encrypt && o.Op != OpEncryptArchive {
 		// Typed, it is a mistake. From a configuration, it is a preference
 		// for when an archive is encrypted, and this one is not.
 		if o.explicit["encrypt-index"] {
@@ -711,6 +716,14 @@ func (o *Options) validate() error {
 		if o.Op == OpChangePassphrase && strings.HasPrefix(name, "kdf-") {
 			continue
 		}
+		// --encrypt-archive makes new keys, as create does (doc/design.md 9.11).
+		// The operation itself says "encrypt", so -e has no place there.
+		if o.Op == OpEncryptArchive && name != "encrypt" {
+			continue
+		}
+		if o.Op == OpEncryptArchive {
+			return &UsageError{fmt.Errorf("--encrypt-archive needs no -e: the operation itself encrypts the archive")}
+		}
 		return &UsageError{fmt.Errorf("--%s applies to -c only: an existing archive's "+
 			"encryption is fixed by its header", name)}
 	}
@@ -750,7 +763,7 @@ func (o *Options) validate() error {
 		if len(o.Args) == 0 && len(o.Regex) == 0 {
 			return &UsageError{fmt.Errorf("--delete needs at least one pattern, or -R")}
 		}
-	case OpCompact, OpChangePassphrase, OpInfo, OpRepair, OpListCodecs:
+	case OpCompact, OpChangePassphrase, OpEncryptArchive, OpInfo, OpRepair, OpListCodecs:
 		if len(o.Args) > 0 {
 			return &UsageError{fmt.Errorf("%v takes no positional arguments, got %d", o.Op, len(o.Args))}
 		}

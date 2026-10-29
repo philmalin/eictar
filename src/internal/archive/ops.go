@@ -350,20 +350,8 @@ func (e *EncryptionConfig) apply(opts *Options) error {
 	if _, err := rand.Read(uuid[:]); err != nil {
 		return fmt.Errorf("generating an archive id: %w", err)
 	}
-	// A random data key, wrapped for the passphrase: the passphrase makes
-	// none of the keys, so it can change later (doc/design.md 6.2, 9.7).
-	dataKey, err := crypt.NewDataKey()
+	keys, salt, wrapped, err := newWrappedKeys(e.Passphrase, params, uuid)
 	if err != nil {
-		return err
-	}
-	keys, err := crypt.NewKeys(dataKey, uuid)
-	clear(dataKey)
-	if err != nil {
-		return err
-	}
-	salt, wrapped, err := keys.Wrap(e.Passphrase, params)
-	if err != nil {
-		keys.Zero()
 		return err
 	}
 
@@ -374,6 +362,26 @@ func (e *EncryptionConfig) apply(opts *Options) error {
 	opts.EncryptIndex = e.EncryptIndex
 	opts.ArchiveUUID = uuid
 	return nil
+}
+
+// newWrappedKeys makes a random data key, derives the keys of the archive
+// uuid from it, and wraps it for the passphrase. The passphrase makes none of
+// the keys, so it can change later (doc/design.md 6.2, 9.7).
+func newWrappedKeys(passphrase []byte, params crypt.KDFParams, uuid [16]byte) (keys *crypt.Keys, salt, wrapped []byte, err error) {
+	dataKey, err := crypt.NewDataKey()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	keys, err = crypt.NewKeys(dataKey, uuid)
+	clear(dataKey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if salt, wrapped, err = keys.Wrap(passphrase, params); err != nil {
+		keys.Zero()
+		return nil, nil, nil, err
+	}
+	return keys, salt, wrapped, nil
 }
 
 // checkAffordable refuses key derivation that this machine cannot survive.

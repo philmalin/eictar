@@ -32,7 +32,7 @@ eictar \- archive files, each compressed and optionally encrypted on its own
 .IR pattern ...
 .br
 .B eictar
-.BR \-\-compact | \-\-change\-passphrase | \-\-repair | \-\-info
+.BR \-\-compact | \-\-change\-passphrase | \-\-encrypt\-archive | \-\-repair | \-\-info
 .B \-f
 .I archive
 .RI [ options ]
@@ -110,6 +110,34 @@ does. The content is copied, not encrypted again. The Argon2id parameters stay
 as they are, except those that a
 .B \-\-kdf\-*
 option gives.
+.TP
+.B \-\-encrypt\-archive
+Encrypt an archive that was made without
+.BR \-e .
+The program asks two times for the passphrase, as
+.B \-c
+\-e
+does, and writes the archive again, as
+.B \-\-compact
+does. The members and their compressed content do not change. Each chunk is
+sealed under a new key, and each digest gets the keyed value. The program
+decodes each member once, to check its old digest, so a damaged archive
+stops the run, and the archive does not change.
+.B \-\-encrypt\-index
+and the
+.B \-\-kdf\-*
+options work as for
+.BR \-c .
+An archive that is already encrypted stops the run with exit 2. To change
+its passphrase, use
+.BR \-\-change\-passphrase .
+.IP
+The old plaintext file is not gone. Its blocks stay on the disk until
+something writes over them, and copies, snapshots and backups of it stay
+readable. The program prints a reminder after each run, also with
+.BR \-q .
+To keep plaintext off the disk, create the archive with
+.BR \-e .
 .TP
 .B \-\-verify
 Decode every member and check every digest and every authentication tag,
@@ -194,8 +222,9 @@ generation. An archive that opens correctly is not changed.
 .TP
 .B \-\-info
 Show the header, the encryption settings, the generation, the member counts,
-the codecs, the dictionaries, the files that share another's data, and the
-dead space.
+the size of the content and its stored size, with the stored size as a
+percentage, the codecs, the dictionaries, the files that share another's data,
+and the dead space.
 .TP
 .B \-\-list\-codecs
 Show each codec with its parameters, defaults and ranges.
@@ -355,9 +384,17 @@ takes this option: every later operation uses the passphrase of the archive,
 until
 .B \-\-change\-passphrase
 changes it.
+To encrypt an archive that was made without
+.BR \-e ,
+use
+.BR \-\-encrypt\-archive .
 .TP
 .B \-\-encrypt\-index
-Also encrypt the index, which hides the names, sizes and digests.
+Also encrypt the index, which hides the names, sizes and digests. Only
+.B \-c
+and
+.B \-\-encrypt\-archive
+take this option.
 .TP
 .BI \-\-passphrase\-file " file"
 Read the passphrase from the first line of
@@ -369,7 +406,9 @@ Read the passphrase from the environment variable
 Other processes can see the environment, so the program prints a warning.
 .IP
 With either option, the program refuses an archive that is not encrypted,
-with exit 3.
+with exit 3. With
+.BR \-\-encrypt\-archive ,
+the option gives the new passphrase of a plaintext archive.
 .TP
 .BI \-\-new\-passphrase\-file " file" "\fR, \fP\-\-new\-passphrase\-env " var
 With
@@ -384,8 +423,9 @@ Without them, the program asks for it.
 The Argon2id cost: passes (1 to 64, default 3), memory in KiB (at most
 4194304, default 262144), and threads (default 4). Only
 .B \-c
+.BR \-\-change\-passphrase ,
 and
-.B \-\-change\-passphrase
+.B \-\-encrypt\-archive
 take these options.
 .SS Changes
 .TP
@@ -917,7 +957,9 @@ under
 .BR \-\-on\-conflict=error ,
 or a scratch directory of
 .B \-\-diff\-extract
-in the compared tree. Nothing was changed.
+in the compared tree, or
+.B \-\-encrypt\-archive
+of an archive that is already encrypted. Nothing was changed.
 .TP
 .B 3
 The archive failed a check: damaged data, a wrong passphrase, a failed
@@ -1023,6 +1065,11 @@ seals the same data key under a new passphrase. The blocks of the old file
 can stay on the disk. Thus a person with a copy of the old file, or with the
 old passphrase and the disk, can still read what the archive held then.
 .IP \(bu 2
+An archive that
+.B \-\-encrypt\-archive
+encrypted was plaintext on the disk before. Its old blocks, copies,
+snapshots and backups stay readable.
+.IP \(bu 2
 .B \-\-update\-mode=newer
 misses a file that a restore from backup made older. Use
 .B different
@@ -1126,6 +1173,16 @@ Change the passphrase, and make the key derivation stronger:
 .nf
 .RS
 eictar \-\-change\-passphrase \-f home.ect \-\-kdf\-memory 1048576
+.RE
+.fi
+.PP
+Encrypt an archive that was made without
+.BR \-e ,
+and hide its index:
+.PP
+.nf
+.RS
+eictar \-\-encrypt\-archive \-\-encrypt\-index \-f home.ect
 .RE
 .fi
 .PP

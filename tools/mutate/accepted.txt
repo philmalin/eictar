@@ -441,31 +441,31 @@ src/internal/archive/mutate.go: rewrapHeaders: if false: err != nil → false #5
 src/internal/archive/mutate.go: rewrapHeaders: if false: err != nil → false #6
 	Equivalent. Header.MarshalBinary fails only when the encrypted flag and
 	the length of the crypto header disagree, and this header has both.
-src/internal/archive/mutate.go: decodeInParallel: operator: < → <=
+src/internal/archive/mutate.go: decodeInParallelWith: operator: < → <=
 	Equivalent. Only the number of workers changes.
-src/internal/archive/mutate.go: decodeInParallel: if false: workers < 1 → false #2
+src/internal/archive/mutate.go: decodeInParallelWith: if false: workers < 1 → false #2
 	Equivalent. With no work, the loops that follow have nothing to do.
-src/internal/archive/mutate.go: decodeInParallel: if false: i > starts[len(starts)-1] && (i-starts[len(starts)-1] == decodeBatchMembers || size >= decodeBatchBytes) → false
+src/internal/archive/mutate.go: decodeInParallelWith: if false: i > starts[len(starts)-1] && (i-starts[len(starts)-1] == decodeBatchMembers || size >= decodeBatchBytes) → false
 	Equivalent. Each split of the members into consecutive batches gives
 	the same reports, in the same order: pending puts them in order.
-src/internal/archive/mutate.go: decodeInParallel: operator: > → >=
+src/internal/archive/mutate.go: decodeInParallelWith: operator: > → >=
 	Equivalent. See the entry above: an empty batch reports nothing.
-src/internal/archive/mutate.go: decodeInParallel: operator: > → <=
+src/internal/archive/mutate.go: decodeInParallelWith: operator: > → <=
 	Equivalent. See the entry above.
-src/internal/archive/mutate.go: decodeInParallel: operator: && → ||
+src/internal/archive/mutate.go: decodeInParallelWith: operator: && → ||
 	Equivalent. See the entry above.
-src/internal/archive/mutate.go: decodeInParallel: operator: - → + #2
+src/internal/archive/mutate.go: decodeInParallelWith: operator: - → + #2
 	Equivalent. See the entry above.
-src/internal/archive/mutate.go: decodeInParallel: operator: == → !=
+src/internal/archive/mutate.go: decodeInParallelWith: operator: == → !=
 	Equivalent. See the entry above.
-src/internal/archive/mutate.go: decodeInParallel: operator: || → &&
+src/internal/archive/mutate.go: decodeInParallelWith: operator: || → &&
 	Equivalent. See the entry above.
-src/internal/archive/mutate.go: decodeInParallel: operator: >= → >
+src/internal/archive/mutate.go: decodeInParallelWith: operator: >= → >
 	Equivalent. See the entry above.
-src/internal/archive/mutate.go: decodeInParallel: operator: >= → <
+src/internal/archive/mutate.go: decodeInParallelWith: operator: >= → <
 	Equivalent. See the entry above.
 src/internal/archive/mutate.go: decodeBatchBytes: operator: << → >>
-	Equivalent. See the entries for decodeInParallel: batches of one member.
+	Equivalent. See the entries for decodeInParallelWith: batches of one member.
 src/internal/archive/mutate.go: RepairArchive: operator: > → >=
 	Equivalent. The loop ends at the start of the body by the break that
 	follows, before the condition can be equal.
@@ -705,13 +705,13 @@ src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → fa
 src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → false #3
 	Equivalent. crypto/rand.Read never returns an error (see
 	crypt.SealIndex).
-src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → false #4
+src/internal/archive/ops.go: newWrappedKeys: if false: err != nil → false
 	Equivalent. NewDataKey fails only when crypto/rand.Read does, which it
 	never does.
-src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → false #5
+src/internal/archive/ops.go: newWrappedKeys: if false: err != nil → false #2
 	Equivalent. NewKeys fails only for a data key of the wrong size, and
 	NewDataKey gives the right size.
-src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → false #6
+src/internal/archive/ops.go: newWrappedKeys: if false: err != nil → false #3
 	Equivalent. Wrap fails only when crypto/rand.Read does, or for the
 	parameters, which Validate passed.
 src/internal/archive/ops.go: encoderSlotsOn: if false: name == "" → false
@@ -765,6 +765,43 @@ src/internal/archive/dedup.go: dedup.usable: operator: || → &&
 src/internal/archive/dedup.go: contentKey: operator: + → -
 	Equivalent. The expression is the capacity of a buffer that append
 	grows, and it stays above 0: 32-8, and 16 more for each segment.
+
+# --- archive: --encrypt-archive (encrypt.go) ---
+
+src/internal/archive/encrypt.go: encryptHeaders: if false: err != nil → false #4
+	Equivalent. newWrappedKeys fails only when the system gives no random
+	bytes, or when Argon2id refuses its parameters. The parameters passed
+	Validate and checkAffordable just before.
+src/internal/archive/encrypt.go: encryptHeaders: if false: err != nil → false #5
+	Equivalent. The crypto header holds constants, a salt and a wrapped key
+	of the right sizes, and parameters that passed Validate, so Marshal
+	cannot fail.
+src/internal/archive/encrypt.go: encryptHeaders: if false: err != nil → false #6
+	Equivalent. The header is the one that the reader decoded, with one
+	more flag and the length of a crypto header that is far below the
+	limit, so MarshalBinary cannot fail.
+src/internal/archive/encrypt.go: encryptBlobs: if false: o == nil → false
+	Equivalent. The index check (format.validateData) refuses a member
+	whose owner is not in the index, so Owner always finds it here.
+src/internal/archive/encrypt.go: sealMember: if false: err != nil → false
+	Equivalent. newSealer fails only when the system gives no random bytes
+	for the member salt.
+src/internal/archive/encrypt.go: encryptBlobs: operator: < → <=
+	Equivalent. Only members with no blob have the same offset, and pass B
+	writes nothing for them, so their order changes nothing.
+src/internal/archive/encrypt.go: encryptBlobs: operator: << → >>
+	Equivalent. A buffer of size 0 gets the default size of bufio. Only the
+	speed of the writes changes.
+src/internal/archive/encrypt.go: sealMember: operator: < → <=
+	Equivalent. A buffer of the same capacity is made again. Only the
+	allocations change.
+src/internal/archive/encrypt.go: sealMember: if false: err != nil → false #3
+	Equivalent. MemberSealer.Seal fails only when the sealer is not made,
+	and newSealer made it just before.
+src/internal/archive/encrypt.go: sealMember: if false: err != nil → false #4
+	Equivalent. A bufio.Writer keeps its first error, and gives it again on
+	each later write and on Flush. encryptBlobs checks Flush, so the fault
+	still stops the run. The fault tests show it.
 
 # --- archive: the small files ---
 
@@ -986,6 +1023,8 @@ src/internal/cli/options.go: noOperation: operator: || → && #11
 src/internal/cli/options.go: noOperation: operator: || → && #12
 	Equivalent. See the first entry of noOperation.
 src/internal/cli/options.go: noOperation: operator: || → && #13
+	Equivalent. See the first entry of noOperation.
+src/internal/cli/options.go: noOperation: operator: || → && #14
 	Equivalent. See the first entry of noOperation.
 src/internal/cli/passphrase.go: passphraseSource.warnIfInsecureSource: if false: warn == nil → false
 	Equivalent. Each caller gives the Warn of a reporter, never nil.

@@ -139,7 +139,8 @@ var diskFaultKinds = []string{"open", "create", "write", "short", "sync", "trunc
 //   - A command that fails leaves the old state or the new one. A change
 //     made in place (append, delete) can need --repair, which must then give
 //     back one of them. A change that commits with a rename (compact,
-//     recompress, a change of passphrase) must never need it.
+//     recompress, a change of passphrase, --encrypt-archive) must never need
+//     it.
 //   - No file is left beside the archive, except when the fault was the
 //     removal of a temporary file.
 //   - A failure is an I/O error: exit 4, never "damaged".
@@ -186,10 +187,16 @@ func (s *sequence) diskFault() error {
 		spec := s.codecSpec()
 		args = append([]string{"--compact", "-f", s.archive, "--recompress", spec}, s.tuning(spec)...)
 		inPlace, what = false, "--compact --recompress "+spec
-	default:
-		if !s.encrypted {
-			return nil
+	case !s.encrypted:
+		pass := filepath.Join(s.dir, "passphrase")
+		if err := os.WriteFile(pass, []byte("stress test passphrase\n"), 0o600); err != nil {
+			return err
 		}
+		args = []string{"--encrypt-archive", "-f", s.archive, "--passphrase-file", pass,
+			"--kdf-memory", "8192", "--kdf-time", "1", "--kdf-threads", "1"}
+		newCrypt = []string{"--passphrase-file", pass}
+		inPlace, what = false, "--encrypt-archive"
+	default:
 		s.passphrases++
 		pass := filepath.Join(s.dir, fmt.Sprintf("passphrase-%d", s.passphrases))
 		if err := os.WriteFile(pass, []byte(fmt.Sprintf("stress passphrase %d\n", s.passphrases)), 0o600); err != nil {

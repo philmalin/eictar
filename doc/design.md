@@ -1686,6 +1686,7 @@ This section describes the operations on an existing archive. Append,
 update, delete, compact, repair and the change of passphrase change it
 (§9.1 to §9.3, §9.5 to §9.7). `--verify`, `--info` (§9.4), `--diff` (§9.8),
 a dry run (§9.9) and `--diff-extract` (§9.10) change nothing.
+`--encrypt-archive` (§9.11) encrypts an archive that was made without `-e`.
 
 Each mutation writes a new index generation. The body is append-only. The
 writer never writes over bytes that a valid trailer describes.
@@ -1710,8 +1711,8 @@ sticky directory that everyone can write, such as `/tmp`. There, Linux
 follows a link only when it belongs to the caller or to the owner of the
 directory (`fs.protected_symlinks`). The writer resolves the path itself and
 renames over the target, so the kernel's rule never applies. Thus the writer
-applies the rule to each link in the path, for create, compact and change of
-passphrase. Without this rule, a link `/tmp/backup.ect -> /etc/passwd` that
+applies the rule to each link in the path, for create, compact, change of
+passphrase and `--encrypt-archive`. Without this rule, a link `/tmp/backup.ect -> /etc/passwd` that
 another user plants makes a create by root replace `/etc/passwd`.
 
 ### 9.1 The write sequence
@@ -1857,7 +1858,11 @@ must match at least one member. On success, `--verify` prints one summary
 line, unless `-q` is given. `-v` also prints each member that passed.
 
 `--info` shows the header, the crypto parameters, the generation, the counts
-of live and dead members, the codecs in use, and the dead space. The dead
+of live and dead members, the codecs in use, and the dead space. The content
+row gives the plaintext bytes of the live members and the bytes of their
+blobs. The percentage after it is the stored size as a part of the
+plaintext size, for example `stored in 35871 bytes (32.5%)`. An archive
+with no content shows no percentage. The dead
 space is the number of bytes that `--compact` removes. It also shows each
 dictionary, and the members that share content with the bytes that they did
 not store.
@@ -2371,6 +2376,159 @@ the result. The operational test `TestDiffExtractOfTheBinary` runs the built bin
 created archive, and finds no difference and no scratch directory after the
 run.
 
+### 9.11 Encryption of an existing archive (`--encrypt-archive`)
+
+`--encrypt-archive` encrypts an archive that was made without `-e`. The
+result is the same as a create with `-e`: a data key, wrapped for a
+passphrase, a crypto header, sealed blobs and keyed digests (§6). The
+members, their metadata and their compressed content do not change.
+
+```
+eictar --encrypt-archive -f home.ect
+eictar --encrypt-archive --encrypt-index --passphrase-file pass -f home.ect
+```
+
+**Create with `-e` is the safe way.** An archive that is encrypted later was
+on disk as plaintext. After the rename, the blocks of the old file are free
+space until something writes over them. Copies, snapshots and backups of
+the old file stay readable. `--encrypt-archive` cannot remove any of them.
+Thus the program prints a reminder on standard error after each successful
+run, also with `-q`:
+
+```
+eictar: home.ect: the old plaintext file can still be read from free disk space, snapshots and backups; to keep plaintext off the disk, create with -e
+```
+
+The manual page says the same. §9.7 gives the same limit for an old
+passphrase.
+
+**The name.** This is one operation, with no short letter. It needs no `-e`,
+because the operation itself says "encrypt". `--compact -e` was the other
+choice. It was not used, because two options would then make one atomic
+operation, and `-e` would mean a different thing with `-c` and with
+`--compact`. With `--encrypt-archive`, `-e` is a usage error that says so.
+
+**An archive that is already encrypted.** The reader checks the flag of the
+file header (`RequirePlaintext`), before it reads the crypto header and
+before it asks for a passphrase. The run stops with exit status 2:
+
+```
+eictar: home.ect: the archive is already encrypted; to change its passphrase, use --change-passphrase
+```
+
+`--encrypt-archive` does not give an encrypted archive a new data key. A
+change of the data key is a different operation, and it is not part of this
+one.
+
+**The options.** The passphrase options, the `--kdf-*` options and
+`--encrypt-index` have the meaning that they have for create (§10.3). Thus
+the program asks for the passphrase two times, and `--passphrase-file` and
+`--passphrase-env` give it without a prompt. The keys `kdf-*` and
+`encrypt-index` of a configuration apply too (§11.1). `-j` and
+`--memory-limit` set the workers of the decode and their memory, as for
+`--verify`. `--progress` and `-v` work as for compact. `-q` hides the
+summary line. Each other option of create, and any positional argument, is a
+usage error.
+
+**The steps.** `CompactArchive` does the work, with `CompactConfig.Encrypt`
+set. Thus the lock, the temporary file, the mode and the owner, the rename
+and the sync of the directory are those of compact (§9.3).
+
+1. Open the archive with `RequirePlaintext`, and take the writer's lock.
+2. Check the KDF parameters, and then this machine (§A.3). Then ask for the
+   passphrase. Make a new random data key, and derive the keys with the
+   uuid of the archive, with the code of create (`newWrappedKeys`). The uuid
+   and the creation time do not change.
+3. Write the file header, with the encrypted flag and the length of the
+   new crypto header, and then the crypto header.
+4. Write each dictionary that a kept member uses. `loadDict` checks its
+   plain digest. `storeDict` seals it with a new salt and gives it a keyed
+   digest. It keeps its id and its generation.
+5. Pass A and pass B (below) write the members.
+6. Write the index, with the next generation and the keyed index digest.
+   With `--encrypt-index`, the index is sealed (§6.4).
+7. Rename the new file over the archive, as compact does.
+
+A crash or an error before the rename leaves the original archive. The
+temporary file is removed.
+
+**Pass A** decodes each kept member that holds its own content, the empty
+ones too, with the parallel decode of `--verify`. It runs before the
+catalog drops its unused entries, because that gives the codecs new
+positions. For each member it
+calculates two digests, and keeps them:
+
+- the keyed digest of the decoded content, with `contentK` (§6.2). This
+  becomes the new digest of the member.
+- the plain digest of the blob as it is on disk.
+
+The decode also compares the old digest with the content. If they are not
+equal, the run stops with exit status 3, and the original stays. Thus
+damage in a blob cannot become a sealed blob with a valid tag.
+
+**Pass B** reads each blob again, in the order of the file, and seals each
+chunk as it is, under a new member salt and thus a new key (§6.3). The
+compressed bytes do not change, so the member keeps its codec and its
+catalog entry. Each chunk increases by the 16 bytes of its tag, and the
+index gets the new lengths. Pass B also calculates the plain digest of the
+bytes that it seals. If it is not equal to the digest from pass A, the run
+stops with exit status 3. Thus no byte gets a seal that pass A did not
+check.
+
+Two passes keep the memory small. A sealed member is not held until the
+members before it are written, so a large file costs only its chunk. The
+cost is a second read of each blob, which is usually in the page cache.
+
+**The members without a blob.** A member that shares the content of another
+member (§4.3) gets the new keyed digest of the member that holds its
+content. Each other member with a digest gets one from pass A. If a member
+has a digest and no content that gives a keyed one, the run stops: no plain
+digest goes into the encrypted archive.
+
+**Dead space and tombstones.** The run drops the dead space and the
+tombstones, as compact does. A tombstone stays only when a live member needs
+its blob, and then its blob is sealed too. Thus no blob of the old file goes
+into the new file without a seal.
+
+**What is not done.** The run does not compress again. For a new codec,
+the user runs `--compact --recompress` before or after it. A `--verify`
+after the run checks the new archive with the new keys.
+
+**Tests.**
+
+- `TestEncryptArchive`: a tree with each member type, content that does not
+  compress, a file with holes, shared content, a hardlink and a
+  shared blob that need a tombstone, and a dictionary. After the run, each
+  member has the same id and metadata, a new keyed digest, and chunks 16
+  bytes longer. The dictionary is sealed. The uuid and the creation time
+  stay. `--verify` passes. The state of the archive and the extracted tree
+  are the same as before. No chunk, dictionary or index of the plaintext
+  archive, and no member path, occurs in the encrypted file.
+- `TestEncryptArchiveWithoutEncryptIndex`: the index is not sealed.
+- `TestEncryptArchiveRefusesAnEncryptedArchive`: `ErrAlreadyEncrypted`, no
+  passphrase asked, and no change.
+- `TestEncryptArchiveRefusals`: an empty passphrase, bad or unaffordable
+  parameters, and a failed prompt. `TestEncryptArchiveDefaultParameters`.
+- `TestEncryptArchiveOfADamagedArchive`: a changed byte in a member or in a
+  dictionary is damage, and the archive does not change.
+- `TestEncryptArchiveSealsOnlyCheckedBytes`: a blob that changes between
+  the passes stops the run.
+- `TestEncryptArchiveDoesNotDependOnWorkers` and
+  `TestEncryptArchiveProgress`.
+- `TestEncryptArchiveOfACatalogThatShrinks`: when no kept member uses the
+  first codec, each codec gets a new position. Pass A decodes with the
+  positions of the archive that it reads. The stress tester found this
+  fault.
+- The fault and power-loss tests (testing.md §1) run "encryption of an
+  archive", with and without a dictionary. After each fault, the archive is
+  the plaintext one or the encrypted one, and no temporary file stays.
+- In `cli`: `TestEncryptArchiveThroughRun` (the summary, the reminder with
+  and without `-q`, exit 2 for an encrypted archive),
+  `TestEncryptArchiveRefusals`, `TestEncryptArchiveOptions` and
+  `TestConfigScopeOfEncryptArchive`.
+- The operational test `TestEncryptArchiveOfTheBinary` and the stress tester
+  (testing.md §4) run the built binary.
+
 ---
 
 # Part III — Interface
@@ -2415,6 +2573,7 @@ a missing or doubled operation gets a short error on stderr and exit 2.
 | | `--repair` | Restore the last complete generation after an interrupted write (§9.5) | none | M6 |
 | | `--info` | Show the archive header, the codecs, the dictionaries, the counts, the shared content and the dead space | none | M6 |
 | | `--change-passphrase` | Seal the data key under a new passphrase, and write the archive again without its dead space (§9.7) | none | M9 |
+| | `--encrypt-archive` | Encrypt an archive that was made without `-e`, and write it again without its dead space (§9.11) | none | after v1.1.3 |
 | | `--list-codecs` | Show each codec with its parameters, defaults and ranges | none | M2 |
 
 All operations are built. An option that is not built yet exits with 70 and
@@ -2565,9 +2724,10 @@ You select encryption when you create an archive, and it applies to the whole
 archive. An append to an encrypted archive needs the same passphrase. This
 agrees with the problem statement: one secret key for all members.
 
-`--encrypt` and `--encrypt-index` apply to create only. The `--kdf-*`
-options apply to create and to `--change-passphrase`. On any other operation
-they are a usage error, because the header of an existing archive fixes its
+`--encrypt` applies to create only. `--encrypt-index` applies to create and
+to `--encrypt-archive` (§9.11). The `--kdf-*` options apply to create,
+`--change-passphrase` and `--encrypt-archive`. On any other operation they
+are a usage error, because the header of an existing archive fixes its
 encryption. The `--kdf-*` limits are the same limits that a reader applies
 (§6.2).
 
@@ -3077,7 +3237,8 @@ except `--help` and `--version`. The compression shorthands `-z`, `-J` and
 **A configured value applies only to the operations that use it.** On any
 other operation, the program ignores it. For example, `compress = xz` does
 not stop a listing, and `preserve-owner = true` applies only to `-x`. The
-`kdf-*` keys apply only to create. Thus `--change-passphrase` keeps the
+`kdf-*` keys apply only to create and to `--encrypt-archive`, which make new
+keys. Thus `--change-passphrase` keeps the
 parameters of the archive unless its command line gives new ones (§9.7). On the
 command line, the rules of §10.4 still refuse an option where it means
 nothing.
@@ -3089,8 +3250,8 @@ values for the whole group. Thus `-z` wins over `compress = xz`, and is not a
 second codec.
 
 **`encrypt-index` in a configuration is a preference.** It applies when the
-archive is encrypted. On the command line without `--encrypt`, it is an
-error. `progress` is a preference in the same way: a dry run ignores it,
+archive is encrypted, by create or by `--encrypt-archive`. On the command
+line without `--encrypt` or `--encrypt-archive`, it is an error. `progress` is a preference in the same way: a dry run ignores it,
 and on the command line with `-n` it is an error (§9.9).
 
 ### 11.2 Environment variables
@@ -3599,6 +3760,9 @@ section N of `testing.md`.
   `--change-passphrase` needs no second encryption of the members (§9.7). A
   change does not protect what someone already has: a copy of the old file,
   or the data key.
+- **`--encrypt-archive` encrypts what was plaintext** (§9.11). The old file,
+  its free blocks, and its copies, snapshots and backups stay readable. Create
+  with `-e` keeps plaintext off the disk.
 - **Passphrase handling.** The program reads the passphrase from the terminal
   with echo off, and sets it to zero after the key schedule. The reader sets
   the data key to zero when it closes. The program does not set the derived

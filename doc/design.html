@@ -5220,6 +5220,9 @@ Change of passphrase</a></li>
 (<code>-n</code>)</a></li>
 <li><a href="#compare-with-an-extraction---diff-extract" id="toc-compare-with-an-extraction---diff-extract">9.10 Compare with an
 extraction (<code>--diff-extract</code>)</a></li>
+<li><a href="#encryption-of-an-existing-archive---encrypt-archive" id="toc-encryption-of-an-existing-archive---encrypt-archive">9.11
+Encryption of an existing archive
+(<code>--encrypt-archive</code>)</a></li>
 </ul></li>
 </ul></li>
 <li><a href="#part-iii-interface" id="toc-part-iii-interface">Part III —
@@ -7556,7 +7559,9 @@ change a row.</p>
 update, delete, compact, repair and the change of passphrase change it
 (§9.1 to §9.3, §9.5 to §9.7). <code>--verify</code>, <code>--info</code>
 (§9.4), <code>--diff</code> (§9.8), a dry run (§9.9) and
-<code>--diff-extract</code> (§9.10) change nothing.</p>
+<code>--diff-extract</code> (§9.10) change nothing.
+<code>--encrypt-archive</code> (§9.11) encrypts an archive that was made
+without <code>-e</code>.</p>
 <p>Each mutation writes a new index generation. The body is append-only.
 The writer never writes over bytes that a valid trailer describes.</p>
 <p>A mutation of an encrypted archive needs the passphrase. New members
@@ -7579,9 +7584,10 @@ to the caller or to the owner of the directory
 (<code>fs.protected_symlinks</code>). The writer resolves the path
 itself and renames over the target, so the kernel’s rule never applies.
 Thus the writer applies the rule to each link in the path, for create,
-compact and change of passphrase. Without this rule, a link
-<code>/tmp/backup.ect -&gt; /etc/passwd</code> that another user plants
-makes a create by root replace <code>/etc/passwd</code>.</p>
+compact, change of passphrase and <code>--encrypt-archive</code>.
+Without this rule, a link <code>/tmp/backup.ect -&gt; /etc/passwd</code>
+that another user plants makes a create by root replace
+<code>/etc/passwd</code>.</p>
 <h3 id="the-write-sequence">9.1 The write sequence</h3>
 <p>Append, update and delete all use this sequence:</p>
 <ol type="1">
@@ -7725,7 +7731,11 @@ success, <code>--verify</code> prints one summary line, unless
 passed.</p>
 <p><code>--info</code> shows the header, the crypto parameters, the
 generation, the counts of live and dead members, the codecs in use, and
-the dead space. The dead space is the number of bytes that
+the dead space. The content row gives the plaintext bytes of the live
+members and the bytes of their blobs. The percentage after it is the
+stored size as a part of the plaintext size, for example
+<code>stored in 35871 bytes (32.5%)</code>. An archive with no content
+shows no percentage. The dead space is the number of bytes that
 <code>--compact</code> removes. It also shows each dictionary, and the
 members that share content with the bytes that they did not store.</p>
 <h3 id="repair">9.5 Repair</h3>
@@ -8260,6 +8270,156 @@ that cannot change the result. The operational test
 <code>TestDiffExtractOfTheBinary</code> runs the built binary on a
 created archive, and finds no difference and no scratch directory after
 the run.</p>
+<h3 id="encryption-of-an-existing-archive---encrypt-archive">9.11
+Encryption of an existing archive (<code>--encrypt-archive</code>)</h3>
+<p><code>--encrypt-archive</code> encrypts an archive that was made
+without <code>-e</code>. The result is the same as a create with
+<code>-e</code>: a data key, wrapped for a passphrase, a crypto header,
+sealed blobs and keyed digests (§6). The members, their metadata and
+their compressed content do not change.</p>
+<pre><code>eictar --encrypt-archive -f home.ect
+eictar --encrypt-archive --encrypt-index --passphrase-file pass -f home.ect</code></pre>
+<p><strong>Create with <code>-e</code> is the safe way.</strong> An
+archive that is encrypted later was on disk as plaintext. After the
+rename, the blocks of the old file are free space until something writes
+over them. Copies, snapshots and backups of the old file stay readable.
+<code>--encrypt-archive</code> cannot remove any of them. Thus the
+program prints a reminder on standard error after each successful run,
+also with <code>-q</code>:</p>
+<pre><code>eictar: home.ect: the old plaintext file can still be read from free disk space, snapshots and backups; to keep plaintext off the disk, create with -e</code></pre>
+<p>The manual page says the same. §9.7 gives the same limit for an old
+passphrase.</p>
+<p><strong>The name.</strong> This is one operation, with no short
+letter. It needs no <code>-e</code>, because the operation itself says
+“encrypt”. <code>--compact -e</code> was the other choice. It was not
+used, because two options would then make one atomic operation, and
+<code>-e</code> would mean a different thing with <code>-c</code> and
+with <code>--compact</code>. With <code>--encrypt-archive</code>,
+<code>-e</code> is a usage error that says so.</p>
+<p><strong>An archive that is already encrypted.</strong> The reader
+checks the flag of the file header (<code>RequirePlaintext</code>),
+before it reads the crypto header and before it asks for a passphrase.
+The run stops with exit status 2:</p>
+<pre><code>eictar: home.ect: the archive is already encrypted; to change its passphrase, use --change-passphrase</code></pre>
+<p><code>--encrypt-archive</code> does not give an encrypted archive a
+new data key. A change of the data key is a different operation, and it
+is not part of this one.</p>
+<p><strong>The options.</strong> The passphrase options, the
+<code>--kdf-*</code> options and <code>--encrypt-index</code> have the
+meaning that they have for create (§10.3). Thus the program asks for the
+passphrase two times, and <code>--passphrase-file</code> and
+<code>--passphrase-env</code> give it without a prompt. The keys
+<code>kdf-*</code> and <code>encrypt-index</code> of a configuration
+apply too (§11.1). <code>-j</code> and <code>--memory-limit</code> set
+the workers of the decode and their memory, as for
+<code>--verify</code>. <code>--progress</code> and <code>-v</code> work
+as for compact. <code>-q</code> hides the summary line. Each other
+option of create, and any positional argument, is a usage error.</p>
+<p><strong>The steps.</strong> <code>CompactArchive</code> does the
+work, with <code>CompactConfig.Encrypt</code> set. Thus the lock, the
+temporary file, the mode and the owner, the rename and the sync of the
+directory are those of compact (§9.3).</p>
+<ol type="1">
+<li>Open the archive with <code>RequirePlaintext</code>, and take the
+writer’s lock.</li>
+<li>Check the KDF parameters, and then this machine (§A.3). Then ask for
+the passphrase. Make a new random data key, and derive the keys with the
+uuid of the archive, with the code of create
+(<code>newWrappedKeys</code>). The uuid and the creation time do not
+change.</li>
+<li>Write the file header, with the encrypted flag and the length of the
+new crypto header, and then the crypto header.</li>
+<li>Write each dictionary that a kept member uses. <code>loadDict</code>
+checks its plain digest. <code>storeDict</code> seals it with a new salt
+and gives it a keyed digest. It keeps its id and its generation.</li>
+<li>Pass A and pass B (below) write the members.</li>
+<li>Write the index, with the next generation and the keyed index
+digest. With <code>--encrypt-index</code>, the index is sealed
+(§6.4).</li>
+<li>Rename the new file over the archive, as compact does.</li>
+</ol>
+<p>A crash or an error before the rename leaves the original archive.
+The temporary file is removed.</p>
+<p><strong>Pass A</strong> decodes each kept member that holds its own
+content, the empty ones too, with the parallel decode of
+<code>--verify</code>. It runs before the catalog drops its unused
+entries, because that gives the codecs new positions. For each member it
+calculates two digests, and keeps them:</p>
+<ul>
+<li>the keyed digest of the decoded content, with <code>contentK</code>
+(§6.2). This becomes the new digest of the member.</li>
+<li>the plain digest of the blob as it is on disk.</li>
+</ul>
+<p>The decode also compares the old digest with the content. If they are
+not equal, the run stops with exit status 3, and the original stays.
+Thus damage in a blob cannot become a sealed blob with a valid tag.</p>
+<p><strong>Pass B</strong> reads each blob again, in the order of the
+file, and seals each chunk as it is, under a new member salt and thus a
+new key (§6.3). The compressed bytes do not change, so the member keeps
+its codec and its catalog entry. Each chunk increases by the 16 bytes of
+its tag, and the index gets the new lengths. Pass B also calculates the
+plain digest of the bytes that it seals. If it is not equal to the
+digest from pass A, the run stops with exit status 3. Thus no byte gets
+a seal that pass A did not check.</p>
+<p>Two passes keep the memory small. A sealed member is not held until
+the members before it are written, so a large file costs only its chunk.
+The cost is a second read of each blob, which is usually in the page
+cache.</p>
+<p><strong>The members without a blob.</strong> A member that shares the
+content of another member (§4.3) gets the new keyed digest of the member
+that holds its content. Each other member with a digest gets one from
+pass A. If a member has a digest and no content that gives a keyed one,
+the run stops: no plain digest goes into the encrypted archive.</p>
+<p><strong>Dead space and tombstones.</strong> The run drops the dead
+space and the tombstones, as compact does. A tombstone stays only when a
+live member needs its blob, and then its blob is sealed too. Thus no
+blob of the old file goes into the new file without a seal.</p>
+<p><strong>What is not done.</strong> The run does not compress again.
+For a new codec, the user runs <code>--compact --recompress</code>
+before or after it. A <code>--verify</code> after the run checks the new
+archive with the new keys.</p>
+<p><strong>Tests.</strong></p>
+<ul>
+<li><code>TestEncryptArchive</code>: a tree with each member type,
+content that does not compress, a file with holes, shared content, a
+hardlink and a shared blob that need a tombstone, and a dictionary.
+After the run, each member has the same id and metadata, a new keyed
+digest, and chunks 16 bytes longer. The dictionary is sealed. The uuid
+and the creation time stay. <code>--verify</code> passes. The state of
+the archive and the extracted tree are the same as before. No chunk,
+dictionary or index of the plaintext archive, and no member path, occurs
+in the encrypted file.</li>
+<li><code>TestEncryptArchiveWithoutEncryptIndex</code>: the index is not
+sealed.</li>
+<li><code>TestEncryptArchiveRefusesAnEncryptedArchive</code>:
+<code>ErrAlreadyEncrypted</code>, no passphrase asked, and no
+change.</li>
+<li><code>TestEncryptArchiveRefusals</code>: an empty passphrase, bad or
+unaffordable parameters, and a failed prompt.
+<code>TestEncryptArchiveDefaultParameters</code>.</li>
+<li><code>TestEncryptArchiveOfADamagedArchive</code>: a changed byte in
+a member or in a dictionary is damage, and the archive does not
+change.</li>
+<li><code>TestEncryptArchiveSealsOnlyCheckedBytes</code>: a blob that
+changes between the passes stops the run.</li>
+<li><code>TestEncryptArchiveDoesNotDependOnWorkers</code> and
+<code>TestEncryptArchiveProgress</code>.</li>
+<li><code>TestEncryptArchiveOfACatalogThatShrinks</code>: when no kept
+member uses the first codec, each codec gets a new position. Pass A
+decodes with the positions of the archive that it reads. The stress
+tester found this fault.</li>
+<li>The fault and power-loss tests (testing.md §1) run “encryption of an
+archive”, with and without a dictionary. After each fault, the archive
+is the plaintext one or the encrypted one, and no temporary file
+stays.</li>
+<li>In <code>cli</code>: <code>TestEncryptArchiveThroughRun</code> (the
+summary, the reminder with and without <code>-q</code>, exit 2 for an
+encrypted archive), <code>TestEncryptArchiveRefusals</code>,
+<code>TestEncryptArchiveOptions</code> and
+<code>TestConfigScopeOfEncryptArchive</code>.</li>
+<li>The operational test <code>TestEncryptArchiveOfTheBinary</code> and
+the stress tester (testing.md §4) run the built binary.</li>
+</ul>
 <hr />
 <h1 id="part-iii-interface">Part III — Interface</h1>
 <h2 id="command-line-interface">10. Command line interface</h2>
@@ -8400,6 +8560,14 @@ again without its dead space (§9.7)</td>
 <td>M9</td>
 </tr>
 <tr class="even">
+<td></td>
+<td><code>--encrypt-archive</code></td>
+<td>Encrypt an archive that was made without <code>-e</code>, and write
+it again without its dead space (§9.11)</td>
+<td>none</td>
+<td>after v1.1.3</td>
+</tr>
+<tr class="odd">
 <td></td>
 <td><code>--list-codecs</code></td>
 <td>Show each codec with its parameters, defaults and ranges</td>
@@ -8654,12 +8822,14 @@ statement requires.</p>
 the whole archive. An append to an encrypted archive needs the same
 passphrase. This agrees with the problem statement: one secret key for
 all members.</p>
-<p><code>--encrypt</code> and <code>--encrypt-index</code> apply to
-create only. The <code>--kdf-*</code> options apply to create and to
-<code>--change-passphrase</code>. On any other operation they are a
-usage error, because the header of an existing archive fixes its
-encryption. The <code>--kdf-*</code> limits are the same limits that a
-reader applies (§6.2).</p>
+<p><code>--encrypt</code> applies to create only.
+<code>--encrypt-index</code> applies to create and to
+<code>--encrypt-archive</code> (§9.11). The <code>--kdf-*</code> options
+apply to create, <code>--change-passphrase</code> and
+<code>--encrypt-archive</code>. On any other operation they are a usage
+error, because the header of an existing archive fixes its encryption.
+The <code>--kdf-*</code> limits are the same limits that a reader
+applies (§6.2).</p>
 <p>The program reads the passphrase from the terminal with echo off.
 <strong>On create, and for the new passphrase of a change, it asks two
 times</strong>, because a mistyped passphrase cannot be recovered. No
@@ -9521,7 +9691,8 @@ The compression shorthands <code>-z</code>, <code>-J</code> and
 it.</strong> On any other operation, the program ignores it. For
 example, <code>compress = xz</code> does not stop a listing, and
 <code>preserve-owner = true</code> applies only to <code>-x</code>. The
-<code>kdf-*</code> keys apply only to create. Thus
+<code>kdf-*</code> keys apply only to create and to
+<code>--encrypt-archive</code>, which make new keys. Thus
 <code>--change-passphrase</code> keeps the parameters of the archive
 unless its command line gives new ones (§9.7). On the command line, the
 rules of §10.4 still refuse an option where it means nothing.</p>
@@ -9533,10 +9704,11 @@ one key of a group, the program ignores the configured values for the
 whole group. Thus <code>-z</code> wins over <code>compress = xz</code>,
 and is not a second codec.</p>
 <p><strong><code>encrypt-index</code> in a configuration is a
-preference.</strong> It applies when the archive is encrypted. On the
-command line without <code>--encrypt</code>, it is an error.
-<code>progress</code> is a preference in the same way: a dry run ignores
-it, and on the command line with <code>-n</code> it is an error
+preference.</strong> It applies when the archive is encrypted, by create
+or by <code>--encrypt-archive</code>. On the command line without
+<code>--encrypt</code> or <code>--encrypt-archive</code>, it is an
+error. <code>progress</code> is a preference in the same way: a dry run
+ignores it, and on the command line with <code>-n</code> it is an error
 (§9.9).</p>
 <h3 id="environment-variables">11.2 Environment variables</h3>
 <p>The rule is mechanical: <code>EICTAR_</code>, then the long option
@@ -9575,22 +9747,22 @@ occur only one time, except <code>exclude</code> and
 <code>[codec.NAME]</code> sections give defaults for one codec. The
 parser has no dependency, and it checks each codec value when it reads
 it, so that an error names the line.</p>
-<div class="sourceCode" id="cb25"><pre class="sourceCode ini"><code class="sourceCode ini"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ~/.eictarrc</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="dt">compress    </span><span class="ot">=</span><span class="st"> zstd</span></span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="dt">workers     </span><span class="ot">=</span><span class="st"> </span><span class="dv">12</span></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="dt">chunk-size  </span><span class="ot">=</span><span class="st"> 8MiB</span></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="dt">update-mode </span><span class="ot">=</span><span class="st"> different</span></span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="dt">progress    </span><span class="ot">=</span><span class="st"> </span><span class="kw">true</span></span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> *.o</span></span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> .cache</span></span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.zstd]</span></span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a><span class="dt">level </span><span class="ot">=</span><span class="st"> </span><span class="dv">19</span></span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a><span class="dt">long  </span><span class="ot">=</span><span class="st"> </span><span class="dv">27</span></span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a><span class="dt">train </span><span class="ot">=</span><span class="st"> </span><span class="kw">on</span></span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.xz]</span></span>
-<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a><span class="dt">preset </span><span class="ot">=</span><span class="st"> </span><span class="dv">6</span></span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre class="sourceCode ini"><code class="sourceCode ini"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ~/.eictarrc</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="dt">compress    </span><span class="ot">=</span><span class="st"> zstd</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="dt">workers     </span><span class="ot">=</span><span class="st"> </span><span class="dv">12</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="dt">chunk-size  </span><span class="ot">=</span><span class="st"> 8MiB</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="dt">update-mode </span><span class="ot">=</span><span class="st"> different</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="dt">progress    </span><span class="ot">=</span><span class="st"> </span><span class="kw">true</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> *.o</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a><span class="dt">exclude     </span><span class="ot">=</span><span class="st"> .cache</span></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.zstd]</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a><span class="dt">level </span><span class="ot">=</span><span class="st"> </span><span class="dv">19</span></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a><span class="dt">long  </span><span class="ot">=</span><span class="st"> </span><span class="dv">27</span></span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a><span class="dt">train </span><span class="ot">=</span><span class="st"> </span><span class="kw">on</span></span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a><span class="kw">[codec.xz]</span></span>
+<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a><span class="dt">preset </span><span class="ot">=</span><span class="st"> </span><span class="dv">6</span></span></code></pre></div>
 <p>A key that is not a known long option is a usage error, for the
 reason in §11.2. So is a section that is not <code>[codec.NAME]</code>,
 and a codec that does not exist.</p>
@@ -9831,48 +10003,48 @@ package of its own. It changes nothing but options, and it needs the
 option parser.</p>
 <h3 id="core-interfaces">12.1 Core interfaces</h3>
 <p>The codec interfaces:</p>
-<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co">// codec: one chunk in, one chunk out. Encoders hold no state between chunks,</span></span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="co">// so all workers can share one encoder.</span></span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Encoder <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>    Encode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>    Resolved<span class="op">()</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">any</span> <span class="co">// the parameters in effect, for the index catalog</span></span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Decode receives the plaintext size that the index gives. Without it, a</span></span>
-<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a><span class="co">// crafted chunk is a decompression bomb with nothing to compare against.</span></span>
-<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Decoder <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>    Decode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> plainSize <span class="dt">int</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
-<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Factory <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a>    Name<span class="op">()</span> <span class="dt">string</span></span>
-<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a>    Describe<span class="op">()</span> Spec                                      <span class="co">// for --list-codecs</span></span>
-<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>    NewEncoder<span class="op">(</span>p Params<span class="op">,</span> concurrency <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Encoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// concurrency: §8.2</span></span>
-<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>    NewDecoder<span class="op">(</span>maxPlain <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Decoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb30"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co">// codec: one chunk in, one chunk out. Encoders hold no state between chunks,</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a><span class="co">// so all workers can share one encoder.</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Encoder <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>    Encode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    Resolved<span class="op">()</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">any</span> <span class="co">// the parameters in effect, for the index catalog</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Decode receives the plaintext size that the index gives. Without it, a</span></span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a><span class="co">// crafted chunk is a decompression bomb with nothing to compare against.</span></span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Decoder <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a>    Decode<span class="op">(</span>dst<span class="op">,</span> src <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> plainSize <span class="dt">int</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb30-15"><a href="#cb30-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-16"><a href="#cb30-16" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Factory <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb30-17"><a href="#cb30-17" aria-hidden="true" tabindex="-1"></a>    Name<span class="op">()</span> <span class="dt">string</span></span>
+<span id="cb30-18"><a href="#cb30-18" aria-hidden="true" tabindex="-1"></a>    Describe<span class="op">()</span> Spec                                      <span class="co">// for --list-codecs</span></span>
+<span id="cb30-19"><a href="#cb30-19" aria-hidden="true" tabindex="-1"></a>    NewEncoder<span class="op">(</span>p Params<span class="op">,</span> concurrency <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Encoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// concurrency: §8.2</span></span>
+<span id="cb30-20"><a href="#cb30-20" aria-hidden="true" tabindex="-1"></a>    NewDecoder<span class="op">(</span>maxPlain <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Decoder<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb30-21"><a href="#cb30-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <p>A decoder takes no compression parameters, because the stream
 contains what decoding needs. Thus a later build can read an archive
 even if its view of the recorded parameters changed.</p>
 <p>The index encoder takes hooks, so that encryption did not change the
 shape of the pipeline:</p>
-<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co">// format</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Sealer <span class="kw">func</span><span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Opener <span class="kw">func</span><span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> EncodeOptions <span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    Compress <span class="dt">bool</span></span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>    Seal     Sealer                           <span class="co">// nil: the index is not sealed</span></span>
-<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    Digest   <span class="kw">func</span><span class="op">([]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">[</span>DigestSize<span class="op">]</span><span class="dt">byte</span>    <span class="co">// nil: the plain BLAKE3 (§6.4)</span></span>
-<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb31"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co">// format</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Sealer <span class="kw">func</span><span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Opener <span class="kw">func</span><span class="op">(</span>ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> EncodeOptions <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>    Compress <span class="dt">bool</span></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>    Seal     Sealer                           <span class="co">// nil: the index is not sealed</span></span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>    Digest   <span class="kw">func</span><span class="op">([]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">[</span>DigestSize<span class="op">]</span><span class="dt">byte</span>    <span class="co">// nil: the plain BLAKE3 (§6.4)</span></span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <p>The chunk sealer in <code>crypt</code> is a different thing. It seals
 one chunk with a counter and a final-chunk flag.
 <code>format.Sealer</code> seals the whole index in one call:</p>
-<div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co">// crypt</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> MemberSealer <span class="kw">struct</span><span class="op">{</span> <span class="op">...</span> <span class="op">}</span></span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Seal<span class="op">(</span>dst<span class="op">,</span> plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Open<span class="op">(</span>dst<span class="op">,</span> ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb32"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co">// crypt</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> MemberSealer <span class="kw">struct</span><span class="op">{</span> <span class="op">...</span> <span class="op">}</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Seal<span class="op">(</span>dst<span class="op">,</span> plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>MemberSealer<span class="op">)</span> Open<span class="op">(</span>dst<span class="op">,</span> ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> chunkIndex <span class="dt">uint64</span><span class="op">,</span> final <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
 <p>There is one sealer and one key for each member. <code>final</code>
 is a parameter, not a state of the sealer. The writer learns which chunk
 is last only when the next read reaches the end of the file (§8).</p>
@@ -10118,6 +10290,10 @@ archive is open, earlier generations too.</li>
 <code>--change-passphrase</code> needs no second encryption of the
 members (§9.7). A change does not protect what someone already has: a
 copy of the old file, or the data key.</li>
+<li><strong><code>--encrypt-archive</code> encrypts what was
+plaintext</strong> (§9.11). The old file, its free blocks, and its
+copies, snapshots and backups stay readable. Create with <code>-e</code>
+keeps plaintext off the disk.</li>
 <li><strong>Passphrase handling.</strong> The program reads the
 passphrase from the terminal with echo off, and sets it to zero after
 the key schedule. The reader sets the data key to zero when it closes.

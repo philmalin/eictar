@@ -533,3 +533,16 @@ versions read what it writes.
   loong64 only. In `x/sys`, `Listxattr` on FreeBSD and NetBSD now returns
   its error. Before, it gave an empty list. eictar calls `ExtattrList*`,
   not `Listxattr`, so this fault did not have an effect on eictar.
+- `--encrypt-archive` encrypts an archive that was made without `-e`
+  (design.md §9.11). It is one operation, and needs no `-e`. Each member
+  keeps its metadata and its compressed content. Each chunk and each
+  dictionary is sealed under new keys, and each digest gets its keyed
+  value. One decode checks each old digest first, so a damaged archive does
+  not change. `--encrypt-index` and the `--kdf-*` options work as for
+  create. An encrypted archive gives exit 2. The old plaintext file can stay
+  readable on the disk, so each run prints a reminder, also with `-q`. The
+  stress tester found a fault before the release: the decode used the
+  positions of a catalog that had shrunk. `TestEncryptArchiveOfACatalogThatShrinks`
+  covers it.
+- `--info` gives the stored size of the content as a percentage of its
+  size: `stored in 35871 bytes (32.5%)`.

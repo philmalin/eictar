@@ -1156,3 +1156,31 @@ func TestDiffExtractOfTheBinary(t *testing.T) {
 			res.ExitCode, exitPartial, res.Stdout, res.Stderr)
 	}
 }
+
+// TestEncryptArchiveOfTheBinary: the built binary encrypts a plaintext
+// archive (doc/design.md 9.11). The result asks for the passphrase,
+// verifies, and extracts the same tree. A second run is a usage error.
+func TestEncryptArchiveOfTheBinary(t *testing.T) {
+	tree := metadataFixture(t)
+	archive := filepath.Join(t.TempDir(), "meta.ect")
+	runOK(t, tree.Root, "-cf", archive, "work")
+	key := []string{"--passphrase-file", passFile(t, "battery staple")}
+
+	res := testutil.Run(t, tree.Root, append([]string{"--encrypt-archive", "--encrypt-index", "-f", archive,
+		"--kdf-memory", "8192", "--kdf-time", "1"}, key...)...)
+	if res.ExitCode != exitOK || !strings.Contains(res.Stdout, "encrypted;") || !strings.Contains(res.Stderr, "old plaintext file") {
+		t.Fatalf("--encrypt-archive: exit %d\nstdout: %s\nstderr: %s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+	if res := testutil.Run(t, tree.Root, "-tf", archive); res.ExitCode == exitOK {
+		t.Error("the encrypted archive lists with no passphrase")
+	}
+	runOK(t, tree.Root, append([]string{"--verify", "-f", archive}, key...)...)
+	res = testutil.Run(t, tree.Root, append([]string{"--diff", "-f", archive}, key...)...)
+	if res.ExitCode != exitOK {
+		t.Errorf("--diff: exit %d\nstdout: %s\nstderr: %s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+	res = testutil.Run(t, tree.Root, append([]string{"--encrypt-archive", "-f", archive}, key...)...)
+	if res.ExitCode != exitUsage || !strings.Contains(res.Stderr, "--change-passphrase") {
+		t.Errorf("a second run: exit %d, want %d\nstderr: %s", res.ExitCode, exitUsage, res.Stderr)
+	}
+}

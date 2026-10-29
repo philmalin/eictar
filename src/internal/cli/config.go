@@ -51,10 +51,10 @@ var configKeys = map[string][]Operation{
 	"spill-threshold": allOps,
 
 	"encrypt":       {OpCreate},
-	"encrypt-index": {OpCreate},
-	"kdf-time":      {OpCreate},
-	"kdf-memory":    {OpCreate},
-	"kdf-threads":   {OpCreate},
+	"encrypt-index": {OpCreate, OpEncryptArchive},
+	"kdf-time":      {OpCreate, OpEncryptArchive},
+	"kdf-memory":    {OpCreate, OpEncryptArchive},
+	"kdf-threads":   {OpCreate, OpEncryptArchive},
 
 	"exclude":         append([]Operation{OpList, OpExtract}, walking...),
 	"exclude-from":    append([]Operation{OpList, OpExtract}, walking...),

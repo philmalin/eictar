@@ -2053,6 +2053,20 @@ only. In <code>x/sys</code>, <code>Listxattr</code> on FreeBSD and
 NetBSD now returns its error. Before, it gave an empty list. eictar
 calls <code>ExtattrList*</code>, not <code>Listxattr</code>, so this
 fault did not have an effect on eictar.</li>
+<li><code>--encrypt-archive</code> encrypts an archive that was made
+without <code>-e</code> (design.md §9.11). It is one operation, and
+needs no <code>-e</code>. Each member keeps its metadata and its
+compressed content. Each chunk and each dictionary is sealed under new
+keys, and each digest gets its keyed value. One decode checks each old
+digest first, so a damaged archive does not change.
+<code>--encrypt-index</code> and the <code>--kdf-*</code> options work
+as for create. An encrypted archive gives exit 2. The old plaintext file
+can stay readable on the disk, so each run prints a reminder, also with
+<code>-q</code>. The stress tester found a fault before the release: the
+decode used the positions of a catalog that had shrunk.
+<code>TestEncryptArchiveOfACatalogThatShrinks</code> covers it.</li>
+<li><code>--info</code> gives the stored size of the content as a
+percentage of its size: <code>stored in 35871 bytes (32.5%)</code>.</li>
 </ul>
 </body>
 </html>

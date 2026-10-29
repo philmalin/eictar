@@ -28,6 +28,7 @@ _eictar_long='--create
 --info
 --list-codecs
 --change-passphrase
+--encrypt-archive
 --file
 --directory
 --destination

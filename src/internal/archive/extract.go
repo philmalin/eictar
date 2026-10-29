@@ -690,7 +690,7 @@ func (w *fileWorker) writeFile(dir destDir, m *format.Member, base, target strin
 	if len(m.Sparse) > 0 {
 		dst = &sparseWriter{f: f, segs: m.Sparse}
 	}
-	if err := x.r.writeMember(m, countWriter(dst, progressOf(x.cfg.Reporter)), w.set); err != nil {
+	if err := x.r.writeMember(m, countWriter(dst, progressOf(x.cfg.Reporter)), w.set, nil); err != nil {
 		f.Close()
 		cleanup()
 		return err

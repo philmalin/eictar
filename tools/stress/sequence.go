@@ -247,7 +247,10 @@ func (s *sequence) step() error {
 	}
 	// A disk fault in a change of the archive (faults.go).
 	if s.faults && s.r.faultBin != "" && s.rnd.IntN(8) == 0 {
-		return s.diskFault()
+		// A fault in --encrypt-archive can leave the encrypted archive.
+		err := s.diskFault()
+		s.encrypted = len(s.r.crypt) > 0
+		return err
 	}
 	op := s.rnd.IntN(26)
 	switch {
@@ -263,6 +266,8 @@ func (s *sequence) step() error {
 		return s.compact(true)
 	case op < 16 && s.encrypted:
 		return s.changePassphrase()
+	case op < 16 && !s.encrypted && s.rnd.IntN(4) == 0:
+		return s.encryptArchive()
 	case op < 18:
 		return s.diffStep()
 	case op < 20:
@@ -500,6 +505,38 @@ func (s *sequence) changePassphrase() error {
 		return fmt.Errorf("the old passphrase after a change: exit %d, want 3:\n%s", res.code, res)
 	}
 	s.stats.checks["passphrase"]++
+	return nil
+}
+
+// encryptArchive encrypts the plaintext archive with --encrypt-archive, now
+// and then with --encrypt-index (doc/design.md 9.11). The archive must no
+// longer list without the passphrase. The checks after the step show that
+// the passphrase opens it, and that the content is the same.
+func (s *sequence) encryptArchive() error {
+	pass := filepath.Join(s.dir, "passphrase")
+	if err := os.WriteFile(pass, []byte("stress test passphrase\n"), 0o600); err != nil {
+		return err
+	}
+	args := []string{"--encrypt-archive", "-f", s.archive, "--passphrase-file", pass,
+		"--kdf-memory", "8192", "--kdf-time", "1", "--kdf-threads", "1"}
+	if s.rnd.IntN(2) == 0 {
+		args = append(args, "--encrypt-index")
+	}
+	s.note("encrypt the archive %q", args[5:])
+	s.stats.ops["encrypt-archive"]++
+	if _, err := s.r.expect(true, args...); err != nil {
+		return err
+	}
+	s.encrypted = true
+	s.r.crypt = []string{"--passphrase-file", pass}
+	res, err := s.r.run(false, "-tf", s.archive)
+	if err != nil {
+		return err
+	}
+	if res.code == 0 {
+		return fmt.Errorf("the archive lists with no passphrase after --encrypt-archive:\n%s", res)
+	}
+	s.stats.checks["encrypt-archive"]++
 	return nil
 }
 
