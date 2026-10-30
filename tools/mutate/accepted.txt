@@ -314,13 +314,6 @@ src/internal/archive/extract.go: extraction.finishDir: if false: err == nil → 
 	the CI job as root, restores one.
 src/internal/archive/extract.go: extraction.finishDir: operator: == → !=
 	Needs root. See the entry above.
-src/internal/archive/extract.go: extraction.writeSpecial: if false: errors.Is(err, meta.ErrUnsupported) → false
-	Another platform: the platforms with no call for a pipe or a device on
-	the descriptor of a directory: macOS (sys_darwin.go), Windows, and those
-	of meta_other.go. There a member is skipped with a notice, not failed.
-src/internal/archive/extract.go: extraction.writeSymlink: if false: errors.Is(err, meta.ErrUnsupported) → false
-	Another platform: the platforms with no call to set the times of a link,
-	those of meta_other.go. There the link keeps the times it was made with.
 src/internal/archive/extract.go: extraction.parent: if false: dir != "." → false
 	Equivalent. MkdirAll of "." makes nothing.
 src/internal/archive/extract.go: extraction.writeSymlink: if false: dir != "." → false
@@ -344,8 +337,6 @@ src/internal/archive/extract.go: fileWorker.writeFile: if false: err != nil → 
 	Equivalent. crypto/rand.Read does not return an error (see the writer).
 src/internal/archive/extract.go: tempName: if false: err != nil → false
 	Equivalent. crypto/rand.Read does not return an error (see the writer).
-src/internal/archive/extract.go: fileWorker.writeFile: operator: > → >= #2
-	Equivalent. A file with no holes is cut to the size that it has.
 src/internal/archive/extract.go: extraction.finishDirs: operator: > → >=
 	Equivalent. Only two directories with the same path compare equal, and
 	sort.Slice gives no order to equal ones in either form.
@@ -705,6 +696,9 @@ src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → fa
 src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → false #3
 	Equivalent. crypto/rand.Read never returns an error (see
 	crypt.SealIndex).
+src/internal/archive/ops.go: EncryptionConfig.apply: if false: err != nil → false #4
+	Equivalent. newWrappedKeys fails only when NewDataKey, NewKeys or Wrap
+	does, and the entries for newWrappedKeys give why none of them does.
 src/internal/archive/ops.go: newWrappedKeys: if false: err != nil → false
 	Equivalent. NewDataKey fails only when crypto/rand.Read does, which it
 	never does.
