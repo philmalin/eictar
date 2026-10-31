@@ -127,8 +127,9 @@ readable with other tools, but the content is not. Use `--encrypt-index` to
 keep them secret too.
 
 `--encrypt-archive` encrypts an archive that was made without `-e`. The
-old plaintext file can still be read from free disk space, snapshots and
-backups. Thus `-e` at create is the safe way to keep data private.
+file is then encrypted, but copies of its old unencrypted contents can
+remain in free disk space, snapshots and backups. Thus `-e` at create is the
+safe way to keep data private.
 
 ### Compression
 

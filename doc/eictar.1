@@ -132,11 +132,12 @@ An archive that is already encrypted stops the run with exit 2. To change
 its passphrase, use
 .BR \-\-change\-passphrase .
 .IP
-The old plaintext file is not gone. Its blocks stay on the disk until
-something writes over them, and copies, snapshots and backups of it stay
-readable. The program prints a reminder after each run, also with
+The archive file is encrypted after the run, but copies of its old
+unencrypted contents can remain. The blocks of the old contents stay on the
+disk until something writes over them, and snapshots and backups of them
+stay readable. The program prints a reminder after each run, also with
 .BR \-q .
-To keep plaintext off the disk, create the archive with
+To never write plaintext to disk, create the archive with
 .BR \-e .
 .TP
 .B \-\-verify
@@ -1067,8 +1068,8 @@ old passphrase and the disk, can still read what the archive held then.
 .IP \(bu 2
 An archive that
 .B \-\-encrypt\-archive
-encrypted was plaintext on the disk before. Its old blocks, copies,
-snapshots and backups stay readable.
+encrypted was plaintext on the disk before. Copies of its old contents in
+free disk space, snapshots and backups stay readable.
 .IP \(bu 2
 .B \-\-update\-mode=newer
 misses a file that a restore from backup made older. Use

@@ -181,7 +181,7 @@ func TestSparseFileAcrossChunks(t *testing.T) {
 		t.Error("the file extracted to disk differs")
 	}
 	var out bytes.Buffer
-	if _, err := Extract(ExtractConfig{Archive: archive, ToStdout: &out}); err != nil {
+	if _, err := Extract(ExtractConfig{Archive: archive, Destination: t.TempDir(), ToStdout: &out}); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(out.Bytes(), want) {
@@ -213,7 +213,7 @@ func (w *failingWriter) Write(p []byte) (int, error) {
 func TestStdoutWriteFails(t *testing.T) {
 	archive, want := sparseArchive(t)
 	for _, n := range []int{0, 100, 5000, 8 << 10, 30 << 10, len(want) - 1} {
-		if _, err := Extract(ExtractConfig{Archive: archive, ToStdout: &failingWriter{n: n}}); !errors.Is(err, errStdout) {
+		if _, err := Extract(ExtractConfig{Archive: archive, Destination: t.TempDir(), ToStdout: &failingWriter{n: n}}); !errors.Is(err, errStdout) {
 			t.Errorf("stdout fails after %d bytes: %v", n, err)
 		}
 	}
@@ -242,7 +242,7 @@ func TestExtractToStdout(t *testing.T) {
 
 	var out bytes.Buffer
 	rep := &memberRecorder{}
-	stats, err := Extract(ExtractConfig{Archive: path, ToStdout: &out, Reporter: rep})
+	stats, err := Extract(ExtractConfig{Archive: path, Destination: t.TempDir(), ToStdout: &out, Reporter: rep})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,12 +272,12 @@ func TestExtractToStdout(t *testing.T) {
 	}
 
 	out.Reset()
-	if _, err := Extract(ExtractConfig{Archive: path, ToStdout: &out}); !IsDamage(err) {
+	if _, err := Extract(ExtractConfig{Archive: path, Destination: t.TempDir(), ToStdout: &out}); !IsDamage(err) {
 		t.Errorf("a damaged member: %v, want damage", err)
 	}
 	out.Reset()
 	rep = &memberRecorder{}
-	stats, err = Extract(ExtractConfig{Archive: path, ToStdout: &out, KeepGoing: true, Reporter: rep})
+	stats, err = Extract(ExtractConfig{Archive: path, Destination: t.TempDir(), ToStdout: &out, KeepGoing: true, Reporter: rep})
 	if err != nil {
 		t.Fatalf("with --keep-going: %v", err)
 	}

@@ -286,7 +286,13 @@ func runEncryptArchive(o *Options, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stdout, "%s: encrypted; %s sealed, %d -> %d bytes, %d tombstones removed\n",
 			o.Archive, plural(res.Sealed, "member"), res.OldSize, res.NewSize, res.Dropped)
 	}
-	fmt.Fprintln(stderr, "eictar: "+printable(o.Archive)+": the old plaintext file can still be read "+
-		"from free disk space, snapshots and backups; to keep plaintext off the disk, create with -e")
+	// The reminder goes out also with -q. Without the summary, it starts at
+	// the copies.
+	lead := "encrypted. Copies"
+	if o.Quiet {
+		lead = "copies"
+	}
+	fmt.Fprintln(stderr, "eictar: "+printable(o.Archive)+": "+lead+" of its old unencrypted contents can "+
+		"remain in free disk space, snapshots and backups; to never write plaintext to disk, create with -e")
 	return nil
 }

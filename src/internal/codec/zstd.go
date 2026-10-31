@@ -2,6 +2,7 @@ package codec
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -191,6 +192,13 @@ func (z *zstdDecoder) Decode(dst, src []byte, plainSize int) ([]byte, error) {
 		dst = grown
 	}
 
+	// DecodeAll decodes each frame that it finds, so it does not prove that
+	// the chunk is one frame (doc/format.md 6).
+	if n, err := zstdFrameLen(src); err != nil {
+		return nil, fmt.Errorf("zstd: %w", err)
+	} else if n != len(src) {
+		return nil, fmt.Errorf("zstd: %d bytes after the compressed stream", len(src)-n)
+	}
 	out, err := z.dec.DecodeAll(src, dst[:start])
 	if err != nil {
 		return nil, fmt.Errorf("zstd: %w", err)
@@ -199,6 +207,47 @@ func (z *zstdDecoder) Decode(dst, src []byte, plainSize int) ([]byte, error) {
 		return nil, fmt.Errorf("zstd: chunk decoded to %d bytes, index says %d", got, plainSize)
 	}
 	return out, nil
+}
+
+// zstdFrameLen gives the length of the frame at the start of src, from its
+// header and the headers of its blocks (RFC 8878, section 3.1.1). It does
+// not decode the blocks. A skippable frame is refused: a chunk holds one
+// frame of content.
+func zstdFrameLen(src []byte) (int, error) {
+	var h zstd.Header
+	if err := h.Decode(src); err != nil {
+		return 0, err
+	}
+	if h.Skippable {
+		return 0, errors.New("a skippable frame")
+	}
+	n := h.HeaderSize
+	for last := false; !last; {
+		if len(src)-n < 3 {
+			return 0, errors.New("the frame ends in a block header")
+		}
+		bh := uint32(src[n]) | uint32(src[n+1])<<8 | uint32(src[n+2])<<16
+		n += 3
+		last = bh&1 != 0
+		size := int(bh >> 3)
+		switch bh >> 1 & 3 {
+		case 1: // RLE: one byte, repeated size times
+			size = 1
+		case 3:
+			return 0, errors.New("a block of the reserved type")
+		}
+		if len(src)-n < size {
+			return 0, errors.New("the frame ends in a block")
+		}
+		n += size
+	}
+	if h.HasCheckSum {
+		if len(src)-n < 4 {
+			return 0, errors.New("the frame ends in its checksum")
+		}
+		n += 4
+	}
+	return n, nil
 }
 
 func (z *zstdDecoder) Close() error {

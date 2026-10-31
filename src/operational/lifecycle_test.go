@@ -1168,7 +1168,7 @@ func TestEncryptArchiveOfTheBinary(t *testing.T) {
 
 	res := testutil.Run(t, tree.Root, append([]string{"--encrypt-archive", "--encrypt-index", "-f", archive,
 		"--kdf-memory", "8192", "--kdf-time", "1"}, key...)...)
-	if res.ExitCode != exitOK || !strings.Contains(res.Stdout, "encrypted;") || !strings.Contains(res.Stderr, "old plaintext file") {
+	if res.ExitCode != exitOK || !strings.Contains(res.Stdout, "encrypted;") || !strings.Contains(res.Stderr, ": encrypted. Copies of its old unencrypted contents can remain") {
 		t.Fatalf("--encrypt-archive: exit %d\nstdout: %s\nstderr: %s", res.ExitCode, res.Stdout, res.Stderr)
 	}
 	if res := testutil.Run(t, tree.Root, "-tf", archive); res.ExitCode == exitOK {

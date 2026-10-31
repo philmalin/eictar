@@ -161,6 +161,15 @@ A decoder reads at most the expected plaintext length, and then one more
 byte to prove that the stream ends there. A chunk that decodes to more or to
 less is refused.
 
+**A chunk is one stream, with no bytes after it.** A reader refuses a chunk
+with bytes after the end of its stream, also when the stream decodes to the
+expected plaintext. For `flate`, the stream ends with its final block. For
+`gzip`, it ends with the member trailer. For `xz`, it ends with the end
+marker. For `zstd`, the frame ends after its last block and its checksum.
+The block headers (RFC 8878, section 3.1.1.2) give the length of each
+block. A decoder that goes on to a next frame does not find the end, so a
+reader finds it from these headers.
+
 ### 6.1 Dictionaries
 
 A `zstd` catalog entry with `dict` compresses each chunk with a Zstandard

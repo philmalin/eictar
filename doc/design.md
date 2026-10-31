@@ -2389,17 +2389,25 @@ eictar --encrypt-archive --encrypt-index --passphrase-file pass -f home.ect
 ```
 
 **Create with `-e` is the safe way.** An archive that is encrypted later was
-on disk as plaintext. After the rename, the blocks of the old file are free
-space until something writes over them. Copies, snapshots and backups of
-the old file stay readable. `--encrypt-archive` cannot remove any of them.
-Thus the program prints a reminder on standard error after each successful
-run, also with `-q`:
+on disk as plaintext. The rename replaces the file, but the blocks of the
+old contents are free space until something writes over them. Copies,
+snapshots and backups of the old contents also stay readable.
+`--encrypt-archive` cannot remove any of them. Thus the program prints a
+reminder on standard error after each successful run:
 
 ```
-eictar: home.ect: the old plaintext file can still be read from free disk space, snapshots and backups; to keep plaintext off the disk, create with -e
+eictar: home.ect: encrypted. Copies of its old unencrypted contents can remain in free disk space, snapshots and backups; to never write plaintext to disk, create with -e
 ```
 
-The manual page says the same. §9.7 gives the same limit for an old
+With `-q`, there is no summary, and the reminder starts at "copies":
+
+```
+eictar: home.ect: copies of its old unencrypted contents can remain in free disk space, snapshots and backups; to never write plaintext to disk, create with -e
+```
+
+The reminder starts with "encrypted" so that the reader does not take it
+for an error: the file itself is encrypted. The risk is in the copies of
+its old contents. The manual page says the same. §9.7 gives the same limit for an old
 passphrase.
 
 **The name.** This is one operation, with no short letter. It needs no `-e`,

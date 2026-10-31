@@ -120,11 +120,12 @@ type xzDecoder struct{ maxPlain int }
 func (d *xzDecoder) Decode(dst, src []byte, plainSize int) ([]byte, error) {
 	// The dictionary is the chunk's size, never a number from the stream.
 	cfg := lzma.Reader2Config{DictCap: max(lzma.MinDictCap, plainSize)}
-	r, err := cfg.NewReader2(bytes.NewReader(src))
+	br := bytes.NewReader(src)
+	r, err := cfg.NewReader2(br)
 	if err != nil {
 		return nil, fmt.Errorf("xz: %w", err)
 	}
-	return decodeStream("xz", r, dst, plainSize, d.maxPlain)
+	return decodeStream("xz", r, br, dst, plainSize, d.maxPlain)
 }
 
 func (d *xzDecoder) Close() error { return nil }

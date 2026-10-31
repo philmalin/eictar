@@ -199,7 +199,7 @@ func TestSparseToStdoutFillsHoles(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if _, err := Extract(ExtractConfig{Archive: archivePath, ToStdout: &out}); err != nil {
+	if _, err := Extract(ExtractConfig{Archive: archivePath, Destination: t.TempDir(), ToStdout: &out}); err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
 	want, err := os.ReadFile(tree.Path("tree/disk.img"))

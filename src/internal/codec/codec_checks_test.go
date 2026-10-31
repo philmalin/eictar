@@ -3,8 +3,12 @@ package codec
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 // Tests of the parts of the package that the conformance suite does not
@@ -101,6 +105,50 @@ func TestDecodeOfAShortStream(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "decoded to") {
 			t.Errorf("%s: %v, want the size that it decoded to", name, err)
 		}
+	}
+}
+
+// TestDecodeOfBytesAfterTheStream: a chunk is one stream (doc/format.md 6),
+// so bytes after the end of the stream are refused, also when the stream
+// decodes to the right content. The suffixes are ones that a decoder stops
+// before without an error: an empty final block after the final block of
+// flate, a byte after the gzip member, a second end marker of LZMA2, and a
+// second frame after the zstd frame: zstd decodes each frame that it finds.
+// The stress tester found the fault: a flipped bit made a block final, and
+// eictar took the chunk while the second reader refused it.
+func TestDecodeOfBytesAfterTheStream(t *testing.T) {
+	payload := []byte(strings.Repeat("abcdefgh", 1000))
+	for name, suffixes := range map[string][][]byte{
+		"flate": {{0x03, 0x00}, {0x00}},
+		"gzip":  {{0x00}, {0x1f, 0x8b}},
+		"xz":    {{0x00}, {0xff}},
+		// An empty frame, and a skippable frame of one byte.
+		"zstd": {{0x28, 0xb5, 0x2f, 0xfd, 0x20, 0x00, 0x01, 0x00, 0x00}, {0x50, 0x2a, 0x4d, 0x18, 0x01, 0x00, 0x00, 0x00, 0xaa}},
+	} {
+		enc, err := NewEncoder(name, nil, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src, err := enc.Encode(nil, payload)
+		enc.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		dec, err := NewDecoder(name, len(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, err := dec.Decode(nil, src, len(payload)); err != nil || !bytes.Equal(got, payload) {
+			t.Errorf("%s: the chunk as written: %v", name, err)
+		}
+		for _, suffix := range suffixes {
+			chunk := append(append([]byte(nil), src...), suffix...)
+			if _, err := dec.Decode(nil, chunk, len(payload)); err == nil ||
+				!strings.Contains(err.Error(), fmt.Sprintf(": %d bytes after the compressed stream", len(suffix))) {
+				t.Errorf("%s: %x after the stream: %v, want a refusal", name, suffix, err)
+			}
+		}
+		dec.Close()
 	}
 }
 
@@ -311,6 +359,83 @@ func TestGzipIsFramed(t *testing.T) {
 func TestIntParamEmpty(t *testing.T) {
 	if v, err := intParam(Params{"level": ""}, "level", 5, 1, 9); v != 5 || err != nil {
 		t.Errorf("%d, %v; want 5", v, err)
+	}
+}
+
+// TestZstdFrameLen: the length of a frame comes from the headers of its
+// blocks. A frame cut in a block header, in a block or in its checksum is
+// refused, and so are a block of the reserved type and a skippable frame.
+// An RLE block holds one byte on disk.
+func TestZstdFrameLen(t *testing.T) {
+	enc, err := NewEncoder("zstd", nil, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frame, err := enc.Encode(nil, []byte(strings.Repeat("a frame of some length, ", 40)))
+	enc.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := zstdFrameLen(frame); err != nil || n != len(frame) {
+		t.Fatalf("the frame: %d, %v, want %d", n, err, len(frame))
+	}
+	var h zstd.Header
+	if err := h.Decode(frame); err != nil || !h.HasCheckSum || h.FirstBlock.CompressedSize < 2 {
+		t.Fatalf("the test needs a checksum and a block of 2 bytes or more: %+v, %v", h, err)
+	}
+	for _, tc := range []struct {
+		cut  int
+		want string
+	}{
+		{h.HeaderSize + 2, "the frame ends in a block header"},
+		{h.HeaderSize + 4, "the frame ends in a block"},
+		// Near the end of the one block: fewer bytes are left than its
+		// size, but more than its size less the bytes before it.
+		{len(frame) - 5, "the frame ends in a block"},
+		{len(frame) - 1, "the frame ends in its checksum"},
+	} {
+		if _, err := zstdFrameLen(frame[:tc.cut]); err == nil || err.Error() != tc.want {
+			t.Errorf("cut at %d of %d: %v, want %q", tc.cut, len(frame), err, tc.want)
+		}
+	}
+	if _, err := zstdFrameLen([]byte("not a frame")); !errors.Is(err, zstd.ErrMagicMismatch) {
+		t.Errorf("not a frame: %v, want the error of the header", err)
+	}
+	reserved := append([]byte(nil), frame...)
+	reserved[h.HeaderSize] |= 3 << 1
+	if _, err := zstdFrameLen(reserved); err == nil || !strings.Contains(err.Error(), "reserved") {
+		t.Errorf("a block of the reserved type: %v", err)
+	}
+	// Decode gives the error of the frame, not only its length.
+	zdec, err := NewDecoder("zstd", 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zdec.Close()
+	if _, err := zdec.Decode(nil, reserved, 960); err == nil || !strings.Contains(err.Error(), "zstd: a block of the reserved type") {
+		t.Errorf("decode of a block of the reserved type: %v", err)
+	}
+	if _, err := zstdFrameLen([]byte{0x50, 0x2a, 0x4d, 0x18, 0x01, 0x00, 0x00, 0x00, 0xaa}); err == nil ||
+		!strings.Contains(err.Error(), "skippable") {
+		t.Errorf("a skippable frame: %v", err)
+	}
+
+	// A single segment of 5 bytes, without a checksum, in one RLE block of
+	// "a": the block header is last, type 1, size 5.
+	rle := []byte{0x28, 0xb5, 0x2f, 0xfd, 0x20, 0x05, 5<<3 | 1<<1 | 1, 0x00, 0x00, 'a'}
+	if n, err := zstdFrameLen(rle); err != nil || n != len(rle) {
+		t.Errorf("an RLE block: %d, %v, want %d", n, err, len(rle))
+	}
+	dec, err := NewDecoder("zstd", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dec.Close()
+	if got, err := dec.Decode(nil, rle, 5); err != nil || string(got) != "aaaaa" {
+		t.Errorf("an RLE block decodes to %q, %v", got, err)
+	}
+	if _, err := dec.Decode(nil, append(rle, 'a'), 5); err == nil {
+		t.Error("a byte after an RLE block: no error")
 	}
 }
 

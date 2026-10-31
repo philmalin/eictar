@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -14,7 +15,12 @@ import (
 // prove that the stream ends there. A chunk that decodes to more is refused
 // without the surplus ever being held in memory, which is what makes a
 // crafted chunk harmless.
-func decodeStream(name string, r io.Reader, dst []byte, plainSize, maxPlain int) ([]byte, error) {
+//
+// src is the chunk that r reads. The chunk is one stream (doc/format.md 6),
+// so a byte of src after the end of the stream is refused. Without this
+// check, a changed bit that ends the stream early, before bytes that add
+// nothing to the content, is a damaged chunk that decodes.
+func decodeStream(name string, r io.Reader, src *bytes.Reader, dst []byte, plainSize, maxPlain int) ([]byte, error) {
 	if plainSize > maxPlain {
 		return nil, fmt.Errorf("%s: chunk claims %d bytes, more than the %d permitted", name, plainSize, maxPlain)
 	}
@@ -38,6 +44,9 @@ func decodeStream(name string, r io.Reader, dst []byte, plainSize, maxPlain int)
 	case err != nil && !errors.Is(err, io.EOF):
 		// The stream's own check (a CRC, an end marker) runs at the end.
 		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	if n := src.Len(); n != 0 {
+		return nil, fmt.Errorf("%s: %d bytes after the compressed stream", name, n)
 	}
 	return dst, nil
 }

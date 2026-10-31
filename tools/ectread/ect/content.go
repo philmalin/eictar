@@ -253,6 +253,15 @@ func (a *Archive) decodeZstd(c Codec, b []byte, want, chunk uint64) ([]byte, err
 	if !h.SingleSegment && h.WindowSize > max(maxWindow, chunk) {
 		return nil, fmt.Errorf("the frame asks for a window of %d bytes", h.WindowSize)
 	}
+	// The chunk is one frame (format.md 6). The decoder goes on to a next
+	// frame, so the frame's end comes from its block headers.
+	end, err := frameEnd(b, h.HeaderSize, h.HasCheckSum)
+	if err != nil {
+		return nil, err
+	}
+	if end != len(b) {
+		return nil, errors.New("bytes after the compressed stream")
+	}
 	opts := []zstd.DOption{zstd.WithDecoderConcurrency(1)}
 	if c.Dict != 0 {
 		d, err := a.dict(c.Dict)
@@ -267,6 +276,44 @@ func (a *Archive) decodeZstd(c Codec, b []byte, want, chunk uint64) ([]byte, err
 	}
 	defer dec.Close()
 	return exact(dec, nil, want)
+}
+
+// frameEnd is the offset in b where the zstd frame ends: after the frame
+// header, each block (RFC 8878, 3.1.1.2), and the checksum if the frame has
+// one. A block header is 3 bytes, little-endian: bit 0 says the last block,
+// bits 1-2 the type, and the rest the size. A raw or compressed block has
+// size bytes after its header, an RLE block one byte.
+func frameEnd(b []byte, off int, checksum bool) (int, error) {
+	for {
+		if off+3 > len(b) {
+			return 0, errors.New("the frame is cut in a block header")
+		}
+		hdr := int(b[off]) | int(b[off+1])<<8 | int(b[off+2])<<16
+		off += 3
+		var size int
+		switch hdr >> 1 & 3 {
+		case 0, 2:
+			size = hdr >> 3
+		case 1:
+			size = 1
+		default:
+			return 0, errors.New("a block of the reserved type")
+		}
+		if off+size > len(b) {
+			return 0, errors.New("the frame is cut in a block")
+		}
+		off += size
+		if hdr&1 == 1 {
+			break
+		}
+	}
+	if checksum {
+		off += 4
+	}
+	if off > len(b) {
+		return 0, errors.New("the frame is cut in its checksum")
+	}
+	return off, nil
 }
 
 // dict returns a dictionary after its checks (format.md 6.1).

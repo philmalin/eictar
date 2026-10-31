@@ -116,11 +116,14 @@ type deflateDecoder struct {
 }
 
 func (d *deflateDecoder) Decode(dst, src []byte, plainSize int) ([]byte, error) {
+	// br is an io.ByteReader, so neither reader reads ahead of the stream,
+	// and br.Len() is what is left after it.
+	br := bytes.NewReader(src)
 	var r io.Reader
 	if d.framed {
 		// One gzip member per chunk: a second member would be data the index
 		// does not account for.
-		zr, err := gzip.NewReader(bytes.NewReader(src))
+		zr, err := gzip.NewReader(br)
 		if err != nil {
 			return nil, fmt.Errorf("gzip: %w", err)
 		}
@@ -128,11 +131,11 @@ func (d *deflateDecoder) Decode(dst, src []byte, plainSize int) ([]byte, error) 
 		defer zr.Close()
 		r = zr
 	} else {
-		fr := flate.NewReader(bytes.NewReader(src))
+		fr := flate.NewReader(br)
 		defer fr.Close()
 		r = fr
 	}
-	return decodeStream(d.name, r, dst, plainSize, d.maxPlain)
+	return decodeStream(d.name, r, br, dst, plainSize, d.maxPlain)
 }
 
 func (d *deflateDecoder) Close() error { return nil }

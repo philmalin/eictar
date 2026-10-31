@@ -539,10 +539,24 @@ versions read what it writes.
   dictionary is sealed under new keys, and each digest gets its keyed
   value. One decode checks each old digest first, so a damaged archive does
   not change. `--encrypt-index` and the `--kdf-*` options work as for
-  create. An encrypted archive gives exit 2. The old plaintext file can stay
-  readable on the disk, so each run prints a reminder, also with `-q`. The
-  stress tester found a fault before the release: the decode used the
-  positions of a catalog that had shrunk. `TestEncryptArchiveOfACatalogThatShrinks`
-  covers it.
+  create. An encrypted archive gives exit 2. Copies of the old unencrypted
+  contents can remain on the disk, so each run prints a reminder, also with
+  `-q`. The stress tester found a fault before the release: the decode used
+  the positions of a catalog that had shrunk.
+  `TestEncryptArchiveOfACatalogThatShrinks` covers it.
 - `--info` gives the stored size of the content as a percentage of its
   size: `stored in 35871 bytes (32.5%)`.
+- A chunk with bytes after the end of its compressed stream is now
+  refused (format.md §6). A chunk is one stream. Before, eictar read the
+  stream to its end and did not look at the bytes after it. The stress
+  tester of the release gate found the fault: one changed bit made a flate
+  block final, before the last bytes of the chunk. The content did not
+  change, so the digest passed, and `--verify` accepted the damaged chunk.
+  The second reader refused it. The same fault was in gzip and xz. For
+  zstd, the decoder went on to a next frame, so an empty frame or a
+  skippable frame after the frame was accepted. Both readers had this
+  fault, so the stress tester could not find it. A changed bit cannot make
+  such a frame: only a crafted chunk can, and in an encrypted archive the
+  tag of the chunk refuses it. Now the zstd decoder finds the end of the
+  frame from the headers of its blocks. `TestDecodeOfBytesAfterTheStream`,
+  `TestZstdFrameLen` and `TestZstdFrameEnd` cover it.

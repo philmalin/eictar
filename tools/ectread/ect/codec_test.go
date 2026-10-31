@@ -70,7 +70,7 @@ func TestCodecs(t *testing.T) {
 		if _, err := a.decode(c, z, uint64(len(plain))+1, 1<<20); err == nil {
 			t.Errorf("%s: a chunk that decodes to one byte less is accepted", name)
 		}
-		if name == "zstd" || name == "s2" {
+		if name == "s2" { // a block of its own length, not a stream
 			continue
 		}
 		if _, err := a.decode(c, append(bytes.Clone(z), z...), uint64(len(plain)), 1<<20); err == nil {
@@ -161,5 +161,42 @@ func TestZstdHuffWeightsAdvisory(t *testing.T) {
 	a.decode(Codec{Name: "zstd"}, twoFrames[0], 1<<20, 1<<20)
 	if _, err := a.decode(Codec{Name: "zstd"}, twoFrames[1], 1<<20, 1<<20); err == nil {
 		t.Error("the second of two frames: no error")
+	}
+}
+
+// TestZstdFrameEnd: a zstd chunk ends where its frame ends. An empty frame
+// after it, a frame cut short, and a block of the reserved type are
+// refused (format.md 6).
+func TestZstdFrameEnd(t *testing.T) {
+	a := &Archive{}
+	plain := []byte(strings.Repeat("the content of a chunk. ", 40))
+	z := compressors["zstd"](t, plain)
+	empty := []byte{0x28, 0xb5, 0x2f, 0xfd, 0x20, 0x00, 0x01, 0x00, 0x00}
+	if _, err := a.decode(Codec{Name: "zstd"}, append(bytes.Clone(z), empty...), uint64(len(plain)), 1<<20); err == nil ||
+		!strings.Contains(err.Error(), "after the compressed stream") {
+		t.Errorf("an empty frame after the frame: %v", err)
+	}
+	var h zstd.Header
+	if err := h.Decode(z); err != nil || !h.HasCheckSum || h.FirstBlock.CompressedSize < 2 {
+		t.Fatalf("the test needs a checksum and a block of 2 bytes or more: %v", err)
+	}
+	for want, cut := range map[string]int{
+		"the frame is cut in a block header": h.HeaderSize + 2,
+		"the frame is cut in a block":        h.HeaderSize + 4,
+		"the frame is cut in its checksum":   len(z) - 1,
+	} {
+		if _, err := a.decode(Codec{Name: "zstd"}, z[:cut], uint64(len(plain)), 1<<20); err == nil || err.Error() != want {
+			t.Errorf("cut at %d: %v, want %q", cut, err, want)
+		}
+	}
+	reserved := bytes.Clone(z)
+	reserved[h.HeaderSize] |= 3 << 1
+	if _, err := a.decode(Codec{Name: "zstd"}, reserved, uint64(len(plain)), 1<<20); err == nil || !strings.Contains(err.Error(), "reserved") {
+		t.Errorf("a block of the reserved type: %v", err)
+	}
+	// One RLE block of 5 bytes "a", in a single segment with no checksum.
+	rle := []byte{0x28, 0xb5, 0x2f, 0xfd, 0x20, 0x05, 5<<3 | 1<<1 | 1, 0x00, 0x00, 'a'}
+	if got, err := a.decode(Codec{Name: "zstd"}, rle, 5, 1<<20); err != nil || string(got) != "aaaaa" {
+		t.Errorf("an RLE block: %q, %v", got, err)
 	}
 }

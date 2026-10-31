@@ -150,7 +150,7 @@ func TestPlanExtractToStdout(t *testing.T) {
 	}
 	archive := copyArchive(t, mkArchive(t, tree, false, "t"))
 	var out sizes
-	stats, err := PlanExtract(ExtractConfig{Archive: archive, ToStdout: &bytes.Buffer{}}, out.add)
+	stats, err := PlanExtract(ExtractConfig{Archive: archive, Destination: t.TempDir(), ToStdout: &bytes.Buffer{}}, out.add)
 	if want := []string{"t/a ++", "t/b +++", "t/c +++"}; err != nil || !slices.Equal(out, want) || stats.Members != 3 || stats.Bytes != 8 {
 		t.Errorf("%q, %+v, %v; want %q", out, stats, err, want)
 	}

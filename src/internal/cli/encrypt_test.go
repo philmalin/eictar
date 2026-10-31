@@ -12,7 +12,7 @@ import (
 var kdfFast = []string{"--kdf-time", "1", "--kdf-memory", "8192", "--kdf-threads", "1"}
 
 // TestEncryptArchiveThroughRun: --encrypt-archive encrypts a plaintext
-// archive, says so, and prints the reminder about the old file, also with -q.
+// archive, says so, and prints the reminder about the old contents, also with -q.
 // A second run is a usage error that names --change-passphrase.
 func TestEncryptArchiveThroughRun(t *testing.T) {
 	dir, archivePath := opsTree(t)
@@ -20,10 +20,12 @@ func TestEncryptArchiveThroughRun(t *testing.T) {
 	if err := os.WriteFile(pass, []byte("battery staple\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	const reminder = "the old plaintext file can still be read from free disk space, snapshots and backups"
+	const reminder = " of its old unencrypted contents can remain in free disk space, snapshots and backups; " +
+		"to never write plaintext to disk, create with -e\n"
 
 	code, stdout, stderr := runCLI(append([]string{"--encrypt-archive", "-f", archivePath, "--passphrase-file", pass}, kdfFast...)...)
-	if code != ExitOK || !strings.Contains(stdout, ": encrypted; 2 members sealed, ") || !strings.Contains(stderr, reminder) {
+	if code != ExitOK || !strings.Contains(stdout, ": encrypted; 2 members sealed, ") ||
+		stderr != "eictar: "+archivePath+": encrypted. Copies"+reminder {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLI("--info", "-f", archivePath, "--passphrase-file", pass)
@@ -52,7 +54,7 @@ func TestEncryptArchiveThroughRun(t *testing.T) {
 		t.Fatalf("create: exit %d: %s", code, stderr)
 	}
 	code, stdout, stderr = runCLI(append([]string{"--encrypt-archive", "-q", "--encrypt-index", "-f", quiet, "--passphrase-file", pass}, kdfFast...)...)
-	if code != ExitOK || stdout != "" || !strings.Contains(stderr, reminder) {
+	if code != ExitOK || stdout != "" || stderr != "eictar: "+quiet+": copies"+reminder {
 		t.Errorf("-q: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	code, stdout, _ = runCLI("--info", "-f", quiet, "--passphrase-file", pass)
