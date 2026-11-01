@@ -3,7 +3,7 @@ module github.com/philmalin/eictar
 go 1.27
 
 require (
-	github.com/fxamacker/cbor/v2 v2.9.6
+	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/klauspost/compress v1.20.3
 	github.com/spf13/pflag v1.0.10
 	github.com/ulikunitz/xz v0.5.17
