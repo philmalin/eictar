@@ -5968,7 +5968,7 @@ reads the samples that the first chose, while the walk holds their
 directories (§14.5). For <code>train=auto</code>, the budget is 100
 times 1 MiB, the largest size. Thus the choice of samples depends only
 on the tree.</p>
-<p><strong>The trainer of klauspost/compress v1.20.3 is not
+<p><strong>The trainer of klauspost/compress v1.20.3 to v1.20.5 is not
 deterministic.</strong> The same samples give a different dictionary on
 each run. The builder in <code>dict/builder.go</code> collects its
 candidate strings from Go maps, and the order of a map changes from run
@@ -6793,12 +6793,14 @@ treats them as hostile.</strong> It refuses <code>time</code> more than
 <strong>64</strong> and <code>memory</code> more than <strong>4
 GiB</strong>. It also refuses a zero <code>time</code> or
 <code>threads</code>, and <code>memory</code> less than 8 KiB for each
-thread, which Argon2id cannot use. These are damage, with exit 3. Then
-it compares the memory with this machine (§A.3). All of this occurs
-<em>before</em> the prompt for the passphrase. The cost of Argon2id is
-linear in <code>time</code>, approximately 1.8 s for each pass at the
-memory limit. Without the time limit, a crafted header that asks for
-2³²−1 passes stops a listing for centuries.</p>
+thread, which Argon2id cannot use. These are damage, with exit</p>
+<ol start="3" type="1">
+<li>Then it compares the memory with this machine (§A.3). All of this
+occurs <em>before</em> the prompt for the passphrase. The cost of
+Argon2id is linear in <code>time</code>, approximately 1.8 s for each
+pass at the memory limit. Without the time limit, a crafted header that
+asks for 2³²−1 passes stops a listing for centuries.</li>
+</ol>
 <p><strong>In an encrypted archive, the member digest is keyed.</strong>
 A plain BLAKE3 digest of the content is readable in an index that is not
 sealed, which is the default. Anyone with a copy of a file can then find
@@ -10803,7 +10805,7 @@ against the library.</p></li>
 files very slow. Level 12, the default, is in this range. 20000 small
 JSON files take 23.8 s and 265 s of CPU, against 0.7 s without a
 dictionary. At this speed, the library (klauspost/compress v1.20.1 to
-v1.20.3, <code>bestFastEncoder.Reset</code>) copies the tables that it
+v1.20.5, <code>bestFastEncoder.Reset</code>) copies the tables that it
 made from the dictionary, about 34 MiB, at the start of each chunk. A
 small file is one chunk, so the copy costs much more than the
 compression. A large chunk hides the copy. The speeds below 10 copy only
@@ -11094,7 +11096,8 @@ no optimal parsing.</p>
 <h3 id="b.2-method">B.2 Method</h3>
 <p>The measurement was on 2026-10-25, on an AMD Ryzen AI Max+ 395 (16
 cores, 32 threads). It compared the <code>zstd</code> command v1.6.0
-with <code>klauspost/compress</code> v1.20.3, the version in go.mod.</p>
+with <code>klauspost/compress</code> v1.20.3, the version in go.mod on
+that date.</p>
 <p>Each encoder compressed each file of a corpus as one frame, as eictar
 compresses each chunk (§4). A file larger than 4 MiB, the default chunk
 size, was first cut into pieces of 4 MiB. Thus the two encoders got the

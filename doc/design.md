@@ -351,7 +351,7 @@ files and their sizes, and the second reads the samples that the first
 chose, while the walk holds their directories (§14.5). For `train=auto`, the budget is 100 times 1 MiB,
 the largest size. Thus the choice of samples depends only on the tree.
 
-**The trainer of klauspost/compress v1.20.3 is not deterministic.** The
+**The trainer of klauspost/compress v1.20.3 to v1.20.5 is not deterministic.** The
 same samples give a different dictionary on each run. The builder in
 `dict/builder.go` collects its candidate strings from Go maps, and the order
 of a map changes from run to run. Its main sort does not use a strict
@@ -4161,7 +4161,7 @@ before any work starts.
   create of many small files very slow. Level 12, the default, is in this
   range. 20000 small JSON files take 23.8 s and 265 s of CPU, against 0.7 s
   without a dictionary. At this speed, the library (klauspost/compress
-  v1.20.1 to v1.20.3, `bestFastEncoder.Reset`) copies the tables that it made from the
+  v1.20.1 to v1.20.5, `bestFastEncoder.Reset`) copies the tables that it made from the
   dictionary, about 34 MiB, at the start of each chunk. A small file is one
   chunk, so the copy costs much more than the compression. A large chunk
   hides the copy. The speeds below 10 copy only the parts of their tables
@@ -4384,7 +4384,7 @@ short chain. It does no optimal parsing.
 
 The measurement was on 2026-10-25, on an AMD Ryzen AI Max+ 395 (16 cores,
 32 threads). It compared the `zstd` command v1.6.0 with `klauspost/compress`
-v1.20.3, the version in go.mod.
+v1.20.3, the version in go.mod on that date.
 
 Each encoder compressed each file of a corpus as one frame, as eictar
 compresses each chunk (§4). A file larger than 4 MiB, the default chunk

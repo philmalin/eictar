@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/fxamacker/cbor/v2 v2.9.6
-	github.com/klauspost/compress v1.20.3
+	github.com/klauspost/compress v1.20.5
 	github.com/spf13/pflag v1.0.10
 	github.com/ulikunitz/xz v0.5.17
 	golang.org/x/crypto v0.58.0

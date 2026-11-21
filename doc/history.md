@@ -533,6 +533,20 @@ versions read what it writes.
   loong64 only. In `x/sys`, `Listxattr` on FreeBSD and NetBSD now returns
   its error. Before, it gave an empty list. eictar calls `ExtattrList*`,
   not `Listxattr`, so this fault did not have an effect on eictar.
+- `klauspost/compress` goes from v1.20.3 to v1.20.5. The main reason is a
+  fault of the zstd encoder. Sometimes a block stored its literals raw
+  after it made a new Huffman table for them. The next block could then
+  use that table, which the decoder never got, so the decoder could not
+  read that block. eictar does not decode a chunk after it compresses it.
+  Thus only `--verify` or an extraction found such a chunk. In the decoder,
+  `DecodeAll` no longer allocates the size that a crafted frame declares
+  before it decodes anything. Also, a failed block no longer gives up to
+  one block of old output before its error. flate and gzip get fixes to
+  their decoders and their error reports, and zstd decodes faster without
+  assembly. The output of the zstd and flate encoders changes, and
+  archives stay readable in both directions. The slow dictionary at level
+  10 and above, and the trainer that is not deterministic, stay
+  (design.md §4.2, §15.2).
 - `--encrypt-archive` encrypts an archive that was made without `-e`
   (design.md §9.11). It is one operation, and needs no `-e`. Each member
   keeps its metadata and its compressed content. Each chunk and each
