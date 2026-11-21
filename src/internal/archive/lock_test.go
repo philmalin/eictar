@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -50,6 +51,57 @@ func TestSecondWriterIsRefused(t *testing.T) {
 	}
 	if _, err := appendTo(t, archive, tree, false, nil, "t/b.txt"); err != nil {
 		t.Errorf("the lock outlived its writer: %v", err)
+	}
+}
+
+// TestReadDuringAnAppend: an append writes in place, so until its trailer
+// lands the file ends in its blobs. A reader then finds no trailer at the
+// end. While a writer holds the lock, that is a write in progress and not
+// damage: the reader says that the archive is being changed, and does not
+// name --repair (doc/design.md 9.6). With no writer, the same bytes are
+// damage.
+func TestReadDuringAnAppend(t *testing.T) {
+	tree := mutTree(t)
+	archive := mkArchive(t, tree, false, "t/a.txt")
+	tail := func() {
+		t.Helper()
+		f, err := os.OpenFile(archive, os.O_WRONLY|os.O_APPEND, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		if _, err := f.Write(bytes.Repeat([]byte("blob"), 100)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	w, err := OpenAppend(archive, Options{}, OpenOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tail()
+	_, err = Open(archive, nil)
+	if !errors.Is(err, ErrLocked) || IsDamage(err) || strings.Contains(err.Error(), "--repair") {
+		t.Errorf("a read during an append: %v, want ErrLocked and not damage", err)
+	}
+	if _, err := VerifyArchive(VerifyConfig{Archive: archive}); !errors.Is(err, ErrLocked) {
+		t.Errorf("a verify during an append: %v, want ErrLocked", err)
+	}
+	w.Abort()
+
+	tail()
+	if _, err := Open(archive, nil); !IsDamage(err) || errors.Is(err, ErrLocked) {
+		t.Errorf("the same bytes with no writer: %v, want damage", err)
+	}
+	if r, err := Open(archive, nil); err == nil {
+		r.Close()
+	}
+	if _, err := RepairArchive(archive, OpenOptions{}); err != nil {
+		t.Errorf("repair after the test: %v", err)
+	}
+	// The probe of the lock released it: a writer can start.
+	if _, err := appendTo(t, archive, tree, false, nil, "t/b.txt"); err != nil {
+		t.Errorf("an append after the reads: %v", err)
 	}
 }
 

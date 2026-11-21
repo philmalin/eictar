@@ -1891,6 +1891,29 @@ many bytes it removed. On an archive that opens correctly, `--repair` changes
 nothing. A wrong passphrase stops the repair before the scan starts, because
 that archive is not damaged.
 
+**A crash and damage look different at the end of the file.** The writer
+syncs the index before it writes the trailer, and the trailer is its last
+write (§9.1). Thus a crash leaves blob bytes or index bytes at the end, and
+no trailer. A file that ends with the trailer magic, 96 bytes from its end,
+ends with a whole trailer. Its newest generation was complete, and later its
+trailer or its index was damaged. A repair then removes a whole generation
+that was committed: the members that it added or changed are lost.
+
+Thus, if the file ends with the trailer magic, `--repair` stops with exit 3
+and changes nothing. The message gives the generation that a repair restores
+and the number of bytes that it removes. The user can restore the archive
+from a copy, or give `--discard-damaged` to remove the generation. A
+configuration file cannot set `--discard-damaged`. `--repair -n` gives the
+same numbers, and changes nothing, also with `-q`. It takes the lock and
+scans as a repair does.
+
+One crash can also end the file with the magic: a power cut in the write of
+a trailer that falls across two sectors, when only the first sector reaches
+the disk. Then the refusal is not necessary, but it loses nothing: the
+generation was not committed, and `--discard-damaged` removes it.
+`TestRepairOfADamagedTrailer`, `TestRepairOfAnInterruptedWrite` and
+`TestRepairThroughRun` cover these rules.
+
 The body has no framing, so a scan cannot recover an archive whose every
 trailer is damaged. This is the cost of the unframed body (§4).
 
@@ -1920,8 +1943,16 @@ Each writer takes an advisory lock on the archive file:
   message "another eictar is changing this archive". It does not wait. A
   backup job that waits can hang with no message.
 - List, extract, `--verify`, `--info`, `--diff`, `--diff-extract` and every
-  dry run (`-n`) take no lock. The trailer is the commit point, so a reader sees one
-  complete generation.
+  dry run (`-n`) except that of `--repair` take no lock. Create and compact
+  rename a complete file over the path, so a reader sees one complete
+  generation. An append, an update and a delete write in place, so until
+  their trailer lands the file ends in their new bytes. A reader then finds
+  no trailer at the end, which is also how damage looks. Thus, when a
+  reader finds damage, it tries the lock without waiting. If another
+  process holds it, the reader stops with exit 4 and the message "another
+  eictar is changing this archive", not with exit 3 and the name of
+  `--repair`. The try takes the lock only for a moment: the reader closes
+  the file at once. `TestReadDuringAnAppend` covers it.
 
 **A lock is on one inode, and compact and create rename a new inode over the
 path.** Suppose that a process opens the path immediately before such a

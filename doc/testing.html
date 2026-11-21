@@ -1561,7 +1561,12 @@ why the xz binary tree is not used (design.md §10.2).</li>
 <li><strong>Lock</strong>: while one writer holds an archive, append,
 delete, compact, repair and create each stop with
 <code>ErrLocked</code>. A lock on a file that a rename replaced is
-refused (design.md §9.6).</li>
+refused. A reader during an append stops with <code>ErrLocked</code>,
+not with damage (design.md §9.6).</li>
+<li><strong>Repair</strong>: a file that ends with a damaged trailer is
+not changed without <code>--discard-damaged</code>, and <code>-n</code>
+changes nothing. A file whose last write stopped before its trailer is
+repaired with no option (design.md §9.5).</li>
 <li><strong>Recompress</strong>: the content, the digests and the ids
 stay, and each sealed member gets a new salt. A tombstone behind a
 hardlink, and the holes of a sparse file, survive (design.md §9.3).</li>

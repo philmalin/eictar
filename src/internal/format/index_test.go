@@ -282,6 +282,20 @@ func TestIndexValidateRejects(t *testing.T) {
 			m := &ix.Members[7]
 			m.Size, m.Digest, m.Chunks, m.Length = 0, bytes.Repeat([]byte{0x33}, DigestSize), []uint32{16}, 16
 		}},
+		// A chunk on disk is at most its plaintext, and the tag when it is
+		// sealed (doc/format.md 5). The sample holds both at the limit.
+		{"a first chunk longer than its plaintext", "chunk 0 is 2049 bytes on disk, more than the 2048", func(ix *Index) {
+			ix.Members[0].Chunks, ix.Members[0].Length = []uint32{2049, 200}, 2249
+		}},
+		{"a last chunk longer than its plaintext", "chunk 0 is 11 bytes on disk, more than the 10", func(ix *Index) {
+			ix.Members[6].Chunks, ix.Members[6].Length = []uint32{11}, 11
+		}},
+		{"a second and last chunk longer than its plaintext", "chunk 1 is 2049 bytes on disk, more than the 2048", func(ix *Index) {
+			ix.Members[0].Chunks, ix.Members[0].Length = []uint32{1000, 2049}, 3049
+		}},
+		{"a sealed chunk longer than its plaintext and tag", "chunk 0 is 27 bytes on disk, more than the 26", func(ix *Index) {
+			ix.Members[7].Chunks, ix.Members[7].Length = []uint32{27}, 27
+		}},
 		{"chunk size and no chunks", "a chunk size of 4194304 but no chunks", func(ix *Index) {
 			m := &ix.Members[7]
 			m.Size, m.Chunks, m.Length = 0, nil, 0
@@ -400,8 +414,10 @@ func TestIndexValidateAcceptsEdges(t *testing.T) {
 			m.Size, m.Offset, m.Length, m.Chunks, m.ChunkSize, m.Enc = 0, 0, 0, nil, 0, nil
 		}},
 		{"payload one byte into its last chunk", func(ix *Index) {
-			// 2049 bytes in chunks of 2048: the second chunk has one byte.
+			// 2049 bytes in chunks of 2048: the second chunk has one byte,
+			// and so is one byte on disk.
 			ix.Members[0].Size, ix.Members[8].Size = 2049, 2049
+			ix.Members[0].Chunks, ix.Members[0].Length = []uint32{1000, 1}, 1001
 		}},
 		{"payload of exactly n chunks", func(ix *Index) {
 			ix.Members[0].Size, ix.Members[8].Size = 4096, 4096

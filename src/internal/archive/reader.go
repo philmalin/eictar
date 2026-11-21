@@ -13,6 +13,11 @@ import (
 	"github.com/philmalin/eictar/src/internal/format"
 )
 
+// The index checks the length of a sealed chunk with format.SealTagSize,
+// and the cipher adds crypt.Overhead. If the two differ, the two array
+// types differ, and the build fails.
+var _ [format.SealTagSize]struct{} = [crypt.Overhead]struct{}{}
+
 // Reader opens an archive for listing and extraction.
 //
 // Everything it needs to answer a question lives in the index, so listing
@@ -128,6 +133,15 @@ func OpenWith(path string, opt OpenOptions) (*Reader, error) {
 
 	r := &Reader{f: f, path: path, size: fi.Size()}
 	if err := r.load(opt); err != nil {
+		// An append writes in place, so until its trailer lands the file
+		// ends in its blobs, and a reader finds damage. If a writer holds
+		// the lock, that is a write in progress (doc/design.md 9.6). The
+		// probe takes the lock if no one holds it, and the close below
+		// releases it. Only a reader that holds no lock can probe: a
+		// writer's own load would find its own lock.
+		if IsDamage(err) && errors.Is(lockFile(f), ErrLocked) {
+			err = fmt.Errorf("%s: %w", path, ErrLocked)
+		}
 		r.Close()
 		return nil, err
 	}

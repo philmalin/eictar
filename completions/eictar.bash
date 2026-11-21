@@ -76,6 +76,7 @@ _eictar_long='--create
 --long
 --json
 --quick
+--discard-damaged
 --recompress
 --verbose
 --quiet

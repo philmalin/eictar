@@ -7761,6 +7761,30 @@ exactly, and it reports how many bytes it removed. On an archive that
 opens correctly, <code>--repair</code> changes nothing. A wrong
 passphrase stops the repair before the scan starts, because that archive
 is not damaged.</p>
+<p><strong>A crash and damage look different at the end of the
+file.</strong> The writer syncs the index before it writes the trailer,
+and the trailer is its last write (§9.1). Thus a crash leaves blob bytes
+or index bytes at the end, and no trailer. A file that ends with the
+trailer magic, 96 bytes from its end, ends with a whole trailer. Its
+newest generation was complete, and later its trailer or its index was
+damaged. A repair then removes a whole generation that was committed:
+the members that it added or changed are lost.</p>
+<p>Thus, if the file ends with the trailer magic, <code>--repair</code>
+stops with exit 3 and changes nothing. The message gives the generation
+that a repair restores and the number of bytes that it removes. The user
+can restore the archive from a copy, or give
+<code>--discard-damaged</code> to remove the generation. A configuration
+file cannot set <code>--discard-damaged</code>. <code>--repair -n</code>
+gives the same numbers, and changes nothing, also with <code>-q</code>.
+It takes the lock and scans as a repair does.</p>
+<p>One crash can also end the file with the magic: a power cut in the
+write of a trailer that falls across two sectors, when only the first
+sector reaches the disk. Then the refusal is not necessary, but it loses
+nothing: the generation was not committed, and
+<code>--discard-damaged</code> removes it.
+<code>TestRepairOfADamagedTrailer</code>,
+<code>TestRepairOfAnInterruptedWrite</code> and
+<code>TestRepairThroughRun</code> cover these rules.</p>
 <p>The body has no framing, so a scan cannot recover an archive whose
 every trailer is damaged. This is the cost of the unframed body
 (§4).</p>
@@ -7790,8 +7814,17 @@ the message “another eictar is changing this archive”. It does not wait.
 A backup job that waits can hang with no message.</li>
 <li>List, extract, <code>--verify</code>, <code>--info</code>,
 <code>--diff</code>, <code>--diff-extract</code> and every dry run
-(<code>-n</code>) take no lock. The trailer is the commit point, so a
-reader sees one complete generation.</li>
+(<code>-n</code>) except that of <code>--repair</code> take no lock.
+Create and compact rename a complete file over the path, so a reader
+sees one complete generation. An append, an update and a delete write in
+place, so until their trailer lands the file ends in their new bytes. A
+reader then finds no trailer at the end, which is also how damage looks.
+Thus, when a reader finds damage, it tries the lock without waiting. If
+another process holds it, the reader stops with exit 4 and the message
+“another eictar is changing this archive”, not with exit 3 and the name
+of <code>--repair</code>. The try takes the lock only for a moment: the
+reader closes the file at once. <code>TestReadDuringAnAppend</code>
+covers it.</li>
 </ul>
 <p><strong>A lock is on one inode, and compact and create rename a new
 inode over the path.</strong> Suppose that a process opens the path

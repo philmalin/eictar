@@ -2084,6 +2084,30 @@ frame from the headers of its blocks.
 <code>TestDecodeOfBytesAfterTheStream</code>,
 <code>TestZstdFrameLen</code> and <code>TestZstdFrameEnd</code> cover
 it.</li>
+<li>A list, an extraction or a <code>--verify</code> during an append
+now stops with exit 4 and “another eictar is changing this archive”
+(design.md §9.6). An append writes in place, so until its trailer lands
+the file ends in its blobs. Before, the reader took that for damage: it
+gave exit 3, “not an eictar archive: bad magic”, and named
+<code>--repair</code>. Now, when a reader finds damage, it tries the
+lock of the writers, and a held lock means a write in progress. A review
+of the code found the fault. <code>TestReadDuringAnAppend</code> covers
+it.</li>
+<li><code>--repair</code> no longer removes a generation that was
+complete (design.md §9.5). A crash leaves no trailer at the end of the
+file, but one changed byte in the newest trailer or index leaves a whole
+trailer there. Before, a repair then removed the whole newest
+generation, with no question. Now it stops with exit 3, gives the
+generation that it would restore and the bytes that it would remove, and
+changes nothing. <code>--discard-damaged</code> lets it remove the
+generation, and <code>--repair -n</code> shows what a repair does. A
+review of the code found the fault.</li>
+<li>The index refuses a chunk that is longer on disk than its plaintext,
+or than its plaintext and the tag when it is sealed (format.md §5). No
+writer makes one. Before, the length of one chunk in a crafted index
+made a reader allocate up to 4 GiB, outside <code>--memory-limit</code>.
+The second reader has the same check. A review of the code found the
+gap.</li>
 </ul>
 </body>
 </html>

@@ -183,15 +183,24 @@ func runVerify(o *Options, stdout, stderr io.Writer) error {
 
 func runRepair(o *Options, stdout, stderr io.Writer) error {
 	rep := &reporter{out: stdout, errOut: stderr, quiet: o.Quiet}
-	res, err := archive.RepairArchive(o.Archive, openFor(o, rep))
-	if err != nil || o.Quiet {
+	res, err := archive.RepairArchiveWith(o.Archive, openFor(o, rep),
+		archive.RepairOptions{DryRun: o.DryRun, DiscardDamaged: o.DiscardDamaged})
+	// The result of -n is what it prints, so -q does not hide it.
+	if err != nil || (o.Quiet && !o.DryRun) {
 		return err
 	}
-	if res.AlreadyValid {
+	switch {
+	case res.AlreadyValid:
 		fmt.Fprintf(stdout, "%s: the archive is intact; nothing to repair\n", o.Archive)
-		return nil
+	case o.DryRun && res.Complete && !o.DiscardDamaged:
+		fmt.Fprintf(stdout, "%s: would remove %d bytes and restore generation %d; "+
+			"the newest generation looks complete, so the repair needs --discard-damaged\n",
+			o.Archive, res.Removed, res.Generation)
+	case o.DryRun:
+		fmt.Fprintf(stdout, "%s: would remove %d bytes and restore generation %d\n", o.Archive, res.Removed, res.Generation)
+	default:
+		fmt.Fprintf(stdout, "%s: removed %d bytes; restored generation %d\n", o.Archive, res.Removed, res.Generation)
 	}
-	fmt.Fprintf(stdout, "%s: removed %d bytes; restored generation %d\n", o.Archive, res.Removed, res.Generation)
 	return nil
 }
 

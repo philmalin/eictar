@@ -169,7 +169,8 @@ func hasExtension(name string) bool {
 // Every operation is built. notImplemented stays for the options that are
 // not (doc/design.md 10.6).
 func dispatch(o *Options, stdout, stderr io.Writer) error {
-	if o.DryRun {
+	// The dry run of --repair is its own: it names a generation, not paths.
+	if o.DryRun && o.Op != OpRepair {
 		return runDryRun(o, stdout, stderr)
 	}
 	switch o.Op {
@@ -327,6 +328,8 @@ Changes:
       --update-mode MODE    with -u: newer (default), different or digest
       --recompress SPEC     with --compact: encode every member again
       --quick               with --verify: check the structure only
+      --discard-damaged     with --repair: also remove a newest generation
+                            that looks complete and is damaged
       --scratch-dir DIR     with --diff-extract: make the scratch directory
                             in DIR (default $TMPDIR)
 
@@ -349,7 +352,7 @@ Output and work:
   -v, --verbose             list members as they are processed
   -n, --dry-run             with -c, -r, -u, -x or --delete: show the paths
                             the operation would write or delete, and change
-                            nothing
+                            nothing; with --repair: show what it would remove
   -q, --quiet               errors only
       --long                with -t: the same as -v
       --json                with -t: a listing for programs

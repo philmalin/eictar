@@ -32,7 +32,15 @@ func downgradeArchive(t *testing.T, path string, ask PassphraseFunc, newName str
 	r.Close()
 
 	for i := range index.Members {
-		index.Members[i].Enc = nil
+		m := &index.Members[i]
+		if m.Enc != nil && m.Length > 0 {
+			// A sealed chunk is longer than its plaintext, which the index
+			// refuses (doc/format.md 5). The attacker presents the blob as
+			// one stored chunk: the index is valid, and the content is the
+			// ciphertext, which the digest refuses.
+			m.Size, m.ChunkSize, m.Chunks = m.Length, uint32(m.Length), []uint32{uint32(m.Length)}
+		}
+		m.Enc = nil
 	}
 	index.Members[len(index.Members)-1].Path = newName
 

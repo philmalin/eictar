@@ -9,7 +9,7 @@ import (
 )
 
 // dryRunOps are the operations that -n applies to: those that write.
-var dryRunOps = []Operation{OpCreate, OpAppend, OpUpdate, OpExtract, OpDelete}
+var dryRunOps = []Operation{OpCreate, OpAppend, OpUpdate, OpExtract, OpDelete, OpRepair}
 
 // runDryRun is -n (doc/design.md 9.9): it prints the paths that the
 // operation would write or delete, and changes nothing.

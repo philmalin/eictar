@@ -405,6 +405,13 @@ func TestIndexChecks(t *testing.T) {
 		{"dead false", func(idx *cmap) { memberOf(idx, 9).set("dead", false) }, -1, "dead is not true"},
 		{"live count", func(idx *cmap) { memberOf(idx, 9).set("dead", true) }, -1, "live members"},
 		{"chunks total", func(idx *cmap) { memberOf(idx, 9).set("chunks", []any{uint64(16), uint64(5)}) }, -1, "chunks total"},
+		{"a chunk longer than its plaintext", func(idx *cmap) {
+			// Stored chunks are at the limit: one byte more in the first,
+			// and one less in the second, keeps the total.
+			arr, _ := memberOf(idx, 9).get("chunks")
+			c := arr.([]any)
+			memberOf(idx, 9).set("chunks", []any{c[0].(uint64) + 1, c[1].(uint64) - 1})
+		}, -1, "chunk 0 is"},
 		{"too few chunks", func(idx *cmap) { memberOf(idx, 9).set("chunk", uint64(8)) }, -1, "does not need 2 chunks"},
 		{"too many chunks", func(idx *cmap) { memberOf(idx, 9).set("chunk", uint64(22)) }, -1, "does not need 2 chunks"},
 		{"chunk 0", func(idx *cmap) { memberOf(idx, 9).set("chunk", uint64(0)) }, -1, "chunk 0"},

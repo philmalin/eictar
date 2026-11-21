@@ -127,6 +127,12 @@ test has only one meaning.
 The expected plaintext length of chunk `i` is `chunk`, except for the last
 chunk, which has the rest of the payload.
 
+**A chunk on disk is at most its expected plaintext length**, and 16 bytes
+more when it is sealed (the tag, §7.3). This follows from step 1. A reader
+refuses an index with a longer chunk before it reads a byte of it. Without
+this check, the length of one chunk is a number of up to 4 GiB that the
+reader must allocate.
+
 ## 6. Codecs
 
 The index has a catalog of codecs. Each member names an entry of the catalog

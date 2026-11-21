@@ -560,3 +560,24 @@ versions read what it writes.
   tag of the chunk refuses it. Now the zstd decoder finds the end of the
   frame from the headers of its blocks. `TestDecodeOfBytesAfterTheStream`,
   `TestZstdFrameLen` and `TestZstdFrameEnd` cover it.
+- A list, an extraction or a `--verify` during an append now stops with
+  exit 4 and "another eictar is changing this archive" (design.md §9.6).
+  An append writes in place, so until its trailer lands the file ends in
+  its blobs. Before, the reader took that for damage: it gave exit 3, "not
+  an eictar archive: bad magic", and named `--repair`. Now, when a reader
+  finds damage, it tries the lock of the writers, and a held lock means a
+  write in progress. A review of the code found the fault.
+  `TestReadDuringAnAppend` covers it.
+- `--repair` no longer removes a generation that was complete
+  (design.md §9.5). A crash leaves no trailer at the end of the file, but
+  one changed byte in the newest trailer or index leaves a whole trailer
+  there. Before, a repair then removed the whole newest generation, with no
+  question. Now it stops with exit 3, gives the generation that it would
+  restore and the bytes that it would remove, and changes nothing.
+  `--discard-damaged` lets it remove the generation, and `--repair -n`
+  shows what a repair does. A review of the code found the fault.
+- The index refuses a chunk that is longer on disk than its plaintext, or
+  than its plaintext and the tag when it is sealed (format.md §5). No
+  writer makes one. Before, the length of one chunk in a crafted index made
+  a reader allocate up to 4 GiB, outside `--memory-limit`. The second
+  reader has the same check. A review of the code found the gap.

@@ -662,6 +662,24 @@ func validatePayload(m *Member) error {
 	} else if m.ChunkSize != 0 {
 		return corrupt(m, fmt.Sprintf("a chunk size of %d but no chunks", m.ChunkSize))
 	}
+
+	// A chunk on disk is never longer than its plaintext: a writer keeps the
+	// plaintext when compression does not make it shorter. Sealing adds the
+	// tag (doc/format.md 5). Without this bound, one chunk of a crafted index
+	// makes a reader allocate up to 4 GiB to read it.
+	var tag uint64
+	if m.Enc != nil {
+		tag = SealTagSize
+	}
+	for i, c := range m.Chunks {
+		plain := uint64(m.ChunkSize)
+		if i == len(m.Chunks)-1 {
+			plain = payload - plain*uint64(i)
+		}
+		if uint64(c) > plain+tag {
+			return corrupt(m, fmt.Sprintf("chunk %d is %d bytes on disk, more than the %d that it can be", i, c, plain+tag))
+		}
+	}
 	return nil
 }
 

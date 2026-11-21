@@ -457,13 +457,17 @@ src/internal/archive/mutate.go: decodeInParallelWith: operator: >= → <
 	Equivalent. See the entry above.
 src/internal/archive/mutate.go: decodeBatchBytes: operator: << → >>
 	Equivalent. See the entries for decodeInParallelWith: batches of one member.
-src/internal/archive/mutate.go: RepairArchive: operator: > → >=
+src/internal/archive/mutate.go: RepairArchiveWith: operator: >= → >
+	Equivalent. A file of exactly the header and one trailer has one place
+	for a trailer, at its end. That is the last generation, which did not
+	open, so no candidate is found and Complete is not used.
+src/internal/archive/mutate.go: RepairArchiveWith: operator: > → >=
 	Equivalent. The loop ends at the start of the body by the break that
 	follows, before the condition can be equal.
-src/internal/archive/mutate.go: RepairArchive: operator: <= → <
+src/internal/archive/mutate.go: RepairArchiveWith: operator: <= → <
 	Equivalent. A trailer that ends at the end of the file is the last
 	generation, which did not open, so it is not a candidate either way.
-src/internal/archive/mutate.go: RepairArchive: operator: + → - #4
+src/internal/archive/mutate.go: RepairArchiveWith: operator: + → - #5
 	Equivalent. The magic EICTRAIL has no start that is also its end, so
 	two of them cannot overlap, and the part that the search keeps is not
 	needed.

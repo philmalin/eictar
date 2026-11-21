@@ -493,7 +493,8 @@ func TestRepairSkipsTheTrailersOfNestedArchives(t *testing.T) {
 	if err := os.WriteFile(path, b, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	res, err := RepairArchive(path, OpenOptions{})
+	// The second generation was complete, so the repair needs leave to remove it.
+	res, err := RepairArchiveWith(path, OpenOptions{}, RepairOptions{DiscardDamaged: true})
 	if err != nil || res.Generation != 1 {
 		t.Fatalf("RepairArchive = generation %d, %v; want the first generation", res.Generation, err)
 	}
@@ -520,10 +521,10 @@ func TestRepairAsksOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	asked := 0
-	res, err := RepairArchive(path, OpenOptions{Passphrase: func() ([]byte, error) {
+	res, err := RepairArchiveWith(path, OpenOptions{Passphrase: func() ([]byte, error) {
 		asked++
 		return []byte("correct horse"), nil
-	}})
+	}}, RepairOptions{DiscardDamaged: true})
 	if err != nil || res.Generation != 1 || asked != 1 {
 		t.Errorf("RepairArchive = generation %d, %v, after %d questions; want generation 1 after 1", res.Generation, err, asked)
 	}

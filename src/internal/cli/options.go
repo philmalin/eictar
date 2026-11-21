@@ -177,6 +177,9 @@ type Options struct {
 	JSON       bool
 	Quick      bool
 	Recompress string
+	// DiscardDamaged lets --repair remove a newest generation that is
+	// complete and damaged (doc/design.md 9.5).
+	DiscardDamaged bool
 
 	Verbose  int
 	Quiet    bool
@@ -311,6 +314,7 @@ func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs.BoolVar(&o.Long, "long", false, "long-format listing")
 	fs.BoolVar(&o.JSON, "json", false, "machine-readable listing")
 	fs.BoolVar(&o.Quick, "quick", false, "with --verify, check the structure only")
+	fs.BoolVar(&o.DiscardDamaged, "discard-damaged", false, "with --repair, remove a newest generation that is complete and damaged")
 	fs.StringVar(&o.Recompress, "recompress", "", "with --compact, re-encode using this spec")
 
 	fs.CountVarP(&o.Verbose, "verbose", "v", "list members as they are processed")
@@ -635,9 +639,12 @@ func (o *Options) validate() error {
 	if o.Quick && o.Op != OpVerify {
 		return &UsageError{fmt.Errorf("--quick applies to --verify only")}
 	}
+	if o.DiscardDamaged && o.Op != OpRepair {
+		return &UsageError{fmt.Errorf("--discard-damaged applies to --repair only")}
+	}
 	if o.DryRun {
 		if !containsOp(dryRunOps, o.Op) {
-			return &UsageError{fmt.Errorf("-n/--dry-run applies to -c, -r, -u, -x and --delete only")}
+			return &UsageError{fmt.Errorf("-n/--dry-run applies to -c, -r, -u, -x, --delete and --repair only")}
 		}
 		// A dry run reads almost nothing, so a meter has nothing to show.
 		// Typed, asking for both is a mistake; from a configuration, it is

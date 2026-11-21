@@ -183,7 +183,9 @@ eictar --compact -f home --recompress xz                 # the same, and encode 
 
 Each change adds a new generation after the old one. A crash does not damage
 what the archive held before, and `eictar --repair -f home` removes an
-incomplete generation. Deleted and replaced files keep their space until
+incomplete generation. If the newest generation was complete and is damaged,
+`--repair` stops and changes nothing. `--repair -n` shows what it would
+remove, and `--discard-damaged` removes it. Deleted and replaced files keep their space until
 `--compact`. Use `--update-mode different` for backups: the default,
 `newer`, misses a file that a restore from backup made older.
 

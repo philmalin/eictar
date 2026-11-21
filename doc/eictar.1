@@ -220,6 +220,17 @@ a usage error. The copies of an encrypted archive are plaintext.
 .B \-\-repair
 After a crash during a change, cut the file back to the last complete
 generation. An archive that opens correctly is not changed.
+.IP
+A crash leaves the file with no trailer at its end. If the file ends with a
+trailer, the newest generation most likely was complete, and its trailer or
+its index is damaged. The repair would remove that whole generation. Thus
+it stops with exit 3, tells how many bytes it would remove, and changes
+nothing. Restore the archive from a copy, or use
+.B \-\-discard\-damaged
+to remove the generation.
+.B \-n
+shows the generation that a repair restores and the bytes that it removes,
+and changes nothing.
 .TP
 .B \-\-info
 Show the header, the encryption settings, the generation, the member counts,
@@ -462,6 +473,13 @@ With
 .BR \-\-verify :
 check only the structure, and read no member data.
 .TP
+.B \-\-discard\-damaged
+With
+.BR \-\-repair :
+remove the newest generation also when the file ends with a trailer, that
+is, when that generation looks complete and is damaged. The members that it
+added or changed are lost. A configuration file cannot set this option.
+.TP
 .BI \-\-scratch\-dir " dir"
 With
 .BR \-\-diff\-extract :
@@ -611,6 +629,15 @@ and
 .BR \-\-delete ,
 but not for
 .BR \-c .
+.IP
+With
+.BR \-\-repair ,
+.B \-n
+tells the generation that the repair restores and the bytes that it
+removes, also with
+.BR \-q .
+It takes the lock and reads the archive as a repair does, and changes
+nothing.
 .TP
 .B \-\-long
 With

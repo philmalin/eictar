@@ -1083,12 +1083,36 @@ func Info(path string, open OpenOptions) (*ArchiveInfo, error) {
 	return in, nil
 }
 
-// RepairResult says what --repair did.
+// RepairResult says what --repair did, or with DryRun, what it would do.
 type RepairResult struct {
 	AlreadyValid bool  // the archive opened; nothing was changed
-	Removed      int64 // bytes cut from the end
+	Removed      int64 // bytes cut from the end, or that would be
 	Generation   uint64
+	// Complete means that the file ends with a trailer: its last write
+	// finished, and the newest generation was damaged after it.
+	Complete bool
 }
+
+// RepairOptions are the options of --repair.
+type RepairOptions struct {
+	// DryRun finds the generation that a repair restores, and changes
+	// nothing (-n).
+	DryRun bool
+	// DiscardDamaged lets a repair remove a newest generation that was
+	// complete (--discard-damaged). Without it, such a repair stops with
+	// ErrDamagedGeneration.
+	DiscardDamaged bool
+}
+
+// ErrDamagedGeneration means that the file ends with a trailer, so its last
+// write most likely finished, and the trailer or the index of that
+// generation is damaged. A crash almost never does that: the writer syncs
+// the index before it writes the trailer, and the trailer is its last
+// write. Only a power cut in the one write of the trailer, when it falls
+// across two sectors, can leave its first part. A repair would
+// remove a whole generation, so it needs --discard-damaged (doc/design.md
+// 9.5).
+var ErrDamagedGeneration = errors.New("the newest generation looks complete, and is damaged")
 
 // repairWindow is how much of the file one scan step reads. A test makes it
 // small, so that a trailer falls across the boundary of two steps.
@@ -1105,7 +1129,14 @@ var trailerMagic = format.TrailerMagic[:]
 // ranges - as if the file ended right after it. Then it cuts the file there.
 // An archive that opens is left alone. A wrong passphrase stops the repair
 // before anything is scanned: that archive is not damaged.
-func RepairArchive(path string, open OpenOptions) (res RepairResult, err error) {
+func RepairArchive(path string, open OpenOptions) (RepairResult, error) {
+	return RepairArchiveWith(path, open, RepairOptions{})
+}
+
+// RepairArchiveWith is RepairArchive with options. A file that ends with a
+// trailer is not cut without opt.DiscardDamaged, and opt.DryRun cuts
+// nothing.
+func RepairArchiveWith(path string, open OpenOptions, opt RepairOptions) (res RepairResult, err error) {
 	// The passphrase is asked for at most once, although the checks below can
 	// need it more than once.
 	var secret []byte
@@ -1197,6 +1228,16 @@ func RepairArchive(path string, open OpenOptions) (res RepairResult, err error) 
 	}
 
 	body := base.hdr.BodyOffset()
+	// A file that ends with the magic of a trailer ends with a whole one: the
+	// trailer is the last write, and one write. An interrupted write ends in
+	// blob or index bytes instead (doc/design.md 9.5).
+	if size >= body+format.TrailerSize {
+		magic := make([]byte, len(trailerMagic))
+		if _, err := f.ReadAt(magic, size-format.TrailerSize); err != nil {
+			return res, fmt.Errorf("%s: reading: %w", path, err)
+		}
+		res.Complete = bytes.Equal(magic, trailerMagic)
+	}
 	buf := make([]byte, repairWindow)
 	end := size
 	for end > body {
@@ -1222,6 +1263,15 @@ func RepairArchive(path string, open OpenOptions) (res RepairResult, err error) 
 				if c != nil {
 					res.Generation = c.tr.Generation
 					res.Removed = size - c.size
+					if opt.DryRun {
+						return res, nil
+					}
+					if res.Complete && !opt.DiscardDamaged {
+						return res, fmt.Errorf("%s: %w: the file ends with a trailer, so its last write most likely finished, "+
+							"and the trailer or the index is damaged. A repair removes that generation (%d bytes) and "+
+							"restores generation %d. If no write to it was interrupted, restore the archive from a copy. "+
+							"Otherwise, use --repair --discard-damaged; -n shows what it removes", path, ErrDamagedGeneration, res.Removed, res.Generation)
+					}
 					if err := f.Truncate(c.size); err != nil {
 						return res, fmt.Errorf("%s: truncating: %w", path, err)
 					}
@@ -1249,7 +1299,7 @@ func RepairArchive(path string, open OpenOptions) (res RepairResult, err error) 
 var damage = []error{
 	format.ErrBadMagic, format.ErrChecksum, format.ErrCorruptIndex, format.ErrCorruptData,
 	format.ErrTruncated, format.ErrIndexTooLarge, format.ErrVersionMismatch,
-	crypt.ErrAuthentication,
+	crypt.ErrAuthentication, ErrDamagedGeneration,
 }
 
 // IsDamage reports whether err means the archive is damaged or was altered,

@@ -611,21 +611,86 @@ func TestCrashAtEveryCut(t *testing.T) {
 	}
 }
 
-func TestRepairTornTrailer(t *testing.T) {
+// TestRepairOfADamagedTrailer: a byte that changed in the last trailer is
+// damage of a complete generation, not an interrupted write: the file ends
+// with a whole trailer. A repair would remove the whole generation, so it
+// stops and changes nothing. -n says what it would remove, and changes
+// nothing. --discard-damaged removes it (doc/design.md 9.5).
+func TestRepairOfADamagedTrailer(t *testing.T) {
 	tree := mutTree(t)
 	archive := mkArchive(t, tree, false, "t/a.txt")
-	before := readAll(t, archive)
+	first := readAll(t, archive)
 	if _, err := appendTo(t, archive, tree, false, nil, "t/b.txt"); err != nil {
 		t.Fatal(err)
 	}
 	flipByteAt(t, archive, mustStat(t, archive).Size()-10)
+	damaged := readAll(t, archive)
+	removed := int64(len(damaged) - len(first))
 
 	res, err := RepairArchive(archive, OpenOptions{})
-	if err != nil {
+	if !errors.Is(err, ErrDamagedGeneration) || !IsDamage(err) || !strings.Contains(err.Error(), "--discard-damaged") {
+		t.Errorf("repair of a damaged trailer: %v, want ErrDamagedGeneration", err)
+	}
+	if !res.Complete || res.Generation != 1 || res.Removed != removed {
+		t.Errorf("the refusal: %+v, want generation 1 and %d bytes", res, removed)
+	}
+	if !bytes.Equal(readAll(t, archive), damaged) {
+		t.Fatal("a refused repair changed the file")
+	}
+
+	for _, discard := range []bool{false, true} {
+		res, err = RepairArchiveWith(archive, OpenOptions{}, RepairOptions{DryRun: true, DiscardDamaged: discard})
+		if err != nil || !res.Complete || res.Generation != 1 || res.Removed != removed {
+			t.Errorf("-n (discard %v): %+v, %v", discard, res, err)
+		}
+		if !bytes.Equal(readAll(t, archive), damaged) {
+			t.Fatalf("-n (discard %v) changed the file", discard)
+		}
+	}
+
+	res, err = RepairArchiveWith(archive, OpenOptions{}, RepairOptions{DiscardDamaged: true})
+	if err != nil || res.Generation != 1 || res.Removed != removed {
+		t.Errorf("--discard-damaged: %+v, %v", res, err)
+	}
+	if !bytes.Equal(readAll(t, archive), first) {
+		t.Error("the file is not the first generation")
+	}
+}
+
+// TestRepairOfAnInterruptedWrite: a write that stopped before its trailer
+// leaves no trailer at the end. A repair cuts it off with no option, and -n
+// says so first.
+func TestRepairOfAnInterruptedWrite(t *testing.T) {
+	tree := mutTree(t)
+	archive := mkArchive(t, tree, false, "t/a.txt")
+	first := readAll(t, archive)
+	partial := append(bytes.Clone(first), bytes.Repeat([]byte("blob"), 50)...)
+	if err := os.WriteFile(archive, partial, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if res.Generation != 1 || !bytes.Equal(readAll(t, archive), before) {
-		t.Errorf("repair = %+v; the file is not the first generation", res)
+	res, err := RepairArchiveWith(archive, OpenOptions{}, RepairOptions{DryRun: true})
+	if err != nil || res.Complete || res.Removed != 200 || !bytes.Equal(readAll(t, archive), partial) {
+		t.Errorf("-n: %+v, %v", res, err)
+	}
+	res, err = RepairArchive(archive, OpenOptions{})
+	if err != nil || res.Complete || res.Generation != 1 || res.Removed != 200 || !bytes.Equal(readAll(t, archive), first) {
+		t.Errorf("repair: %+v, %v", res, err)
+	}
+}
+
+// TestRepairOfAFileShorterThanATrailer: a crash during a create can leave the
+// header and a few bytes. That file has no generation to restore, and repair
+// must say so, not fail to read the place of a trailer before the file start.
+func TestRepairOfAFileShorterThanATrailer(t *testing.T) {
+	tree := mutTree(t)
+	archive := mkArchive(t, tree, false, "t/a.txt")
+	short := readAll(t, archive)[:format.HeaderSize+10]
+	if err := os.WriteFile(archive, short, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := RepairArchive(archive, OpenOptions{})
+	if !errors.Is(err, format.ErrCorruptIndex) || res.Complete || !bytes.Equal(readAll(t, archive), short) {
+		t.Errorf("repair: %+v, %v, want ErrCorruptIndex", res, err)
 	}
 }
 

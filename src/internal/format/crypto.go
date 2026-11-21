@@ -155,4 +155,9 @@ const (
 	// of hundred bytes; the field is 32 bits, and a reader allocates what it
 	// says before it has decoded a byte.
 	MaxCryptoHeaderLen = 64 * 1024
+
+	// SealTagSize is what sealing adds to a chunk: the Poly1305 tag
+	// (doc/format.md 7.3). The archive package checks that it is the
+	// overhead of its cipher.
+	SealTagSize = 16
 )

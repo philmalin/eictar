@@ -696,6 +696,21 @@ func (a *Archive) parseBlob(m *Member, mm *cmap, where string) error {
 	} else if a.Encrypted && m.HasBlob {
 		return refusef("%s has chunks and no enc in an encrypted archive", where)
 	}
+	// A chunk is at most its plaintext, and 16 bytes of tag when it is sealed
+	// (format.md 5). The payload rule above puts the last chunk's plaintext
+	// in 1 to chunk.
+	for i, c := range m.Chunks {
+		limit := m.Chunk
+		if uint64(i) == n-1 {
+			limit = p - m.Chunk*(n-1)
+		}
+		if m.Salt != nil {
+			limit += 16
+		}
+		if c > limit {
+			return refusef("%s: chunk %d is %d bytes, more than %d", where, i, c, limit)
+		}
+	}
 	if m.Data != 0 && m.Codec != -1 {
 		return refusef("%s: codec %d on a member with data", where, m.Codec)
 	}

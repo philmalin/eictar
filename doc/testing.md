@@ -84,7 +84,12 @@ Every item in the lists below exists now, except the items marked "later".
   is not used (design.md §10.2).
 - **Lock**: while one writer holds an archive, append, delete, compact,
   repair and create each stop with `ErrLocked`. A lock on a file that a
-  rename replaced is refused (design.md §9.6).
+  rename replaced is refused. A reader during an append stops with
+  `ErrLocked`, not with damage (design.md §9.6).
+- **Repair**: a file that ends with a damaged trailer is not changed
+  without `--discard-damaged`, and `-n` changes nothing. A file whose last
+  write stopped before its trailer is repaired with no option
+  (design.md §9.5).
 - **Recompress**: the content, the digests and the ids stay, and each sealed
   member gets a new salt. A tombstone behind a hardlink, and the holes of a
   sparse file, survive (design.md §9.3).

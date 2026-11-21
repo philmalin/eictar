@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -97,6 +99,81 @@ func TestCompactMessages(t *testing.T) {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+// TestRepairThroughRun: a file that ends with a damaged trailer is refused
+// with exit 3, and is not changed. -n says what a repair removes, also with
+// -q, and --discard-damaged removes it. A file whose last write stopped
+// before its trailer is repaired with no option (doc/design.md 9.5).
+func TestRepairThroughRun(t *testing.T) {
+	dir, archivePath := opsTree(t)
+	first, err := os.ReadFile(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := runCLI("-rf", archivePath, "-C", dir, "t/a.txt"); code != ExitOK {
+		t.Fatalf("append: exit %d: %s", code, stderr)
+	}
+	damaged, err := os.ReadFile(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	damaged[len(damaged)-10] ^= 0xff
+	if err := os.WriteFile(archivePath, damaged, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	unchanged := func(what string) {
+		t.Helper()
+		if b, _ := os.ReadFile(archivePath); !bytes.Equal(b, damaged) {
+			t.Fatalf("%s changed the archive", what)
+		}
+	}
+	removed := itoa(int64(len(damaged) - len(first)))
+
+	code, stdout, stderr := runCLI("--repair", "-f", archivePath)
+	if code != ExitCorrupt || stdout != "" || !strings.Contains(stderr, "--discard-damaged") {
+		t.Errorf("repair: exit %d, %q, %q", code, stdout, stderr)
+	}
+	unchanged("a refused repair")
+	code, stdout, _ = runCLI("--repair", "-n", "-qf", archivePath)
+	if want := archivePath + ": would remove " + removed + " bytes and restore generation 1; " +
+		"the newest generation looks complete, so the repair needs --discard-damaged\n"; code != ExitOK || stdout != want {
+		t.Errorf("-n -q: exit %d, %q, want %q", code, stdout, want)
+	}
+	code, stdout, _ = runCLI("--repair", "-n", "--discard-damaged", "-f", archivePath)
+	if want := archivePath + ": would remove " + removed + " bytes and restore generation 1\n"; code != ExitOK || stdout != want {
+		t.Errorf("-n --discard-damaged: exit %d, %q, want %q", code, stdout, want)
+	}
+	unchanged("-n")
+	code, stdout, _ = runCLI("--repair", "--discard-damaged", "-f", archivePath)
+	if want := archivePath + ": removed " + removed + " bytes; restored generation 1\n"; code != ExitOK || stdout != want {
+		t.Errorf("--discard-damaged: exit %d, %q, want %q", code, stdout, want)
+	}
+	if b, _ := os.ReadFile(archivePath); !bytes.Equal(b, first) {
+		t.Error("the archive is not its first generation")
+	}
+
+	// An interrupted write: no trailer at the end, and no option needed.
+	if err := os.WriteFile(archivePath, append(bytes.Clone(first), "blob"...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, stdout, _ = runCLI("--repair", "-n", "-f", archivePath); code != ExitOK ||
+		stdout != archivePath+": would remove 4 bytes and restore generation 1\n" {
+		t.Errorf("-n of an interrupted write: exit %d, %q", code, stdout)
+	}
+	if code, stdout, _ = runCLI("--repair", "-f", archivePath); code != ExitOK ||
+		stdout != archivePath+": removed 4 bytes; restored generation 1\n" {
+		t.Errorf("repair of an interrupted write: exit %d, %q", code, stdout)
+	}
+
+	if code, _, stderr := runCLI("--verify", "--discard-damaged", "-f", archivePath); code != ExitUsage ||
+		!strings.Contains(stderr, "--discard-damaged applies to --repair only") {
+		t.Errorf("--discard-damaged with --verify: exit %d, %s", code, stderr)
+	}
+	// A read during an append is a busy archive, not a damaged one.
+	if code := exitCodeFor(fmt.Errorf("a.ect: %w", archive.ErrLocked)); code != ExitIO {
+		t.Errorf("a locked archive: exit %d, want %d", code, ExitIO)
+	}
+}
 
 // TestVerifyQuick: --quick says that it read the structure only.
 func TestVerifyQuick(t *testing.T) {
