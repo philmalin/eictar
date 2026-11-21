@@ -25,7 +25,7 @@ func TestEncryptArchiveThroughRun(t *testing.T) {
 
 	code, stdout, stderr := runCLI(append([]string{"--encrypt-archive", "-f", archivePath, "--passphrase-file", pass}, kdfFast...)...)
 	if code != ExitOK || !strings.Contains(stdout, ": encrypted; 2 members sealed, ") ||
-		stderr != "eictar: "+archivePath+": encrypted. Copies"+reminder {
+		stderr != "eictar: "+printable(archivePath)+": encrypted. Copies"+reminder {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLI("--info", "-f", archivePath, "--passphrase-file", pass)
@@ -54,7 +54,7 @@ func TestEncryptArchiveThroughRun(t *testing.T) {
 		t.Fatalf("create: exit %d: %s", code, stderr)
 	}
 	code, stdout, stderr = runCLI(append([]string{"--encrypt-archive", "-q", "--encrypt-index", "-f", quiet, "--passphrase-file", pass}, kdfFast...)...)
-	if code != ExitOK || stdout != "" || stderr != "eictar: "+quiet+": copies"+reminder {
+	if code != ExitOK || stdout != "" || stderr != "eictar: "+printable(quiet)+": copies"+reminder {
 		t.Errorf("-q: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	code, stdout, _ = runCLI("--info", "-f", quiet, "--passphrase-file", pass)
