@@ -547,6 +547,18 @@ versions read what it writes.
   archives stay readable in both directions. The slow dictionary at level
   10 and above, and the trainer that is not deterministic, stay
   (design.md §4.2, §15.2).
+- The modules from Dependabot: `fxamacker/cbor` goes from v2.9.6 to
+  v2.10.0, `spf13/pflag` from v1.0.10 to v1.1.0, `x/crypto` from v0.58.0
+  to v0.59.0, `x/sys` from v0.49.0 to v0.50.0, and `x/term` from v0.47.0
+  to v0.48.0. The cbor encoder is faster, and its output for the index
+  does not change. Map keys stay in bytewise order. The cbor decoder gets
+  a relaxed mode, but only its stream decoder uses it, and eictar does
+  not. The pflag changes are for unknown flags, custom bool flags and its
+  usage text. eictar uses none of these, and prints its own usage. The
+  changes of `x/crypto` are for ssh, openpgp and blake2s, which eictar
+  does not use. In `x/sys`, the Windows system calls use a newer internal
+  form. Its other fixes are in code that eictar does not call. `x/term`
+  changes only its go.mod.
 - `--encrypt-archive` encrypts an archive that was made without `-e`
   (design.md §9.11). It is one operation, and needs no `-e`. Each member
   keeps its metadata and its compressed content. Each chunk and each

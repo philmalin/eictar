@@ -3,13 +3,13 @@ module github.com/philmalin/eictar
 go 1.27
 
 require (
-	github.com/fxamacker/cbor/v2 v2.9.6
+	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/klauspost/compress v1.20.5
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	github.com/ulikunitz/xz v0.5.17
-	golang.org/x/crypto v0.58.0
-	golang.org/x/sys v0.49.0
-	golang.org/x/term v0.47.0
+	golang.org/x/crypto v0.59.0
+	golang.org/x/sys v0.50.0
+	golang.org/x/term v0.48.0
 	lukechampine.com/blake3 v1.4.1
 )
 

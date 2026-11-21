@@ -2067,6 +2067,19 @@ reports, and zstd decodes faster without assembly. The output of the
 zstd and flate encoders changes, and archives stay readable in both
 directions. The slow dictionary at level 10 and above, and the trainer
 that is not deterministic, stay (design.md §4.2, §15.2).</li>
+<li>The modules from Dependabot: <code>fxamacker/cbor</code> goes from
+v2.9.6 to v2.10.0, <code>spf13/pflag</code> from v1.0.10 to v1.1.0,
+<code>x/crypto</code> from v0.58.0 to v0.59.0, <code>x/sys</code> from
+v0.49.0 to v0.50.0, and <code>x/term</code> from v0.47.0 to v0.48.0. The
+cbor encoder is faster, and its output for the index does not change.
+Map keys stay in bytewise order. The cbor decoder gets a relaxed mode,
+but only its stream decoder uses it, and eictar does not. The pflag
+changes are for unknown flags, custom bool flags and its usage text.
+eictar uses none of these, and prints its own usage. The changes of
+<code>x/crypto</code> are for ssh, openpgp and blake2s, which eictar
+does not use. In <code>x/sys</code>, the Windows system calls use a
+newer internal form. Its other fixes are in code that eictar does not
+call. <code>x/term</code> changes only its go.mod.</li>
 <li><code>--encrypt-archive</code> encrypts an archive that was made
 without <code>-e</code> (design.md §9.11). It is one operation, and
 needs no <code>-e</code>. Each member keeps its metadata and its
