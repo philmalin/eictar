@@ -146,7 +146,7 @@ used, and a reader needs it to decode.
 |------|-------------------------|
 | `zstd` | one Zstandard frame (RFC 8878). The writer puts a content checksum in the frame. |
 | `flate` | one raw DEFLATE stream (RFC 1951) that ends with a final block |
-| `gzip` | one gzip member (RFC 1952), with MTIME 0 and no name. A reader refuses a second member after the first. |
+| `gzip` | one gzip member (RFC 1952), with MTIME 0 and no name. A reader refuses a member with a reserved FLG bit (bits 5 to 7) set, and a second member after the first. |
 | `s2` | one S2 block: a uvarint of the decoded length, then S2 block elements (the block format of `github.com/klauspost/compress/s2`, a superset of the Snappy block format) |
 | `xz` | one raw LZMA2 stream, with no `.xz` container, that ends with the end marker (a 0x00 control byte). The properties are lc=3, lp=0, pb=2. |
 

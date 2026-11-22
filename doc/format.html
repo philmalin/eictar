@@ -1771,7 +1771,8 @@ in the frame.</td>
 <tr class="odd">
 <td><code>gzip</code></td>
 <td>one gzip member (RFC 1952), with MTIME 0 and no name. A reader
-refuses a second member after the first.</td>
+refuses a member with a reserved FLG bit (bits 5 to 7) set, and a second
+member after the first.</td>
 </tr>
 <tr class="even">
 <td><code>s2</code></td>

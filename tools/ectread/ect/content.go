@@ -188,6 +188,11 @@ func (a *Archive) decode(c Codec, b []byte, want, chunk uint64) ([]byte, error) 
 	case "flate":
 		return exact(flate.NewReader(br), br, want)
 	case "gzip":
+		// RFC 1952 2.3.1.2: a reserved FLG bit is an error. compress/gzip
+		// does not check them.
+		if len(b) > 3 && b[3]>>5 != 0 {
+			return nil, refusef("a reserved FLG bit of the gzip header is set")
+		}
 		z, err := gzip.NewReader(br)
 		if err != nil {
 			return nil, err

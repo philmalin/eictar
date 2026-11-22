@@ -2080,6 +2080,13 @@ eictar uses none of these, and prints its own usage. The changes of
 does not use. In <code>x/sys</code>, the Windows system calls use a
 newer internal form. Its other fixes are in code that eictar does not
 call. <code>x/term</code> changes only its go.mod.</li>
+<li>The second reader (<code>tools/ectread</code>) refuses a gzip chunk
+with a reserved FLG bit set, as RFC 1952 says. eictar already refused
+it, because the gzip reader of <code>klauspost/compress</code> checks
+these bits. The reader of the Go standard library does not check them.
+The stress tester found the difference: one flipped bit in a gzip header
+made eictar refuse a copy that the second reader accepted. format.md §6
+now states the rule. <code>TestGzipReservedFlags</code> covers it.</li>
 <li><code>--encrypt-archive</code> encrypts an archive that was made
 without <code>-e</code> (design.md §9.11). It is one operation, and
 needs no <code>-e</code>. Each member keeps its metadata and its

@@ -93,6 +93,22 @@ func TestCodecs(t *testing.T) {
 	}
 }
 
+// TestGzipReservedFlags: a gzip member with a reserved FLG bit is refused,
+// as RFC 1952 2.3.1.2 says, and as eictar refuses it. compress/gzip
+// accepts it. The stress tester found this difference.
+func TestGzipReservedFlags(t *testing.T) {
+	a := &Archive{}
+	plain := []byte(strings.Repeat("the content of a chunk. ", 40))
+	z := compressors["gzip"](t, plain)
+	for bit := 5; bit < 8; bit++ {
+		bad := bytes.Clone(z)
+		bad[3] |= 1 << bit
+		if _, err := a.decode(Codec{Name: "gzip"}, bad, uint64(len(plain)), 1<<20); !isRefusal(err, "reserved") {
+			t.Errorf("FLG bit %d: %v", bit, err)
+		}
+	}
+}
+
 // TestZstdWindow: a frame that asks for a window larger than both 1 MiB and
 // the chunk size of its member is refused (doc/format.md 6).
 func TestZstdWindow(t *testing.T) {
