@@ -506,7 +506,13 @@ The tests:
 The format is still 1.0. v1.1.3 reads every earlier archive, and earlier
 versions read what it writes.
 
-**After v1.1.3, not yet in a release.**
+**v1.1.4 adds `--diff-extract` and `--encrypt-archive`, and fixes faults
+that the release gate and a review of the code found.** It passed the
+release gate (testing.md §5, step 6) on 5bfee24: 1 hour of fuzzing for
+each target, and 8 hours of stress. The commits after 5bfee24 change only
+documents.
+
+The changes:
 
 - `completions/eictar.bash` gives tab completion in bash (design.md §10.8).
   It completes the options, the codecs and the other fixed values, and file
@@ -520,10 +526,6 @@ versions read what it writes.
   that `--verify` and `--diff` cannot find. `--scratch-dir` chooses where
   the scratch directory goes. Times are compared to the precision of its
   file system. The stress tester runs it in half of its `--diff` steps.
-- `tools/mutate`: the name of a mutant that removes a `!`, the first of its
-  function, ended with a space. A line of `accepted.txt` cannot keep a
-  space at its end, so no entry could accept such a mutant. The name now
-  ends at the arrow. `TestKeys` covers it.
 - The modules from Dependabot: `fxamacker/cbor` goes from v2.9.4 to
   v2.9.6, `x/crypto` from v0.57.0 to v0.58.0, `x/sys` from v0.48.0 to
   v0.49.0, and `x/term` from v0.46.0 to v0.47.0. v2.9.5 of cbor was
@@ -559,13 +561,6 @@ versions read what it writes.
   does not use. In `x/sys`, the Windows system calls use a newer internal
   form. Its other fixes are in code that eictar does not call. `x/term`
   changes only its go.mod.
-- The second reader (`tools/ectread`) refuses a gzip chunk with a reserved
-  FLG bit set, as RFC 1952 says. eictar already refused it, because the
-  gzip reader of `klauspost/compress` checks these bits. The reader of
-  the Go standard library does not check them. The stress tester found the
-  difference: one flipped bit in a gzip header made eictar refuse a copy
-  that the second reader accepted. format.md §6 now states the rule.
-  `TestGzipReservedFlags` covers it.
 - `--encrypt-archive` encrypts an archive that was made without `-e`
   (design.md §9.11). It is one operation, and needs no `-e`. Each member
   keeps its metadata and its compressed content. Each chunk and each
@@ -614,3 +609,21 @@ versions read what it writes.
   writer makes one. Before, the length of one chunk in a crafted index made
   a reader allocate up to 4 GiB, outside `--memory-limit`. The second
   reader has the same check. A review of the code found the gap.
+
+The tests:
+
+- `tools/mutate`: the name of a mutant that removes a `!`, the first of its
+  function, ended with a space. A line of `accepted.txt` cannot keep a
+  space at its end, so no entry could accept such a mutant. The name now
+  ends at the arrow. `TestKeys` covers it.
+- The second reader (`tools/ectread`) refuses a gzip chunk with a reserved
+  FLG bit set, as RFC 1952 says. eictar already refused it, because the
+  gzip reader of `klauspost/compress` checks these bits. The reader of
+  the Go standard library does not check them. The stress tester of the
+  gate on 90d426c found the difference: one flipped bit in a gzip header
+  made eictar refuse a copy that the second reader accepted. format.md §6
+  now states the rule. `TestGzipReservedFlags` covers it.
+
+The format is still 1.0. v1.1.4 reads every earlier archive, and earlier
+versions read what it writes. v1.1.4 refuses a chunk with bytes after its
+stream, or longer than its plaintext, but no version of eictar writes one.

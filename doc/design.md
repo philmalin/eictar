@@ -1,9 +1,9 @@
 # eictar — Design Document
 
-Status: M1 to M11 are complete, and v1.1.3 is the current release. The CI workflow passes
+Status: M1 to M11 are complete, and v1.1.4 is the current release. The CI workflow passes
 on Linux, macOS, FreeBSD, NetBSD, OpenBSD and Windows (§15.1). The six steps of
 the assurance plan (testing.md §5) are complete.
-Date: 2026-10-21
+Date: 2026-11-24
 Applies to: v1 (format version 1.0)
 
 This document describes the on-disk format, the concurrency model, the
@@ -2608,11 +2608,11 @@ a missing or doubled operation gets a short error on stderr and exit 2.
 | | `--compact` | Write the archive again without the tombstoned blobs | none | M6 |
 | | `--verify` | Check integrity without extraction | patterns (default: all) | M6 |
 | | `--diff` | Compare the members with the tree on disk, and change nothing (§9.8) | patterns (default: all) | v1.0.6 |
-| | `--diff-extract` | Do what `--diff` does, and also extract each member into a scratch directory and compare the copy with the disk byte by byte (§9.10) | patterns (default: all) | after v1.1.3 |
+| | `--diff-extract` | Do what `--diff` does, and also extract each member into a scratch directory and compare the copy with the disk byte by byte (§9.10) | patterns (default: all) | v1.1.4 |
 | | `--repair` | Restore the last complete generation after an interrupted write (§9.5) | none | M6 |
 | | `--info` | Show the archive header, the codecs, the dictionaries, the counts, the shared content and the dead space | none | M6 |
 | | `--change-passphrase` | Seal the data key under a new passphrase, and write the archive again without its dead space (§9.7) | none | M9 |
-| | `--encrypt-archive` | Encrypt an archive that was made without `-e`, and write it again without its dead space (§9.11) | none | after v1.1.3 |
+| | `--encrypt-archive` | Encrypt an archive that was made without `-e`, and write it again without its dead space (§9.11) | none | v1.1.4 |
 | | `--list-codecs` | Show each codec with its parameters, defaults and ranges | none | M2 |
 
 All operations are built. An option that is not built yet exits with 70 and
@@ -2830,7 +2830,7 @@ whose encryption was removed (§14).
 | | `--long` | the long listing, the same as `-tv` (§10.9) | M2 |
 | | `--json` | listing for programs, with every field of §10.9. A path that is not valid UTF-8 also has `path_base64`, because a JSON string cannot hold its bytes. | M2 |
 | | `--quick` | with `--verify`, check only the structure and read no member data (§9.4) | M6 |
-| | `--scratch-dir DIR` | with `--diff-extract`, make the scratch directory in DIR, not in `$TMPDIR` or `/tmp` (§9.10) | after v1.1.3 |
+| | `--scratch-dir DIR` | with `--diff-extract`, make the scratch directory in DIR, not in `$TMPDIR` or `/tmp` (§9.10) | v1.1.4 |
 | | `--on-conflict MODE` | with `-r`: `replace` (default), `skip` or `error` (§9.2) | M6 |
 | | `--update-mode MODE` | with `-u`: `newer` (default), `different` or `digest` (§10.5) | M6 |
 | | `--recompress SPEC` | with `--compact`, encode again with SPEC | M7 |

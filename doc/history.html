@@ -2020,7 +2020,13 @@ closed.</li>
 </ul>
 <p>The format is still 1.0. v1.1.3 reads every earlier archive, and
 earlier versions read what it writes.</p>
-<p><strong>After v1.1.3, not yet in a release.</strong></p>
+<p><strong>v1.1.4 adds <code>--diff-extract</code> and
+<code>--encrypt-archive</code>, and fixes faults that the release gate
+and a review of the code found.</strong> It passed the release gate
+(testing.md §5, step 6) on 5bfee24: 1 hour of fuzzing for each target,
+and 8 hours of stress. The commits after 5bfee24 change only
+documents.</p>
+<p>The changes:</p>
 <ul>
 <li><code>completions/eictar.bash</code> gives tab completion in bash
 (design.md §10.8). It completes the options, the codecs and the other
@@ -2037,11 +2043,6 @@ and <code>--diff</code> cannot find. <code>--scratch-dir</code> chooses
 where the scratch directory goes. Times are compared to the precision of
 its file system. The stress tester runs it in half of its
 <code>--diff</code> steps.</li>
-<li><code>tools/mutate</code>: the name of a mutant that removes a
-<code>!</code>, the first of its function, ended with a space. A line of
-<code>accepted.txt</code> cannot keep a space at its end, so no entry
-could accept such a mutant. The name now ends at the arrow.
-<code>TestKeys</code> covers it.</li>
 <li>The modules from Dependabot: <code>fxamacker/cbor</code> goes from
 v2.9.4 to v2.9.6, <code>x/crypto</code> from v0.57.0 to v0.58.0,
 <code>x/sys</code> from v0.48.0 to v0.49.0, and <code>x/term</code> from
@@ -2080,13 +2081,6 @@ eictar uses none of these, and prints its own usage. The changes of
 does not use. In <code>x/sys</code>, the Windows system calls use a
 newer internal form. Its other fixes are in code that eictar does not
 call. <code>x/term</code> changes only its go.mod.</li>
-<li>The second reader (<code>tools/ectread</code>) refuses a gzip chunk
-with a reserved FLG bit set, as RFC 1952 says. eictar already refused
-it, because the gzip reader of <code>klauspost/compress</code> checks
-these bits. The reader of the Go standard library does not check them.
-The stress tester found the difference: one flipped bit in a gzip header
-made eictar refuse a copy that the second reader accepted. format.md §6
-now states the rule. <code>TestGzipReservedFlags</code> covers it.</li>
 <li><code>--encrypt-archive</code> encrypts an archive that was made
 without <code>-e</code> (design.md §9.11). It is one operation, and
 needs no <code>-e</code>. Each member keeps its metadata and its
@@ -2143,5 +2137,25 @@ made a reader allocate up to 4 GiB, outside <code>--memory-limit</code>.
 The second reader has the same check. A review of the code found the
 gap.</li>
 </ul>
+<p>The tests:</p>
+<ul>
+<li><code>tools/mutate</code>: the name of a mutant that removes a
+<code>!</code>, the first of its function, ended with a space. A line of
+<code>accepted.txt</code> cannot keep a space at its end, so no entry
+could accept such a mutant. The name now ends at the arrow.
+<code>TestKeys</code> covers it.</li>
+<li>The second reader (<code>tools/ectread</code>) refuses a gzip chunk
+with a reserved FLG bit set, as RFC 1952 says. eictar already refused
+it, because the gzip reader of <code>klauspost/compress</code> checks
+these bits. The reader of the Go standard library does not check them.
+The stress tester of the gate on 90d426c found the difference: one
+flipped bit in a gzip header made eictar refuse a copy that the second
+reader accepted. format.md §6 now states the rule.
+<code>TestGzipReservedFlags</code> covers it.</li>
+</ul>
+<p>The format is still 1.0. v1.1.4 reads every earlier archive, and
+earlier versions read what it writes. v1.1.4 refuses a chunk with bytes
+after its stream, or longer than its plaintext, but no version of eictar
+writes one.</p>
 </body>
 </html>
