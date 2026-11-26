@@ -1,0 +1,779 @@
+{metadata n=title: eictar security audit, pass 2}
+{metadata n=sections_numbered}
+
+{Sty center fs=180%:{b:eictar security audit, pass 2}}
+
+{stable col=2 b== i=3% w=94%:
+| Version reviewed | v1.1.4 (commit ebd3fea) |
+| Date | 2026-11-26 |
+| Earlier review | {ref t=Security_Audit.html#scope-method:Security_Audit.eml}: v1.0.1, with follow-ups for v1.0.3 and v1.0.6 (findings 1 to 12) |
+| Scope | the source code of {C:src/}, the archive format, and encrypted archives |
+| Status | open: no finding of this review is fixed yet |
+}
+
+{contents l=2}
+
+{section 1 bid=scope-method: Scope and method}
+
+The first review ({C:Security_Audit.eml}) looked at v1.0.1, and its
+follow-ups at v1.0.3 and v1.0.6. Since v1.0.6, about 18,000 lines of
+{C:src/} changed: dictionaries, shared content, {C:--repair}, {C:--compact},
+{C:--diff-extract}, {C:--encrypt-archive}, append in place, and Windows. This
+review covers the whole code again, and these changes in particular.
+
+The review had four parts. Each part read the code, and tried each attack
+on a build of v1.1.4 as a normal user on Linux:
+
+{list t=1:
+  {item: An archive from an attacker as input: the header, trailer, index and CBOR, the decoders, and the paths that read an archive ({C:-t}, {C:--info}, {C:--verify}, {C:-x}, append, compact, repair).}
+  {item: The cryptography: keys, nonces, what each AAD binds, the KDF limits, downgrade and rollback, the change of passphrase, {C:--encrypt-archive}, and the passphrase.}
+  {item: Extraction: what {C:-x}, {C:--diff}, {C:--diff-extract} and {C:-n} do to the file system with an archive from an attacker, also as root.}
+  {item: The writer and the command line: the walk, temporary and spill files, the rename of the archive, locks, repair, the configuration, the passphrase sources, and the escape of names in each output.}
+}
+
+"Tested" means that the review made the attack happen. "Code" means that
+the review found it in the code. The review reproduced findings 13, 14, 18,
+19 and 20 a second time, on a separate build. Tests that need a second
+account, root, Windows, macOS or a BSD were not run: those parts were
+reviewed in the code only.
+
+The findings continue the numbers of the first review, so that each number
+names one finding in both documents.
+
+{section 1 bid=summary: Summary}
+
+{stable col=4 header sb b==:
+| # | Severity | Finding | Found by |
+| 13 | High | A directory and a link to {C:.} with one path change the destination directory itself | Tested |
+| 14 | Medium; high for root and {C:-d /} | Extraction follows a link that another user put inside the destination | Tested |
+| 15 | Medium | A race between the check of {C:-f} and its resolution follows a planted link | Tested |
+| 16 | Medium | The check of {C:-f} does not look at a link inside the target of a link | Tested |
+| 17 | Medium | Create gives the new archive the mode of a file that another user put at {C:-f} | Tested |
+| 18 | Medium | {C:-c} with a passphrase source and no {C:-e} writes a plaintext archive, with no message | Tested |
+| 19 | Medium | A 7 KB plain archive makes a listing use 4 GB of memory | Tested |
+| 20 | Low | {C:--repair} removes a complete generation when the damage is in its trailer magic | Tested |
+| 21 | Low | Blobs that overlap: compact and {C:--encrypt-archive} write one copy for each member | Tested |
+| 22 | Low | A member id of 2{S:64}-1 wraps the next id to 0, and the check of an old owner stops | Tested |
+| 23 | Low | {C:--repair} takes quadratic time on a file of crafted trailers | Tested |
+| 24 | Low | Large chunks make extraction and {C:--verify} use 1.6 to 2.6 times {C:--memory-limit} | Tested |
+| 25 | Low | {C:--info} writes codec names and parameters from the archive with no escape | Tested |
+| 26 | Low | An append to a plaintext archive put in place of an encrypted one stores new content in the clear | Tested |
+| 27 | Low | With {C:--encrypt-index}, the trailers show the member count and the size of each generation | Tested |
+| 28 | Low | With {C:--encrypt-index}, the length of the compressed index lets an attacker test a guess of a name | Tested |
+| 29 | Low | Create keeps the group bits of the old archive, but not its group | Tested |
+| 30 | Low | The temporary file of create is wider than the old archive for a short time | Tested |
+| 31 | Low | A failed write of the output of {C:-t}, {C:--info}, {C:--verify} or {C:-n} gives exit 0 | Tested |
+| 32 | Low | The check of a passphrase file does not look at its write bits or its owner on Unix | Tested |
+| 33 | Low | Windows: a member {C:x\\..} names the destination, and other names are aliases | Code |
+| 34 | Information | {C:chown} after the xattrs removes file capabilities | Code |
+| 35 | Information | The creation time in the header is not authenticated | Tested |
+| 36 | Information | A rollback needs no old copy: a truncation is enough | Tested |
+| 37 | Information | After an append, update or delete, the data key is not set to zero | Code |
+| 38 | Information | {C:--json} writes C1 control characters and text-direction characters as they are | Tested |
+| 39 | Information | With {C:-h}, a link changed to a FIFO after the walk makes the open wait for ever | Tested |
+| 40 | Information | No signal handling: a temporary file stays, and the prompt leaves echo off | Tested |
+| 41 | Information | Windows: {C:-f} follows junctions, and a rewrite drops the ACL of the archive | Code |
+| 42 | Information | Shared content allows a ratio of about 70,000 to 1 at extraction, with no bound | Tested |
+| 43 | Information | An unknown codec name gives exit 4, not 3 | Code |
+| 44 | Information | A member id can be used again after a compact, against format.md §8.3 | Code |
+}
+
+Three findings bypass a fix of the first review. Finding 13 reaches the
+destination as finding 2 did. Findings 15, 16 and 17 go round the rule of
+finding 4, and finding 16 needs no race. Findings 25 and 38 are gaps in the
+fix of finding 12.
+
+Findings 13 to 17 matter most when root extracts an archive from someone
+else, restores a tree where other users own directories, or writes an
+archive in a directory that other users can write. Finding 19 affects any
+user who opens a plain archive from someone else. Finding 18 needs no
+attacker: a user who forgets {C:-e} loses the confidentiality of the whole
+archive.
+
+{section 1 bid=findings: Findings}
+
+{section 2 nc bid=finding-13: Finding 13. A directory and a link to . with one path change the destination (high)}
+
+{b:Where:} {C:finishDir} and {C:extractNode} in
+{C bc=/._:src/internal/archive/extract.go}, and {C:Index.Validate} in
+{C bc=/._:src/internal/format/index.go}. Tested.
+
+{b:Problem.} The index accepts two live members with one path. An archive
+holds a directory {C:x} (mode 0777, its times, {C:user.*} attributes, an
+owner) and a symbolic link {C:x -> .}, in either order. Phase 1 makes both,
+and the link takes the place of the empty directory. The last phase opens
+{C:x} by its path, follows the link, and applies the metadata of the
+directory to the destination itself. {C:a/x -> ..} does the same one level
+down. The fix of finding 2 removes a member {C:.}, but not a member whose
+path leads to the destination.
+
+{b:Attack.} A user runs {C:eictar -xf evil.ect -d ~}. The home directory
+becomes 0777 less the umask, its times and its {C:user.*} attributes change,
+and the run ends with exit 0. With {C:-p}, the mode is exactly 0777, or 03777.
+As root there is no umask, and {C:--preserve-owner} gives the destination to
+the uid that the archive names. With {C:-d /} that is {C:/}. On a file system
+that ignores case, {C:X} and {C:x} are enough, so a check for equal paths is
+not a full fix.
+
+{b:Evidence.} A destination of mode 0700 became 0775, with mtime 1970-01-01
+and {C:user.audit="pwned"}, exit 0. The review reproduced this on a separate
+build.
+
+{b:Fix.} In the last phase, apply metadata only to the directory that phase
+1 made or found: record its device and inode, and refuse a link at the last
+name ({C:Lstat}, then compare with the open directory). Never apply metadata
+to the destination itself. Set the times through the open descriptor. When a
+directory member meets a link on disk, replace the link (as GNU tar does) or
+refuse the member. The fix of finding 14 also closes this one.
+
+{section 2 nc bid=finding-14: Finding 14. Extraction follows a link that another user put inside the destination (medium)}
+
+{b:Where:} each operation of {C bc=/._:src/internal/archive/extract.go}
+through {C:os.Root}: {C:fileWorker} ({C:OpenRoot}), {C:MkdirAll}, {C:parent},
+{C:writeSymlink}, {C:applyTimes}, {C:extractHardlink} and {C:finishDir}. Tested.
+
+{b:Problem.} {C:os.Root} refuses a path that leaves the destination, but it
+follows a relative link that stays inside it. Design
+{ref t=design.html#symbolic-links:§7.6} says so, and calls the risk small
+when extraction goes into a new directory. But design
+{ref t=design.html#extraction-reads-disk:§14.3} says "Extraction never
+follows a link and never goes through a linked directory". That is true only
+for a link that leads out.
+
+{b:Attack.} Root restores {C:/home} from a backup. The backup holds
+{C:alice/.ssh2/authorized_keys}, a file of alice with her key. Before the
+restore, alice runs {C:ln -s ../bob/.ssh ~/.ssh2}. The restore writes her
+file over {C:bob/.ssh/authorized_keys}, and gives bob's {C:.ssh} the mode of
+her directory. Alice can then log in as bob. With {C:-d /}, the same reaches
+{C:/root/.ssh} and {C:/etc/cron.d}. A race does the same with no link before
+the run: phase 1 makes all the directories, and phase 2 opens them again by
+path, so alice can swap a new directory under her home for a link.
+
+{b:Evidence.} With the planted link, bob's {C:authorized_keys} held alice's
+key, and his {C:.ssh} went from 0700 to 0775, exit 0. The review reproduced
+this on a separate build. The race worked in 3 runs of 3.
+
+{b:Fix.} Resolve each member path with no link following: on Linux 5.6 and
+later, {C:openat2} with {C:RESOLVE_NO_SYMLINKS} and {C:RESOLVE_BENEATH};
+elsewhere, open one name at a time with {C:O_NOFOLLOW} and {C:O_DIRECTORY}
+from the destination descriptor, and do the last operation with an {C:*at}
+call. Keep {C:os.Root} as a second barrier. Until then, correct design
+{ref t=design.html#extraction-reads-disk:§14.3}, and warn against an
+extraction as root into a tree where other users own directories.
+
+{section 2 nc bid=finding-15: Finding 15. A race between the check of -f and its resolution (medium)}
+
+{b:Where:} {C:createTarget} in {C bc=/._:src/internal/archive/writer.go}
+({C:checkLinks}, then {C:filepath.EvalSymlinks}), and the same order in
+{C:CompactArchive} in {C bc=/._:src/internal/archive/mutate.go}. Tested.
+
+{b:Problem.} {C:checkLinks} applies the rule of {C:fs.protected_symlinks} to
+each part of the path. When the path does not exist yet, it finds no link.
+Then {C:EvalSymlinks} resolves the path a second time. A link that appears
+between the two calls is followed with no check, and the rename replaces
+its target.
+
+{b:Attack.} The attack of {ref t=Security_Audit.html#finding-4:finding 4}:
+root runs {C:eictar -cf /tmp/backup.ect} from cron. A local user makes and
+removes the link {C:/tmp/backup.ect -> /etc/passwd} in a loop. A failed try
+gives exit 3 or a normal create, so the user can try at each run.
+
+{b:Evidence.} A test with the rule of another user's link, and a goroutine
+that made and removed the link, replaced the victim file in each of 6 runs,
+after 2 to 14 creates.
+
+{b:Fix.} Resolve the path in one pass: {C:Lstat} each part, apply the rule
+to each link, read it and go on with its target, to at most 40 links. Do not
+call {C:EvalSymlinks}. Then open the parent of the target, and do the open of
+the old file, the create of the temporary file and the rename relative to
+that directory descriptor.
+
+{section 2 nc bid=finding-16: Finding 16. The check of -f does not look at a link inside the target of a link (medium)}
+
+{b:Where:} {C:checkLinks} in {C bc=/._:src/internal/archive/writer.go}, used
+by create, compact, the change of passphrase and {C:--encrypt-archive}. Tested.
+
+{b:Problem.} {C:checkLinks} checks only the parts of the path as the user
+typed it. When a part is a link that it can follow, it does not check the
+links in the target of that link. {C:EvalSymlinks} follows them all. The
+kernel applies its rule to each link that it follows.
+
+{b:Attack.} Root has its own link {C:~/backups/latest.ect -> /tmp/latest.ect},
+and {C:/tmp/latest.ect} does not exist. A local user puts the link
+{C:/tmp/latest.ect -> /etc/shadow}. Then {C:eictar -cf ~/backups/latest.ect}
+by root replaces {C:/etc/shadow}. No race is necessary.
+
+{b:Evidence.} {C:-f} on the planted link was refused; {C:-f} on the user's
+own link to the planted link replaced the victim file. The review confirmed
+the gap in the code.
+
+{b:Fix.} The one-pass resolution of finding 15, which applies the rule to
+every link that it follows, also inside a link target.
+
+{section 2 nc bid=finding-17: Finding 17. Create gives the new archive the mode of a file that another user put at -f (medium)}
+
+{b:Where:} {C:createTarget} and {C:createTemp} in
+{C bc=/._:src/internal/archive/writer.go}. Tested (the mode); Code (the
+owner).
+
+{b:Problem.} The new archive takes the permission bits of the file that it
+replaces, and the umask does not limit them. The owner of that file is not
+checked.
+
+{b:Attack.} A local user creates {C:/tmp/backup.ect} with mode 0666 before
+root's {C:eictar -cf /tmp/backup.ect}. Root can rename over the file of
+another user. The new archive, owned by root, has mode 0666: the user can
+read a plaintext backup, and change or cut any backup. Under
+{C:fs.protected_regular}, {C:tar} gets {C:EACCES} for this file. In a shared
+group directory, the same lets one member widen the archive of another.
+
+{b:Evidence.} A file of mode 0666 at {C:-f}, then {C:umask 077} and a create:
+the archive had mode 0666.
+
+{b:Fix.} Take the mode only from a file that the caller owns. In a sticky
+directory that everyone can write, refuse a file that neither the caller nor
+the owner of the directory owns (exit 3), as the kernel does. In other cases,
+use {C:0666} less the umask.
+
+{section 2 nc bid=finding-18: Finding 18. -c with a passphrase source and no -e writes a plaintext archive (medium)}
+
+{b:Where:} {C:runCreate} in {C bc=/._:src/internal/cli/ops.go}, and
+{C:validate} in {C bc=/._:src/internal/cli/options.go}. Tested.
+
+{b:Problem.} On create, the program reads the passphrase source only with
+{C:-e}. Without {C:-e}, {C:--passphrase-file} and {C:--passphrase-env} are
+ignored with no message. Design {ref t=design.html#encryption:§10.3} says
+"A passphrase source means 'this archive is encrypted'", and
+{C:--encrypt-index} without {C:-e} is already a usage error.
+
+{b:Attack.} No attacker is necessary. A user puts
+{C:eictar -cf /mnt/offsite/backup.ect --passphrase-file /root/key /home} in
+cron and forgets {C:-e}. Each run writes the whole tree in the clear to
+off-site storage, with exit 0. The next read with the passphrase file says
+"the archive is not encrypted; if it should be, it has been replaced or
+stripped", which points to an attack and not to the missing option.
+
+{b:Evidence.} A create with {C:--passphrase-file} and no {C:-e}: exit 0, no
+output, and a later list with the passphrase file gave exit 3 with the
+message above. The review reproduced this on a separate build.
+
+{b:Fix.} On {C:-c} (and {C:-n -c}), a passphrase source without {C:-e} is a
+usage error (exit 2). Do not make it imply {C:-e}: an explicit error is the
+same as for the other options.
+
+{section 2 nc bid=finding-19: Finding 19. A 7 KB plain archive makes a listing use 4 GB of memory (medium)}
+
+{b:Where:} {C:CodecSpec.Params} ({C:map[string]any}) in
+{C bc=/._:src/internal/format/index.go}, and {C:decModeFor} in
+{C bc=/._:src/internal/format/cbor.go}. Tested.
+
+{b:Problem.} The decoder accepts any CBOR value in a codec parameter, also
+arrays and maps nested 32 levels deep. The bound on elements applies to
+each array, not to the whole index. The bound of
+{ref t=Security_Audit.html#finding-6:finding 6} limits the bytes of the
+index (200 times its compressed size, at most 1 GiB), not the Go memory that
+those bytes decode into. An empty CBOR map is 1 byte, and becomes about 67
+bytes of Go memory. {C:Validate} does not look at the parameters.
+
+{b:Attack.} A plain archive has one catalog entry that no member uses, with
+parameters that hold 15 arrays of 4,194,304 empty maps. The 63 MB of CBOR
+compresses to 7 KB. Each user who lists, extracts, verifies, appends to,
+compacts or asks {C:--info} of the file pays the memory. The 1 GiB bound
+allows about 67 GiB, so the kernel can stop the process, and other
+processes. An encrypted index cannot be forged without the passphrase.
+
+{b:Evidence.}
+
+{stable col=4 header sb b== i=3% w=94%:
+| Archive | Command | Peak memory | Exit |
+| 7,083 bytes, empty maps | {C:-t} | 4.2 GB | 0 |
+| the same | {C:--info} | 8.1 GB | 0 |
+| the same | {C:-x} | 4.2 GB | 0 |
+| 2,895 bytes, 4M members | {C:-t} | 1.6 GB | 3, after the decode |
+}
+
+The review reproduced the first row on a separate build: 4,189,272 KB, exit 0.
+
+{b:Fix.} Decode a parameter only as an integer or a text string, as every
+writer of eictar makes them, and refuse arrays, maps and byte strings. Bound
+the number of keys and of catalog entries. Bound the decoded memory, not only
+the bytes: count the items of the CBOR before the decode, and weight each
+array of structures by the Go size of its element. Add the bound to design
+{ref t=design.html#extraction-reads-disk:§14.3}.
+
+{section 2 nc bid=finding-20: Finding 20. --repair removes a complete generation when its trailer magic is damaged (low)}
+
+{b:Where:} {C:RepairArchive} in {C bc=/._:src/internal/archive/mutate.go}.
+Tested.
+
+{b:Problem.} v1.1.4 made {C:--repair} refuse to remove a generation that
+looks complete, unless {C:--discard-damaged} is given
+({ref t=design.html#repair:§9.5}). The test of "complete" is the 8 bytes of
+the trailer magic alone. When the damage is in those bytes, repair takes the
+file for an interrupted write, and removes the newest committed generation
+with no question. Its index and the other 88 bytes of its trailer are good.
+
+{b:Attack.} Not an attack: one bad byte in the last sector loses a committed
+generation, in the path that v1.1.4 made safe.
+
+{b:Evidence.} A create, an append, then one byte changed at the start of the
+last trailer: {C:--repair} printed "removed 389 bytes; restored generation 1"
+with exit 0, and the appended member was gone. The same damage 76 bytes
+later was refused with exit 3, as intended. The review reproduced this on a
+separate build.
+
+{b:Fix.} Also take the generation as complete when the last 96 bytes, with
+the magic left out, read as a trailer whose index ends at the trailer and
+whose generation follows the one before. Better, offer to write the magic
+again.
+
+{section 2 nc bid=finding-21: Finding 21. Blobs that overlap (low)}
+
+{b:Where:} {C:validateMemberRanges} in
+{C bc=/._:src/internal/archive/reader.go}, {C:copyBlobs} and {C:deadSpace}
+in {C bc=/._:src/internal/archive/mutate.go}, and pass B of
+{C bc=/._:src/internal/archive/encrypt.go}. Tested.
+
+{b:Problem.} Each blob must be inside the body, but two blobs can overlap. No
+writer of eictar makes that: shared content uses {C:data}, and a hardlink has
+no blob.
+
+{b:Attack.} A plain archive of 1 MB holds one blob and 200 members that all
+point to it. {C:--info} shows a dead space of -208,666,624 bytes, and
+{C:--compact} (or {C:--encrypt-archive}) writes 210 MB. The output grows by
+about the blob size for each 4.5 bytes of index.
+
+{b:Fix.} In {C:validateMemberRanges}, sort the blobs and dictionaries by
+offset, and refuse an overlap as a corrupt index. Apply the same rule in the
+second reader, and state it in format.md §8. Treat a negative dead space
+as damage.
+
+{section 2 nc bid=finding-22: Finding 22. A member id of 2^64-1 wraps the next id to 0 (low)}
+
+{b:Where:} {C:OpenAppend} in {C bc=/._:src/internal/archive/writer.go}
+({C:maxID + 1}), and {C bc=/._:src/internal/archive/dedup.go}. Tested.
+
+{b:Problem.} With an old member of id 2{S:64}-1, the first new id is 0. Dedup
+then counts each old owner as written by this run, so it shares old content
+without the check that design {ref t=design.html#identical-content-m11:§4.3}
+describes ("an old owner is checked before it is first used").
+
+{b:Attack.} A plain archive holds a member with id 2{S:64}-1, and a member
+whose digest is that of a file the victim will append, with other bytes in
+its blob. The victim's append shares the bad blob, and ends with exit 0.
+{C:--verify} and extraction find it later with exit 3. With a normal id, the
+same append warns and stores the file in full.
+
+{b:Fix.} In {C:Validate}, refuse an id above a bound such as 2{S:63}. In
+{C:OpenAppend}, refuse an id that wraps. In dedup, keep the set of the old
+ids, and do not compare ids.
+
+{section 2 nc bid=finding-23: Finding 23. --repair takes quadratic time on crafted trailers (low)}
+
+{b:Where:} the scan of {C:RepairArchive} in
+{C bc=/._:src/internal/archive/mutate.go}, which calls {C:Reader.load} for
+each match of the trailer magic. Tested.
+
+{b:Problem.} Each candidate trailer with a correct CRC can claim the index
+from the body to its own position. The scan reads and hashes that index
+before it compares the digest, so the work is about {i:n}{S:2}/192 bytes of
+BLAKE3 for a file of {i:n} bytes.
+
+{b:Attack.} {C:--repair} or {C:--repair -n} of a file from someone else.
+Memory stays small. The user can stop the run.
+
+{b:Evidence.} 1.9 MB took 5 s, and 3.8 MB took 15 s (65 s of CPU). Each
+doubling of the size made it 3 to 4 times slower.
+
+{b:Fix.} Give the scan a budget of bytes to hash, for example 4 times the
+file size plus 1 GiB, and stop with exit 3 when it is used. Do the cheap
+checks first: the index must end at the trailer.
+
+{section 2 nc bid=finding-24: Finding 24. Large chunks exceed --memory-limit (low)}
+
+{b:Where:} {C:boundByMemory} in {C bc=/._:src/internal/archive/extract.go},
+and the xz decoder in {C bc=/._:src/internal/codec/xz.go}. Tested.
+
+{b:Problem.} The bound counts two buffers of the chunk size for each worker.
+xz makes a third, a dictionary of the chunk size for each chunk. No
+{C:GOMEMLIMIT} is set, so the garbage of each chunk stays until the heap
+doubles. The chunk size comes from the index, up to 256 MiB.
+
+{b:Evidence.} {C:--verify --memory-limit 512M} reached 806 MB with zstd and
+1.35 GB with xz, on archives of 263 KB and 1.3 MB.
+
+{b:Fix.} Give each codec a {C:DecodeMemory(chunk)}, as {C:EncodeMemory} does
+for the writer, and count it. Keep the xz dictionary in the decoder. Call
+{C:debug.SetMemoryLimit} when {C:--memory-limit} is given.
+
+{section 2 nc bid=finding-25: Finding 25. --info writes codec names and parameters with no escape (low)}
+
+{b:Where:} {C:writeInfo} in {C bc=/._:src/internal/cli/mutate.go}. Tested.
+Two parts of this review found it separately.
+
+{b:Problem.} The fix of {ref t=Security_Audit.html#finding-12:finding 12}
+escapes names on a terminal. The listing escapes the codec cell too. But
+{C:--info} writes each catalog entry as it is, also an entry that no member
+uses, and {C:Validate} does not check catalog names.
+
+{b:Attack.} A catalog entry named
+{C:zstd\\x1b[2J\\x1b]0;pwned\\x07}: {C:eictar --info -f evil.ect} on a terminal
+clears the screen and sets the window title.
+
+{b:Fix.} Pass each string from the archive through {C:namesFor(stdout)} in
+{C:writeInfo}, with a test like {C:TestNamesOnATerminal}. Refuse a catalog name
+that is not a known codec, and a parameter that is not printable.
+
+{section 2 nc bid=finding-26: Finding 26. An append to a substituted plaintext archive stores new content in the clear (low)}
+
+{b:Where:} {C:OpenAppend} in {C bc=/._:src/internal/archive/writer.go}, and
+the option rules in {C bc=/._:src/internal/cli/options.go}. Tested.
+
+{b:Problem.} Design {ref t=design.html#integrity-its-limits:§14.4} documents
+the downgrade for reads: without a passphrase option, a plaintext archive in
+place of an encrypted one opens with no prompt. A write then stores new
+content in the clear. A user at a terminal cannot ask for the check: only a
+passphrase file or variable turns it on, and {C:-e} on {C:-r} is a usage
+error.
+
+{b:Attack.} An attacker who can write the archive file, but has no
+passphrase, puts any plaintext archive in its place. The user runs
+{C:eictar -rf backup.ect new/} as usual. No prompt comes, the run ends with
+exit 0, and {C:new/} is in the clear.
+
+{b:Fix.} Accept {C:-e} on each operation on an existing archive, as "this
+archive must be encrypted": prompt as now, and refuse a plaintext archive.
+A configuration key such as {C:require-encryption} lets a user set it once.
+Document the case in {ref t=design.html#integrity-its-limits:§14.4} and in
+the man page.
+
+{section 2 nc bid=finding-27: Finding 27. With --encrypt-index, the trailers show counts and sizes for each generation (low)}
+
+{b:Where:} the trailer ({C bc=/._:src/internal/format/trailer.go}) and the
+append path of {C bc=/._:src/internal/archive/writer.go}. Tested.
+
+{b:Problem.} Design {ref t=design.html#what-observer-sees:§14.1} says that
+with {C:--encrypt-index} "an observer sees only that the archive exists, and
+its total size". But each trailer shows, in the clear, the generation, the
+offset and length of the index, and the live member count. An append writes
+after the old trailer, so each earlier trailer stays until a compact.
+
+{b:Attack.} An observer with no passphrase reads, for each generation, the
+number of live members, how many were added or removed, and the bytes that
+it added. When a generation adds one file, its stored size is exact.
+
+{b:Fix.} Correct design {ref t=design.html#what-observer-sees:§14.1}, the man
+page and the README. A sealed member count is possible in a later format
+version, but the old trailers of an append stay in the clear until a
+compact.
+
+{section 2 nc bid=finding-28: Finding 28. With --encrypt-index, the length of the index lets an attacker test a name (low)}
+
+{b:Where:} the seal of the index in {C bc=/._:src/internal/format/index.go}:
+compression, then the seal, with no padding. Tested.
+
+{b:Problem.} The trailer gives the exact length of the sealed index
+(finding 27). The index is compressed before it is sealed, so a name that
+repeats part of another name makes the index shorter. This is the setting of
+{ref t=Security_Audit.html#finding-7:finding 7}, for names in place of
+content. Design {ref t=design.html#what-observer-sees:§14.1} documents it for
+content only.
+
+{b:Attack.} A user who can add files to the tree, and see the archive after
+each backup, adds a file whose name is a guess of a secret name. In a test,
+the right guess made the sealed index 7 to 8 bytes shorter at the median of
+six runs.
+
+{b:Fix.} Document it in {ref t=design.html#what-observer-sees:§14.1}. In code,
+pad the sealed index to a bucket size, or do not compress a sealed index.
+
+{section 2 nc bid=finding-29: Finding 29. Create keeps the group bits, but not the group (low)}
+
+{b:Where:} {C:createTemp} in {C bc=/._:src/internal/archive/writer.go}. Tested.
+
+{b:Problem.} The new archive gets the mode bits of the old one, but its group
+is the primary group of the user who creates it. Compact keeps the group.
+
+{b:Attack.} An archive is {C:-rw-r----- user:backup}. The user creates it
+again, and the new file is {C:-rw-r----- user:users}. Every member of
+{C:users} can then read it. No attacker acts. The user does not see the
+change.
+
+{b:Fix.} Do as compact does: keep the old group when the system permits it,
+and clear the group bits and warn when it does not.
+
+{section 2 nc bid=finding-30: Finding 30. The temporary file of create is wider than the old archive for a short time (low)}
+
+{b:Where:} {C:createTemp} in {C bc=/._:src/internal/archive/writer.go}. Tested.
+
+{b:Problem.} The temporary file is made with mode 0666 less the umask, and
+gets the mode of the old archive after that. When the old archive is 0600
+and the umask is 022, the file is 0644 for a short time. A descriptor opened
+in that time can read the whole new archive later.
+
+{b:Evidence.} A watcher with inotify opened the file before its {C:chmod} in
+10 of 2000 creates.
+
+{b:Fix.} Make the temporary file with mode 0600, and set the final mode at
+the end, as compact does.
+
+{section 2 nc bid=finding-31: Finding 31. A failed write of the output gives exit 0 (low)}
+
+{b:Where:} the output of {C:-t}, {C:-tv}, {C:--info}, the summary of
+{C:--verify} and the list of {C:-n}, in {C bc=/._:src/internal/cli/ops.go},
+{C bc=/._:src/internal/cli/mutate.go} and {C bc=/._:src/internal/cli/dryrun.go}.
+Tested.
+
+{b:Problem.} These paths ignore the error of each write. {C:--json} checks
+it and gives exit 4.
+
+{b:Attack.} A script runs {C:eictar -tf a.ect > manifest} on a full disk. It
+gets a short manifest and exit 0, and keeps it as correct.
+
+{b:Fix.} Write the output through a {C:bufio.Writer}, and give exit 4 when its
+{C:Flush} fails.
+
+{section 2 nc bid=finding-32: Finding 32. The check of a passphrase file does not look at its write bits or owner (low)}
+
+{b:Where:} {C:passphraseFileExposure} in
+{C bc=/._:src/internal/cli/access_unix.go}. Tested (the mode); Code (the
+owner).
+
+{b:Problem.} The fix of {ref t=Security_Audit.html#finding-8:finding 8} warns
+when others can read the file. On Unix it does not warn when others can
+write it, or when another user owns it. On Windows, another owner gives a
+warning.
+
+{b:Attack.} Root encrypts backups with a passphrase file of mode 0622, or one
+that another user owns. That user writes a passphrase of their own into it
+before the run, and can then read the backups.
+
+{b:Fix.} Also warn when the file is writable by group or others, or owned by
+a user other than the caller or root. Check the open file, so that the check
+and the read are of the same file.
+
+{section 2 nc bid=finding-33: Finding 33. Windows: x\.. names the destination (low)}
+
+{b:Where:} {C:IsStoredPath} in {C bc=/._:src/internal/fsutil/path.go}, and
+{C:os.Root} on Windows. Code only.
+
+{b:Problem.} {C:IsStoredPath} splits a path only on {C:/}. On Windows,
+{C:os.Root} cleans {C:x\\..} to {C:.}, and removes trailing dots and spaces.
+So a directory member {C:x\\..} names the destination, and {C:f}, {C:f.},
+{C:F} and {C:a\\..\\f} are one file. {C:os.Root} still refuses {C::},
+reserved names and a path that escapes, so nothing leaves the destination.
+
+{b:Attack.} An archive changes the times and the read-only attribute of the
+destination, and goes round the rules on collisions. Windows restores no
+owner, mode or xattrs, so the effect is small.
+
+{b:Fix.} On Windows, refuse a member path with {C:\\}, {C::}, a part that ends
+in a dot or a space, or a reserved name. Compare paths without case for
+collisions. The fix of finding 13 closes the case of the destination on all
+systems.
+
+{section 2 nc bid=finding-34: Finding 34. chown after the xattrs removes file capabilities (information)}
+
+{b:Where:} {C:writeFile} in {C bc=/._:src/internal/archive/extract.go}: the
+xattrs, then {C:fchown}, then {C:fchmod}. Code only.
+
+{b:Problem.} On Linux, {C:fchown} of a regular file clears
+{C:security.capability}. So {C:-p --preserve-owner} as root never restores a
+file capability, which design {ref t=design.html#metadata-extraction:§7.7}
+says it does. {C:--diff-extract} as root reports a false difference for each
+such file. The failure is safe: a capability is lost, never added.
+
+{b:Fix.} The owner first, then the xattrs, then the mode. Test it in the CI
+job that runs as root.
+
+{section 2 nc bid=finding-35: Finding 35. The creation time in the header is not authenticated (information)}
+
+{b:Where:} {C bc=/._:src/internal/format/header.go}; the keyed index digest
+covers the uuid, the generation and the index, not the header. Tested.
+
+{b:Problem.} With no passphrase, an attacker can set the creation time of an
+encrypted archive. {C:--info} shows the new time, and {C:--verify} passes.
+Design {ref t=design.html#integrity-its-limits:§14.4} names only the trailer
+flags as a field without authentication. The uuid is bound into each key,
+and a change of the other fields breaks the read.
+
+{b:Fix.} Name the creation time in {ref t=design.html#integrity-its-limits:§14.4}.
+In a later format version, bind the header into the input of the index
+digest.
+
+{section 2 nc bid=finding-36: Finding 36. A rollback needs no old copy (information)}
+
+{b:Where:} the append path of {C bc=/._:src/internal/archive/writer.go}.
+Tested.
+
+{b:Problem.} Design {ref t=design.html#integrity-its-limits:§14.4} documents
+a rollback as putting back an older archive. But an append writes after the
+old trailer, so the current file holds each earlier generation until a
+compact. To cut the file after an earlier trailer is enough: the archive
+opens, {C:--verify} passes, and deleted or replaced members come back. A
+{C:--repair} after damage at the end does the same.
+
+{b:Fix.} Say in {ref t=design.html#integrity-its-limits:§14.4} and the man
+page that a truncation is a rollback, and that only {C:--compact} removes the
+earlier generations. The defence stays the same: record the uuid and the
+generation in another place.
+
+{section 2 nc bid=finding-37: Finding 37. After an append, the data key is not set to zero (information)}
+
+{b:Where:} {C:OpenAppend}, {C:Writer.Close} and {C:Writer.abort} in
+{C bc=/._:src/internal/archive/writer.go}. Code only.
+
+{b:Problem.} The writer borrows the keys of the reader, and no code sets them
+to zero after {C:-r}, {C:-u} or {C:--delete}. Design
+{ref t=design.html#keys-passphrases:§14.2} says that the reader sets the data
+key to zero when it closes. Create, compact and the change of passphrase do.
+
+{b:Fix.} Call {C:Keys.Zero} in {C:Writer.Close} and {C:Writer.abort} for a
+writer that {C:OpenAppend} made.
+
+{section 2 nc bid=finding-38: Finding 38. --json writes C1 and text-direction characters as they are (information)}
+
+{b:Where:} the JSON output in {C bc=/._:src/internal/cli/ops.go}. Tested.
+
+{b:Problem.} {C:encoding/json} escapes C0 characters, but not U+0080 to
+U+009F or the text-direction characters U+202A to U+202E and U+2066 to
+U+2069. Design {ref t=design.html#names-terminal:§10.13} says that {C:--json}
+escapes each name. On a terminal, a crafted name can show as another name.
+
+{b:Fix.} Write these characters as {C:\\uXXXX} after the encode, which is
+valid JSON, or correct the design.
+
+{section 2 nc bid=finding-39: Finding 39. With -h, a link changed to a FIFO after the walk makes the open wait (information)}
+
+{b:Where:} {C:osSrcPaths.Open} in {C bc=/._:src/internal/archive/src.go}, which
+opens with no {C:O_NONBLOCK}. Tested through a test hook.
+
+{b:Problem.} A user who can write the tree points a link at a file, then at a
+FIFO after the walk. A {C:-h} backup waits for ever, with no message. {C:-h}
+follows links by design ({ref t=design.html#archiving-tree-that-other:§14.5}),
+so the effect is a hang only.
+
+{b:Fix.} Open with {C:O_RDONLY} and {C:O_NONBLOCK}, as the other opens of the
+walk do.
+
+{section 2 nc bid=finding-40: Finding 40. No signal handling (information)}
+
+{b:Where:} the program has no {C:signal.Notify}.
+{C bc=/._:src/internal/cli/password_unix.go} restores the terminal in a
+{C:defer}. Tested (the temporary file); Code (the prompt). Two parts of this
+review found the prompt case separately.
+
+{b:Problem.} {C:SIGINT} or {C:SIGTERM} during a create leaves the temporary
+file {C:.NAME.create-*}, with the mode of the old archive and a part of the
+archive, in the clear unless {C:-e}. A later walk of that directory stores
+it. A compact leaves {C:.NAME.rewrite-*}. Ctrl-C at the passphrase prompt
+ends the process before the {C:defer}, so echo stays off.
+
+{b:Fix.} Catch {C:SIGINT}, {C:SIGTERM} and {C:SIGHUP}: restore the terminal,
+remove the temporary file, and exit with 130 or 143.
+
+{section 2 nc bid=finding-41: Finding 41. Windows: -f follows junctions, and a rewrite drops the ACL (information)}
+
+{b:Where:} {C:MayFollow} in {C bc=/._:src/internal/meta/meta_windows.go}, and
+the rewrite in {C bc=/._:src/internal/archive/mutate.go}. Code only.
+
+{b:Problem.} On Windows, {C:checkLinks} does nothing, so a junction that
+another user made on the path is followed, and the rename replaces its
+target. Compact, the change of passphrase and {C:--encrypt-archive} write a
+new file that inherits the ACL of the directory, so an explicit ACL on the
+archive is lost. Design {ref t=design.html#other-platforms:§15.1} says that
+modes are not kept, but does not name the ACL.
+
+{b:Fix.} Copy the DACL of the old file before the rename. Refuse a reparse
+point in {C:-f} that the caller does not own, or document the case.
+
+{section 2 nc bid=finding-42: Finding 42. Shared content allows a ratio of 70,000 to 1 at extraction (information)}
+
+{b:Where:} shared content, {ref t=design.html#identical-content-m11:§4.3}.
+Tested.
+
+{b:Problem.} This is the feature as designed: each member that shares
+content is written in full. A plain archive of 1.4 MB lists 105 GB. With an
+owner of 1 GiB of zeros, the same index gives about 100 TB. Design
+{ref t=design.html#extraction-reads-disk:§14.3} does not name this cost
+beside the decompression bombs.
+
+{b:Fix.} Document it in {ref t=design.html#extraction-reads-disk:§14.3}. The
+user sees the total in {C:-tv} and {C:--info} before an extraction. An option
+such as {C:--max-extract-bytes}, or a check of free space against the
+selected total, lets a script bound it.
+
+{section 2 nc bid=finding-43: Finding 43. An unknown codec name gives exit 4 (information)}
+
+{b:Where:} {C:ErrUnknownCodec} in {C bc=/._:src/internal/codec/codec.go}, and
+{C:exitCodeFor} in {C bc=/._:src/internal/cli/run.go}. Code only.
+
+{b:Problem.} An archive that names a codec that this build does not have is
+"too new or damaged", which is exit 3 ({ref t=design.html#exit-codes:§10.7}).
+The error has no mapping, so it gives exit 4, an I/O error.
+
+{b:Fix.} Map {C:codec.ErrUnknownCodec} to exit 3, with a test.
+
+{section 2 nc bid=finding-44: Finding 44. A member id can be used again after a compact (information)}
+
+{b:Where:} {C:OpenAppend} in {C bc=/._:src/internal/archive/writer.go}. Code
+only.
+
+{b:Problem.} {C:--compact} drops a tombstone with the highest id, and the next
+append takes the highest id plus one. So an id comes back. format.md §8.3
+says that an id is never used again. Each new blob has a new salt and key, so
+this has no effect on the cryptography.
+
+{b:Fix.} Keep the highest id ever used, for example in the index, or correct
+format.md §8.3.
+
+{section 1 bid=prior-findings: The findings of the first review}
+
+{stable col=3 header sb b== i=3% w=94%:
+| # | Status in v1.1.4 | Notes |
+| 1 | Holds | See finding 34 for the order of {C:chown} and the xattrs. |
+| 2 | Bypassed | A member {C:.} is still removed, but finding 13 (and finding 33 on Windows) reach the destination another way. |
+| 3 | Holds | With {C:-h}, finding 39 makes the open wait, but no wrong file is read. |
+| 4 | Bypassed | Findings 15 and 16 go round the rule; finding 17 is the same pattern for a file; finding 41 on Windows. |
+| 5 | Holds | |
+| 6 | Holds for the bytes | Finding 19 goes round it in Go memory. |
+| 7 | Documented | Finding 28 is the same inference for names. |
+| 8 | Holds for reads | Finding 32: writers and other owners give no warning. |
+| 9 | Documented | Findings 26, 36 and 37 add to the known limits. |
+| 10 | Holds | |
+| 11 | Holds | |
+| 12 | Holds, with two gaps | Finding 25 ({C:--info}) and finding 38 ({C:--json}). |
+}
+
+{section 1 bid=what-review-found-sound: What the review found sound}
+
+{list t=*:
+  {item: {b:Nonces and keys.} A test read every index of 22 generations from two full life cycles: create with a trained dictionary, {C:-u}, {C:-r}, {C:--delete}, compact, recompress, change of passphrase and {C:--encrypt-archive}. It found 1475 salts, and none sealed two different ciphertexts. The HKDF info strings cannot collide, no key has two purposes, and the wrap binds the archive uuid.}
+  {item: {b:What the AADs bind.} A chunk binds the member id, its index and the last-chunk flag, which the reader takes from the authenticated index, so truncation and reorder fail. The index binds the generation, and its key binds the uuid. A dictionary binds its id. The review found no gap.}
+  {item: {b:Index authentication.} In an encrypted archive, the keyed index digest is checked first, in constant time, before any decompression or decode. A member without a seal in an encrypted archive is refused, and the reverse fails.}
+  {item: {b:KDF limits.} A crafted crypto header with time 65, or memory 2{S:32}-1, is refused with exit 3 before the prompt.}
+  {item: {b:Parsing.} The header, trailer and crypto header are checked before any allocation that their numbers decide. {C:Validate} covers ids, types, sparse maps, the chunk table, shared content, hardlinks and dictionaries with no overflow. No input made the program panic.}
+  {item: {b:Decoders.} The zstd window, the s2 length, the bound of gzip, flate and xz, the bytes after a stream, and the dictionary size all hold. 33,281 changed dictionaries given to the zstd encoder made no panic and no failed round trip.}
+  {item: {b:Extraction.} {C:..}, absolute paths and links that lead out are refused. Pipes and devices use {C:*at} calls with one name. Temporary files are random, {C:O_EXCL} and 0600, and removed on error. A hardlink links only to a file of this run. The umask, setuid and xattr rules hold. {C:--strip-components} cannot give an empty path. The dry run makes nothing.}
+  {item: {b:The scratch directory of {C:--diff-extract}.} It is made by {C:os.MkdirTemp} with mode 0700, all work in it is by unique names through {C:os.Root}, and it is removed at the end. Another user in {C:/tmp} cannot enter it.}
+  {item: {b:The walk.} Each directory is held, each file is opened by one name, and its device and inode are checked. FIFOs and devices are never opened. Spill files hold sealed chunks only, are 0600, and are removed at once.}
+  {item: {b:Locks and the write sequence.} The lock is taken before the trailer is read, and the path must still name the locked file. An append writes its index before its trailer, and an abort cuts the file back.}
+  {item: {b:Configuration.} No file is read from the current directory. The owner and mode of the configuration file are checked on the open file. Passphrase keys are refused in it. {C:--no-config} ignores the file and the environment.}
+  {item: {b:Messages.} Each error and warning, and the lines of {C:-t}, {C:-tv}, {C:-v}, {C:-n} and {C:--diff}, escape names on a terminal (except findings 25 and 38).}
+}
+
+{section 1 bid=order-of-work: Order of work}
+
+The review suggests this order, from the effect on a user and the size of the
+fix:
+
+{list t=1:
+  {item: Findings 13 and 14 together: one resolution of member paths with no link following, also for the metadata of the last phase. Correct design {ref t=design.html#extraction-reads-disk:§14.3}.}
+  {item: Findings 15, 16 and 17 together: one resolution of {C:-f} in a single pass, with the operations relative to the parent directory, and the rule of {C:fs.protected_regular} for an existing file.}
+  {item: Finding 18: a usage error. A small change.}
+  {item: Finding 19: parameters as integers and strings only, and a bound on the decoded memory.}
+  {item: Finding 20, then the other low findings. Findings 25, 31, 32, 37, 39 and 43 are each a small change.}
+  {item: The documentation findings: 26, 27, 28, 35, 36, 42 and 44.}
+}
+
+Each fix needs a test that fails without it, as for the first review.

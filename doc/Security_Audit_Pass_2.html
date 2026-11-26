@@ -1,0 +1,1955 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title> eictar security audit, pass 2</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <style>
+@media all
+{
+   body {
+      font-family      : Bitter,Merriweather,Bookman Old Style,serif ;
+      font-size        : 12pt;
+      font-weight      : normal;
+      text-align       : justify;
+      background-color : white;
+      line-height      : 1.3;
+   }
+   td.npar {
+      text-align : justify;
+   }
+   div.npar {
+      margin-left : 3em;
+      margin-block-start  : 1em;
+      margin-block-end    : 1em;
+   }
+   div.npar_nbr {
+      position    : absolute;
+      margin-left : -3em;
+      width       : 3em;
+   }
+   div.par {
+      margin-block-start  : 1em;
+      margin-block-end    : 1em;
+      margin-inline-start : 0px;
+      margin-inline-end   : 0px;
+   }
+   div.style-block {
+      margin-block-start  : 1em;
+      margin-block-end    : 1em;
+      margin-inline-start : 0px;
+      margin-inline-end   : 0px;
+   }
+   td.npar div.par {
+      margin-block-start  : 0.25em;
+      margin-block-end    : 0.25em;
+   }
+   div.quote {
+      box-sizing         : border-box;
+      margin-left        : 3%;
+      color              : #222222;
+      width              : 94%;
+      border-left        : 2.5pt solid #777777;
+      padding-left       : 0.5em;
+      padding-right      : 0.5em;
+      padding-top        : 0.25em;
+      padding-bottom     : 0.25em;
+      margin-block-start : 1em;
+      margin-block-end   : 1em;
+   }
+   div.quote :first-child {
+      margin-top : 0.5pt;
+   }
+   div.quote :last-child {
+      margin-bottom : 0.5pt;
+   }
+   div.caption {
+      margin-left  : 3%;
+      margin-right : 3%;
+      /* text-align   : center; */
+   }
+   div.caption p {
+      margin-top  : 0.5em;
+   }
+   span.npar {
+      position    : absolute;
+      margin-left : -3em;
+      width       : 3em;
+   }
+   .code {
+      font-family : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size : 11.0pt;
+      text-align  : left;
+   }
+   .small {
+      font-size : 80%;
+   }
+   .em {
+      font-family : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight : bold;
+   }
+   .italic {
+      font-style       : italic;
+   }
+   .hl {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight      : bold;
+      background-color : #eeeeee;
+   }
+   .comment {
+      font-family          : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-style           : italic;
+      background-color     : #FAFFFA;
+      border               : thin solid #6DBA6D;
+      padding              : 0.1em;
+      line-height          : 175%;
+      box-decoration-break : clone;
+   }
+   .comment-block {
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      background-color : #FAFFFA;
+      border           : thin solid #6DBA6D;
+      padding          : 5pt;
+      padding-top      : 0pt;
+      padding-bottom   : 0pt;
+      margin           : 1em;
+   }
+   .phead {
+      font-family        : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size          : 105%;
+      font-weight        : bold;
+      text-align         : left;
+      margin-block-start : 1em;
+      margin-block-end   : 0.2em;
+   }
+   .header {
+      font-family        : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size          : 110%;
+      font-weight        : bold;
+      text-align         : left;
+      border-bottom      : thin solid #777777;
+      background-color   : #eeeeee;
+      margin-block-start : 1em;
+      margin-block-end   : 0.5em;
+   }
+   .inline-strong {
+      font-family : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight : bold;
+   }
+   .inline-border {
+      border  : thin solid #777777;
+      padding : 1px;
+   }
+   .important {
+      border        : thin solid #cc0000;
+      border-radius : 4px;
+      padding       : 3px;
+      color         : #aa0000;
+      margin-left   : 15%;
+      margin-right  : 15%;
+      font-family   : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size     : 100%;
+      font-weight   : bold;
+   }
+   .title {
+      font-family : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size   : 210%;
+      font-weight : bold;
+      text-align  : left;
+   }
+   .author {
+      font-family : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size   : 120%;
+      font-weight : bold;
+      text-align  : left;
+   }
+   .summary {
+      font-family : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size   : 100%;
+      font-style  : italic;
+      font-weight : normal;
+   }
+   .definition-name {
+      font-family : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight : bold;
+   }
+   .definition-body {
+      font-family : Bitter,Merriweather,Bookman Old Style,serif ;
+      font-weight : normal;
+   }
+   sub {
+      font-size : 75%;
+   }
+   sup {
+      font-size : 75%;
+   }
+   .symbol {
+      font-family : MathJax_Main,Times New Roman,serif;
+   }
+   tt {
+      font-family : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size : 11.0pt;
+      font-weight : normal;
+   }
+   tt.code {
+      color : #CC0000;
+      background-color : #8A8A8A12;
+   }
+   h1 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 165%;
+      font-weight      : bold;
+      text-align       : left;
+      border-bottom    : medium solid #777777;
+      background-color : #eeeeee;
+   }
+   h2 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 145%;
+      font-weight      : bold;
+      text-align       : left;
+      border-bottom    : thin solid #777777;
+      background-color : #eeeeee;
+   }
+   h3 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 130%;
+      font-weight      : bold;
+      text-align       : left;
+      background-color : #eeeeee;
+   }
+   h4 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 120%;
+      font-weight      : bold;
+      text-align       : left;
+      margin-block-end : 0.4em;
+   }
+   h5 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 110%;
+      font-weight      : bold;
+      text-align       : left;
+      margin-block-end : 0.3em;
+   }
+   h6 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 105%;
+      font-weight      : bold;
+      text-align       : left;
+      margin-block-end : 0.2em;
+   }
+   ol {
+      font-weight  : normal;
+      text-align   : justify;
+      margin-right : 2em;
+   }
+   ul {
+      font-weight  : normal;
+      text-align   : justify;
+      margin-right : 2em;
+   }
+   li .par {
+      margin-block-start : 0.5em;
+      margin-block-end   : 0.5em;
+   }
+   table {
+      margin-block-start : 1em;
+      margin-block-end   : 1em;
+      font-size          : 100%;
+      font-weight        : normal;
+      border-collapse    : collapse;
+   }
+   th {
+      background-color : #E6F0FF;
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight      : bold;
+      text-align       : left;
+      vertical-align   : top;
+      padding          : 0.2em;
+   }
+   td p {
+      /* top/bottom right/left */
+      margin : 0.75em 0.1em;
+   }
+   td.smargin p {
+      /* top/bottom right/left */
+      margin : 0.25em 0.1em;
+   }
+   td {
+      vertical-align : top;
+      padding        : 0.2em;
+   }
+   table.contents {
+      border-collapse : collapse;
+      width           : 80%
+   }
+   td.contents-1 {
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size      : 120%;
+      font-weight    : bold;
+      text-align     : left;
+      vertical-align : top;
+   }
+   td.contents-2 {
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size      : 100%;
+      font-weight    : normal;
+      text-align     : left;
+      vertical-align : top
+   }
+   td.contents-3 {
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size      : 100%;
+      font-weight    : normal;
+      text-align     : left;
+      vertical-align : top
+   }
+   td.contents-4 {
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size      : 100%;
+      font-style     : italic;
+      text-align     : left;
+      vertical-align : top
+   }
+   td.contents-5 {
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size      : 100%;
+      font-style     : italic;
+      text-align     : left;
+      vertical-align : top
+   }
+   td.thead {
+      background-color : #E6F0FF;
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight      : bold;
+      text-align       : left;
+      vertical-align   : top
+   }
+   div.image {
+      width             : 100%;
+      page-break-inside : avoid;
+      margin-top        : 1.25em;
+      margin-bottom     : 1.25em;
+   }
+   .code-container {
+      background-color: #FAFCFF;
+      border          : thin solid #718FBC;
+      border-radius   : 2pt;
+      font-family     : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size       : 85%;
+      text-align      : left;
+      counter-reset   : line;
+      margin-top      : 1.25em;
+      margin-bottom   : 1.25em;
+      width           : fit-content;
+      line-height     : 110%;
+   }
+   .code-header {
+      border-bottom: thin solid #718FBC;
+      font-weight  : bold;
+      counter-reset: line;
+      padding      : 0.4em;
+   }
+   .code-container .noLineNum {
+      display       : block;
+      word-break    : break-all;
+      overflow-wrap : break-word;
+      padding-top   : 0.075em;
+      padding-bottom: 0.075em;
+      margin-left   : 0.5em;
+      text-align    : left;
+   }
+   .code-container .lineNum {
+      display       : block;
+      word-break    : break-all;
+      overflow-wrap : break-word;
+      padding-top   : 0.075em;
+      padding-bottom: 0.075em;
+      margin-left   : 3.5em;
+      text-align    : left;
+      border-left   : thin solid #718FBC;
+   }
+   .code-container .lineNum:before {
+      counter-increment: line;
+      content          : counter(line);
+      display          : inline-block;
+      margin-left      : -3.5em;
+      padding-right    : 0.7em;
+      margin-right     : 0.7em;
+      text-align       : right;
+      width            : 3em;
+   }
+   table.code-table {
+      background-color : #FAFCFF;
+      border           : thin solid #718FBC;
+      /*margin           : 0.1em;*/
+   }
+   table.code-inner-table {
+      margin           : 0.1em;
+      padding          : 0px;
+      border-spacing   : 0px;
+   }
+   th.code-table {
+      background-color : #FAFCFF;
+      border-bottom    : thin solid #718FBC;
+      font-family      : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size        : 11.0pt;
+      font-weight      : bold;
+   }
+   td.code-left {
+      font-family  : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size    : 11.0pt;
+      font-weight  : normal;
+      padding      : 0px;
+      text-align   : right;
+      border-right : thin solid #718FBC;
+   }
+   td.code-right {
+      font-family  : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size    : 11.0pt;
+      font-weight  : normal;
+      padding      : 0px;
+      text-align   : left;
+   }
+   table.panel-table {
+      border        : thin solid #777777;
+      font-family   : Bitter,Merriweather,Bookman Old Style,serif ;
+      text-align    : justify;
+      margin-top    : 1.5em;
+      margin-bottom : 1.5em;
+   }
+   th.panel-table {
+      border-bottom    : thin solid #777777;
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 100%;
+      font-weight      : bold;
+      text-align       : left;
+      vertical-align   : middle;
+      padding          : 0.125em 0.25em;
+   }
+   td.panel-table {
+      padding : 0.125em 0.25em;
+      overflow-wrap: anywhere;
+   }
+   th.panel-table p {
+      margin : 0.5em 0.1em;
+   }
+   td.panel-table p {
+      margin : 0.5em 0.1em;
+      overflow-wrap: anywhere;
+   }
+   table.forum-table {
+      border        : thin solid #777777;
+      font-family   : Bitter,Merriweather,Bookman Old Style,serif ;
+      text-align    : justify;
+      margin-top    : 1.5em;
+      margin-bottom : 1.5em;
+   }
+   th.forum-table {
+      border-bottom    : thin solid #777777;
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 100%;
+      font-weight      : bold;
+      text-align       : left;
+      vertical-align   : middle;
+      padding          : 0.125em 0.25em;
+   }
+   td.forum-table {
+      padding : 0.125em 0.25em;
+      overflow-wrap: anywhere;
+   }
+   th.forum-table p {
+      margin : 0.5em 0.1em;
+   }
+   th.forum-table .par {
+      margin-block-start  : 0.125em;
+      margin-block-end    : 0.125em;
+      margin-inline-start : 0px;
+      margin-inline-end   : 0px;
+   }
+   td.forum-table p {
+      margin : 0.5em 0.1em;
+      overflow-wrap: anywhere;
+   }
+   table.class-desc {
+      border      : 1.5px solid #777777;
+   }
+   th.class-desc {
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      /*background-color : #dddddd;*/
+      background-color : #E6F0FF;;
+      border-bottom    : 1.5px solid #777777;
+      vertical-align   : top;
+   }
+   td.class-desc-sec {
+      border-bottom  : 1.5px solid #777777;
+      border-top     : 1.5px solid #777777;
+      font-weight    : bold;
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      vertical-align : top
+   }
+   td.class-desc-item {
+      font-family    : Bitter,Merriweather,Bookman Old Style,serif ;
+      border-bottom  : 1.5px solid #777777;
+      border-top     : 1.5px solid #777777;
+      vertical-align : top;
+   }
+   td.class-desc-head {
+      font-weight    : bold;
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      vertical-align : top
+   }
+   .emath {
+      font-family    : MathJax_Main,Times New Roman,serif;
+      font-size      : 110%;
+      letter-spacing : 0.2pt;
+   }
+   div.emath {
+      margin-left   : 3%;
+      margin-top    : 0.5em;
+      margin-bottom : 0.5em;
+      max-width     : 97%;
+   }
+   table.matrix {
+      padding            : 0;
+      border-spacing     : 0;
+      margin-block-start : 0.1em;
+      margin-block-end   : 0.1em;
+   }
+   td.matrix {
+      vertical-align : middle;
+      text-align     : center;
+   }
+   td.lbracket {
+      font-size    : 20%;
+      border       : solid 1px black;
+      border-right : none;
+   }
+   td.rbracket {
+      font-size   : 20%;
+      border      : solid 1px black;
+      border-left : none;
+   }
+   td.lpipe {
+      font-size    : 20%;
+      border-left  : solid 1px black;
+   }
+   td.rpipe {
+      font-size    : 20%;
+      border-right : solid 1px black;
+   }
+   table.sum {
+      vertical-align : middle;
+      display        : inline-table;
+      margin-bottom  : 0.0em;
+      text-indent    : 0em;
+   }
+   .emath div.fraction {
+      display            : inline-grid;
+      grid-template-rows : 50% 50%;
+      vertical-align     : middle;
+      text-align         : center;
+      padding            : 0 0.10em;
+   }
+   .emath span.ftop {
+      align-self : end;
+      padding    : 0 0.15em 0.1em;
+   }
+   .emath span.fbottom {
+      border-top : 1px solid #000;
+      align-self : start;
+      padding    : 0.1em 0.15em 0;
+   }
+   .emath .supsub {
+      display         : inline-flex;
+      flex-direction  : column;
+      justify-content : space-between;
+      vertical-align  : middle;
+      font-size       : 80%;
+   }
+   .emath .supsubitem {
+      margin-top : -0.2em;
+      margin-bottom : -0.2em;
+      text-align    : left;
+   }
+   .emath .sum {
+      display            : inline-grid;
+      grid-template-rows : 25% 50% 25%;
+      vertical-align     : middle;
+      align-items        : center;
+      text-align         : center;
+   }
+   .emath .sum .stop {
+      font-size  : 80%;
+      align-self : end;
+   }
+   .emath .sum .smiddle {
+      font-size     : 100%;
+      align-self    : center;
+      margin-bottom : 0.1em;
+   }
+   .emath .sum .sbottom {
+      font-size  : 80%;
+      align-self : start;
+   }
+   .emath .quotation {
+      font-family : Bitter,Merriweather,Bookman Old Style,serif ;
+      font-size   : 90%;
+   }
+   .emath .root {
+      display: inline-block;
+      vertical-align: middle;
+      border-top: 1px solid;
+      border-left: 1px solid;
+      transform: skew(-15deg);
+      transform-origin: bottom left;
+      margin: 0 10px;
+      position: relative;
+   }
+   .emath .root:before {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      height: 40%;
+      width: 5px;
+      left: -5px;
+      border-top: 1px solid;
+      border-right: 1px solid;
+      transform: skew(30deg);
+      transform-origin: bottom right;
+   }
+   .emath .radicand {
+      display: inline-block;
+      padding-left: 0.5em;
+      transform: skew(15deg);
+   }
+   .emath .overbar {
+      position: relative;
+   }
+   .emath .overbar::after {
+      content    : var(--overbar-content);
+      line-height: 100%;
+      position   : absolute;
+      width      : 100%;
+      height     : 100%;
+      left       : 0;
+      top        :50%;
+      transform  : translateX(var(--overbar-translateX)) translateY(var(--overbar-translateY));
+      text-align : center;
+   }
+   table.frac {
+      vertical-align : middle;
+      display        : inline-table;
+      margin-bottom  : 0.5em;
+      margin-left    : 0.3em;
+      margin-right   : 0.3em;
+      text-indent    : 0em;
+   }
+   span.sumchar {
+      font-size: 160%;
+   }
+   span.sumsup {
+      font-size: 80%;
+   }
+   span.sumsub {
+      font-size: 80%;
+   }
+   .supsub {
+      line-height: 1.8;
+   }
+   table.tsupsub {
+      border-collapse : collapse;
+      font-size       : 80%;
+      position        : relative;
+      vertical-align  : middle;
+      display         : inline-table;
+      text-indent     : 0em;
+   }
+   td.tsupsub {
+      padding     : 0;
+      position    : relative;
+      text-indent : 0em;
+   }
+}
+@media screen
+{
+   body
+   {
+      margin-left  : 2.5em;
+      margin-right : 2.5em;
+   }
+}
+@media print
+{
+   @page {
+      margin: 10mm;
+      padding: 0;
+      size: A4;
+   }
+   body {
+      font-family : Bitter,Merriweather,Bookman Old Style,serif ;
+      font-size   : 10.5pt;
+      font-weight : normal;
+      text-align  : justify;
+      background-color : white;
+   }
+   h1 {
+      font-family        : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size          : 165%;
+      font-weight        : bold;
+      text-align         : left;
+      border-bottom      : medium solid #777777;
+      page-break-before  : always;
+      page-break-after   : avoid;
+   }
+   h2 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 145%;
+      font-weight      : bold;
+      text-align       : left;
+      border-bottom    : thin solid #777777;
+      background-color : #eeeeee;
+      page-break-after : avoid;
+   }
+   h3 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 130%;
+      font-weight      : bold;
+      text-align       : left;
+      background-color : #eeeeee;
+      page-break-after : avoid;
+   }
+   ol {
+      font-weight : normal;
+      text-align  : justify;
+   }
+   ul {
+      font-weight : normal;
+      text-align  : justify;
+   }
+   .code-container {
+      font-size       : 80%;
+   }
+   div.new_page {
+      page-break-before  : always;
+   }
+   .code {
+      font-family : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size : 9.66pt;
+      text-align  : left;
+   }
+   tt {
+      font-family : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size : 9.66pt;
+      font-weight : normal;
+   }
+   tt.code {
+      color : #CC0000;
+      background-color : #8A8A8A12;
+   }
+   th.code-table {
+      background-color : #FAFCFF;
+      border-bottom    : thin solid #718FBC;
+      font-family      : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size        : 9.66pt;
+      font-weight      : bold;
+   }
+   td.code-left {
+      font-family  : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size    : 9.66pt;
+      font-weight  : normal;
+      padding      : 0px;
+      text-align   : right;
+      border-right : thin solid #718FBC;
+   }
+   td.code-right {
+      font-family  : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size    : 9.66pt;
+      font-weight  : normal;
+      padding      : 0px;
+      text-align   : left;
+   }
+}
+  </style>
+</head>
+
+<body>
+<div class="style-block" style="text-align : center;font-size : 180%;"><b>eictar security audit, pass 2</b></div>
+<table style="width : 94%;margin-left : 3%;border-top:1px solid #777777;border-bottom:1px solid #777777;">
+<tbody><tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Version reviewed </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> v1.1.4 (commit ebd3fea) </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Date </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 2026-11-26 </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Earlier review </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <a href = "Security_Audit.html#scope-method">Security_Audit.eml</a>: v1.0.1, with follow-ups for v1.0.3 and v1.0.6 (findings 1 to 12) </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Scope </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> the source code of <tt class="code">src/</tt>, the archive format, and encrypted archives </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Status </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> open: no finding of this review is fixed yet </div>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="contents">
+<table class="contents">
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">1</div></td>
+<td class="contents-1" colspan="2"><a href="#scope-method"> Scope and method</a></td>
+</tr>
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">2</div></td>
+<td class="contents-1" colspan="2"><a href="#summary"> Summary</a></td>
+</tr>
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">3</div></td>
+<td class="contents-1" colspan="2"><a href="#findings"> Findings</a></td>
+</tr>
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">4</div></td>
+<td class="contents-1" colspan="2"><a href="#prior-findings"> The findings of the first review</a></td>
+</tr>
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">5</div></td>
+<td class="contents-1" colspan="2"><a href="#what-review-found-sound"> What the review found sound</a></td>
+</tr>
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">6</div></td>
+<td class="contents-1" colspan="2"><a href="#order-of-work"> Order of work</a></td>
+</tr>
+</table></div>
+<div style="page-break-inside:avoid;">
+<h1 id="scope-method">1&#x00A0;&#x00A0; Scope and method</h1>
+<div class="par">The first review (<tt class="code">Security_Audit.eml</tt>) looked at v1.0.1, and its
+follow-ups at v1.0.3 and v1.0.6. Since v1.0.6, about 18,000 lines of
+<tt class="code">src/</tt> changed: dictionaries, shared content, <tt class="code">--repair</tt>, <tt class="code">--compact</tt>,
+<tt class="code">--diff-extract</tt>, <tt class="code">--encrypt-archive</tt>, append in place, and Windows. This
+review covers the whole code again, and these changes in particular.</div>
+</div>
+<div class="par">The review had four parts. Each part read the code, and tried each attack
+on a build of v1.1.4 as a normal user on Linux:</div>
+<ol>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;"> An archive from an attacker as input: the header, trailer, index and CBOR, the decoders, and the paths that read an archive (<tt class="code">-t</tt>, <tt class="code">--info</tt>, <tt class="code">--verify</tt>, <tt class="code">-x</tt>, append, compact, repair).</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> The cryptography: keys, nonces, what each AAD binds, the KDF limits, downgrade and rollback, the change of passphrase, <tt class="code">--encrypt-archive</tt>, and the passphrase.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> Extraction: what <tt class="code">-x</tt>, <tt class="code">--diff</tt>, <tt class="code">--diff-extract</tt> and <tt class="code">-n</tt> do to the file system with an archive from an attacker, also as root.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;"> The writer and the command line: the walk, temporary and spill files, the rename of the archive, locks, repair, the configuration, the passphrase sources, and the escape of names in each output.</div>
+  </li>
+</ol>
+<div class="par">"Tested" means that the review made the attack happen. "Code" means that
+the review found it in the code. The review reproduced findings 13, 14, 18,
+19 and 20 a second time, on a separate build. Tests that need a second
+account, root, Windows, macOS or a BSD were not run: those parts were
+reviewed in the code only.</div>
+<div class="par">The findings continue the numbers of the first review, so that each number
+names one finding in both documents.</div>
+<div style="page-break-inside:avoid;">
+<h1 id="summary">2&#x00A0;&#x00A0; Summary</h1>
+<table style="border-top:2px solid #777777;border-bottom:2px solid #777777;">
+<thead style="border-bottom:2px solid #777777;;">
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> # </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Severity </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Finding </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Found by </div>
+</td>
+</thead>
+<tbody><tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 13 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> High </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> A directory and a link to <tt class="code">.</tt> with one path change the destination directory itself </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 14 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Medium; high for root and <tt class="code">-d /</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Extraction follows a link that another user put inside the destination </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 15 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Medium </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> A race between the check of <tt class="code">-f</tt> and its resolution follows a planted link </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 16 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Medium </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> The check of <tt class="code">-f</tt> does not look at a link inside the target of a link </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 17 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Medium </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Create gives the new archive the mode of a file that another user put at <tt class="code">-f</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 18 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Medium </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">-c</tt> with a passphrase source and no <tt class="code">-e</tt> writes a plaintext archive, with no message </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 19 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Medium </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> A 7 KB plain archive makes a listing use 4 GB of memory </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 20 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">--repair</tt> removes a complete generation when the damage is in its trailer magic </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 21 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Blobs that overlap: compact and <tt class="code">--encrypt-archive</tt> write one copy for each member </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 22 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> A member id of 2<sup>64</sup>-1 wraps the next id to 0, and the check of an old owner stops </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 23 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">--repair</tt> takes quadratic time on a file of crafted trailers </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 24 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Large chunks make extraction and <tt class="code">--verify</tt> use 1.6 to 2.6 times <tt class="code">--memory-limit</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 25 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">--info</tt> writes codec names and parameters from the archive with no escape </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 26 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> An append to a plaintext archive put in place of an encrypted one stores new content in the clear </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 27 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> With <tt class="code">--encrypt-index</tt>, the trailers show the member count and the size of each generation </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 28 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> With <tt class="code">--encrypt-index</tt>, the length of the compressed index lets an attacker test a guess of a name </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 29 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Create keeps the group bits of the old archive, but not its group </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 30 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> The temporary file of create is wider than the old archive for a short time </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 31 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> A failed write of the output of <tt class="code">-t</tt>, <tt class="code">--info</tt>, <tt class="code">--verify</tt> or <tt class="code">-n</tt> gives exit 0 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 32 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> The check of a passphrase file does not look at its write bits or its owner on Unix </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 33 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Windows: a member <tt class="code">x\..</tt> names the destination, and other names are aliases </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Code </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 34 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">chown</tt> after the xattrs removes file capabilities </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Code </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 35 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> The creation time in the header is not authenticated </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 36 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> A rollback needs no old copy: a truncation is enough </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 37 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> After an append, update or delete, the data key is not set to zero </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Code </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 38 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">--json</tt> writes C1 control characters and text-direction characters as they are </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 39 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> With <tt class="code">-h</tt>, a link changed to a FIFO after the walk makes the open wait for ever </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 40 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> No signal handling: a temporary file stays, and the prompt leaves echo off </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 41 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Windows: <tt class="code">-f</tt> follows junctions, and a rewrite drops the ACL of the archive </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Code </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 42 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Shared content allows a ratio of about 70,000 to 1 at extraction, with no bound </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 43 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> An unknown codec name gives exit 4, not 3 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Code </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 44 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> A member id can be used again after a compact, against format.md §8.3 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Code </div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="par">Three findings bypass a fix of the first review. Finding 13 reaches the
+destination as finding 2 did. Findings 15, 16 and 17 go round the rule of
+finding 4, and finding 16 needs no race. Findings 25 and 38 are gaps in the
+fix of finding 12.</div>
+<div class="par">Findings 13 to 17 matter most when root extracts an archive from someone
+else, restores a tree where other users own directories, or writes an
+archive in a directory that other users can write. Finding 19 affects any
+user who opens a plain archive from someone else. Finding 18 needs no
+attacker: a user who forgets <tt class="code">-e</tt> loses the confidentiality of the whole
+archive.</div>
+<div style="page-break-inside:avoid;">
+<h1 id="findings">3&#x00A0;&#x00A0; Findings</h1>
+<h2 id="finding-13"> Finding 13. A directory and a link to . with one path change the destination (high)</h2>
+</div>
+<div class="par"><b>Where:</b> <tt class="code">finishDir</tt> and <tt class="code">extractNode</tt> in
+<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;extract.&#8203;go</tt>, and <tt class="code">Index.Validate</tt> in
+<tt class="code">src/&#8203;internal/&#8203;format/&#8203;index.&#8203;go</tt>. Tested.</div>
+<div class="par"><b>Problem.</b> The index accepts two live members with one path. An archive
+holds a directory <tt class="code">x</tt> (mode 0777, its times, <tt class="code">user.*</tt> attributes, an
+owner) and a symbolic link <tt class="code">x -&gt; .</tt>, in either order. Phase 1 makes both,
+and the link takes the place of the empty directory. The last phase opens
+<tt class="code">x</tt> by its path, follows the link, and applies the metadata of the
+directory to the destination itself. <tt class="code">a/x -&gt; ..</tt> does the same one level
+down. The fix of finding 2 removes a member <tt class="code">.</tt>, but not a member whose
+path leads to the destination.</div>
+<div class="par"><b>Attack.</b> A user runs <tt class="code">eictar -xf evil.ect -d ~</tt>. The home directory
+becomes 0777 less the umask, its times and its <tt class="code">user.*</tt> attributes change,
+and the run ends with exit 0. With <tt class="code">-p</tt>, the mode is exactly 0777, or 03777.
+As root there is no umask, and <tt class="code">--preserve-owner</tt> gives the destination to
+the uid that the archive names. With <tt class="code">-d /</tt> that is <tt class="code">/</tt>. On a file system
+that ignores case, <tt class="code">X</tt> and <tt class="code">x</tt> are enough, so a check for equal paths is
+not a full fix.</div>
+<div class="par"><b>Evidence.</b> A destination of mode 0700 became 0775, with mtime 1970-01-01
+and <tt class="code">user.audit="pwned"</tt>, exit 0. The review reproduced this on a separate
+build.</div>
+<div class="par"><b>Fix.</b> In the last phase, apply metadata only to the directory that phase
+1 made or found: record its device and inode, and refuse a link at the last
+name (<tt class="code">Lstat</tt>, then compare with the open directory). Never apply metadata
+to the destination itself. Set the times through the open descriptor. When a
+directory member meets a link on disk, replace the link (as GNU tar does) or
+refuse the member. The fix of finding 14 also closes this one.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-14"> Finding 14. Extraction follows a link that another user put inside the destination (medium)</h2>
+<div class="par"><b>Where:</b> each operation of <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;extract.&#8203;go</tt>
+through <tt class="code">os.Root</tt>: <tt class="code">fileWorker</tt> (<tt class="code">OpenRoot</tt>), <tt class="code">MkdirAll</tt>, <tt class="code">parent</tt>,
+<tt class="code">writeSymlink</tt>, <tt class="code">applyTimes</tt>, <tt class="code">extractHardlink</tt> and <tt class="code">finishDir</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> <tt class="code">os.Root</tt> refuses a path that leaves the destination, but it
+follows a relative link that stays inside it. Design
+<a href = "design.html#symbolic-links">§7.6</a> says so, and calls the risk small
+when extraction goes into a new directory. But design
+<a href = "design.html#extraction-reads-disk">§14.3</a> says "Extraction never
+follows a link and never goes through a linked directory". That is true only
+for a link that leads out.</div>
+<div class="par"><b>Attack.</b> Root restores <tt class="code">/home</tt> from a backup. The backup holds
+<tt class="code">alice/.ssh2/authorized_keys</tt>, a file of alice with her key. Before the
+restore, alice runs <tt class="code">ln -s ../bob/.ssh ~/.ssh2</tt>. The restore writes her
+file over <tt class="code">bob/.ssh/authorized_keys</tt>, and gives bob's <tt class="code">.ssh</tt> the mode of
+her directory. Alice can then log in as bob. With <tt class="code">-d /</tt>, the same reaches
+<tt class="code">/root/.ssh</tt> and <tt class="code">/etc/cron.d</tt>. A race does the same with no link before
+the run: phase 1 makes all the directories, and phase 2 opens them again by
+path, so alice can swap a new directory under her home for a link.</div>
+<div class="par"><b>Evidence.</b> With the planted link, bob's <tt class="code">authorized_keys</tt> held alice's
+key, and his <tt class="code">.ssh</tt> went from 0700 to 0775, exit 0. The review reproduced
+this on a separate build. The race worked in 3 runs of 3.</div>
+<div class="par"><b>Fix.</b> Resolve each member path with no link following: on Linux 5.6 and
+later, <tt class="code">openat2</tt> with <tt class="code">RESOLVE_NO_SYMLINKS</tt> and <tt class="code">RESOLVE_BENEATH</tt>;
+elsewhere, open one name at a time with <tt class="code">O_NOFOLLOW</tt> and <tt class="code">O_DIRECTORY</tt>
+from the destination descriptor, and do the last operation with an <tt class="code">*at</tt>
+call. Keep <tt class="code">os.Root</tt> as a second barrier. Until then, correct design
+<a href = "design.html#extraction-reads-disk">§14.3</a>, and warn against an
+extraction as root into a tree where other users own directories.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-15"> Finding 15. A race between the check of -f and its resolution (medium)</h2>
+<div class="par"><b>Where:</b> <tt class="code">createTarget</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>
+(<tt class="code">checkLinks</tt>, then <tt class="code">filepath.EvalSymlinks</tt>), and the same order in
+<tt class="code">CompactArchive</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;mutate.&#8203;go</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> <tt class="code">checkLinks</tt> applies the rule of <tt class="code">fs.protected_symlinks</tt> to
+each part of the path. When the path does not exist yet, it finds no link.
+Then <tt class="code">EvalSymlinks</tt> resolves the path a second time. A link that appears
+between the two calls is followed with no check, and the rename replaces
+its target.</div>
+<div class="par"><b>Attack.</b> The attack of <a href = "Security_Audit.html#finding-4">finding 4</a>:
+root runs <tt class="code">eictar -cf /tmp/backup.ect</tt> from cron. A local user makes and
+removes the link <tt class="code">/tmp/backup.ect -&gt; /etc/passwd</tt> in a loop. A failed try
+gives exit 3 or a normal create, so the user can try at each run.</div>
+<div class="par"><b>Evidence.</b> A test with the rule of another user's link, and a goroutine
+that made and removed the link, replaced the victim file in each of 6 runs,
+after 2 to 14 creates.</div>
+<div class="par"><b>Fix.</b> Resolve the path in one pass: <tt class="code">Lstat</tt> each part, apply the rule
+to each link, read it and go on with its target, to at most 40 links. Do not
+call <tt class="code">EvalSymlinks</tt>. Then open the parent of the target, and do the open of
+the old file, the create of the temporary file and the rename relative to
+that directory descriptor.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-16"> Finding 16. The check of -f does not look at a link inside the target of a link (medium)</h2>
+<div class="par"><b>Where:</b> <tt class="code">checkLinks</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>, used
+by create, compact, the change of passphrase and <tt class="code">--encrypt-archive</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> <tt class="code">checkLinks</tt> checks only the parts of the path as the user
+typed it. When a part is a link that it can follow, it does not check the
+links in the target of that link. <tt class="code">EvalSymlinks</tt> follows them all. The
+kernel applies its rule to each link that it follows.</div>
+<div class="par"><b>Attack.</b> Root has its own link <tt class="code">~/backups/latest.ect -&gt; /tmp/latest.ect</tt>,
+and <tt class="code">/tmp/latest.ect</tt> does not exist. A local user puts the link
+<tt class="code">/tmp/latest.ect -&gt; /etc/shadow</tt>. Then <tt class="code">eictar -cf ~/backups/latest.ect</tt>
+by root replaces <tt class="code">/etc/shadow</tt>. No race is necessary.</div>
+<div class="par"><b>Evidence.</b> <tt class="code">-f</tt> on the planted link was refused; <tt class="code">-f</tt> on the user's
+own link to the planted link replaced the victim file. The review confirmed
+the gap in the code.</div>
+<div class="par"><b>Fix.</b> The one-pass resolution of finding 15, which applies the rule to
+every link that it follows, also inside a link target.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-17"> Finding 17. Create gives the new archive the mode of a file that another user put at -f (medium)</h2>
+<div class="par"><b>Where:</b> <tt class="code">createTarget</tt> and <tt class="code">createTemp</tt> in
+<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>. Tested (the mode); Code (the
+owner).</div>
+</div>
+<div class="par"><b>Problem.</b> The new archive takes the permission bits of the file that it
+replaces, and the umask does not limit them. The owner of that file is not
+checked.</div>
+<div class="par"><b>Attack.</b> A local user creates <tt class="code">/tmp/backup.ect</tt> with mode 0666 before
+root's <tt class="code">eictar -cf /tmp/backup.ect</tt>. Root can rename over the file of
+another user. The new archive, owned by root, has mode 0666: the user can
+read a plaintext backup, and change or cut any backup. Under
+<tt class="code">fs.protected_regular</tt>, <tt class="code">tar</tt> gets <tt class="code">EACCES</tt> for this file. In a shared
+group directory, the same lets one member widen the archive of another.</div>
+<div class="par"><b>Evidence.</b> A file of mode 0666 at <tt class="code">-f</tt>, then <tt class="code">umask 077</tt> and a create:
+the archive had mode 0666.</div>
+<div class="par"><b>Fix.</b> Take the mode only from a file that the caller owns. In a sticky
+directory that everyone can write, refuse a file that neither the caller nor
+the owner of the directory owns (exit 3), as the kernel does. In other cases,
+use <tt class="code">0666</tt> less the umask.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-18"> Finding 18. -c with a passphrase source and no -e writes a plaintext archive (medium)</h2>
+<div class="par"><b>Where:</b> <tt class="code">runCreate</tt> in <tt class="code">src/&#8203;internal/&#8203;cli/&#8203;ops.&#8203;go</tt>, and
+<tt class="code">validate</tt> in <tt class="code">src/&#8203;internal/&#8203;cli/&#8203;options.&#8203;go</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> On create, the program reads the passphrase source only with
+<tt class="code">-e</tt>. Without <tt class="code">-e</tt>, <tt class="code">--passphrase-file</tt> and <tt class="code">--passphrase-env</tt> are
+ignored with no message. Design <a href = "design.html#encryption">§10.3</a> says
+"A passphrase source means 'this archive is encrypted'", and
+<tt class="code">--encrypt-index</tt> without <tt class="code">-e</tt> is already a usage error.</div>
+<div class="par"><b>Attack.</b> No attacker is necessary. A user puts
+<tt class="code">eictar -cf /mnt/offsite/backup.ect --passphrase-file /root/key /home</tt> in
+cron and forgets <tt class="code">-e</tt>. Each run writes the whole tree in the clear to
+off-site storage, with exit 0. The next read with the passphrase file says
+"the archive is not encrypted; if it should be, it has been replaced or
+stripped", which points to an attack and not to the missing option.</div>
+<div class="par"><b>Evidence.</b> A create with <tt class="code">--passphrase-file</tt> and no <tt class="code">-e</tt>: exit 0, no
+output, and a later list with the passphrase file gave exit 3 with the
+message above. The review reproduced this on a separate build.</div>
+<div class="par"><b>Fix.</b> On <tt class="code">-c</tt> (and <tt class="code">-n -c</tt>), a passphrase source without <tt class="code">-e</tt> is a
+usage error (exit 2). Do not make it imply <tt class="code">-e</tt>: an explicit error is the
+same as for the other options.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-19"> Finding 19. A 7 KB plain archive makes a listing use 4 GB of memory (medium)</h2>
+<div class="par"><b>Where:</b> <tt class="code">CodecSpec.Params</tt> (<tt class="code">map[string]any</tt>) in
+<tt class="code">src/&#8203;internal/&#8203;format/&#8203;index.&#8203;go</tt>, and <tt class="code">decModeFor</tt> in
+<tt class="code">src/&#8203;internal/&#8203;format/&#8203;cbor.&#8203;go</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> The decoder accepts any CBOR value in a codec parameter, also
+arrays and maps nested 32 levels deep. The bound on elements applies to
+each array, not to the whole index. The bound of
+<a href = "Security_Audit.html#finding-6">finding 6</a> limits the bytes of the
+index (200 times its compressed size, at most 1 GiB), not the Go memory that
+those bytes decode into. An empty CBOR map is 1 byte, and becomes about 67
+bytes of Go memory. <tt class="code">Validate</tt> does not look at the parameters.</div>
+<div class="par"><b>Attack.</b> A plain archive has one catalog entry that no member uses, with
+parameters that hold 15 arrays of 4,194,304 empty maps. The 63 MB of CBOR
+compresses to 7 KB. Each user who lists, extracts, verifies, appends to,
+compacts or asks <tt class="code">--info</tt> of the file pays the memory. The 1 GiB bound
+allows about 67 GiB, so the kernel can stop the process, and other
+processes. An encrypted index cannot be forged without the passphrase.</div>
+<div class="par"><b>Evidence.</b></div>
+<table style="width : 94%;margin-left : 3%;border-top:2px solid #777777;border-bottom:2px solid #777777;">
+<thead style="border-bottom:2px solid #777777;;">
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Archive </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Command </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Peak memory </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Exit </div>
+</td>
+</thead>
+<tbody><tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 7,083 bytes, empty maps </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">-t</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 4.2 GB </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 0 </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> the same </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">--info</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 8.1 GB </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 0 </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> the same </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">-x</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 4.2 GB </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 0 </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 2,895 bytes, 4M members </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">-t</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 1.6 GB </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 3, after the decode </div>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="par">The review reproduced the first row on a separate build: 4,189,272 KB, exit 0.</div>
+<div class="par"><b>Fix.</b> Decode a parameter only as an integer or a text string, as every
+writer of eictar makes them, and refuse arrays, maps and byte strings. Bound
+the number of keys and of catalog entries. Bound the decoded memory, not only
+the bytes: count the items of the CBOR before the decode, and weight each
+array of structures by the Go size of its element. Add the bound to design
+<a href = "design.html#extraction-reads-disk">§14.3</a>.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-20"> Finding 20. --repair removes a complete generation when its trailer magic is damaged (low)</h2>
+<div class="par"><b>Where:</b> <tt class="code">RepairArchive</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;mutate.&#8203;go</tt>.
+Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> v1.1.4 made <tt class="code">--repair</tt> refuse to remove a generation that
+looks complete, unless <tt class="code">--discard-damaged</tt> is given
+(<a href = "design.html#repair">§9.5</a>). The test of "complete" is the 8 bytes of
+the trailer magic alone. When the damage is in those bytes, repair takes the
+file for an interrupted write, and removes the newest committed generation
+with no question. Its index and the other 88 bytes of its trailer are good.</div>
+<div class="par"><b>Attack.</b> Not an attack: one bad byte in the last sector loses a committed
+generation, in the path that v1.1.4 made safe.</div>
+<div class="par"><b>Evidence.</b> A create, an append, then one byte changed at the start of the
+last trailer: <tt class="code">--repair</tt> printed "removed 389 bytes; restored generation 1"
+with exit 0, and the appended member was gone. The same damage 76 bytes
+later was refused with exit 3, as intended. The review reproduced this on a
+separate build.</div>
+<div class="par"><b>Fix.</b> Also take the generation as complete when the last 96 bytes, with
+the magic left out, read as a trailer whose index ends at the trailer and
+whose generation follows the one before. Better, offer to write the magic
+again.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-21"> Finding 21. Blobs that overlap (low)</h2>
+<div class="par"><b>Where:</b> <tt class="code">validateMemberRanges</tt> in
+<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;reader.&#8203;go</tt>, <tt class="code">copyBlobs</tt> and <tt class="code">deadSpace</tt>
+in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;mutate.&#8203;go</tt>, and pass B of
+<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;encrypt.&#8203;go</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> Each blob must be inside the body, but two blobs can overlap. No
+writer of eictar makes that: shared content uses <tt class="code">data</tt>, and a hardlink has
+no blob.</div>
+<div class="par"><b>Attack.</b> A plain archive of 1 MB holds one blob and 200 members that all
+point to it. <tt class="code">--info</tt> shows a dead space of -208,666,624 bytes, and
+<tt class="code">--compact</tt> (or <tt class="code">--encrypt-archive</tt>) writes 210 MB. The output grows by
+about the blob size for each 4.5 bytes of index.</div>
+<div class="par"><b>Fix.</b> In <tt class="code">validateMemberRanges</tt>, sort the blobs and dictionaries by
+offset, and refuse an overlap as a corrupt index. Apply the same rule in the
+second reader, and state it in format.md §8. Treat a negative dead space
+as damage.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-22"> Finding 22. A member id of 2^64-1 wraps the next id to 0 (low)</h2>
+<div class="par"><b>Where:</b> <tt class="code">OpenAppend</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>
+(<tt class="code">maxID + 1</tt>), and <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;dedup.&#8203;go</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> With an old member of id 2<sup>64</sup>-1, the first new id is 0. Dedup
+then counts each old owner as written by this run, so it shares old content
+without the check that design <a href = "design.html#identical-content-m11">§4.3</a>
+describes ("an old owner is checked before it is first used").</div>
+<div class="par"><b>Attack.</b> A plain archive holds a member with id 2<sup>64</sup>-1, and a member
+whose digest is that of a file the victim will append, with other bytes in
+its blob. The victim's append shares the bad blob, and ends with exit 0.
+<tt class="code">--verify</tt> and extraction find it later with exit 3. With a normal id, the
+same append warns and stores the file in full.</div>
+<div class="par"><b>Fix.</b> In <tt class="code">Validate</tt>, refuse an id above a bound such as 2<sup>63</sup>. In
+<tt class="code">OpenAppend</tt>, refuse an id that wraps. In dedup, keep the set of the old
+ids, and do not compare ids.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-23"> Finding 23. --repair takes quadratic time on crafted trailers (low)</h2>
+<div class="par"><b>Where:</b> the scan of <tt class="code">RepairArchive</tt> in
+<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;mutate.&#8203;go</tt>, which calls <tt class="code">Reader.load</tt> for
+each match of the trailer magic. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> Each candidate trailer with a correct CRC can claim the index
+from the body to its own position. The scan reads and hashes that index
+before it compares the digest, so the work is about <i>n</i><sup>2</sup>/192 bytes of
+BLAKE3 for a file of <i>n</i> bytes.</div>
+<div class="par"><b>Attack.</b> <tt class="code">--repair</tt> or <tt class="code">--repair -n</tt> of a file from someone else.
+Memory stays small. The user can stop the run.</div>
+<div class="par"><b>Evidence.</b> 1.9 MB took 5 s, and 3.8 MB took 15 s (65 s of CPU). Each
+doubling of the size made it 3 to 4 times slower.</div>
+<div class="par"><b>Fix.</b> Give the scan a budget of bytes to hash, for example 4 times the
+file size plus 1 GiB, and stop with exit 3 when it is used. Do the cheap
+checks first: the index must end at the trailer.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-24"> Finding 24. Large chunks exceed --memory-limit (low)</h2>
+<div class="par"><b>Where:</b> <tt class="code">boundByMemory</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;extract.&#8203;go</tt>,
+and the xz decoder in <tt class="code">src/&#8203;internal/&#8203;codec/&#8203;xz.&#8203;go</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> The bound counts two buffers of the chunk size for each worker.
+xz makes a third, a dictionary of the chunk size for each chunk. No
+<tt class="code">GOMEMLIMIT</tt> is set, so the garbage of each chunk stays until the heap
+doubles. The chunk size comes from the index, up to 256 MiB.</div>
+<div class="par"><b>Evidence.</b> <tt class="code">--verify --memory-limit 512M</tt> reached 806 MB with zstd and
+1.35 GB with xz, on archives of 263 KB and 1.3 MB.</div>
+<div class="par"><b>Fix.</b> Give each codec a <tt class="code">DecodeMemory(chunk)</tt>, as <tt class="code">EncodeMemory</tt> does
+for the writer, and count it. Keep the xz dictionary in the decoder. Call
+<tt class="code">debug.SetMemoryLimit</tt> when <tt class="code">--memory-limit</tt> is given.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-25"> Finding 25. --info writes codec names and parameters with no escape (low)</h2>
+<div class="par"><b>Where:</b> <tt class="code">writeInfo</tt> in <tt class="code">src/&#8203;internal/&#8203;cli/&#8203;mutate.&#8203;go</tt>. Tested.
+Two parts of this review found it separately.</div>
+</div>
+<div class="par"><b>Problem.</b> The fix of <a href = "Security_Audit.html#finding-12">finding 12</a>
+escapes names on a terminal. The listing escapes the codec cell too. But
+<tt class="code">--info</tt> writes each catalog entry as it is, also an entry that no member
+uses, and <tt class="code">Validate</tt> does not check catalog names.</div>
+<div class="par"><b>Attack.</b> A catalog entry named
+<tt class="code">zstd\x1b[2J\x1b]0;pwned\x07</tt>: <tt class="code">eictar --info -f evil.ect</tt> on a terminal
+clears the screen and sets the window title.</div>
+<div class="par"><b>Fix.</b> Pass each string from the archive through <tt class="code">namesFor(stdout)</tt> in
+<tt class="code">writeInfo</tt>, with a test like <tt class="code">TestNamesOnATerminal</tt>. Refuse a catalog name
+that is not a known codec, and a parameter that is not printable.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-26"> Finding 26. An append to a substituted plaintext archive stores new content in the clear (low)</h2>
+<div class="par"><b>Where:</b> <tt class="code">OpenAppend</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>, and
+the option rules in <tt class="code">src/&#8203;internal/&#8203;cli/&#8203;options.&#8203;go</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> Design <a href = "design.html#integrity-its-limits">§14.4</a> documents
+the downgrade for reads: without a passphrase option, a plaintext archive in
+place of an encrypted one opens with no prompt. A write then stores new
+content in the clear. A user at a terminal cannot ask for the check: only a
+passphrase file or variable turns it on, and <tt class="code">-e</tt> on <tt class="code">-r</tt> is a usage
+error.</div>
+<div class="par"><b>Attack.</b> An attacker who can write the archive file, but has no
+passphrase, puts any plaintext archive in its place. The user runs
+<tt class="code">eictar -rf backup.ect new/</tt> as usual. No prompt comes, the run ends with
+exit 0, and <tt class="code">new/</tt> is in the clear.</div>
+<div class="par"><b>Fix.</b> Accept <tt class="code">-e</tt> on each operation on an existing archive, as "this
+archive must be encrypted": prompt as now, and refuse a plaintext archive.
+A configuration key such as <tt class="code">require-encryption</tt> lets a user set it once.
+Document the case in <a href = "design.html#integrity-its-limits">§14.4</a> and in
+the man page.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-27"> Finding 27. With --encrypt-index, the trailers show counts and sizes for each generation (low)</h2>
+<div class="par"><b>Where:</b> the trailer (<tt class="code">src/&#8203;internal/&#8203;format/&#8203;trailer.&#8203;go</tt>) and the
+append path of <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> Design <a href = "design.html#what-observer-sees">§14.1</a> says that
+with <tt class="code">--encrypt-index</tt> "an observer sees only that the archive exists, and
+its total size". But each trailer shows, in the clear, the generation, the
+offset and length of the index, and the live member count. An append writes
+after the old trailer, so each earlier trailer stays until a compact.</div>
+<div class="par"><b>Attack.</b> An observer with no passphrase reads, for each generation, the
+number of live members, how many were added or removed, and the bytes that
+it added. When a generation adds one file, its stored size is exact.</div>
+<div class="par"><b>Fix.</b> Correct design <a href = "design.html#what-observer-sees">§14.1</a>, the man
+page and the README. A sealed member count is possible in a later format
+version, but the old trailers of an append stay in the clear until a
+compact.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-28"> Finding 28. With --encrypt-index, the length of the index lets an attacker test a name (low)</h2>
+<div class="par"><b>Where:</b> the seal of the index in <tt class="code">src/&#8203;internal/&#8203;format/&#8203;index.&#8203;go</tt>:
+compression, then the seal, with no padding. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> The trailer gives the exact length of the sealed index
+(finding 27). The index is compressed before it is sealed, so a name that
+repeats part of another name makes the index shorter. This is the setting of
+<a href = "Security_Audit.html#finding-7">finding 7</a>, for names in place of
+content. Design <a href = "design.html#what-observer-sees">§14.1</a> documents it for
+content only.</div>
+<div class="par"><b>Attack.</b> A user who can add files to the tree, and see the archive after
+each backup, adds a file whose name is a guess of a secret name. In a test,
+the right guess made the sealed index 7 to 8 bytes shorter at the median of
+six runs.</div>
+<div class="par"><b>Fix.</b> Document it in <a href = "design.html#what-observer-sees">§14.1</a>. In code,
+pad the sealed index to a bucket size, or do not compress a sealed index.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-29"> Finding 29. Create keeps the group bits, but not the group (low)</h2>
+<div class="par"><b>Where:</b> <tt class="code">createTemp</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> The new archive gets the mode bits of the old one, but its group
+is the primary group of the user who creates it. Compact keeps the group.</div>
+<div class="par"><b>Attack.</b> An archive is <tt class="code">-rw-r----- user:backup</tt>. The user creates it
+again, and the new file is <tt class="code">-rw-r----- user:users</tt>. Every member of
+<tt class="code">users</tt> can then read it. No attacker acts. The user does not see the
+change.</div>
+<div class="par"><b>Fix.</b> Do as compact does: keep the old group when the system permits it,
+and clear the group bits and warn when it does not.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-30"> Finding 30. The temporary file of create is wider than the old archive for a short time (low)</h2>
+<div class="par"><b>Where:</b> <tt class="code">createTemp</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> The temporary file is made with mode 0666 less the umask, and
+gets the mode of the old archive after that. When the old archive is 0600
+and the umask is 022, the file is 0644 for a short time. A descriptor opened
+in that time can read the whole new archive later.</div>
+<div class="par"><b>Evidence.</b> A watcher with inotify opened the file before its <tt class="code">chmod</tt> in
+10 of 2000 creates.</div>
+<div class="par"><b>Fix.</b> Make the temporary file with mode 0600, and set the final mode at
+the end, as compact does.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-31"> Finding 31. A failed write of the output gives exit 0 (low)</h2>
+<div class="par"><b>Where:</b> the output of <tt class="code">-t</tt>, <tt class="code">-tv</tt>, <tt class="code">--info</tt>, the summary of
+<tt class="code">--verify</tt> and the list of <tt class="code">-n</tt>, in <tt class="code">src/&#8203;internal/&#8203;cli/&#8203;ops.&#8203;go</tt>,
+<tt class="code">src/&#8203;internal/&#8203;cli/&#8203;mutate.&#8203;go</tt> and <tt class="code">src/&#8203;internal/&#8203;cli/&#8203;dryrun.&#8203;go</tt>.
+Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> These paths ignore the error of each write. <tt class="code">--json</tt> checks
+it and gives exit 4.</div>
+<div class="par"><b>Attack.</b> A script runs <tt class="code">eictar -tf a.ect &gt; manifest</tt> on a full disk. It
+gets a short manifest and exit 0, and keeps it as correct.</div>
+<div class="par"><b>Fix.</b> Write the output through a <tt class="code">bufio.Writer</tt>, and give exit 4 when its
+<tt class="code">Flush</tt> fails.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-32"> Finding 32. The check of a passphrase file does not look at its write bits or owner (low)</h2>
+<div class="par"><b>Where:</b> <tt class="code">passphraseFileExposure</tt> in
+<tt class="code">src/&#8203;internal/&#8203;cli/&#8203;access_&#8203;unix.&#8203;go</tt>. Tested (the mode); Code (the
+owner).</div>
+</div>
+<div class="par"><b>Problem.</b> The fix of <a href = "Security_Audit.html#finding-8">finding 8</a> warns
+when others can read the file. On Unix it does not warn when others can
+write it, or when another user owns it. On Windows, another owner gives a
+warning.</div>
+<div class="par"><b>Attack.</b> Root encrypts backups with a passphrase file of mode 0622, or one
+that another user owns. That user writes a passphrase of their own into it
+before the run, and can then read the backups.</div>
+<div class="par"><b>Fix.</b> Also warn when the file is writable by group or others, or owned by
+a user other than the caller or root. Check the open file, so that the check
+and the read are of the same file.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-33"> Finding 33. Windows: x.. names the destination (low)</h2>
+<div class="par"><b>Where:</b> <tt class="code">IsStoredPath</tt> in <tt class="code">src/&#8203;internal/&#8203;fsutil/&#8203;path.&#8203;go</tt>, and
+<tt class="code">os.Root</tt> on Windows. Code only.</div>
+</div>
+<div class="par"><b>Problem.</b> <tt class="code">IsStoredPath</tt> splits a path only on <tt class="code">/</tt>. On Windows,
+<tt class="code">os.Root</tt> cleans <tt class="code">x\..</tt> to <tt class="code">.</tt>, and removes trailing dots and spaces.
+So a directory member <tt class="code">x\..</tt> names the destination, and <tt class="code">f</tt>, <tt class="code">f.</tt>,
+<tt class="code">F</tt> and <tt class="code">a\..\f</tt> are one file. <tt class="code">os.Root</tt> still refuses <tt class="code">:</tt>,
+reserved names and a path that escapes, so nothing leaves the destination.</div>
+<div class="par"><b>Attack.</b> An archive changes the times and the read-only attribute of the
+destination, and goes round the rules on collisions. Windows restores no
+owner, mode or xattrs, so the effect is small.</div>
+<div class="par"><b>Fix.</b> On Windows, refuse a member path with <tt class="code">\</tt>, <tt class="code">:</tt>, a part that ends
+in a dot or a space, or a reserved name. Compare paths without case for
+collisions. The fix of finding 13 closes the case of the destination on all
+systems.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-34"> Finding 34. chown after the xattrs removes file capabilities (information)</h2>
+<div class="par"><b>Where:</b> <tt class="code">writeFile</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;extract.&#8203;go</tt>: the
+xattrs, then <tt class="code">fchown</tt>, then <tt class="code">fchmod</tt>. Code only.</div>
+</div>
+<div class="par"><b>Problem.</b> On Linux, <tt class="code">fchown</tt> of a regular file clears
+<tt class="code">security.capability</tt>. So <tt class="code">-p --preserve-owner</tt> as root never restores a
+file capability, which design <a href = "design.html#metadata-extraction">§7.7</a>
+says it does. <tt class="code">--diff-extract</tt> as root reports a false difference for each
+such file. The failure is safe: a capability is lost, never added.</div>
+<div class="par"><b>Fix.</b> The owner first, then the xattrs, then the mode. Test it in the CI
+job that runs as root.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-35"> Finding 35. The creation time in the header is not authenticated (information)</h2>
+<div class="par"><b>Where:</b> <tt class="code">src/&#8203;internal/&#8203;format/&#8203;header.&#8203;go</tt>; the keyed index digest
+covers the uuid, the generation and the index, not the header. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> With no passphrase, an attacker can set the creation time of an
+encrypted archive. <tt class="code">--info</tt> shows the new time, and <tt class="code">--verify</tt> passes.
+Design <a href = "design.html#integrity-its-limits">§14.4</a> names only the trailer
+flags as a field without authentication. The uuid is bound into each key,
+and a change of the other fields breaks the read.</div>
+<div class="par"><b>Fix.</b> Name the creation time in <a href = "design.html#integrity-its-limits">§14.4</a>.
+In a later format version, bind the header into the input of the index
+digest.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-36"> Finding 36. A rollback needs no old copy (information)</h2>
+<div class="par"><b>Where:</b> the append path of <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>.
+Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> Design <a href = "design.html#integrity-its-limits">§14.4</a> documents
+a rollback as putting back an older archive. But an append writes after the
+old trailer, so the current file holds each earlier generation until a
+compact. To cut the file after an earlier trailer is enough: the archive
+opens, <tt class="code">--verify</tt> passes, and deleted or replaced members come back. A
+<tt class="code">--repair</tt> after damage at the end does the same.</div>
+<div class="par"><b>Fix.</b> Say in <a href = "design.html#integrity-its-limits">§14.4</a> and the man
+page that a truncation is a rollback, and that only <tt class="code">--compact</tt> removes the
+earlier generations. The defence stays the same: record the uuid and the
+generation in another place.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-37"> Finding 37. After an append, the data key is not set to zero (information)</h2>
+<div class="par"><b>Where:</b> <tt class="code">OpenAppend</tt>, <tt class="code">Writer.Close</tt> and <tt class="code">Writer.abort</tt> in
+<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>. Code only.</div>
+</div>
+<div class="par"><b>Problem.</b> The writer borrows the keys of the reader, and no code sets them
+to zero after <tt class="code">-r</tt>, <tt class="code">-u</tt> or <tt class="code">--delete</tt>. Design
+<a href = "design.html#keys-passphrases">§14.2</a> says that the reader sets the data
+key to zero when it closes. Create, compact and the change of passphrase do.</div>
+<div class="par"><b>Fix.</b> Call <tt class="code">Keys.Zero</tt> in <tt class="code">Writer.Close</tt> and <tt class="code">Writer.abort</tt> for a
+writer that <tt class="code">OpenAppend</tt> made.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-38"> Finding 38. --json writes C1 and text-direction characters as they are (information)</h2>
+<div class="par"><b>Where:</b> the JSON output in <tt class="code">src/&#8203;internal/&#8203;cli/&#8203;ops.&#8203;go</tt>. Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> <tt class="code">encoding/json</tt> escapes C0 characters, but not U+0080 to
+U+009F or the text-direction characters U+202A to U+202E and U+2066 to
+U+2069. Design <a href = "design.html#names-terminal">§10.13</a> says that <tt class="code">--json</tt>
+escapes each name. On a terminal, a crafted name can show as another name.</div>
+<div class="par"><b>Fix.</b> Write these characters as <tt class="code">\uXXXX</tt> after the encode, which is
+valid JSON, or correct the design.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-39"> Finding 39. With -h, a link changed to a FIFO after the walk makes the open wait (information)</h2>
+<div class="par"><b>Where:</b> <tt class="code">osSrcPaths.Open</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;src.&#8203;go</tt>, which
+opens with no <tt class="code">O_NONBLOCK</tt>. Tested through a test hook.</div>
+</div>
+<div class="par"><b>Problem.</b> A user who can write the tree points a link at a file, then at a
+FIFO after the walk. A <tt class="code">-h</tt> backup waits for ever, with no message. <tt class="code">-h</tt>
+follows links by design (<a href = "design.html#archiving-tree-that-other">§14.5</a>),
+so the effect is a hang only.</div>
+<div class="par"><b>Fix.</b> Open with <tt class="code">O_RDONLY</tt> and <tt class="code">O_NONBLOCK</tt>, as the other opens of the
+walk do.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-40"> Finding 40. No signal handling (information)</h2>
+<div class="par"><b>Where:</b> the program has no <tt class="code">signal.Notify</tt>.
+<tt class="code">src/&#8203;internal/&#8203;cli/&#8203;password_&#8203;unix.&#8203;go</tt> restores the terminal in a
+<tt class="code">defer</tt>. Tested (the temporary file); Code (the prompt). Two parts of this
+review found the prompt case separately.</div>
+</div>
+<div class="par"><b>Problem.</b> <tt class="code">SIGINT</tt> or <tt class="code">SIGTERM</tt> during a create leaves the temporary
+file <tt class="code">.NAME.create-*</tt>, with the mode of the old archive and a part of the
+archive, in the clear unless <tt class="code">-e</tt>. A later walk of that directory stores
+it. A compact leaves <tt class="code">.NAME.rewrite-*</tt>. Ctrl-C at the passphrase prompt
+ends the process before the <tt class="code">defer</tt>, so echo stays off.</div>
+<div class="par"><b>Fix.</b> Catch <tt class="code">SIGINT</tt>, <tt class="code">SIGTERM</tt> and <tt class="code">SIGHUP</tt>: restore the terminal,
+remove the temporary file, and exit with 130 or 143.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-41"> Finding 41. Windows: -f follows junctions, and a rewrite drops the ACL (information)</h2>
+<div class="par"><b>Where:</b> <tt class="code">MayFollow</tt> in <tt class="code">src/&#8203;internal/&#8203;meta/&#8203;meta_&#8203;windows.&#8203;go</tt>, and
+the rewrite in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;mutate.&#8203;go</tt>. Code only.</div>
+</div>
+<div class="par"><b>Problem.</b> On Windows, <tt class="code">checkLinks</tt> does nothing, so a junction that
+another user made on the path is followed, and the rename replaces its
+target. Compact, the change of passphrase and <tt class="code">--encrypt-archive</tt> write a
+new file that inherits the ACL of the directory, so an explicit ACL on the
+archive is lost. Design <a href = "design.html#other-platforms">§15.1</a> says that
+modes are not kept, but does not name the ACL.</div>
+<div class="par"><b>Fix.</b> Copy the DACL of the old file before the rename. Refuse a reparse
+point in <tt class="code">-f</tt> that the caller does not own, or document the case.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-42"> Finding 42. Shared content allows a ratio of 70,000 to 1 at extraction (information)</h2>
+<div class="par"><b>Where:</b> shared content, <a href = "design.html#identical-content-m11">§4.3</a>.
+Tested.</div>
+</div>
+<div class="par"><b>Problem.</b> This is the feature as designed: each member that shares
+content is written in full. A plain archive of 1.4 MB lists 105 GB. With an
+owner of 1 GiB of zeros, the same index gives about 100 TB. Design
+<a href = "design.html#extraction-reads-disk">§14.3</a> does not name this cost
+beside the decompression bombs.</div>
+<div class="par"><b>Fix.</b> Document it in <a href = "design.html#extraction-reads-disk">§14.3</a>. The
+user sees the total in <tt class="code">-tv</tt> and <tt class="code">--info</tt> before an extraction. An option
+such as <tt class="code">--max-extract-bytes</tt>, or a check of free space against the
+selected total, lets a script bound it.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-43"> Finding 43. An unknown codec name gives exit 4 (information)</h2>
+<div class="par"><b>Where:</b> <tt class="code">ErrUnknownCodec</tt> in <tt class="code">src/&#8203;internal/&#8203;codec/&#8203;codec.&#8203;go</tt>, and
+<tt class="code">exitCodeFor</tt> in <tt class="code">src/&#8203;internal/&#8203;cli/&#8203;run.&#8203;go</tt>. Code only.</div>
+</div>
+<div class="par"><b>Problem.</b> An archive that names a codec that this build does not have is
+"too new or damaged", which is exit 3 (<a href = "design.html#exit-codes">§10.7</a>).
+The error has no mapping, so it gives exit 4, an I/O error.</div>
+<div class="par"><b>Fix.</b> Map <tt class="code">codec.ErrUnknownCodec</tt> to exit 3, with a test.</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-44"> Finding 44. A member id can be used again after a compact (information)</h2>
+<div class="par"><b>Where:</b> <tt class="code">OpenAppend</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>. Code
+only.</div>
+</div>
+<div class="par"><b>Problem.</b> <tt class="code">--compact</tt> drops a tombstone with the highest id, and the next
+append takes the highest id plus one. So an id comes back. format.md §8.3
+says that an id is never used again. Each new blob has a new salt and key, so
+this has no effect on the cryptography.</div>
+<div class="par"><b>Fix.</b> Keep the highest id ever used, for example in the index, or correct
+format.md §8.3.</div>
+<div style="page-break-inside:avoid;">
+<h1 id="prior-findings">4&#x00A0;&#x00A0; The findings of the first review</h1>
+<table style="width : 94%;margin-left : 3%;border-top:2px solid #777777;border-bottom:2px solid #777777;">
+<thead style="border-bottom:2px solid #777777;;">
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> # </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Status in v1.1.4 </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Notes </div>
+</td>
+</thead>
+<tbody><tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 1 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Holds </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> See finding 34 for the order of <tt class="code">chown</tt> and the xattrs. </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 2 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Bypassed </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> A member <tt class="code">.</tt> is still removed, but finding 13 (and finding 33 on Windows) reach the destination another way. </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 3 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Holds </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> With <tt class="code">-h</tt>, finding 39 makes the open wait, but no wrong file is read. </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 4 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Bypassed </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Findings 15 and 16 go round the rule; finding 17 is the same pattern for a file; finding 41 on Windows. </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 5 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Holds </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"></td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 6 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Holds for the bytes </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Finding 19 goes round it in Go memory. </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 7 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Documented </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Finding 28 is the same inference for names. </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 8 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Holds for reads </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Finding 32: writers and other owners give no warning. </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 9 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Documented </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Findings 26, 36 and 37 add to the known limits. </div>
+</td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 10 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Holds </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"></td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 11 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Holds </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"></td>
+</tr>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 12 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Holds, with two gaps </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Finding 25 (<tt class="code">--info</tt>) and finding 38 (<tt class="code">--json</tt>). </div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div style="page-break-inside:avoid;">
+<h1 id="what-review-found-sound">5&#x00A0;&#x00A0; What the review found sound</h1>
+<ul>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;"> <b>Nonces and keys.</b> A test read every index of 22 generations from two full life cycles: create with a trained dictionary, <tt class="code">-u</tt>, <tt class="code">-r</tt>, <tt class="code">--delete</tt>, compact, recompress, change of passphrase and <tt class="code">--encrypt-archive</tt>. It found 1475 salts, and none sealed two different ciphertexts. The HKDF info strings cannot collide, no key has two purposes, and the wrap binds the archive uuid.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> <b>What the AADs bind.</b> A chunk binds the member id, its index and the last-chunk flag, which the reader takes from the authenticated index, so truncation and reorder fail. The index binds the generation, and its key binds the uuid. A dictionary binds its id. The review found no gap.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> <b>Index authentication.</b> In an encrypted archive, the keyed index digest is checked first, in constant time, before any decompression or decode. A member without a seal in an encrypted archive is refused, and the reverse fails.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> <b>KDF limits.</b> A crafted crypto header with time 65, or memory 2<sup>32</sup>-1, is refused with exit 3 before the prompt.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> <b>Parsing.</b> The header, trailer and crypto header are checked before any allocation that their numbers decide. <tt class="code">Validate</tt> covers ids, types, sparse maps, the chunk table, shared content, hardlinks and dictionaries with no overflow. No input made the program panic.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> <b>Decoders.</b> The zstd window, the s2 length, the bound of gzip, flate and xz, the bytes after a stream, and the dictionary size all hold. 33,281 changed dictionaries given to the zstd encoder made no panic and no failed round trip.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> <b>Extraction.</b> <tt class="code">..</tt>, absolute paths and links that lead out are refused. Pipes and devices use <tt class="code">*at</tt> calls with one name. Temporary files are random, <tt class="code">O_EXCL</tt> and 0600, and removed on error. A hardlink links only to a file of this run. The umask, setuid and xattr rules hold. <tt class="code">--strip-components</tt> cannot give an empty path. The dry run makes nothing.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> <b>The scratch directory of <tt class="code">--diff-extract</tt>.</b> It is made by <tt class="code">os.MkdirTemp</tt> with mode 0700, all work in it is by unique names through <tt class="code">os.Root</tt>, and it is removed at the end. Another user in <tt class="code">/tmp</tt> cannot enter it.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> <b>The walk.</b> Each directory is held, each file is opened by one name, and its device and inode are checked. FIFOs and devices are never opened. Spill files hold sealed chunks only, are 0600, and are removed at once.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> <b>Locks and the write sequence.</b> The lock is taken before the trailer is read, and the path must still name the locked file. An append writes its index before its trailer, and an abort cuts the file back.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> <b>Configuration.</b> No file is read from the current directory. The owner and mode of the configuration file are checked on the open file. Passphrase keys are refused in it. <tt class="code">--no-config</tt> ignores the file and the environment.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;"> <b>Messages.</b> Each error and warning, and the lines of <tt class="code">-t</tt>, <tt class="code">-tv</tt>, <tt class="code">-v</tt>, <tt class="code">-n</tt> and <tt class="code">--diff</tt>, escape names on a terminal (except findings 25 and 38).</div>
+  </li>
+</ul>
+</div>
+<div style="page-break-inside:avoid;">
+<h1 id="order-of-work">6&#x00A0;&#x00A0; Order of work</h1>
+<div class="par">The review suggests this order, from the effect on a user and the size of the
+fix:</div>
+</div>
+<ol>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;"> Findings 13 and 14 together: one resolution of member paths with no link following, also for the metadata of the last phase. Correct design <a href = "design.html#extraction-reads-disk">§14.3</a>.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> Findings 15, 16 and 17 together: one resolution of <tt class="code">-f</tt> in a single pass, with the operations relative to the parent directory, and the rule of <tt class="code">fs.protected_regular</tt> for an existing file.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> Finding 18: a usage error. A small change.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> Finding 19: parameters as integers and strings only, and a bound on the decoded memory.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> Finding 20, then the other low findings. Findings 25, 31, 32, 37, 39 and 43 are each a small change.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;"> The documentation findings: 26, 27, 28, 35, 36, 42 and 44.</div>
+  </li>
+</ol>
+<div class="par">Each fix needs a test that fails without it, as for the first review.
+</div>
+</body>
+</html>
