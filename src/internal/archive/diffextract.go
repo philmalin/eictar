@@ -73,7 +73,7 @@ func newScratch(cfg DiffConfig, r *Reader, base string, roots []string) (*scratc
 	if err != nil {
 		return nil, fmt.Errorf("creating the scratch directory in %s: %w", parent, err)
 	}
-	root, err := openDest(dir)
+	root, err := openBeneath(dir)
 	if err != nil {
 		os.RemoveAll(dir)
 		return nil, fmt.Errorf("opening the scratch directory %s: %w", dir, err)

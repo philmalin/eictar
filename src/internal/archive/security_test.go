@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/philmalin/eictar/src/internal/format"
+	"github.com/philmalin/eictar/src/internal/fsutil"
 	"github.com/philmalin/eictar/src/internal/meta"
 	"github.com/philmalin/eictar/src/internal/testutil"
 )
@@ -324,5 +326,193 @@ func TestWalkHoldsTheDirectoryItOpened(t *testing.T) {
 	}
 	if got := content["tree/d/b"]; got != "mine b" {
 		t.Errorf("tree/d/b holds %q, want %q from the directory that the walk opened", got, "mine b")
+	}
+}
+
+// Regression tests of doc/Security_Audit_Pass_2.eml.
+
+// craftedArchive writes an archive of members, with the content of each
+// regular member from content, by its path.
+func craftedArchive(t *testing.T, members []format.Member, content map[string][]byte) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "crafted.ect")
+	w, err := Create(path, Options{Codec: "none"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range members {
+		m := &members[i]
+		m.ID, m.Generation, m.Codec = uint64(i+1), 1, format.NoCodec
+		var payload io.WriterTo
+		if b, ok := content[m.Path]; ok && m.Type == format.TypeReg {
+			m.Size, m.Length, m.ChunkSize = uint64(len(b)), uint64(len(b)), uint32(DefaultChunkSize)
+			m.Chunks, m.Digest = []uint32{uint32(len(b))}, blake3Sum(b)
+			payload = bytesWriterTo(b)
+		}
+		if err := w.AppendMember(m, payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// symlinkOrSkip makes a symbolic link, or skips the test where the user
+// cannot (Windows without the privilege).
+func symlinkOrSkip(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("cannot make a symbolic link here: %v", err)
+	}
+}
+
+// Finding 13: a directory and a symbolic link to . with one path do not
+// change the destination. The last phase applied the metadata of the
+// directory through the link, to the destination itself.
+func TestExtractDoesNotChangeTheDestinationThroughALink(t *testing.T) {
+	symlinkOrSkip(t, ".", filepath.Join(t.TempDir(), "probe"))
+	dir := format.Member{Path: "x", Type: format.TypeDir, Mode: 0o777, MTimeNanos: 1}
+	link := format.Member{Path: "x", Type: format.TypeSymlink, Mode: 0o777, LinkTarget: ".", MTimeNanos: 1}
+	parent := format.Member{Path: "a", Type: format.TypeDir, Mode: 0o755, MTimeNanos: 1}
+	down := format.Member{Path: "a/x", Type: format.TypeSymlink, Mode: 0o777, LinkTarget: "..", MTimeNanos: 1}
+	downDir := format.Member{Path: "a/x", Type: format.TypeDir, Mode: 0o777, MTimeNanos: 1}
+	for name, members := range map[string][]format.Member{
+		"the directory, then the link": {dir, link},
+		"the link, then the directory": {link, dir},
+		"one level down":               {parent, downDir, down},
+	} {
+		t.Run(name, func(t *testing.T) {
+			archive := craftedArchive(t, members, nil)
+			dest := filepath.Join(t.TempDir(), "dest")
+			if err := os.Mkdir(dest, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			before := mustStat(t, dest)
+			_, err := Extract(ExtractConfig{Archive: archive, Destination: dest, Restore: RestoreOptions{Permissions: true}})
+			if !errors.Is(err, fsutil.ErrUnsafePath) {
+				t.Errorf("error %v, want an unsafe path", err)
+			}
+			// The times of the destination change with its entries, but they
+			// must not become those of the member.
+			after := mustStat(t, dest)
+			if after.Mode() != before.Mode() || after.ModTime().Equal(time.Unix(0, 1)) {
+				t.Errorf("the destination became %v %v; want the mode %v, and not the time of the member",
+					after.Mode(), after.ModTime(), before.Mode())
+			}
+		})
+	}
+}
+
+// Finding 14: extraction does not go through a link that another user put
+// in the destination, even when the link stays inside it. A restore of
+// alice's directory wrote her key into bob's.
+func TestExtractDoesNotFollowALinkInTheDestination(t *testing.T) {
+	dest := t.TempDir()
+	ssh := filepath.Join(dest, "bob", ".ssh")
+	if err := os.MkdirAll(ssh, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	keys := filepath.Join(ssh, "authorized_keys")
+	if err := os.WriteFile(keys, []byte("bob's key\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dest, "alice"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	symlinkOrSkip(t, filepath.Join("..", "bob", ".ssh"), filepath.Join(dest, "alice", ".ssh2"))
+	before := mustStat(t, ssh)
+
+	archive := craftedArchive(t, []format.Member{
+		{Path: "alice", Type: format.TypeDir, Mode: 0o755, MTimeNanos: 1},
+		{Path: "alice/.ssh2", Type: format.TypeDir, Mode: 0o777, MTimeNanos: 1},
+		{Path: "alice/.ssh2/authorized_keys", Type: format.TypeReg, Mode: 0o644, MTimeNanos: 1},
+	}, map[string][]byte{"alice/.ssh2/authorized_keys": []byte("alice's key\n")})
+	_, err := Extract(ExtractConfig{Archive: archive, Destination: dest, KeepGoing: true})
+	if !errors.Is(err, fsutil.ErrUnsafePath) && err != nil {
+		t.Errorf("error %v, want an unsafe path", err)
+	}
+	if b, _ := os.ReadFile(keys); string(b) != "bob's key\n" {
+		t.Errorf("bob's authorized_keys holds %q", b)
+	}
+	if after := mustStat(t, ssh); after.Mode() != before.Mode() || !after.ModTime().Equal(before.ModTime()) {
+		t.Errorf("bob's .ssh became %v %v; want %v %v", after.Mode(), after.ModTime(), before.Mode(), before.ModTime())
+	}
+}
+
+// swapDest replaces the directory swap with a symbolic link to the
+// directory other, at the moment that the directory is opened: the race of
+// finding 14, when another user owns the directory that holds it.
+type swapDest struct {
+	destDir
+	t           *testing.T
+	swap, other string
+}
+
+func (d swapDest) OpenRoot(name string) (destDir, error) {
+	if name == d.swap {
+		if err := d.Rename(name, name+".moved"); err != nil {
+			d.t.Fatal(err)
+		}
+		if err := d.Symlink(d.other, name); err != nil {
+			d.t.Fatal(err)
+		}
+	}
+	return d.destDir.OpenRoot(name)
+}
+
+// Finding 14: a directory that becomes a link between its check and its
+// open is refused, also when the link stays in the same directory.
+func TestBeneathRefusesADirectorySwappedForALink(t *testing.T) {
+	dest := t.TempDir()
+	for _, d := range []string{"new", "other"} {
+		if err := os.Mkdir(filepath.Join(dest, d), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	symlinkOrSkip(t, "other", filepath.Join(dest, "probe"))
+	root, err := os.OpenRoot(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := newBeneath(swapDest{destDir: osDest{root}, t: t, swap: "new", other: "other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if err := b.MkdirAll("new/inner", 0o700); !errors.Is(err, fsutil.ErrUnsafePath) {
+		t.Errorf("error %v, want an unsafe path", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "other", "inner")); err == nil {
+		t.Error("the directory was made through the link")
+	}
+}
+
+// Finding 13: the directories that beneath keeps open are dropped when the
+// extraction removes one and puts a link at its name. The archive can do
+// that: a directory x, then a link x -> . in its place.
+func TestBeneathForgetsAReplacedDirectory(t *testing.T) {
+	dest := t.TempDir()
+	symlinkOrSkip(t, ".", filepath.Join(t.TempDir(), "probe"))
+	b, err := openBeneath(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if err := b.MkdirAll("x/y", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []func() error{
+		func() error { return b.Remove("x/y") },
+		func() error { return b.Remove("x") },
+		func() error { return b.Symlink(".", "x") },
+	} {
+		if err := step(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := b.MkdirAll("x/y", 0o700); !errors.Is(err, fsutil.ErrUnsafePath) {
+		t.Errorf("error %v, want an unsafe path", err)
 	}
 }

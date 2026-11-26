@@ -3236,24 +3236,34 @@ passes.</div>
   </div>
   </li>
   <li style="padding-left:0.5em;"><div class="par">
-    <b>Extraction never goes through a linked directory.</b> A crafted archive can
-    create <tt class="code">evil -&gt; /etc</tt> and then write <tt class="code">evil/passwd</tt>. That write must not
-    reach <tt class="code">/etc</tt>. The lexical check of each member path,
-    <tt class="code">fsutil.IsStoredPath</tt>, cannot catch this alone.</div>
-<div class="par" style="margin-bottom:0.10em;">    Thus <b>every filesystem operation during extraction goes through
-    <tt class="code">os.Root</tt></b> (Go 1.24 and later). <tt class="code">os.Root</tt> holds a descriptor on the
-    destination. It refuses every path that leaves the destination, through
-    links too. This standard-library feature gives a stronger guarantee than a
-    check on each path component.
-  </div>
+    <b>Extraction never goes through a link.</b> A crafted archive can create
+    <tt class="code">evil -&gt; /etc</tt> and then write <tt class="code">evil/passwd</tt>. That write must not reach
+    <tt class="code">/etc</tt>. The lexical check of each member path, <tt class="code">fsutil.IsStoredPath</tt>,
+    cannot catch this alone. Two barriers stop it:</div>
+<ol>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;"> <tt class="code">beneath</tt> (<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;dest.&#8203;go</tt>) opens each directory of a member path one name at a time, from the destination. It refuses a symbolic link at any name of the path, and on Windows a junction, with exit 3. This is also true for a link that stays inside the destination, which the archive made or another user put there. After each open, it checks that the directory that it opened is the one that it looked at. Thus a directory that becomes a link during the open is refused too. An operation that follows the last name of its path (an open, a mode, the times) refuses a link there. No directory below the destination can be the destination itself.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;"> Every filesystem operation goes through <tt class="code">os.Root</tt> (Go 1.24 and later). <tt class="code">os.Root</tt> holds a descriptor on the destination, and refuses every path that leaves it.</div>
+  </li>
+</ol>
   </li>
 </ul>
-<div class="par"><tt class="code">os.Root</tt> has two properties to know about. It <i>follows</i> a relative link that
-stays inside the destination. It only guarantees that nothing escapes. Also,
-<tt class="code">Root.Chmod</tt>, <tt class="code">Root.Chown</tt> and <tt class="code">Root.Chtimes</tt> have a documented race
-(TOCTOU). If a file becomes a link during the operation, the operation can
-apply to the link. The risk is small when extraction goes into a new
-directory.</div>
+<div class="par">Until v1.1.4, the first barrier did not exist. <tt class="code">os.Root</tt> <i>follows</i> a
+relative link that stays inside the destination, so extraction did too. A
+directory <tt class="code">x</tt> and a link <tt class="code">x -&gt; .</tt> then gave the metadata of <tt class="code">x</tt> to the
+destination itself. A link that alice put in her home sent a restore of her
+files into the home of bob (<tt class="code">Security_Audit_Pass_2.eml</tt>, findings 13 and 14).</div>
+<div class="par">These properties are to know:</div>
+<ul>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;"> A member path through a link in the destination is refused, also when the user made the link on purpose, such as <tt class="code">data -&gt; ../disk2/data</tt>. Extract into the real directory, or remove the link first.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> <tt class="code">beneath</tt> keeps up to 64 directories that it opened, so that the next path in the same directory does not open and check each directory again. An open directory is the one that was checked: a link put at its name later does not change it. The directories at and below a name that the extraction removes, or replaces with a link, are dropped.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> A hardlink names two paths, and <tt class="code">os.Root</tt> has no call that links between two directories that it holds. The program checks both directories, and then links by the paths. A directory that becomes a link between the check and the link can move the hardlink, but only inside the destination.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;"> <tt class="code">Root.Chmod</tt> and <tt class="code">Root.Chtimes</tt> have a documented race (TOCTOU) on the last name. If it becomes a link after the check, the operation can apply to what the link names, but only inside the directory that holds the name.</div>
+  </li>
+</ul>
 <div style="page-break-inside:avoid;">
 <h2 id="metadata-extraction">7.7&#x00A0;&#x00A0; Metadata on extraction</h2>
 <div class="par">The defaults are safe. Extraction restores what a user can restore, and
@@ -7040,7 +7050,9 @@ section N of <tt class="code">testing.md</tt>.</div>
     <b>Paths</b> (<a href = "#path-handling">§7</a>): the writer cleans paths, and the reader checks them again.
     Both refuse absolute paths and <tt class="code">..</tt>, because another program can write an
     archive. Extraction never follows a link and never goes through a linked
-    directory.
+    directory, also one inside the destination that the archive made or another
+    user put there (<a href = "#symbolic-links">§7.6</a>). Thus root can restore a tree
+    in which other users own directories.
   </div>
   </li>
   <li style="padding-left:0.5em;"><div class="par">

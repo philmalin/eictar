@@ -627,3 +627,24 @@ The tests:
 The format is still 1.0. v1.1.4 reads every earlier archive, and earlier
 versions read what it writes. v1.1.4 refuses a chunk with bytes after its
 stream, or longer than its plaintext, but no version of eictar writes one.
+
+**After v1.1.4, not yet in a release.**
+
+- `doc/Security_Audit_Pass_2.eml` is the second security review, of v1.1.4.
+  It has findings 13 to 44. The items below give the fixes.
+- Extraction never goes through a symbolic link, also one inside the
+  destination (design.eml §7.6). Before, `os.Root` followed a relative link
+  that stayed inside the destination, and so did extraction. A directory `x`
+  and a link `x -> .` in one archive gave the metadata of `x` to the
+  destination itself: its mode, its times and its extended attributes, and
+  as root its owner. A link that another user put in a directory of the
+  destination sent the writes of root to another place in it: a restore of
+  `/home` wrote the key of alice into the `authorized_keys` of bob. Now each
+  directory of a member path is opened one name at a time, a link there is
+  refused with exit 3, and each directory that is opened must be the one
+  that was looked at. A member path through a link that the user made on
+  purpose is refused too. The second review found both (findings 13 and
+  14). `TestExtractDoesNotChangeTheDestinationThroughALink`,
+  `TestExtractDoesNotFollowALinkInTheDestination`,
+  `TestBeneathRefusesADirectorySwappedForALink` and
+  `TestBeneathForgetsAReplacedDirectory` cover it.

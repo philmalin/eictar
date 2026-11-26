@@ -134,7 +134,7 @@ func Extract(cfg ExtractConfig) (Stats, error) {
 	if err := os.MkdirAll(dest, 0o777); err != nil {
 		return Stats{}, fmt.Errorf("creating %s: %w", dest, err)
 	}
-	root, err := openDest(dest)
+	root, err := openBeneath(dest)
 	if err != nil {
 		return Stats{}, fmt.Errorf("opening %s: %w", dest, err)
 	}

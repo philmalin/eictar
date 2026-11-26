@@ -1484,25 +1484,32 @@ Three rules apply to links:
     directory, which comes from {C:os.Root}, with a single name component.
   }
   {item:
-    {b:Extraction never goes through a linked directory.} A crafted archive can
-    create {C:evil -> /etc} and then write {C:evil/passwd}. That write must not
-    reach {C:/etc}. The lexical check of each member path,
-    {C:fsutil.IsStoredPath}, cannot catch this alone.
+    {b:Extraction never goes through a link.} A crafted archive can create
+    {C:evil -> /etc} and then write {C:evil/passwd}. That write must not reach
+    {C:/etc}. The lexical check of each member path, {C:fsutil.IsStoredPath},
+    cannot catch this alone. Two barriers stop it:
 
-    Thus {b:every filesystem operation during extraction goes through
-    {C:os.Root}} (Go 1.24 and later). {C:os.Root} holds a descriptor on the
-    destination. It refuses every path that leaves the destination, through
-    links too. This standard-library feature gives a stronger guarantee than a
-    check on each path component.
+    {list t=1:
+      {item: {C:beneath} ({C bc=/._:src/internal/archive/dest.go}) opens each directory of a member path one name at a time, from the destination. It refuses a symbolic link at any name of the path, and on Windows a junction, with exit 3. This is also true for a link that stays inside the destination, which the archive made or another user put there. After each open, it checks that the directory that it opened is the one that it looked at. Thus a directory that becomes a link during the open is refused too. An operation that follows the last name of its path (an open, a mode, the times) refuses a link there. No directory below the destination can be the destination itself.}
+      {item: Every filesystem operation goes through {C:os.Root} (Go 1.24 and later). {C:os.Root} holds a descriptor on the destination, and refuses every path that leaves it.}
+    }
   }
 }
 
-{C:os.Root} has two properties to know about. It {i:follows} a relative link that
-stays inside the destination. It only guarantees that nothing escapes. Also,
-{C:Root.Chmod}, {C:Root.Chown} and {C:Root.Chtimes} have a documented race
-(TOCTOU). If a file becomes a link during the operation, the operation can
-apply to the link. The risk is small when extraction goes into a new
-directory.
+Until v1.1.4, the first barrier did not exist. {C:os.Root} {i:follows} a
+relative link that stays inside the destination, so extraction did too. A
+directory {C:x} and a link {C:x -> .} then gave the metadata of {C:x} to the
+destination itself. A link that alice put in her home sent a restore of her
+files into the home of bob ({C:Security_Audit_Pass_2.eml}, findings 13 and 14).
+
+These properties are to know:
+
+{list t=*:
+  {item: A member path through a link in the destination is refused, also when the user made the link on purpose, such as {C:data -> ../disk2/data}. Extract into the real directory, or remove the link first.}
+  {item: {C:beneath} keeps up to 64 directories that it opened, so that the next path in the same directory does not open and check each directory again. An open directory is the one that was checked: a link put at its name later does not change it. The directories at and below a name that the extraction removes, or replaces with a link, are dropped.}
+  {item: A hardlink names two paths, and {C:os.Root} has no call that links between two directories that it holds. The program checks both directories, and then links by the paths. A directory that becomes a link between the check and the link can move the hardlink, but only inside the destination.}
+  {item: {C:Root.Chmod} and {C:Root.Chtimes} have a documented race (TOCTOU) on the last name. If it becomes a link after the check, the operation can apply to what the link names, but only inside the directory that holds the name.}
+}
 
 {section 2 bid=metadata-extraction: Metadata on extraction}
 
@@ -4288,7 +4295,9 @@ section N of {C:testing.md}.
     {b:Paths} ({ref t=#path-handling:§7}): the writer cleans paths, and the reader checks them again.
     Both refuse absolute paths and {C:..}, because another program can write an
     archive. Extraction never follows a link and never goes through a linked
-    directory.
+    directory, also one inside the destination that the archive made or another
+    user put there ({ref t=#symbolic-links:§7.6}). Thus root can restore a tree
+    in which other users own directories.
   }
   {item:
     {b:Metadata.} By default, extraction restores nothing that needs privilege

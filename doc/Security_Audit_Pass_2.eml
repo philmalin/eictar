@@ -8,7 +8,7 @@
 | Date | 2026-11-26 |
 | Earlier review | {ref t=Security_Audit.html#scope-method:Security_Audit.eml}: v1.0.1, with follow-ups for v1.0.3 and v1.0.6 (findings 1 to 12) |
 | Scope | the source code of {C:src/}, the archive format, and encrypted archives |
-| Status | open: no finding of this review is fixed yet |
+| Status | findings 13 and 14 are fixed after v1.1.4; the others are open |
 }
 
 {contents l=2}
@@ -42,40 +42,40 @@ names one finding in both documents.
 
 {section 1 bid=summary: Summary}
 
-{stable col=4 header sb b==:
-| # | Severity | Finding | Found by |
-| 13 | High | A directory and a link to {C:.} with one path change the destination directory itself | Tested |
-| 14 | Medium; high for root and {C:-d /} | Extraction follows a link that another user put inside the destination | Tested |
-| 15 | Medium | A race between the check of {C:-f} and its resolution follows a planted link | Tested |
-| 16 | Medium | The check of {C:-f} does not look at a link inside the target of a link | Tested |
-| 17 | Medium | Create gives the new archive the mode of a file that another user put at {C:-f} | Tested |
-| 18 | Medium | {C:-c} with a passphrase source and no {C:-e} writes a plaintext archive, with no message | Tested |
-| 19 | Medium | A 7 KB plain archive makes a listing use 4 GB of memory | Tested |
-| 20 | Low | {C:--repair} removes a complete generation when the damage is in its trailer magic | Tested |
-| 21 | Low | Blobs that overlap: compact and {C:--encrypt-archive} write one copy for each member | Tested |
-| 22 | Low | A member id of 2{S:64}-1 wraps the next id to 0, and the check of an old owner stops | Tested |
-| 23 | Low | {C:--repair} takes quadratic time on a file of crafted trailers | Tested |
-| 24 | Low | Large chunks make extraction and {C:--verify} use 1.6 to 2.6 times {C:--memory-limit} | Tested |
-| 25 | Low | {C:--info} writes codec names and parameters from the archive with no escape | Tested |
-| 26 | Low | An append to a plaintext archive put in place of an encrypted one stores new content in the clear | Tested |
-| 27 | Low | With {C:--encrypt-index}, the trailers show the member count and the size of each generation | Tested |
-| 28 | Low | With {C:--encrypt-index}, the length of the compressed index lets an attacker test a guess of a name | Tested |
-| 29 | Low | Create keeps the group bits of the old archive, but not its group | Tested |
-| 30 | Low | The temporary file of create is wider than the old archive for a short time | Tested |
-| 31 | Low | A failed write of the output of {C:-t}, {C:--info}, {C:--verify} or {C:-n} gives exit 0 | Tested |
-| 32 | Low | The check of a passphrase file does not look at its write bits or its owner on Unix | Tested |
-| 33 | Low | Windows: a member {C:x\\..} names the destination, and other names are aliases | Code |
-| 34 | Information | {C:chown} after the xattrs removes file capabilities | Code |
-| 35 | Information | The creation time in the header is not authenticated | Tested |
-| 36 | Information | A rollback needs no old copy: a truncation is enough | Tested |
-| 37 | Information | After an append, update or delete, the data key is not set to zero | Code |
-| 38 | Information | {C:--json} writes C1 control characters and text-direction characters as they are | Tested |
-| 39 | Information | With {C:-h}, a link changed to a FIFO after the walk makes the open wait for ever | Tested |
-| 40 | Information | No signal handling: a temporary file stays, and the prompt leaves echo off | Tested |
-| 41 | Information | Windows: {C:-f} follows junctions, and a rewrite drops the ACL of the archive | Code |
-| 42 | Information | Shared content allows a ratio of about 70,000 to 1 at extraction, with no bound | Tested |
-| 43 | Information | An unknown codec name gives exit 4, not 3 | Code |
-| 44 | Information | A member id can be used again after a compact, against format.md §8.3 | Code |
+{stable col=5 header sb b==:
+| # | Severity | Finding | Found by | Status |
+| 13 | High | A directory and a link to {C:.} with one path change the destination directory itself | Tested | Fixed after v1.1.4 |
+| 14 | Medium; high for root and {C:-d /} | Extraction follows a link that another user put inside the destination | Tested | Fixed after v1.1.4 |
+| 15 | Medium | A race between the check of {C:-f} and its resolution follows a planted link | Tested | Open |
+| 16 | Medium | The check of {C:-f} does not look at a link inside the target of a link | Tested | Open |
+| 17 | Medium | Create gives the new archive the mode of a file that another user put at {C:-f} | Tested | Open |
+| 18 | Medium | {C:-c} with a passphrase source and no {C:-e} writes a plaintext archive, with no message | Tested | Open |
+| 19 | Medium | A 7 KB plain archive makes a listing use 4 GB of memory | Tested | Open |
+| 20 | Low | {C:--repair} removes a complete generation when the damage is in its trailer magic | Tested | Open |
+| 21 | Low | Blobs that overlap: compact and {C:--encrypt-archive} write one copy for each member | Tested | Open |
+| 22 | Low | A member id of 2{S:64}-1 wraps the next id to 0, and the check of an old owner stops | Tested | Open |
+| 23 | Low | {C:--repair} takes quadratic time on a file of crafted trailers | Tested | Open |
+| 24 | Low | Large chunks make extraction and {C:--verify} use 1.6 to 2.6 times {C:--memory-limit} | Tested | Open |
+| 25 | Low | {C:--info} writes codec names and parameters from the archive with no escape | Tested | Open |
+| 26 | Low | An append to a plaintext archive put in place of an encrypted one stores new content in the clear | Tested | Open |
+| 27 | Low | With {C:--encrypt-index}, the trailers show the member count and the size of each generation | Tested | Open |
+| 28 | Low | With {C:--encrypt-index}, the length of the compressed index lets an attacker test a guess of a name | Tested | Open |
+| 29 | Low | Create keeps the group bits of the old archive, but not its group | Tested | Open |
+| 30 | Low | The temporary file of create is wider than the old archive for a short time | Tested | Open |
+| 31 | Low | A failed write of the output of {C:-t}, {C:--info}, {C:--verify} or {C:-n} gives exit 0 | Tested | Open |
+| 32 | Low | The check of a passphrase file does not look at its write bits or its owner on Unix | Tested | Open |
+| 33 | Low | Windows: a member {C:x\\..} names the destination, and other names are aliases | Code | Open |
+| 34 | Information | {C:chown} after the xattrs removes file capabilities | Code | Open |
+| 35 | Information | The creation time in the header is not authenticated | Tested | Open |
+| 36 | Information | A rollback needs no old copy: a truncation is enough | Tested | Open |
+| 37 | Information | After an append, update or delete, the data key is not set to zero | Code | Open |
+| 38 | Information | {C:--json} writes C1 control characters and text-direction characters as they are | Tested | Open |
+| 39 | Information | With {C:-h}, a link changed to a FIFO after the walk makes the open wait for ever | Tested | Open |
+| 40 | Information | No signal handling: a temporary file stays, and the prompt leaves echo off | Tested | Open |
+| 41 | Information | Windows: {C:-f} follows junctions, and a rewrite drops the ACL of the archive | Code | Open |
+| 42 | Information | Shared content allows a ratio of about 70,000 to 1 at extraction, with no bound | Tested | Open |
+| 43 | Information | An unknown codec name gives exit 4, not 3 | Code | Open |
+| 44 | Information | A member id can be used again after a compact, against format.md §8.3 | Code | Open |
 }
 
 Three findings bypass a fix of the first review. Finding 13 reaches the
@@ -126,6 +126,14 @@ to the destination itself. Set the times through the open descriptor. When a
 directory member meets a link on disk, replace the link (as GNU tar does) or
 refuse the member. The fix of finding 14 also closes this one.
 
+{b:Status.} Fixed after v1.1.4, with the fix of finding 14. A link at the name
+of a directory member is refused with exit 3, and no directory below the
+destination can be the destination itself. {C:TestExtractDoesNotChangeTheDestinationThroughALink}
+tests the three archives above, and {C:TestBeneathForgetsAReplacedDirectory}
+tests that a directory that the archive replaces with a link is not used
+again. The archives of the review give exit 3, and the destination keeps its
+mode, times and attributes.
+
 {section 2 nc bid=finding-14: Finding 14. Extraction follows a link that another user put inside the destination (medium)}
 
 {b:Where:} each operation of {C bc=/._:src/internal/archive/extract.go}
@@ -160,6 +168,20 @@ from the destination descriptor, and do the last operation with an {C:*at}
 call. Keep {C:os.Root} as a second barrier. Until then, correct design
 {ref t=design.html#extraction-reads-disk:§14.3}, and warn against an
 extraction as root into a tree where other users own directories.
+
+{b:Status.} Fixed after v1.1.4. {C:beneath}, in
+{C bc=/._:src/internal/archive/dest.go}, opens each directory of a path one
+name at a time through {C:os.Root}, refuses a link, and checks that the
+directory that it opened is the one that it looked at. {C:os.Root} stays as
+the second barrier. This is the walk of the fix above, with {C:os.Root} in
+place of {C:openat2}, so it is the same on each system. Design
+{ref t=design.html#symbolic-links:§7.6} and
+{ref t=design.html#extraction-reads-disk:§14.3} now say so.
+{C:TestExtractDoesNotFollowALinkInTheDestination} tests the planted link, and
+{C:TestBeneathRefusesADirectorySwappedForALink} the race. The script of the
+review refused the swap in 3 runs of 3, and bob's files did not change. A
+hardlink still links by its paths after a check of both directories, so a
+swap in that time can move it, but only inside the destination.
 
 {section 2 nc bid=finding-15: Finding 15. A race between the check of -f and its resolution (medium)}
 
@@ -732,7 +754,7 @@ format.md §8.3.
 {stable col=3 header sb b== i=3% w=94%:
 | # | Status in v1.1.4 | Notes |
 | 1 | Holds | See finding 34 for the order of {C:chown} and the xattrs. |
-| 2 | Bypassed | A member {C:.} is still removed, but finding 13 (and finding 33 on Windows) reach the destination another way. |
+| 2 | Holds again after the fix of finding 13 | On Windows, a member {C:x\\..} (finding 33) named the destination. The check that no directory below the destination is the destination itself now refuses it (Code). |
 | 3 | Holds | With {C:-h}, finding 39 makes the open wait, but no wrong file is read. |
 | 4 | Bypassed | Findings 15 and 16 go round the rule; finding 17 is the same pattern for a file; finding 41 on Windows. |
 | 5 | Holds | |

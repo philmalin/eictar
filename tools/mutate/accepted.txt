@@ -360,6 +360,10 @@ src/internal/archive/extract.go: tempName: operator: > → >=
 	Equivalent. A name of exactly 200 bytes is cut to 180 and the random
 	part, which fits as well as the whole name.
 
+src/internal/archive/dest.go: dirCache.put: operator: < → <=
+	Equivalent. Each use of an entry takes the next tick, so no two entries
+	have the same tick, and the entry that the cache drops is the same.
+
 # --- archive: the operations that change an archive (mutate.go) ---
 
 src/internal/archive/mutate.go: AppendArchive: if false: workers < 1 → false

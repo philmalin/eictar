@@ -66,6 +66,8 @@ or on Windows a drive, is removed when a file is added, and the program says
 so one time. There is
 no option to keep an absolute path. Extraction checks each path again, and
 it never writes outside its destination, not even through a symbolic link.
+It never goes through a symbolic link inside the destination either: a member
+path through one is refused, also when you made the link.
 .SH OPERATIONS
 Give exactly one operation.
 .TP
