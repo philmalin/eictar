@@ -6,7 +6,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Supports is this platform's row of the table in doc/design.md 15.1.
+// Supports is this platform's row of the table in doc/design.eml 15.1.
 var Supports = Capabilities{Metadata: true, Fifos: true, Devices: true}
 
 func statInfo(st *syscall.Stat_t) Info {

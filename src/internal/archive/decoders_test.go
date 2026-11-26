@@ -14,7 +14,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/format"
 )
 
-// Tests of the pool of decoders in the Reader (doc/design.md 15.2).
+// Tests of the pool of decoders in the Reader (doc/design.eml 15.2).
 
 // mixedArchive holds members with three kinds of decoder: zstd with a
 // dictionary in 4 MiB chunks, gzip in 4 KiB chunks, and zstd with no

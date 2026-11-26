@@ -49,7 +49,7 @@ type Reader struct {
 
 	// decoders holds the decoders that no member is using, by what they
 	// decode. Making a zstd decoder costs more than decoding a small file,
-	// and with a dictionary much more, so they are used again (doc/design.md
+	// and with a dictionary much more, so they are used again (doc/design.eml
 	// 8.3). Each WriteMember takes one and gives it back, so a list never
 	// holds more decoders than there are callers at one time. A worker that
 	// decodes many members uses a decoderSet of its own instead, with no
@@ -85,11 +85,11 @@ type PassphraseFunc func() ([]byte, error)
 // ErrNotEncrypted means an archive the caller expected to be encrypted is
 // not. That is how a stripped or substituted archive shows itself: clearing
 // the header flag and rewriting the plaintext index needs no passphrase, and
-// yields an archive that opens without asking for one (doc/design.md 14.4).
+// yields an archive that opens without asking for one (doc/design.eml 14.4).
 var ErrNotEncrypted = errors.New("the archive is not encrypted")
 
 // ErrAlreadyEncrypted means an archive that --encrypt-archive was to encrypt
-// is encrypted already (doc/design.md 9.11).
+// is encrypted already (doc/design.eml 9.11).
 var ErrAlreadyEncrypted = errors.New("the archive is already encrypted")
 
 // OpenOptions configures Open.
@@ -101,7 +101,7 @@ type OpenOptions struct {
 	RequireEncryption bool
 	// RequirePlaintext refuses an archive that is encrypted, with
 	// ErrAlreadyEncrypted, before the crypto header is read and before any
-	// passphrase is asked (--encrypt-archive, doc/design.md 9.11).
+	// passphrase is asked (--encrypt-archive, doc/design.eml 9.11).
 	RequirePlaintext bool
 
 	// keys, when set, are used instead of a passphrase. They stay the
@@ -135,7 +135,7 @@ func OpenWith(path string, opt OpenOptions) (*Reader, error) {
 	if err := r.load(opt); err != nil {
 		// An append writes in place, so until its trailer lands the file
 		// ends in its blobs, and a reader finds damage. If a writer holds
-		// the lock, that is a write in progress (doc/design.md 9.6). The
+		// the lock, that is a write in progress (doc/design.eml 9.6). The
 		// probe takes the lock if no one holds it, and the close below
 		// releases it. Only a reader that holds no lock can probe: a
 		// writer's own load would find its own lock.
@@ -150,7 +150,7 @@ func OpenWith(path string, opt OpenOptions) (*Reader, error) {
 
 // repairHint ends the message for a damaged trailer. That is what a crash
 // during a mutation leaves, and the reader does not fall back to an older
-// generation by itself (doc/design.md 9.5).
+// generation by itself (doc/design.eml 9.5).
 const repairHint = "; if a write to the archive was interrupted, --repair restores the last complete generation"
 
 // Encrypted reports whether the archive's members are sealed.
@@ -213,7 +213,7 @@ func (r *Reader) load(opt OpenOptions) error {
 	// The digest is checked before the index is decoded: damage should be
 	// reported as damage, not as a confusing decode failure. With a key the
 	// digest is keyed, so this also refuses metadata an attacker edited
-	// without being able to read it (doc/design.md 6.4).
+	// without being able to read it (doc/design.eml 6.4).
 	var authKey []byte
 	if r.keys != nil {
 		authKey = r.keys.IndexAuthKey()
@@ -324,7 +324,7 @@ func (r *Reader) unlock(ask PassphraseFunc) error {
 	// The parameters are the archive's, not ours. Check this machine can
 	// afford them before asking for a passphrase: after is too late to be
 	// useful, and deriving without checking is an out-of-memory kill with
-	// no explanation (doc/design.md A.3).
+	// no explanation (doc/design.eml A.3).
 	if err := checkAffordable(params); err != nil {
 		return fmt.Errorf("%s: %w", r.path, err)
 	}
@@ -336,7 +336,7 @@ func (r *Reader) unlock(ask PassphraseFunc) error {
 	defer zero(passphrase)
 
 	// A wrong passphrase gives another key-encryption key, and the wrapped
-	// data key fails its tag: that is the check (doc/design.md 6.2).
+	// data key fails its tag: that is the check (doc/design.eml 6.2).
 	keys, err := crypt.Unlock(passphrase, ch.Salt, r.hdr.ArchiveUUID, params, ch.Key)
 	if err != nil {
 		return fmt.Errorf("%s: %w", r.path, err)
@@ -361,7 +361,7 @@ func (r *Reader) Trailer() format.Trailer { return r.tr }
 func (r *Reader) Members() []format.Member { return r.index.Live() }
 
 // AllMembers returns every member, tombstones included. A live hardlink can
-// point to a tombstone, whose blob still holds the content (doc/design.md
+// point to a tombstone, whose blob still holds the content (doc/design.eml
 // 9.2), so resolving one needs the whole list.
 func (r *Reader) AllMembers() []format.Member { return r.index.Members }
 
@@ -394,7 +394,7 @@ func (r *Reader) writeMember(m *format.Member, dst io.Writer, set *decoderSet, o
 	}
 	// A member that shares another's content reads the owner's blob, with
 	// the owner's codec and keys: the chunk AAD binds the owner's id
-	// (doc/design.md 4.3). The index checks that the owner has the same
+	// (doc/design.eml 4.3). The index checks that the owner has the same
 	// payload and digest, and holds a blob of its own.
 	if m.Data != 0 {
 		o := r.Owner(m)
@@ -411,7 +411,7 @@ func (r *Reader) writeMember(m *format.Member, dst io.Writer, set *decoderSet, o
 	}
 
 	// The chunk table describes the payload: the whole file when it is dense,
-	// only its data segments when it has holes (doc/design.md 5.2).
+	// only its data segments when it has holes (doc/design.eml 5.2).
 	payload := m.PayloadSize()
 
 	chunkSize := int(m.ChunkSize)
@@ -519,7 +519,7 @@ func (r *Reader) writeMember(m *format.Member, dst io.Writer, set *decoderSet, o
 
 		// A chunk that compression would have grown is stored as plaintext.
 		// Compressed chunks are always strictly shorter than their plaintext,
-		// so equality here is unambiguous (doc/design.md 4.1). Under
+		// so equality here is unambiguous (doc/design.eml 4.1). Under
 		// encryption the comparison is against the encoded form, which is why
 		// it is made after unsealing rather than against the on-disk length.
 		content := encoded
@@ -528,7 +528,7 @@ func (r *Reader) writeMember(m *format.Member, dst io.Writer, set *decoderSet, o
 			if err != nil {
 				decodeFailed = true
 				// The codec's own error says what it found; the sentinel says
-				// that this is damage, not I/O (exit 3, doc/design.md 10.7).
+				// that this is damage, not I/O (exit 3, doc/design.eml 10.7).
 				return fmt.Errorf("%w: chunk %d of %q: %v", format.ErrCorruptData, i, m.Path, err)
 			}
 			content = plain
@@ -556,7 +556,7 @@ func (r *Reader) writeMember(m *format.Member, dst io.Writer, set *decoderSet, o
 }
 
 // Owner returns the member whose blob holds m's content: m itself, or the
-// member that m shares its content with (doc/design.md 4.3). It returns nil
+// member that m shares its content with (doc/design.eml 4.3). It returns nil
 // for an owner that the index does not hold.
 func (r *Reader) Owner(m *format.Member) *format.Member {
 	if m.Data == 0 {

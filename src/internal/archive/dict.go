@@ -14,7 +14,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/format"
 )
 
-// Dictionaries (doc/design.md 4.2): zstd trains one from samples of the
+// Dictionaries (doc/design.eml 4.2): zstd trains one from samples of the
 // files, the archive stores it as a blob, and each catalog entry names the
 // dictionary of its codec.
 
@@ -26,7 +26,7 @@ const (
 	// dictionary size, which is what zstd's own trainer asks for.
 	sampleFactor = 100
 
-	// The measurement of train=auto (doc/design.md 4.2). Each candidate
+	// The measurement of train=auto (doc/design.eml 4.2). Each candidate
 	// size trains on trialFactor times its size of samples, from all files
 	// but every heldOut-th one. The held-out files, at most trialBudget
 	// bytes of them, are compressed with and without the dictionary.
@@ -132,7 +132,7 @@ type dictTrial struct {
 }
 
 // chooseDictSize measures which dictionary size makes the smallest archive
-// (doc/design.md 4.2), or returns 0 when no size saves more than it costs.
+// (doc/design.eml 4.2), or returns 0 when no size saves more than it costs.
 // total is the size of the samples of all the files, of which samples may be
 // every k-th one.
 //
@@ -288,7 +288,7 @@ func runTrials(n, slots int, trial func(i int) (dictTrial, error)) (int, error) 
 // largest net gain, or 0 when none gains. A larger size must add more than
 // trialMargin to the best gain: with the trainer of the library's release,
 // which is not deterministic, the measurement varies by about 1% from run
-// to run (doc/design.md 4.2), and below that, the smaller dictionary is as
+// to run (doc/design.eml 4.2), and below that, the smaller dictionary is as
 // good and is cheaper.
 // It stops at the second trial in a row that does not improve on the best,
 // and says so.
@@ -501,19 +501,19 @@ func (r *Reader) dictFor(m *format.Member) ([]byte, error) {
 		format.ErrCorruptIndex, m.Codec, id)
 }
 
-// sampleTree is the pass before a create or an append (doc/design.md 4.2).
+// sampleTree is the pass before a create or an append (doc/design.eml 4.2).
 // It walks the paths with the same filters as the real walk, and takes the
 // start of each regular file. Over the budget, it takes every k-th file, so
 // that the choice of samples depends only on the tree. The dictionary from
 // these samples can still change from run to run, with the trainer of the
-// library's release (doc/design.md 4.2). An error here is not reported:
+// library's release (doc/design.eml 4.2). An error here is not reported:
 // the real walk meets the same file and reports it there.
 //
 // It walks two times. The first walk counts the files and their sizes, which
 // decide k. The second reads the files that k selects. A file is read while
 // the walk holds its directory, as the capture reads it, so that a directory
 // that became a link does not put another file into the dictionary
-// (doc/Security_Audit.md, finding 11). A tree that changes between the two
+// (doc/Security_Audit.eml, finding 11). A tree that changes between the two
 // walks costs ratio only.
 func sampleTree(w *Writer, cfg CreateConfig, budget int) ([][]byte, int, error) {
 	oldArchive, oldErr := os.Stat(cfg.Archive)

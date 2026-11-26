@@ -17,7 +17,7 @@ import (
 const goldenDir = "../../../src/internal/archive/testdata/golden"
 
 // listingOf makes the listing that eictar -t --json gives for a, from the
-// fields of doc/design.md 10.9.
+// fields of doc/design.eml 10.9.
 func listingOf(a *ect.Archive) []map[string]any {
 	var out []map[string]any
 	for _, m := range a.Live() {

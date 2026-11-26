@@ -69,7 +69,7 @@ func TestAccessTime(t *testing.T) {
 
 // TestRefusedXattrsAreReported: the extended attributes that the destination
 // does not take, and the ACLs that only -p restores, are each reported in
-// one notice, with their counts (doc/design.md 7.7).
+// one notice, with their counts (doc/design.eml 7.7).
 func TestRefusedXattrsAreReported(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the names that the destination refuses here are those that Linux does not know")

@@ -411,7 +411,7 @@ func TestIndexSealRoundTrip(t *testing.T) {
 	}
 }
 
-// TestIndexDigestIsKeyed is the point of doc/design.md 6.4: with a key, an
+// TestIndexDigestIsKeyed is the point of doc/design.eml 6.4: with a key, an
 // attacker who cannot read any content still cannot rewrite the metadata.
 func TestIndexDigestIsKeyed(t *testing.T) {
 	k := mustDerive(t, "passphrase")
@@ -506,7 +506,7 @@ const (
 )
 
 // TestDictSealing: a dictionary opens with its key and its id only, and its
-// key is not the member key of the same salt (doc/design.md 6.3).
+// key is not the member key of the same salt (doc/design.eml 6.3).
 func TestDictSealing(t *testing.T) {
 	k := mustDerive(t, "correct horse")
 	salt := bytes.Repeat([]byte{7}, SaltSize)

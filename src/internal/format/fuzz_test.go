@@ -5,7 +5,7 @@ import (
 )
 
 // The fuzz targets exist to prove one property: arbitrary bytes produce an
-// error, never a panic and never an unbounded allocation (doc/design.md
+// error, never a panic and never an unbounded allocation (doc/design.eml
 // 10.1). Anything a target accepts must also survive a round trip, so a
 // crafted input cannot decode into something we would then re-encode
 // differently.

@@ -8,7 +8,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/format"
 )
 
-// Identical content (doc/design.md 4.3): a member whose payload is already in
+// Identical content (doc/design.eml 4.3): a member whose payload is already in
 // the archive shares the blob of that member, its owner, and stores nothing.
 
 // dedup is the writer's table of owners. The capturer asks it before a file
@@ -22,7 +22,7 @@ type dedup struct {
 	// firstNew is the first member id of this run. An owner below it is from
 	// an earlier generation, and it is checked before it is first used,
 	// because the match is on the digest that the index records, not on the
-	// blob (doc/design.md 4.3). checked holds each result.
+	// blob (doc/design.eml 4.3). checked holds each result.
 	firstNew uint64
 	checked  map[uint64]bool
 	// old reads the earlier generations, to check an old owner. It is nil

@@ -16,7 +16,7 @@ const Overhead = chacha20poly1305.Overhead
 //
 // One member, one key, and the chunk index as the nonce counter. That is what
 // makes a counter safe here: nonces only have to be unique within a key, and
-// no two chunks of a member share an index (doc/design.md 6.3).
+// no two chunks of a member share an index (doc/design.eml 6.3).
 type MemberSealer struct {
 	aead     cipher.AEAD
 	memberID uint64
@@ -89,7 +89,7 @@ func chunkAAD(memberID, chunkIndex uint64, final bool) []byte {
 // pair: a copy of an archive appended to beside the original, an append
 // that failed after its index was written, a compact whose rename failed.
 // With a derived nonce each of those reuses a key and nonce, which exposes
-// the XOR of the two indexes and the Poly1305 key (doc/design.md 6.3). A
+// the XOR of the two indexes and the Poly1305 key (doc/design.eml 6.3). A
 // random 192-bit nonce makes a collision impossible in practice.
 func SealIndex(key []byte, generation uint64, plaintext []byte) ([]byte, error) {
 	var nonce [chacha20poly1305.NonceSizeX]byte
@@ -133,7 +133,7 @@ func indexAAD(generation uint64) []byte {
 	return aad
 }
 
-// SealDict seals a dictionary as one message (doc/design.md 6.3). Each
+// SealDict seals a dictionary as one message (doc/design.eml 6.3). Each
 // dictionary has its own salt and so its own key, which seals this one
 // message only: a fixed nonce is safe. The id is bound in, so a dictionary
 // cannot stand in for another.

@@ -44,7 +44,7 @@ type entry struct {
 	// a file, the read of its attributes - goes through dir, one name at a
 	// time. Thus a directory above the entry that becomes a link after the
 	// walk passed it cannot lead the operation elsewhere
-	// (doc/Security_Audit.md, finding 11). dir is nil for an entry that the
+	// (doc/Security_Audit.eml, finding 11). dir is nil for an entry that the
 	// walk reached by its path: a requested path whose parent cannot be
 	// opened, and a link that -h follows. Both are valid during the visit
 	// only.
@@ -69,7 +69,7 @@ type walkOptions struct {
 	// archive names this way.
 	root srcDir
 	// afterLstat, when set, runs after each lstat of the walk. Tests use it
-	// to change the tree at that moment (doc/Security_Audit.md, finding 11).
+	// to change the tree at that moment (doc/Security_Audit.eml, finding 11).
 	afterLstat func(src string)
 	// onError decides what an error of the walk itself does: one lstat,
 	// readdir or readlink that fails below a requested path. It returns nil
@@ -103,7 +103,7 @@ func newWalker(opt walkOptions, visit func(entry) error) *walker {
 }
 
 // unmatched reports the first -R expression that matched no path: a mistyped
-// expression must not give a quietly empty archive (doc/design.md 10.11).
+// expression must not give a quietly empty archive (doc/design.eml 10.11).
 func (w *walker) unmatched() error {
 	for i, hit := range w.regexHit {
 		if !hit {
@@ -279,7 +279,7 @@ func (w *walker) walk(dir srcDir, name, src, rel string, top bool) error {
 
 	// Open the directory, and make sure that it is the directory that the
 	// lstat found. A link put in its place since then would take the walk
-	// into the directory that the link points to (doc/Security_Audit.md,
+	// into the directory that the link points to (doc/Security_Audit.eml,
 	// finding 11).
 	sub, err := w.openDir(e)
 	if err != nil && !errors.Is(err, fs.ErrPermission) {
@@ -370,7 +370,7 @@ func isDiskError(err error) bool {
 // Windows, the FileInfo of os.Lstat and os.Stat has no identity. os.SameFile
 // reads it from the path the first time that it needs it. Thus openWalked
 // compared the file that it opened with the file at the path then, and a
-// file put there after the walk passed as the walked file (doc/Security_Audit.md,
+// file put there after the walk passed as the walked file (doc/Security_Audit.eml,
 // finding 3). The FileInfo of os.Root and of an open file has its identity
 // already, as on Unix. A nil fi does nothing.
 func pinIdentity(fi os.FileInfo) {

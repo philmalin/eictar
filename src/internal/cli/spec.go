@@ -13,7 +13,7 @@ import (
 )
 
 // CompressSpec is a parsed --compress argument: a codec name and the
-// parameters selected for it (doc/design.md 10.2).
+// parameters selected for it (doc/design.eml 10.2).
 //
 // Parameters are kept as strings here. The codec registry owns their meaning,
 // their ranges and their defaults; the CLI's job is only to split them out.
@@ -23,7 +23,7 @@ type CompressSpec struct {
 }
 
 // ParseCompressSpec parses "NAME[:k[=v][,k[=v]]...]". A key given alone has
-// the value "on", which each codec defines (doc/design.md 10.2).
+// the value "on", which each codec defines (doc/design.eml 10.2).
 //
 //	zstd
 //	zstd:level=19

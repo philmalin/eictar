@@ -1,6 +1,6 @@
 // Package archive reads, writes and changes eictar archives.
 //
-// It implements the layout of doc/design.md sections 2 to 6: a header, member
+// It implements the layout of doc/design.eml sections 2 to 6: a header, member
 // blobs, an index, and a trailer that commits them. Create, list and extract
 // are in ops.go and extract.go; the walk and the metadata capture feed the
 // compression pipeline of package pipeline. The mutations of section 9 -
@@ -62,7 +62,7 @@ type Options struct {
 	// Salt is the Argon2id salt of the key that wraps the data key.
 	Salt []byte
 	// WrappedKey is the data key, wrapped for the passphrase
-	// (doc/design.md 6.2).
+	// (doc/design.eml 6.2).
 	WrappedKey []byte
 	// EncryptIndex adds confidentiality to the index. Authentication does not
 	// depend on it.
@@ -86,7 +86,7 @@ type Writer struct {
 	// path. It is empty for an append, which writes in place.
 	tmpPath string
 	// guard is the file a create replaces, held open to keep its lock until
-	// the rename (doc/design.md 9.6). It is nil when nothing was there.
+	// the rename (doc/design.eml 9.6). It is nil when nothing was there.
 	guard archiveFile
 
 	hdr   format.Header
@@ -100,12 +100,12 @@ type Writer struct {
 	codecRef  int
 	chunkSize int
 	// params and concurrency build the encoder again with a dictionary
-	// (doc/design.md 4.2). addedCodec means this writer added the catalog
+	// (doc/design.eml 4.2). addedCodec means this writer added the catalog
 	// entry at codecRef, so that it can take it away when it is not used.
 	params      codec.Params
 	concurrency int
 	addedCodec  bool
-	// dedup finds content that the archive holds already (doc/design.md
+	// dedup finds content that the archive holds already (doc/design.eml
 	// 4.3). It is nil under --no-dedup, and for a compact.
 	dedup *dedup
 
@@ -114,7 +114,7 @@ type Writer struct {
 	closed bool
 
 	// Set when the writer extends an existing archive rather than creating
-	// one (doc/design.md 9.1).
+	// one (doc/design.eml 9.1).
 	appending       bool
 	origSize        int64  // the archive's length before this generation
 	prevIndexOffset uint64 // the index this generation supersedes
@@ -264,14 +264,14 @@ func Create(path string, opt Options) (*Writer, error) {
 // index digest, member ranges, and the passphrase for an encrypted one - and
 // the new generation's blobs start after the old trailer, at the old end of
 // the file. Until Close writes the new trailer, the old one still describes
-// the old generation, in place (doc/design.md 9.1).
+// the old generation, in place (doc/design.eml 9.1).
 func OpenAppend(path string, opt Options, open OpenOptions) (*Writer, error) {
 	f, err := fsys.OpenArchive(path, os.O_RDWR)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", path, err)
 	}
 	// Before the trailer is read: two appends that both read it would both
-	// write after it, each over the blobs of the other (doc/design.md 9.6).
+	// write after it, each over the blobs of the other (doc/design.eml 9.6).
 	if err := lockArchive(f, path); err != nil {
 		f.Close()
 		return nil, err
@@ -381,7 +381,7 @@ func (w *Writer) AppendMember(m *format.Member, payload io.WriterTo) error {
 	}
 
 	// Content that the archive holds already is shared, not written again
-	// (doc/design.md 4.3). This catches two copies that one run adds; the
+	// (doc/design.eml 4.3). This catches two copies that one run adds; the
 	// capturer finds the others before they are compressed.
 	if payload != nil && w.dedup != nil && m.Type == format.TypeReg && m.Data == 0 && m.Length > 0 {
 		if owner, ok := w.dedup.atEmit(m); ok {
@@ -448,10 +448,10 @@ func (w *Writer) newDigest() hash.Hash { return newDigest(w.keys) }
 
 // newDigest is the hash of a member's content: BLAKE3 keyed with the
 // content key in an encrypted archive, plain BLAKE3 otherwise
-// (doc/design.md 6.2).
+// (doc/design.eml 6.2).
 //
 // It is a variable so that a test can give it a fault that create, --verify
-// and --diff all share, and that only --diff-extract finds (doc/design.md
+// and --diff all share, and that only --diff-extract finds (doc/design.eml
 // 9.10).
 var newDigest = func(keys *crypt.Keys) hash.Hash {
 	var key []byte
@@ -470,7 +470,7 @@ func (w *Writer) Generation() uint64 { return w.index.Generation }
 
 // Close writes the index and the trailer, then syncs. Until it returns, the
 // file on disk is not a readable archive: the trailer is the commit point
-// (doc/design.md 9).
+// (doc/design.eml 9).
 func (w *Writer) Close() error {
 	if w.closed {
 		return nil
@@ -505,7 +505,7 @@ func (w *Writer) Close() error {
 	// the path is intact, and after it the new one is complete. A create that
 	// found no file at the path holds no lock. It must not replace an archive
 	// that another run made there since, and that a third run can be
-	// appending to (doc/design.md 9.6).
+	// appending to (doc/design.eml 9.6).
 	replace := w.guard != nil
 	if err := fsys.Rename(w.tmpPath, w.path, replace); err != nil {
 		fsys.Remove(w.tmpPath)
@@ -598,7 +598,7 @@ func createTemp(target string, mode os.FileMode) (archiveFile, os.FileInfo, stri
 }
 
 // ErrUnsafeLink means -f names a path through a symbolic link that the
-// program does not follow (doc/Security_Audit.md, finding 4).
+// program does not follow (doc/Security_Audit.eml, finding 4).
 var ErrUnsafeLink = errors.New("a symbolic link that another user planted in a shared directory")
 
 // checkLinks refuses a path through a symbolic link that the kernel would not
@@ -650,7 +650,7 @@ func (w *Writer) indexEncodeOptions() format.EncodeOptions {
 
 	// The digest binds the index to its archive and generation whether or not
 	// there is a key. Without one it detects damage; with one it is keyed and
-	// also detects metadata an attacker edited (doc/design.md 6.4).
+	// also detects metadata an attacker edited (doc/design.eml 6.4).
 	var authKey []byte
 	if w.keys != nil {
 		authKey = w.keys.IndexAuthKey()

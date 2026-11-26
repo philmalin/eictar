@@ -13,7 +13,7 @@ import (
 // On Windows the program archives content, directories, links, hardlinks and
 // the times of links. Windows has no owner as a number, no mode bits, no
 // extended attributes of the user namespace and no named pipes, so the rest
-// is reported as unsupported (doc/design.md 15.1).
+// is reported as unsupported (doc/design.eml 15.1).
 
 // Supports is empty: the Metadata feature includes owners and special bits,
 // which Windows does not have.

@@ -291,7 +291,7 @@ Windows release is a `.zip` file with `eictar.exe`.
   and again, and can see the size of the archive. Then use `--no-dedup` and
   no `train`: shared content and dictionaries let them test for a guessed
   file.
-- [`doc/Security_Audit.md`](doc/Security_Audit.md) records the security
+- [`doc/Security_Audit.eml`](doc/Security_Audit.eml) records the security
   review of v1.0.1 and the fixes of v1.0.2, and the follow-up reviews of
   v1.0.3 and of v1.0.6 (`--diff` and `-n`).
 - A change of passphrase does not remove old copies of the archive. Such a
@@ -305,7 +305,9 @@ Windows release is a `.zip` file with `eictar.exe`.
 - [`doc/eictar.1`](doc/eictar.1): the manual page.
 - [`doc/format.md`](doc/format.md): the archive format, for a person who
   writes another reader.
-- [`doc/design.md`](doc/design.md): the design and the reasons for it.
+- [`doc/design.eml`](doc/design.eml): the design and the reasons for it.
+  It is in EML. `doc/design.html` is the same document, to read in a
+  browser, and its figures are in `doc/fig`.
 - [`doc/testing.md`](doc/testing.md): the tests, and the evidence that
   they give: mutation testing, a second reader, faults of the disk, fuzzing,
   models of the protocols, and the release gate.

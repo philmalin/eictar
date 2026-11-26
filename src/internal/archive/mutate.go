@@ -25,7 +25,7 @@ import (
 // others take effect.
 var ErrNoMatch = errors.New("matches nothing in the archive")
 
-// Update modes for -u (doc/design.md 10.5).
+// Update modes for -u (doc/design.eml 10.5).
 const (
 	UpdateNewer     = "newer"
 	UpdateDifferent = "different"
@@ -49,7 +49,7 @@ type AppendConfig struct {
 }
 
 // AppendArchive adds the paths of cfg to an existing archive as a new
-// generation (doc/design.md 9.1 and 9.2).
+// generation (doc/design.eml 9.1 and 9.2).
 //
 // On an error the file is cut back to its old length, so the archive is
 // exactly as it was. A run that changes nothing - every path skipped or
@@ -185,7 +185,7 @@ func DeleteMembers(cfg DeleteConfig) (Stats, error) {
 }
 
 // kept returns the members that a compacted archive holds: every live member,
-// and every tombstone that a live hardlink points to (doc/design.md 9.2).
+// and every tombstone that a live hardlink points to (doc/design.eml 9.2).
 func kept(all []format.Member) []format.Member {
 	needed := map[uint64]bool{}
 	for _, m := range all {
@@ -194,7 +194,7 @@ func kept(all []format.Member) []format.Member {
 		}
 	}
 	// A tombstone that a kept member shares content with holds the blob, as
-	// the target of a hardlink does (doc/design.md 4.3). A kept hardlink can
+	// the target of a hardlink does (doc/design.eml 4.3). A kept hardlink can
 	// point to a tombstone that shares content, so the owners come after.
 	for _, m := range all {
 		if (!m.Dead || needed[m.ID]) && m.Data != 0 {
@@ -220,7 +220,7 @@ func deadSpace(r *Reader) int64 {
 			used += int64(m.Length)
 		}
 	}
-	// A dictionary that no kept member uses is dead space (doc/design.md 9.3).
+	// A dictionary that no kept member uses is dead space (doc/design.eml 9.3).
 	inUse := usedDicts(keep, r.index.Codecs)
 	for _, d := range r.index.Dicts {
 		if inUse[d.ID] {
@@ -298,10 +298,10 @@ type CompactConfig struct {
 	// settings (--recompress). Otherwise the blobs are copied as they are.
 	Recompress *RecompressConfig
 	// Rewrap, when set, seals the data key under a new passphrase
-	// (--change-passphrase, doc/design.md 9.7).
+	// (--change-passphrase, doc/design.eml 9.7).
 	Rewrap *RewrapConfig
 	// Encrypt, when set, encrypts an archive made without -e
-	// (--encrypt-archive, doc/design.md 9.11).
+	// (--encrypt-archive, doc/design.eml 9.11).
 	Encrypt *EncryptArchiveConfig
 }
 
@@ -334,7 +334,7 @@ type CompactResult struct {
 }
 
 // CompactArchive writes the archive again without its dead space
-// (doc/design.md 9.3).
+// (doc/design.eml 9.3).
 //
 // By default the blobs are copied byte for byte: nothing is decompressed or
 // unsealed, which is why the uuid must stay the same - the member keys come
@@ -511,7 +511,7 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 var testBeforeCompactLock func()
 
 // openLocked opens the archive at path, takes the writer's lock, and only
-// then reads the trailer and the index (doc/design.md 9.6). The lock is held
+// then reads the trailer and the index (doc/design.eml 9.6). The lock is held
 // until the reader is closed: for compact, after the rename. Reading first
 // and locking after let an append commit in between, and compact then wrote
 // the archive again from the older index and renamed it over the append.
@@ -562,7 +562,7 @@ func rewrapHeaders(r *Reader, rw *RewrapConfig) ([]byte, format.Header, error) {
 			params.Time, params.Memory, format.MaxKDFTime, format.MaxKDFMemoryKiB)
 	}
 	// The new parameters must open on this machine, or the change locks the
-	// archive against the one that made it (doc/design.md A.3).
+	// archive against the one that made it (doc/design.eml A.3).
 	if err := checkAffordable(params); err != nil {
 		return nil, format.Header{}, err
 	}
@@ -625,7 +625,7 @@ func copyBlobs(r *Reader, w *Writer, keep []format.Member, progress Progress) er
 // A member keeps its id, its digest and its metadata. It gets a new member
 // salt, and so a new key: its chunks are new ciphertext at the old chunk
 // indexes, and sealing them under the old key would use each nonce twice
-// (doc/design.md 6.3). The catalog is replaced, because no old entry is used
+// (doc/design.eml 6.3). The catalog is replaced, because no old entry is used
 // any more.
 func recompressBlobs(r *Reader, w *Writer, keep []format.Member, rc *RecompressConfig, tmpPath string, progress Progress, warn func(string, ...any)) (int, error) {
 	workers := rc.Workers
@@ -660,7 +660,7 @@ func recompressBlobs(r *Reader, w *Writer, keep []format.Member, rc *RecompressC
 		w.codecRef, w.addedCodec = 0, true
 	}
 	// --recompress zstd:train trains a new dictionary from the members; the
-	// old dictionaries go, with the catalog that used them (doc/design.md
+	// old dictionaries go, with the catalog that used them (doc/design.eml
 	// 4.2). The members are already in the archive, so there is none to reuse.
 	if err := w.useDictionary(func(budget int) ([][]byte, int, error) { return sampleMembers(r, keep, budget) }, warn); err != nil {
 		return 0, err
@@ -688,7 +688,7 @@ func recompressBlobs(r *Reader, w *Writer, keep []format.Member, rc *RecompressC
 	for i := range keep {
 		m := keep[i]
 		// A member that shares content stays a sharer: its owner keeps its
-		// id, and is encoded again below (doc/design.md 4.3).
+		// id, and is encoded again below (doc/design.eml 4.3).
 		if !m.Type.HasPayload() || m.Data != 0 {
 			if addErr = builder.AddMeta(m); addErr != nil {
 				break
@@ -857,7 +857,7 @@ type VerifyResult struct {
 	Failed  int
 }
 
-// VerifyArchive checks an archive without extracting it (doc/design.md 9.4).
+// VerifyArchive checks an archive without extracting it (doc/design.eml 9.4).
 //
 // Opening already checks the structure: header, trailer, index digest and
 // member ranges. Unless Quick is set, every selected member is then decoded
@@ -893,7 +893,7 @@ func VerifyArchive(cfg VerifyConfig) (VerifyResult, error) {
 	var todo []*format.Member
 	// sharers counts, for each owner, the selected members that share its
 	// content. Each blob is decoded one time, and its result is theirs too
-	// (doc/design.md 4.3).
+	// (doc/design.eml 4.3).
 	sharers := map[uint64][]*format.Member{}
 	sharing := map[uint64]bool{}
 	add := func(m *format.Member) {
@@ -1110,7 +1110,7 @@ type RepairOptions struct {
 // the index before it writes the trailer, and the trailer is its last
 // write. Only a power cut in the one write of the trailer, when it falls
 // across two sectors, can leave its first part. A repair would
-// remove a whole generation, so it needs --discard-damaged (doc/design.md
+// remove a whole generation, so it needs --discard-damaged (doc/design.eml
 // 9.5).
 var ErrDamagedGeneration = errors.New("the newest generation looks complete, and is damaged")
 
@@ -1122,7 +1122,7 @@ var repairWindow int64 = 1 << 20
 var trailerMagic = format.TrailerMagic[:]
 
 // RepairArchive restores the last complete generation of an archive whose end
-// is damaged, usually by a crash during a mutation (doc/design.md 9.5).
+// is damaged, usually by a crash during a mutation (doc/design.eml 9.5).
 //
 // It searches back from the end for a trailer that passes every check a
 // reader makes - magic, CRC, bounds, index digest, index decode, member
@@ -1230,7 +1230,7 @@ func RepairArchiveWith(path string, open OpenOptions, opt RepairOptions) (res Re
 	body := base.hdr.BodyOffset()
 	// A file that ends with the magic of a trailer ends with a whole one: the
 	// trailer is the last write, and one write. An interrupted write ends in
-	// blob or index bytes instead (doc/design.md 9.5).
+	// blob or index bytes instead (doc/design.eml 9.5).
 	if size >= body+format.TrailerSize {
 		magic := make([]byte, len(trailerMagic))
 		if _, err := f.ReadAt(magic, size-format.TrailerSize); err != nil {
@@ -1305,7 +1305,7 @@ var damage = []error{
 // IsDamage reports whether err means the archive is damaged or was altered,
 // as opposed to a wrong passphrase, an archive too new for this build, or an
 // I/O error. Repair scans only past damage, and the command line reports it
-// with its own exit code (doc/design.md 10.7).
+// with its own exit code (doc/design.eml 10.7).
 func IsDamage(err error) bool {
 	for _, e := range damage {
 		if errors.Is(err, e) {

@@ -22,7 +22,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/meta"
 )
 
-// --diff-extract (doc/design.md 9.10) extracts each member, with the code of
+// --diff-extract (doc/design.eml 9.10) extracts each member, with the code of
 // extraction, into a scratch directory under a name of its own. It compares
 // the copy with the file on disk, byte by byte and by its metadata, and then
 // removes it. The comparison uses no digest, so a fault of the digest code
@@ -41,7 +41,7 @@ type scratch struct {
 	dir string      // its path
 	x   *extraction // the extraction into it
 	// precision is that of the times of its file system: two times that
-	// differ by less are the same (doc/design.md 9.10).
+	// differ by less are the same (doc/design.eml 9.10).
 	precision time.Duration
 	// linkTimes is false when the platform cannot set the times of a
 	// symbolic link: the time of a copy of a link is then not compared.
@@ -188,7 +188,7 @@ func (s *scratch) probe() error {
 
 // copiesNodes is false on Windows: there --diff-extract extracts only files
 // and directories, as extraction there makes no links, pipes or devices
-// that it can compare (doc/design.md 15.1).
+// that it can compare (doc/design.eml 15.1).
 const copiesNodes = runtime.GOOS != "windows"
 
 // timePrecision gives the precision of a file system that stored want and
@@ -501,8 +501,8 @@ func (d *differ) compareCopy(m *format.Member, e entry, src srcFile, cpInfo fs.F
 	add := func(kind, disk, copied string) {
 		diffs = append(diffs, Difference{Path: m.Path, Kind: kind, Extracted: true, Disk: disk, Archive: copied})
 	}
-	// Windows has no mode to restore (doc/design.md 15.1), and the mode of
-	// a link means nothing (doc/design.md 7.6).
+	// Windows has no mode to restore (doc/design.eml 15.1), and the mode of
+	// a link means nothing (doc/design.eml 7.6).
 	if copiesNodes && m.Type != format.TypeSymlink && !found[DiffMode] {
 		if a, b := meta.UnixMode(e.Info.Mode()), meta.UnixMode(cpInfo.Mode()); a != b {
 			add(DiffMode, fmt.Sprintf("%04o", a), fmt.Sprintf("%04o", b))

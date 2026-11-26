@@ -1,6 +1,6 @@
 ------------------------------ MODULE Writers ------------------------------
 (***************************************************************************)
-(* Runs that change one archive at the same time (doc/design.md 9.6).     *)
+(* Runs that change one archive at the same time (doc/design.eml 9.6).     *)
 (* Each writer opens the path, which gives it a file (an inode), and takes *)
 (* the lock of that file without waiting. A lock is on a file, not on a   *)
 (* path. An append writes into its file. A compact writes a new file from *)

@@ -2,7 +2,7 @@
 
 This document specifies the bytes of an eictar archive. With it, you can
 write a reader or a writer without the eictar source code.
-`doc/design.md` gives the reasons for each choice. This document gives only
+`doc/design.eml` gives the reasons for each choice. This document gives only
 the rules, and it is the specification. When the two documents do not
 agree, this document is correct.
 

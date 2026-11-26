@@ -23,7 +23,7 @@ func mustParse(t *testing.T, argv ...string) *Options {
 }
 
 // TestParseBundling covers the classical UNIX forms the interface promises
-// (doc/design.md section 10): separate, bundled, and bundled with the
+// (doc/design.eml section 10): separate, bundled, and bundled with the
 // value-taking letter last.
 func TestParseBundling(t *testing.T) {
 	want := func(o *Options) bool {
@@ -278,7 +278,7 @@ func TestOperationProperties(t *testing.T) {
 	}
 }
 
-// TestRunExitCodes checks the mapping in doc/design.md 10.7 end to end, through
+// TestRunExitCodes checks the mapping in doc/design.eml 10.7 end to end, through
 // the same entry point the binary uses.
 func TestRunExitCodes(t *testing.T) {
 	for _, tc := range []struct {
@@ -558,7 +558,7 @@ func TestTuningBounds(t *testing.T) {
 }
 
 // TestChdirOnExtractMustExist: -C means "work in this directory", and unlike
-// -d it does not create one (doc/design.md 7.1).
+// -d it does not create one (doc/design.eml 7.1).
 func TestChdirOnExtractMustExist(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := Run([]string{"-xf", "nonexistent.ect", "-C", "/nonexistent-directory-xyz"},
@@ -594,7 +594,7 @@ func TestEncryptionOptionsOnlyOnCreate(t *testing.T) {
 
 // TestChangePassphraseOptions: a change of passphrase takes the --kdf-*
 // options, and remembers which ones were typed, because only those change
-// the archive's key derivation (doc/design.md 9.7).
+// the archive's key derivation (doc/design.eml 9.7).
 func TestChangePassphraseOptions(t *testing.T) {
 	o := mustParse(t, "--change-passphrase", "-f", "a", "--passphrase-file", "old",
 		"--new-passphrase-file", "new", "--kdf-memory", "65536")
@@ -794,7 +794,7 @@ func TestVersionPrefersTheLinkerValue(t *testing.T) {
 }
 
 // TestRegexOptions: -R bundles as a short option and repeats, and --delete
-// takes it in place of a pattern (doc/design.md 10.11).
+// takes it in place of a pattern (doc/design.eml 10.11).
 func TestRegexOptions(t *testing.T) {
 	o := mustParse(t, "-tR", `.*\.go`, "-f", "a", "--regex", "b/.*", "--exclude-regex", ".*/vendor")
 	if len(o.regex) != 2 || len(o.excludeRegex) != 1 || !o.regex.MatchAny("x/y.go") || o.regex.MatchAny("x/y.gox") {
@@ -806,7 +806,7 @@ func TestRegexOptions(t *testing.T) {
 }
 
 // TestArchiveName: create adds .ect to a name with no extension, and the
-// other operations find the name that create made (doc/design.md 10.12).
+// other operations find the name that create made (doc/design.eml 10.12).
 func TestArchiveName(t *testing.T) {
 	dir := t.TempDir()
 	at := func(name string) string { return filepath.Join(dir, name) }

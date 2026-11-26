@@ -41,7 +41,7 @@ func FuzzDecoders(f *testing.F) {
 // FuzzZstdDictionary feeds arbitrary dictionaries, and chunks to decode with
 // them, along the reader's path: the id check, the decoder built from the
 // dictionary, then the decode. A plain archive can hold any bytes as a
-// dictionary with a correct unkeyed digest (doc/Security_Audit.md 5), so the
+// dictionary with a correct unkeyed digest (doc/Security_Audit.eml 5), so the
 // parser of the dictionary sees what an attacker chooses: it must return an
 // error, and never panic, hang, or decode past the bound.
 //

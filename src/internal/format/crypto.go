@@ -6,7 +6,7 @@ import (
 )
 
 // CryptoHeader is the plaintext block after the file header, present only in
-// an encrypted archive (doc/design.md 6.2).
+// an encrypted archive (doc/design.eml 6.2).
 //
 // It has to be readable before any key exists, because it holds what the key
 // is derived from. Everything in it is public by necessity: the salt and the
@@ -23,7 +23,7 @@ type CryptoHeader struct {
 
 	AEAD string `cbor:"aead"` // "xchacha20poly1305"
 	// Key is the archive's data key, wrapped under the key that the
-	// passphrase gives: the nonce, the sealed key, the tag (doc/design.md
+	// passphrase gives: the nonce, the sealed key, the tag (doc/design.eml
 	// 6.2). A wrong passphrase fails its tag.
 	Key []byte `cbor:"key"`
 

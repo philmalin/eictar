@@ -17,7 +17,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/fsutil"
 )
 
-// Exit codes (doc/design.md 10.7). Code 3 is kept distinct from code 4 so a
+// Exit codes (doc/design.eml 10.7). Code 3 is kept distinct from code 4 so a
 // backup script can tell "this archive is damaged" from "the disk filled up".
 const (
 	ExitOK       = 0
@@ -89,7 +89,7 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 	}
 
 	// A setting nobody typed can surprise; -v says where they came from
-	// (doc/design.md 11.4).
+	// (doc/design.eml 11.4).
 	if opts.Verbose > 0 && opts.configFile != "" {
 		fmt.Fprintf(stderr, "eictar: using configuration file %s\n", opts.configFile)
 	}
@@ -119,11 +119,11 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 	return ExitOK
 }
 
-// ArchiveExt is the conventional extension of an archive (doc/design.md
+// ArchiveExt is the conventional extension of an archive (doc/design.eml
 // 10.12). The program finds an archive by its magic, not by its name.
 const ArchiveExt = ".ect"
 
-// archiveName applies the extension rule of doc/design.md 10.12. Create adds
+// archiveName applies the extension rule of doc/design.eml 10.12. Create adds
 // .ect to a name with no extension. Every other operation uses the name with
 // .ect when no file has the name as typed and that one exists, so that it
 // finds what create made. A file with the name as typed always wins. A
@@ -167,7 +167,7 @@ func hasExtension(name string) bool {
 // dispatch runs the selected operation.
 //
 // Every operation is built. notImplemented stays for the options that are
-// not (doc/design.md 10.6).
+// not (doc/design.eml 10.6).
 func dispatch(o *Options, stdout, stderr io.Writer) error {
 	// The dry run of --repair is its own: it names a generation, not paths.
 	if o.DryRun && o.Op != OpRepair {
@@ -238,7 +238,7 @@ func exitCodeFor(err error) int {
 	// A pattern that matches nothing, a path that is already in the archive
 	// under --on-conflict=error, a scratch directory of --diff-extract in
 	// the compared tree, and --encrypt-archive of an encrypted archive are
-	// mistakes in what was asked for; nothing was changed (doc/design.md
+	// mistakes in what was asked for; nothing was changed (doc/design.eml
 	// 9.2, 9.10, 9.11 and 10.7).
 	if errors.Is(err, archive.ErrNoMatch) || errors.Is(err, archive.ErrConflict) ||
 		errors.Is(err, archive.ErrScratchInTree) || errors.Is(err, archive.ErrAlreadyEncrypted) {
@@ -246,7 +246,7 @@ func exitCodeFor(err error) int {
 	}
 	// A damaged archive is reported separately from an I/O failure, so a
 	// backup script can tell "this archive is broken" from "the disk filled
-	// up" (doc/design.md 10.7).
+	// up" (doc/design.eml 10.7).
 	if archive.IsDamage(err) {
 		return ExitCorrupt
 	}
@@ -254,7 +254,7 @@ func exitCodeFor(err error) int {
 		// Too new for this build, or a member path that would escape.
 		format.ErrUnsupportedVersion, fsutil.ErrUnsafePath, archive.ErrUnsafeLink,
 		// A wrong passphrase is "this archive did not authenticate", which
-		// exit code 3 exists to say, as a failed tag is (doc/design.md 10.7).
+		// exit code 3 exists to say, as a failed tag is (doc/design.eml 10.7).
 		crypt.ErrWrongPassphrase,
 		// Expected sealed, found plain: not an I/O problem, a trust one.
 		archive.ErrNotEncrypted,
@@ -378,7 +378,7 @@ func writeUsage(w io.Writer) { fmt.Fprint(w, usageText) }
 
 // EffectiveSettings renders --show-config: every setting that a
 // configuration can give, its value in effect, and where the value came from
-// (doc/design.md 11).
+// (doc/design.eml 11).
 func EffectiveSettings(o *Options) string {
 	var b strings.Builder
 	file := o.configFile

@@ -1,6 +1,6 @@
 ------------------------------ MODULE Budget ------------------------------
 (***************************************************************************)
-(* The memory budget of a create (doc/design.md 8.1), against a deadlock. *)
+(* The memory budget of a create (doc/design.eml 8.1), against a deadlock. *)
 (*                                                                         *)
 (* One reader reads the members in turn, chunk by chunk. It takes one     *)
 (* chunk of budget before each read, and holds back the last chunk that   *)

@@ -2,7 +2,7 @@
 (***************************************************************************)
 (* A compact, a change of passphrase and a create write a new archive to  *)
 (* a temporary file beside the path, make it durable, and rename it over  *)
-(* the path (doc/design.md 9.3, 9.7). Then they make the directory        *)
+(* the path (doc/design.eml 9.3, 9.7). Then they make the directory        *)
 (* durable. The power can fail at any moment.                             *)
 (*                                                                         *)
 (* The disk is that of Commit.tla, for the new file and for the           *)

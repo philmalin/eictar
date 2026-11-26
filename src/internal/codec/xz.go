@@ -131,7 +131,7 @@ func (d *xzDecoder) Decode(dst, src []byte, plainSize int) ([]byte, error) {
 func (d *xzDecoder) Close() error { return nil }
 
 // encodeMemory is what one Encode call holds, from measurements: about 7
-// times its dictionary, which is the chunk at most (doc/design.md 8.2). At
+// times its dictionary, which is the chunk at most (doc/design.eml 8.2). At
 // 4 MiB chunks, it is 30 MB.
 func (xzFactory) encodeMemory(p Params, maxChunk int) (int64, error) {
 	preset, err := intParam(p, "preset", xzPresetDefault, xzPresetMin, xzPresetMax)

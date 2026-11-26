@@ -1,0 +1,122 @@
+<mxfile host="Electron">
+  <diagram name="A change to an archive" id="change_sequence">
+    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <!-- The two participants -->
+        <mxCell id="life_c" value="eictar -r" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;collapsible=0;recursiveResize=0;outlineConnect=0;size=40;strokeColor=#000000;strokeWidth=0.75;fillColor=#ffffff;fontFamily=Helvetica;fontSize=12;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="160" height="640" as="geometry" />
+        </mxCell>
+        <mxCell id="life_f" value="archive file" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;collapsible=0;recursiveResize=0;outlineConnect=0;size=40;strokeColor=#000000;strokeWidth=0.75;fillColor=#ffffff;fontFamily=Helvetica;fontSize=12;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="540" y="20" width="160" height="640" as="geometry" />
+        </mxCell>
+        <!-- Before the commit -->
+        <mxCell id="t_m1" value="open, flock (no wait), check the path is still this file" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="80" width="480" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="m1" value="" style="html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=block;endFill=1;endSize=6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="100" as="sourcePoint" />
+            <mxPoint x="620" y="100" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t_m2" value="read the header, trailer and index (all the checks)" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="120" width="480" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" value="" style="html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=block;endFill=1;endSize=6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="140" as="sourcePoint" />
+            <mxPoint x="620" y="140" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t_m3" value="write a new dictionary, if trained, and the new blobs, after the old trailer" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="160" width="480" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" value="" style="html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=block;endFill=1;endSize=6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="180" as="sourcePoint" />
+            <mxPoint x="620" y="180" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t_m4" value="write the new index (it lists the tombstones)" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="200" width="480" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" value="" style="html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=block;endFill=1;endSize=6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="220" as="sourcePoint" />
+            <mxPoint x="620" y="220" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t_m5" value="fsync" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="240" width="480" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" value="" style="html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=block;endFill=1;endSize=6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="260" as="sourcePoint" />
+            <mxPoint x="620" y="260" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t_m6" value="write the new trailer, generation + 1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="280" width="480" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" value="" style="html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=block;endFill=1;endSize=6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="300" as="sourcePoint" />
+            <mxPoint x="620" y="300" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t_m7" value="fsync" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="320" width="480" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" value="" style="html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=block;endFill=1;endSize=6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="340" as="sourcePoint" />
+            <mxPoint x="620" y="340" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="n_commit" value="The new trailer is the commit." style="shape=note;size=10;whiteSpace=wrap;html=1;strokeColor=#000000;strokeWidth=0.75;fillColor=#ffffff;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="360" width="620" height="30" as="geometry" />
+        </mxCell>
+        <!-- What happens when the change does not reach the commit -->
+        <mxCell id="alt" value="alt" style="shape=umlFrame;whiteSpace=wrap;html=1;width=40;height=20;strokeColor=#000000;strokeWidth=0.75;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="40" y="410" width="720" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="g_error" value="[error before the commit]" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="412" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="t_m8" value="truncate to the old length" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="450" width="480" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="m8" value="" style="html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=block;endFill=1;endSize=6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="470" as="sourcePoint" />
+            <mxPoint x="620" y="470" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="alt_sep" value="" style="html=1;strokeColor=#000000;strokeWidth=0.75;dashed=1;endArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="40" y="495" as="sourcePoint" />
+            <mxPoint x="760" y="495" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="g_crash" value="[crash before the commit]" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="497" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="n_crash" value="the reader refuses the file, and --repair cuts it after the last valid trailer" style="shape=note;size=10;whiteSpace=wrap;html=1;strokeColor=#000000;strokeWidth=0.75;fillColor=#ffffff;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="500" y="520" width="240" height="45" as="geometry" />
+        </mxCell>
+        <!-- After both -->
+        <mxCell id="t_m9" value="close, which drops the lock" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=11;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="600" width="480" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="m9" value="" style="html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=block;endFill=1;endSize=6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="620" as="sourcePoint" />
+            <mxPoint x="620" y="620" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

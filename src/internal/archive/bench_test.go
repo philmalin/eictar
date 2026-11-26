@@ -109,7 +109,7 @@ func splitSpec(spec string) (string, codec.Params) {
 
 // smallTree is 20000 source-like files of 0.5 to 6 KiB, which is the case
 // where the setup of a decoder for each member costs the most, compared with
-// the decode (doc/design.md 15.2).
+// the decode (doc/design.eml 15.2).
 func smallTree(b *testing.B) (*testutil.Tree, int64) {
 	b.Helper()
 	tree := testutil.NewTree(b)

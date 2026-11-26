@@ -16,7 +16,7 @@ import (
 )
 
 // Operation is the single action a run performs. Exactly one is selected per
-// invocation (doc/design.md 10.1).
+// invocation (doc/design.eml 10.1).
 type Operation int
 
 const (
@@ -140,7 +140,7 @@ type Options struct {
 	FilesFrom   string
 	Exclude     []string
 	ExcludeFrom string
-	// Regex and ExcludeRegex are -R and --exclude-regex (doc/design.md
+	// Regex and ExcludeRegex are -R and --exclude-regex (doc/design.eml
 	// 10.11). validate compiles them into regex and excludeRegex.
 	Regex        []string
 	ExcludeRegex []string
@@ -161,24 +161,24 @@ type Options struct {
 	Overwrite string
 	ToStdout  bool
 	// StripComponents is --strip-components: with -x and --diff, remove
-	// this many leading components from each path (doc/design.md 10.14).
+	// this many leading components from each path (doc/design.eml 10.14).
 	StripComponents int
 	// ScratchDir is --scratch-dir: with --diff-extract, the directory in which
-	// the scratch directory is made (doc/design.md 9.10).
+	// the scratch directory is made (doc/design.eml 9.10).
 	ScratchDir string
 	UpdateMode string
 	OnConflict string
 
 	KeepGoing bool
 	// DryRun is -n: show what the operation would write, and write nothing
-	// (doc/design.md 9.9).
+	// (doc/design.eml 9.9).
 	DryRun     bool
 	Long       bool
 	JSON       bool
 	Quick      bool
 	Recompress string
 	// DiscardDamaged lets --repair remove a newest generation that is
-	// complete and damaged (doc/design.md 9.5).
+	// complete and damaged (doc/design.eml 9.5).
 	DiscardDamaged bool
 
 	Verbose  int
@@ -197,7 +197,7 @@ type Options struct {
 	// for this".
 	explicit map[string]bool
 
-	// The configuration layer (doc/design.md 11). sources says where each
+	// The configuration layer (doc/design.eml 11). sources says where each
 	// value from a configuration file or the environment came from;
 	// codecDefaults holds the [codec.NAME] and EICTAR_CODEC_* defaults;
 	// configFile is the file read, or "".
@@ -233,7 +233,7 @@ func defaultWorkers(cpus int) int {
 }
 
 // flagSet builds the parser. Every short option has a long form, and short
-// options bundle, per doc/design.md section 10.
+// options bundle, per doc/design.eml section 10.
 func (o *Options) flagSet(name string) (*pflag.FlagSet, *operationFlags) {
 	fs := pflag.NewFlagSet(name, pflag.ContinueOnError)
 	fs.SortFlags = false
@@ -364,7 +364,7 @@ type sizeTargets []struct {
 // avoid: --exclude that excludes nothing hands back an archive containing what
 // the user meant to leave out, and they would not find out until they read it.
 // The same rule the design applies to a misspelled environment variable
-// (doc/design.md 11.2) applies here.
+// (doc/design.eml 11.2) applies here.
 var unbuiltOptions = map[string]string{}
 
 // Unbuilt reports the first option the user set that this build ignores.
@@ -425,7 +425,7 @@ func Parse(argv []string) (*Options, error) {
 
 	// The configuration file and the environment fill in what the command
 	// line left out. They are read after the operation is known, because a
-	// setting that does not apply to it is ignored (doc/design.md 11).
+	// setting that does not apply to it is ignored (doc/design.eml 11).
 	o.sources = map[string]string{}
 	o.codecDefaults = map[string]map[string]string{}
 	if o.NoConfig {
@@ -566,7 +566,7 @@ func resolveOverwrite(o *Options, ops *operationFlags) error {
 // expectsEncryption reports whether the user told us, by supplying a
 // passphrase source, that the archive should be encrypted. Reading a
 // plaintext archive in that case is refused: it is how a stripped or
-// substituted archive is caught (doc/design.md 14.4).
+// substituted archive is caught (doc/design.eml 14.4).
 func (o *Options) expectsEncryption() bool {
 	return o.PassphraseFile != "" || o.PassphraseEnv != ""
 }
@@ -667,7 +667,7 @@ func (o *Options) validate() error {
 
 	// Metadata options have one meaning each, on the operations where they
 	// mean anything. Elsewhere they would be silently ignored, which this
-	// program does not do (doc/design.md 10.6).
+	// program does not do (doc/design.eml 10.6).
 	scoped := []struct {
 		name string
 		ops  []Operation
@@ -715,7 +715,7 @@ func (o *Options) validate() error {
 	// archive's own header says how it was made. Accepting these elsewhere
 	// would let someone believe they had chosen something they had not. The
 	// one exception is the key derivation, which a change of passphrase sets
-	// again (doc/design.md 9.7).
+	// again (doc/design.eml 9.7).
 	for _, name := range []string{"encrypt", "encrypt-index", "kdf-time", "kdf-memory", "kdf-threads"} {
 		if !o.explicit[name] || o.Op == OpCreate {
 			continue
@@ -723,7 +723,7 @@ func (o *Options) validate() error {
 		if o.Op == OpChangePassphrase && strings.HasPrefix(name, "kdf-") {
 			continue
 		}
-		// --encrypt-archive makes new keys, as create does (doc/design.md 9.11).
+		// --encrypt-archive makes new keys, as create does (doc/design.eml 9.11).
 		// The operation itself says "encrypt", so -e has no place there.
 		if o.Op == OpEncryptArchive && name != "encrypt" {
 			continue

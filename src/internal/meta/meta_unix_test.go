@@ -15,7 +15,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// TestMayFollow is the rule of fs.protected_symlinks (doc/Security_Audit.md,
+// TestMayFollow is the rule of fs.protected_symlinks (doc/Security_Audit.eml,
 // finding 4), for users that a test cannot be.
 func TestMayFollow(t *testing.T) {
 	sticky := fs.ModeDir | fs.ModeSticky | 0o777

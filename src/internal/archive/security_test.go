@@ -13,7 +13,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
-// Regression tests of doc/Security_Audit.md, one for each finding.
+// Regression tests of doc/Security_Audit.eml, one for each finding.
 
 // Finding 1: privileged attributes - security.capability gives a program
 // privilege - are restored only as root and only with -p. ACLs need root or

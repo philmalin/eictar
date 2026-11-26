@@ -20,8 +20,8 @@ written in Go.  The design and the archive format are specified in doc/.
 -  Each bug fix comes with a test that fails without the fix.
 -  When go.mod changes, update THIRD_PARTY.md: the table, and the license
    texts copied from each module's LICENSE file.  A test checks it.
--  Any documentation should be kept in the directory doc/: design.md,
-   format.md, the man page eictar.1 and Security_Audit.md, with README.md at
+-  Any documentation should be kept in the directory doc/: design.eml,
+   format.md, the man page eictar.1 and Security_Audit.eml, with README.md at
    the top.  Documents here should always be considered when performing code
    changes, and updated with them.
 -  When writing documentation make sure to load the simple-english skill.
@@ -32,6 +32,12 @@ written in Go.  The design and the archive format are specified in doc/.
    regenerate if there is already an html file corresponding to the md file.
    If there is none then don't generate one (I don't always create an html
    file).
+-  design.eml and Security_Audit.eml are EML: load the eml-editor skill to
+   edit them.  Their .html files are made with emlc, from doc/:
+   `emlc design.eml -o design.html`.  Section links are
+   `{ref t=#bid:§9.6}`; tools/docrefs checks that each number is right.
+-  Figures are draw.io files in doc/fig, each with its exported .png beside
+   it.  Load the drawio-editor skill to make or change one.
 -  Do not commit or push; I do that.  When a change is done, suggest a
    one-line commit message for it.
 -  No changes to outside the directory should be done unless explicitly asked

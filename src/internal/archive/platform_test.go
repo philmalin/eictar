@@ -13,7 +13,7 @@ import (
 )
 
 // TestXattrsFromAnotherPlatform is open question 5, as decided for M8
-// (doc/design.md 7.7): names are recorded exactly, each name is applied where
+// (doc/design.eml 7.7): names are recorded exactly, each name is applied where
 // the destination takes it, and the rest are listed in one notice.
 //
 // The member carries a Linux name and a macOS name. macOS takes both. Linux,
@@ -73,7 +73,7 @@ func TestXattrsFromAnotherPlatform(t *testing.T) {
 
 // TestPipeExtraction: a pipe is created where the platform has mkfifoat, and
 // skipped with a notice where it has not (macOS). A path-based mkfifo could
-// be redirected by a planted link (doc/design.md 7.6).
+// be redirected by a planted link (doc/design.eml 7.6).
 func TestPipeExtraction(t *testing.T) {
 	tree := testutil.NewTree(t)
 	tree.Text("f.txt", 0o644, "x").Fifo("pipe", 0o640)

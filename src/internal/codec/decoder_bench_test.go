@@ -7,7 +7,7 @@ import (
 
 // BenchmarkDecoderSetup compares a decoder made for each chunk, as the reader
 // makes one for each member, with one decoder that decodes every chunk
-// (doc/design.md 15.2, "A decoder for each worker"). The chunk is a small
+// (doc/design.eml 15.2, "A decoder for each worker"). The chunk is a small
 // source file, so the cost of the setup is as large as it can be, compared
 // with the decode. maxPlain is the default chunk size, as in the reader.
 //

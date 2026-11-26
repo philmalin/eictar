@@ -1,5 +1,5 @@
 // Command eictar packages files into an encrypted, individually-compressed
-// archive. See doc/design.md for the format and the interface.
+// archive. See doc/design.eml for the format and the interface.
 package main
 
 import (

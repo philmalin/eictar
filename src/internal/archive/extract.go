@@ -32,7 +32,7 @@ type ExtractConfig struct {
 	Overwrite    OverwritePolicy
 	ToStdout     io.Writer // when non-nil, content goes here instead of to files
 	// StripComponents is --strip-components: the number of leading
-	// components to remove from each path (doc/design.md 10.14). The
+	// components to remove from each path (doc/design.eml 10.14). The
 	// patterns match the stored paths, before the strip.
 	StripComponents int
 	KeepGoing       bool
@@ -56,11 +56,11 @@ type ExtractConfig struct {
 
 // RestoreOptions selects the metadata extraction applies. The defaults are the
 // safe ones: permission bits and times, user attributes and ACLs, nothing
-// that needs privilege and nothing that grants it (doc/design.md 7 and 14).
+// that needs privilege and nothing that grants it (doc/design.eml 7 and 14).
 type RestoreOptions struct {
 	// Permissions is -p: restore modes exactly, with setuid, setgid and
 	// sticky, and not less the umask; restore POSIX ACLs as any user; and,
-	// as root, the privileged extended attributes (doc/design.md 7.7).
+	// as root, the privileged extended attributes (doc/design.eml 7.7).
 	Permissions bool
 	Owner       bool // --preserve-owner: chown to the recorded owner; needs root
 	Devices     bool // --preserve-devices: create device nodes; needs root
@@ -95,7 +95,7 @@ type extraction struct {
 	// withheld counts the ACLs and privileged attributes that were not
 	// restored because -p was not given, for one notice at the end.
 	withheld int
-	// umask is taken from each mode, unless -p or root (doc/design.md 7.7).
+	// umask is taken from each mode, unless -p or root (doc/design.eml 7.7).
 	umask fs.FileMode
 }
 
@@ -105,7 +105,7 @@ type extraction struct {
 // destination and refuses any path that leaves it - including a path reached
 // *through* a symbolic link. That is what stops the classic attack of an
 // archive containing "evil -> /etc" followed by "evil/passwd"; a lexical check
-// alone cannot (doc/design.md 7).
+// alone cannot (doc/design.eml 7).
 func Extract(cfg ExtractConfig) (Stats, error) {
 	r, err := OpenWith(cfg.Archive, OpenOptions{
 		Passphrase: cfg.Passphrase, RequireEncryption: cfg.RequireEncryption,
@@ -182,7 +182,7 @@ func (cfg ExtractConfig) selection(r *Reader) (members []format.Member, byID map
 // withoutRoot removes a member whose path is ".", the root of the archived
 // tree. Applied, it would change the destination itself: a crafted archive
 // made a destination of 0755 into 0777, and with --preserve-owner as root it
-// could give the directory to another user (doc/Security_Audit.md, finding
+// could give the directory to another user (doc/Security_Audit.eml, finding
 // 2). The writer never stores such a member.
 func withoutRoot(members []format.Member, rep Reporter) []format.Member {
 	out := members[:0] // in place, as selectMembers
@@ -206,7 +206,7 @@ func (x *extraction) mode(m *format.Member) fs.FileMode {
 }
 
 // reportRefused gives the one notice for the extended attributes that the
-// destination did not take (doc/design.md 7.7): a macOS name on Linux, a
+// destination did not take (doc/design.eml 7.7): a macOS name on Linux, a
 // Linux security.* name on FreeBSD, or any name on a filesystem without them.
 func (x *extraction) withhold() {
 	x.mu.Lock()
@@ -447,7 +447,7 @@ func (x *extraction) writeSpecial(m *format.Member, create func(dir *os.File, ba
 		if errors.Is(err, meta.ErrUnsupported) {
 			// Only a call on a directory descriptor is safe from a planted
 			// link, and this platform has none for this node type
-			// (doc/design.md 15.1).
+			// (doc/design.eml 15.1).
 			return false, &errSkipped{reason: fmt.Sprintf("%s: a %s cannot be created safely on this platform; skipped", m.Path, m.Type)}
 		}
 		return false, fmt.Errorf("creating %s: %w", m.Path, err)
@@ -830,10 +830,10 @@ func (x *extraction) applyOwner(m *format.Member, chown func(uid, gid int) error
 // it is restored as root or with -p. security.*, trusted.* and the rest of
 // system.* are restored only as root and with -p: security.capability gives
 // a program privilege, as setuid does, and security.selinux chooses its
-// label (doc/Security_Audit.md, finding 1). A name that the destination does not take - a macOS
+// label (doc/Security_Audit.eml, finding 1). A name that the destination does not take - a macOS
 // name on Linux, or any name on a filesystem without extended attributes -
 // is counted for the one notice at the end of the run, not failed member by
-// member (doc/design.md 7.7).
+// member (doc/design.eml 7.7).
 func (x *extraction) applyXattrs(m *format.Member, f *os.File, where string) error {
 	if len(m.Xattrs) == 0 {
 		return nil
@@ -874,7 +874,7 @@ const (
 )
 
 // xattrPolicy decides what happens to one extended attribute on extraction
-// (doc/design.md 7.7). It is a function of its own so that the rule can be
+// (doc/design.eml 7.7). It is a function of its own so that the rule can be
 // tested for root without root.
 func xattrPolicy(class meta.XattrClass, o RestoreOptions, root bool) int {
 	switch class {
@@ -919,7 +919,7 @@ func (x *extraction) applyTimes(m *format.Member) error {
 
 // sparseWriter places a sparse member's data stream at the offsets its map
 // gives. The stream is the data segments back to back, which is what the
-// archive stores (doc/design.md 5.1).
+// archive stores (doc/design.eml 5.1).
 type sparseWriter struct {
 	f    io.WriterAt
 	segs []format.SparseSegment
@@ -1067,7 +1067,7 @@ func largestChunk(members []*format.Member, owner func(*format.Member) *format.M
 // number comes from the index. It is capped at format.MaxChunkSize, but a cap
 // of 256 MiB times 64 workers is still 16 GiB, so the archive's own figures
 // decide how many workers are affordable rather than the flag alone
-// (doc/design.md 8.3).
+// (doc/design.eml 8.3).
 func boundByMemory(workers int, largest, limit int64) int {
 	if largest <= 0 {
 		return workers

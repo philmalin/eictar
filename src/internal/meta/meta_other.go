@@ -10,7 +10,7 @@ import (
 
 // On the other platforms (illumos, Plan 9 and the rest) the program
 // archives content, directories and links, and reports anything more as
-// unsupported rather than pretending (doc/design.md 15.1).
+// unsupported rather than pretending (doc/design.eml 15.1).
 
 // Supports is empty: none of the metadata features exists here.
 var Supports Capabilities

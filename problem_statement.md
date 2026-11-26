@@ -1,6 +1,6 @@
 # eictar - Encrypted Individually-Compressed TAR
 
-> This statement and `doc/design.md` are kept in sync. This file says *what*
+> This statement and `doc/design.eml` are kept in sync. This file says *what*
 > the program must do and *why*; the design document says *how*. When a
 > requirement changes, change it here first, then carry it into the design.
 
@@ -99,7 +99,7 @@ individually encrypted.
 
 ## Decisions
 
-These resolve the open questions in the constraints above.  `doc/design.md`
+These resolve the open questions in the constraints above.  `doc/design.eml`
 gives the full reasoning and the exact formats.
 
 | Topic | Decision |
@@ -134,13 +134,13 @@ gives the full reasoning and the exact formats.
   Hardlinks are detected and stored once; two unrelated copies of the same
   file are not.  Neither whole-file dedup nor chunk-level dedup (the
   content-defined chunking that borg and restic use) is in v1.  Whole-file
-  dedup is cheap to add later and `doc/design.md` §15 records what it needs.
+  dedup is cheap to add later and `doc/design.eml` §15 records what it needs.
 - Public-key recipients.  The format leaves room for them.
 - Reading an archive from a pipe.  The footer index needs a seekable file.
 - Archive-wide signatures.
 - Metadata on platforms other than Linux, macOS, FreeBSD, NetBSD and
   OpenBSD.  On other platforms the program archives content, directories and
   links only.  The four platforms besides Linux have the limits in
-  `doc/design.md` §15.1: macOS records no ACLs and does not create pipes,
+  `doc/design.eml` §15.1: macOS records no ACLs and does not create pipes,
   and OpenBSD has no extended attributes.  The tests run on all five
   platforms in CI.

@@ -13,7 +13,7 @@ import (
 
 // FreeBSD and NetBSD keep extended attributes in two namespaces, user and
 // system. The names are recorded as user.NAME and system.NAME, which is how
-// Linux spells them too (doc/design.md 15.1).
+// Linux spells them too (doc/design.eml 15.1).
 //
 // This calls the extattr system calls directly. The xattr wrappers of x/sys
 // v0.48 for these platforms return the raw list format - a length byte, then
@@ -43,7 +43,7 @@ func ReadXattrs(path string, follow bool) (map[string][]byte, error) {
 // ReadXattrsFile returns every extended attribute of an open file or
 // directory that this process may read. Working on the descriptor, not a
 // path, reads the attributes of the file that the walk opened, whatever the
-// path names by now (doc/Security_Audit.md, finding 11). where names the file
+// path names by now (doc/Security_Audit.eml, finding 11). where names the file
 // in an error.
 func ReadXattrsFile(f *os.File, where string) (map[string][]byte, error) {
 	fd := int(f.Fd())

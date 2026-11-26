@@ -6,7 +6,7 @@ import (
 )
 
 // Trailer is the 96-byte structure at the very end of an archive. Writing it
-// is the commit point for every mutation (doc/design.md section 9): until
+// is the commit point for every mutation (doc/design.eml section 9): until
 // these bytes land, the archive still describes its previous generation.
 //
 // Layout (doc/format.md 10), little-endian:

@@ -1,5 +1,5 @@
 // Package crypt holds the key schedule and the chunk sealing for encrypted
-// archives (doc/design.md 6).
+// archives (doc/design.eml 6).
 //
 // Nothing here knows about the archive format. It takes a passphrase and hands
 // back keys, a sealer and an opener; the format package decides what gets
@@ -52,7 +52,7 @@ type KDFParams struct {
 // The memory figure is the one that matters: it is what makes a GPU guess
 // expensive, and a quarter of a gibibyte is enough to cut a card's throughput
 // by orders of magnitude while staying openable on a small machine. See
-// doc/design.md A.3.
+// doc/design.eml A.3.
 var DefaultKDFParams = KDFParams{
 	Time:    3,
 	Memory:  256 * 1024, // 256 MiB
@@ -83,7 +83,7 @@ func (p KDFParams) MemoryBytes() int64 { return int64(p.Memory) * 1024 }
 //
 // Every key comes from the archive's data key: 32 random bytes made once, when
 // the archive is created. The passphrase does not make any of these keys. It
-// wraps the data key (doc/design.md 6.2), so that a new passphrase re-wraps
+// wraps the data key (doc/design.eml 6.2), so that a new passphrase re-wraps
 // the same data key and every key below stays the same. The data key never
 // encrypts anything itself: every use derives a subkey bound to a purpose and
 // to the archive, so that a key for one job cannot serve another.
@@ -227,7 +227,7 @@ func (k *Keys) derive(info string, extra []byte, salt []byte, n int) []byte {
 
 // ContentKey keys the member digests of an encrypted archive, so that a
 // digest in an index that is not sealed tells nothing about the content
-// (doc/design.md 6.2).
+// (doc/design.eml 6.2).
 func (k *Keys) ContentKey() []byte {
 	return k.derive("eictar/v1/content", nil, nil, 32)
 }
@@ -242,7 +242,7 @@ func (k *Keys) IndexKey(generation uint64) []byte {
 //
 // It exists whether or not the index is encrypted: --encrypt-index controls
 // confidentiality, while authenticity is not optional once a key exists
-// (doc/design.md 6.4). Without it, an attacker who cannot read any content can
+// (doc/design.eml 6.4). Without it, an attacker who cannot read any content can
 // still rewrite paths and modes.
 func (k *Keys) IndexAuthKey() []byte {
 	return k.derive("eictar/v1/index-auth", nil, nil, 32)
@@ -258,7 +258,7 @@ func (k *Keys) MemberKey(salt []byte) ([]byte, error) {
 }
 
 // DictKey derives the key that seals one dictionary, from its own salt
-// (doc/design.md 6.3). The info string differs from that of a member, so no
+// (doc/design.eml 6.3). The info string differs from that of a member, so no
 // dictionary key can be a member key.
 func (k *Keys) DictKey(salt []byte) ([]byte, error) {
 	if len(salt) != SaltSize {

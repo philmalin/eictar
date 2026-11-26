@@ -16,7 +16,7 @@ import (
 
 // The model is what the archive must hold: for each live path, what an
 // extraction must give back. It changes only as eictar's own rules say
-// (doc/design.md 9.2 and 10.5), so that any difference from a real
+// (doc/design.eml 9.2 and 10.5), so that any difference from a real
 // extraction is a fault in eictar, or a fault in this model to correct.
 
 type kind int
@@ -39,7 +39,7 @@ type Entry struct {
 	Target string      // symlinks only
 	// Link is the link group, files only. The names of one inode that one
 	// run records share a group, and extraction must give them back as
-	// one file (doc/design.md 7.7, 9.2). Names from other runs, or of other
+	// one file (doc/design.eml 7.7, 9.2). Names from other runs, or of other
 	// inodes, have other groups, and must be other files.
 	Link int
 }
@@ -118,7 +118,7 @@ func walked(src string, args []string) ([]string, error) {
 }
 
 // filter is -R and --exclude-regex for the walk of -r and -u, as eictar
-// applies them (doc/design.md 10.11): each expression matches the whole
+// applies them (doc/design.eml 10.11): each expression matches the whole
 // stored path; an excluded path is left out, and an excluded directory is not
 // entered; with -R, only the paths that match are kept, but every directory
 // is still entered, because a match can be deeper down.
@@ -184,7 +184,7 @@ func walkedFiltered(src string, args []string, f filter) ([]string, error) {
 	return out, nil
 }
 
-// stale is eictar's -u test for one path (doc/design.md 10.5).
+// stale is eictar's -u test for one path (doc/design.eml 10.5).
 func stale(old, cur Entry, mode string) bool {
 	if old.Kind != cur.Kind {
 		return true

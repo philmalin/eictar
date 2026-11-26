@@ -54,7 +54,7 @@ build: | $(TMPDIR)
 	$(GO) build $(BUILDFLAGS) -o $(BIN) ./src/cmd/eictar
 
 # The release binaries: one directory for each platform that the CI workflow
-# tests (doc/design.md 15.1), with the man page, the bash completion, the
+# tests (doc/design.eml 15.1), with the man page, the bash completion, the
 # README and the license. Windows gets eictar.exe, and no man page or bash
 # completion.
 # The release workflow packs each directory and writes the checksums.
@@ -255,7 +255,7 @@ vet: | $(TMPDIR)
 	$(GO) vet -tags operational ./src/operational/
 	$(GO) vet -tags faultinject ./src/internal/archive/
 
-# vet for each platform of CI (doc/design.md 15.1), from this machine. A
+# vet for each platform of CI (doc/design.eml 15.1), from this machine. A
 # file for one platform can use a name that another platform does not have,
 # and only a build for that platform shows it.
 CROSS_GOOS := linux darwin freebsd netbsd openbsd windows

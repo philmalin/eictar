@@ -135,7 +135,7 @@ func zeroBytes(b []byte) {
 
 // warnIfInsecureSource reports the environment-variable route, which is
 // visible to anything that can read /proc, and a passphrase file that other
-// users can read, as ssh does for a key (doc/Security_Audit.md, finding 8).
+// users can read, as ssh does for a key (doc/Security_Audit.eml, finding 8).
 func (p passphraseSource) warnIfInsecureSource(warn func(string, ...any)) {
 	if warn == nil {
 		return

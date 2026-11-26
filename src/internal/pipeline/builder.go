@@ -33,7 +33,7 @@ type Config struct {
 
 // Builder runs the walker's members through the worker pool and into Emit.
 //
-// The shape is the one in doc/design.md 8: a scheduler reads members in order
+// The shape is the one in doc/design.eml 8: a scheduler reads members in order
 // on one goroutine, chunks fan out to the pool, and completed members arrive
 // at a single emitting goroutine. Because member order in the archive carries
 // no meaning, that goroutine takes whatever finishes first and never waits on
@@ -121,7 +121,7 @@ func (b *Builder) worker() {
 		out, err := b.encode(job.plain)
 		if err == nil && job.member.sealer != nil {
 			// Sealing happens after compression: ciphertext does not
-			// compress (doc/design.md 6.3). final is known because the
+			// compress (doc/design.eml 6.3). final is known because the
 			// reader settles the chunk count before releasing its claim.
 			out, err = job.member.sealer.Seal(nil, out, uint64(job.index), job.final)
 		}
@@ -141,7 +141,7 @@ func (b *Builder) worker() {
 }
 
 // encode compresses one chunk, falling back to the plaintext when compression
-// would grow it (doc/design.md 4.1).
+// would grow it (doc/design.eml 4.1).
 //
 // The plaintext is returned as it is, not copied: AddFile reads each chunk
 // into a buffer of its own, and nothing writes to that buffer once the chunk
@@ -262,7 +262,7 @@ func (b *Builder) AddFile(m format.Member, r io.Reader, digest io.Writer) error 
 
 	// One chunk is always held back, because a chunk cannot be sealed until
 	// it is known whether another follows: the last chunk's seal is bound to
-	// being last, which is what makes truncation detectable (doc/design.md
+	// being last, which is what makes truncation detectable (doc/design.eml
 	// 6.3).
 	var (
 		held      []byte

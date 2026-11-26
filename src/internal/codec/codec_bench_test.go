@@ -80,7 +80,7 @@ func BenchmarkCodecs(b *testing.B) {
 }
 
 // BenchmarkDictSmallChunks encodes many small chunks with a zstd dictionary,
-// as zstd:train does for small files (doc/design.md 15.2, "Dictionaries at
+// as zstd:train does for small files (doc/design.eml 15.2, "Dictionaries at
 // the best speed"). At level 10 and above, the library copies its tables
 // from the dictionary at the start of each chunk, and the copy costs more
 // than the compression.

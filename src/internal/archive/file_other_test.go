@@ -13,7 +13,7 @@ import (
 // TestRenameNew: the rename of a create that found no archive makes the
 // new name, or fails with fs.ErrExist and changes nothing. It must do so
 // on a file system with no hard links too, where link(2) fails for every
-// file, and the check before the rename decides (doc/design.md 9.6).
+// file, and the check before the rename decides (doc/design.eml 9.6).
 func TestRenameNew(t *testing.T) {
 	for _, links := range []bool{true, false} {
 		if !links {

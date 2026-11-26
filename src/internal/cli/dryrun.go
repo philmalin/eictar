@@ -11,7 +11,7 @@ import (
 // dryRunOps are the operations that -n applies to: those that write.
 var dryRunOps = []Operation{OpCreate, OpAppend, OpUpdate, OpExtract, OpDelete, OpRepair}
 
-// runDryRun is -n (doc/design.md 9.9): it prints the paths that the
+// runDryRun is -n (doc/design.eml 9.9): it prints the paths that the
 // operation would write or delete, and changes nothing.
 //
 // The paths are the result, so -q does not hide them, as it does not hide

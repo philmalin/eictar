@@ -3,7 +3,7 @@
 //
 // A codec compresses one chunk at a time: chunks are independent so that a
 // large member can be compressed and decompressed in parallel, and so that a
-// single chunk can be fetched without touching the rest (doc/design.md 4).
+// single chunk can be fetched without touching the rest (doc/design.eml 4).
 // Encoders therefore never hold cross-chunk state.
 package codec
 
@@ -20,7 +20,7 @@ import (
 var ErrUnknownCodec = errors.New("unknown codec")
 
 // Params are the raw k=v settings from a --compress spec. A key given alone
-// has the value "on", and "off" turns a key off (doc/design.md 10.2).
+// has the value "on", and "off" turns a key off (doc/design.eml 10.2).
 type Params map[string]string
 
 // On and Off are the values of a key given alone, and of a key turned off.
@@ -134,9 +134,9 @@ func NewEncoder(name string, p Params, concurrency int) (Encoder, error) {
 type EncoderOptions struct {
 	// Concurrency is how many Encode calls may run at once. The encoder
 	// keeps a state for each, and a caller over the number waits. The
-	// writer bounds it by memory (doc/design.md 8.2).
+	// writer bounds it by memory (doc/design.eml 8.2).
 	Concurrency int
-	// Dict is a dictionary (doc/design.md 4.2), or nil. Only a codec that
+	// Dict is a dictionary (doc/design.eml 4.2), or nil. Only a codec that
 	// has dictionaries takes one.
 	Dict []byte
 	// MaxChunk is the largest input of one Encode call, or 0 when it is not
@@ -172,7 +172,7 @@ func NewEncoderWith(name string, p Params, o EncoderOptions) (Encoder, error) {
 
 // limited lets at most cap(slots) Encode calls run at once. zstd limits
 // itself with its pool of states; the other codecs allocate for each call,
-// and this bounds what they hold at one time (doc/design.md 8.2).
+// and this bounds what they hold at one time (doc/design.eml 8.2).
 type limited struct {
 	Encoder
 	slots chan struct{}
@@ -196,7 +196,7 @@ type windowFactory interface {
 // name ask for, when it is larger than chunkSize: a zstd long window, or the
 // dictionary of an xz preset. The chunks are independent, so no match reaches
 // back past the start of its chunk, and the history beyond a chunk has no
-// effect (doc/design.md 10.2). It returns 0 when p asks for no more than a
+// effect (doc/design.eml 10.2). It returns 0 when p asks for no more than a
 // chunk, or does not set the parameter: a codec's default is not the user's
 // choice. what is "window" or "dictionary".
 func WindowBeyondChunk(name string, p Params, chunkSize int) (size int, what string, err error) {
@@ -232,7 +232,7 @@ type memoryFactory interface {
 
 // EncodeMemory estimates the bytes that one Encode call in progress holds,
 // for chunks of at most maxChunk bytes. The writer divides its memory by it
-// to bound the calls that run at once (doc/design.md 8.2). The estimates
+// to bound the calls that run at once (doc/design.eml 8.2). The estimates
 // come from measurements, and they are rounded up.
 func EncodeMemory(name string, p Params, maxChunk int) (int64, error) {
 	f, err := Lookup(name)
@@ -259,7 +259,7 @@ type dictFactory interface {
 }
 
 // TrainAuto is the size that TrainSize returns when the parameters ask the
-// writer to choose the size from the files (doc/design.md 4.2).
+// writer to choose the size from the files (doc/design.eml 4.2).
 const TrainAuto = -1
 
 // TrainSize returns the size of the dictionary that the parameters ask for,

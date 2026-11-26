@@ -8,7 +8,7 @@ import (
 )
 
 // OpenBSD has no extended attributes: nothing is recorded, and nothing can
-// be set (doc/design.md 15.1).
+// be set (doc/design.eml 15.1).
 
 func ReadXattrs(string, bool) (map[string][]byte, error) { return nil, nil }
 

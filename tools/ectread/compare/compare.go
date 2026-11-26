@@ -26,7 +26,7 @@ import (
 	"github.com/philmalin/eictar/tools/ectread/ect"
 )
 
-// jsonMember is an entry of eictar -t --json (doc/design.md 10.9). A field
+// jsonMember is an entry of eictar -t --json (doc/design.eml 10.9). A field
 // that this type does not know fails the comparison, so that a new field is
 // compared too.
 type jsonMember struct {
@@ -270,7 +270,7 @@ func ptr[T any](v *T) any {
 // target is live. Nothing else is there, apart from the directories above a
 // member. Modes, times, owners and extended attributes are in the listing,
 // and Listing compares them. A device and a socket need root, so they are
-// not compared. eictar makes no pipe on Windows and macOS (doc/design.md
+// not compared. eictar makes no pipe on Windows and macOS (doc/design.eml
 // 15.1), so there a pipe is not compared either. Nor are the types in skip.
 func Tree(a *ect.Archive, root string, skip ...string) error {
 	var p problems

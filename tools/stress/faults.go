@@ -12,7 +12,7 @@ import (
 
 // crashable runs a change to the archive. In the fault mode it sometimes
 // then cuts the file at a random point inside the new generation, as a
-// crash would leave it (doc/design.md 9.1). The archive must be refused, with
+// crash would leave it (doc/design.eml 9.1). The archive must be refused, with
 // a message that names --repair, and --repair must give back the archive of
 // before the change, byte for byte.
 func (s *sequence) crashable(change func() error) error {

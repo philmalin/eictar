@@ -12,7 +12,7 @@ import (
 )
 
 // EncryptArchiveConfig is the encryption that --encrypt-archive gives to an
-// archive made without -e (doc/design.md 9.11). Passphrase is asked only
+// archive made without -e (doc/design.eml 9.11). Passphrase is asked only
 // after the archive has opened as plaintext and the KDF parameters have been
 // checked with this machine.
 type EncryptArchiveConfig struct {
@@ -35,7 +35,7 @@ func encryptHeaders(r *Reader, ec *EncryptArchiveConfig) ([]byte, format.Header,
 	if err := params.Validate(); err != nil {
 		return nil, format.Header{}, nil, err
 	}
-	// The check comes before the prompt, as for an open (doc/design.md A.3).
+	// The check comes before the prompt, as for an open (doc/design.eml A.3).
 	if err := checkAffordable(params); err != nil {
 		return nil, format.Header{}, nil, err
 	}
@@ -127,7 +127,7 @@ func encryptBlobs(r *Reader, w *Writer, keep []format.Member, ec *EncryptArchive
 
 	// Each digest becomes keyed: an unkeyed digest in an encrypted archive
 	// tells anyone with a copy of a file that the archive holds it
-	// (doc/design.md 6.2). A digest that this run cannot give a keyed value
+	// (doc/design.eml 6.2). A digest that this run cannot give a keyed value
 	// stops it.
 	for i := range keep {
 		m := &keep[i]

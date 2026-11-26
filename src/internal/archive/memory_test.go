@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// TestTotalMemory: each supported platform (doc/design.md 15.1) reads the
+// TestTotalMemory: each supported platform (doc/design.eml 15.1) reads the
 // size of its RAM. Without it, the budget does not shrink on a small machine,
 // and the check of the key derivation does nothing.
 func TestTotalMemory(t *testing.T) {

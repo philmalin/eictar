@@ -128,7 +128,7 @@ func TestIndexThatDoesNotDecode(t *testing.T) {
 }
 
 // TestUnaffordableKDFIsRefusedFirst: Argon2id parameters that need more than
-// half the RAM are refused before the passphrase is asked for (doc/design.md
+// half the RAM are refused before the passphrase is asked for (doc/design.eml
 // A.3).
 func TestUnaffordableKDFIsRefusedFirst(t *testing.T) {
 	path := mkArchive(t, mutTree(t), true, "t")

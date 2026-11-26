@@ -22,7 +22,7 @@ func openFor(o *Options, rep *reporter) archive.OpenOptions {
 	}
 }
 
-// runAppend is -r and -u (doc/design.md 9.2 and 10.5).
+// runAppend is -r and -u (doc/design.eml 9.2 and 10.5).
 func runAppend(o *Options, stdout, stderr io.Writer) error {
 	if err := checkCompress(o, stderr); err != nil {
 		return err
@@ -114,7 +114,7 @@ func runCompact(o *Options, stdout, stderr io.Writer) error {
 }
 
 // runChangePassphrase seals the archive's data key under a new passphrase,
-// and writes the archive again as compact does (doc/design.md 9.7). Only the
+// and writes the archive again as compact does (doc/design.eml 9.7). Only the
 // --kdf-* options typed on this command line change the key derivation.
 // Otherwise the archive keeps its own parameters, not the defaults.
 func runChangePassphrase(o *Options, stdout, stderr io.Writer) error {
@@ -264,7 +264,7 @@ func writeInfo(w io.Writer, path string, in *archive.ArchiveInfo) {
 }
 
 // runEncryptArchive encrypts an archive that was made without -e, and writes
-// it again as compact does (doc/design.md 9.11). The passphrase and the
+// it again as compact does (doc/design.eml 9.11). The passphrase and the
 // --kdf-* options are those of a create. The reminder about the old file is
 // printed even with -q: it is the one thing that the user must know.
 func runEncryptArchive(o *Options, stdout, stderr io.Writer) error {

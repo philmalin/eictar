@@ -59,7 +59,7 @@ func TestClassifyXattr(t *testing.T) {
 }
 
 // requires skips a test on a platform without the feature it tests
-// (doc/design.md 15.1).
+// (doc/design.eml 15.1).
 func requires(t *testing.T, has bool, feature string) {
 	t.Helper()
 	if !has {

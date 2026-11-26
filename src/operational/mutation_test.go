@@ -192,7 +192,7 @@ func TestVerifyReportsDamage(t *testing.T) {
 // TestKilledAppendIsRepaired kills a real append part way through, the way a
 // power cut or an OOM kill does. The archive must be refused with a message
 // that names --repair, and --repair must give back the old archive exactly
-// (doc/design.md 9.1 and 9.5).
+// (doc/design.eml 9.1 and 9.5).
 func TestKilledAppendIsRepaired(t *testing.T) {
 	tree := fixture(t)
 	archive := filepath.Join(t.TempDir(), "a.ect")
@@ -262,7 +262,7 @@ func TestKilledAppendIsRepaired(t *testing.T) {
 
 // TestOverlappingAppendsAreRefused: two appends at the same time, as two
 // overlapping backup jobs would run them. The second stops at once with
-// exit 4 and says why; the first finishes normally (doc/design.md 9.6).
+// exit 4 and says why; the first finishes normally (doc/design.eml 9.6).
 func TestOverlappingAppendsAreRefused(t *testing.T) {
 	tree := fixture(t)
 	archive := filepath.Join(t.TempDir(), "a.ect")
@@ -370,7 +370,7 @@ func TestRecompress(t *testing.T) {
 
 // TestDictionaryThroughTheBinary: -Z zstd:train stores a dictionary, which
 // --info and the listing show, and the archive gives back every file
-// (doc/design.md 4.2). With nothing to learn from, there is a notice and no
+// (doc/design.eml 4.2). With nothing to learn from, there is a notice and no
 // dictionary.
 func TestDictionaryThroughTheBinary(t *testing.T) {
 	tree := testutil.NewTree(t)
@@ -407,7 +407,7 @@ func TestDictionaryThroughTheBinary(t *testing.T) {
 
 // TestSharedContentThroughTheBinary: copies share one blob, and the listing,
 // --info and --json say so, also when the owner is an earlier version or a
-// deleted file (doc/design.md 4.3). --no-dedup stores each copy.
+// deleted file (doc/design.eml 4.3). --no-dedup stores each copy.
 func TestSharedContentThroughTheBinary(t *testing.T) {
 	text := strings.Repeat("one content, two places\n", 2000)
 	tree := testutil.NewTree(t)

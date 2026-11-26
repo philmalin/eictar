@@ -21,7 +21,7 @@ import (
 
 // TestKept: compact keeps each live member, and each tombstone that a kept
 // member needs: the target of a live hardlink, and the owner of content that
-// a kept member shares, through a chain of both (doc/design.md 4.3, 9.2).
+// a kept member shares, through a chain of both (doc/design.eml 4.3, 9.2).
 func TestKept(t *testing.T) {
 	reg := func(id uint64, dead bool) format.Member {
 		return format.Member{ID: id, Type: format.TypeReg, Dead: dead}

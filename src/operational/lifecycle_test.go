@@ -102,7 +102,7 @@ func TestDestinationIsCreated(t *testing.T) {
 	}
 }
 
-// TestAbsolutePathsAreStripped is the convention from doc/design.md 7: the
+// TestAbsolutePathsAreStripped is the convention from doc/design.eml 7: the
 // leading slash goes, one warning is printed, and extraction lands under the
 // destination rather than over the system.
 func TestAbsolutePathsAreStripped(t *testing.T) {
@@ -627,7 +627,7 @@ func TestEncryptedLifecycle(t *testing.T) {
 }
 
 // TestWrongPassphraseExitsThree keeps "this archive did not authenticate"
-// distinct from "the disk broke" for a script (doc/design.md 10.7).
+// distinct from "the disk broke" for a script (doc/design.eml 10.7).
 func TestWrongPassphraseExitsThree(t *testing.T) {
 	tree := fixture(t)
 	right := passFile(t, "right one")
@@ -743,7 +743,7 @@ func TestPlaintextArchiveWithPassphraseIsRefused(t *testing.T) {
 // M5: metadata, through the binary
 // ---------------------------------------------------------------------------
 
-// platform is what doc/design.md 15.1 promises on this platform. The
+// platform is what doc/design.eml 15.1 promises on this platform. The
 // operational tests keep their own copy, from the design, rather than ask the
 // program: a test must not take its expectations from the code it tests.
 var platform = map[string]struct{ xattrs, holes, pipes bool }{
@@ -900,7 +900,7 @@ func TestRootOnlyOptionsRefusedForUsers(t *testing.T) {
 
 // TestListingLevels: -t prints paths, -tv (or --long) the long listing with
 // the stored size, the percentage saved and the codec, and -tvv adds chunks,
-// sealing, the digest and a totals line (doc/design.md 10.9). --json carries
+// sealing, the digest and a totals line (doc/design.eml 10.9). --json carries
 // all of it.
 func TestListingLevels(t *testing.T) {
 	tree := testutil.NewTree(t)
@@ -968,7 +968,7 @@ func TestListingLevels(t *testing.T) {
 
 // TestChangePassphrase: after the change, the new passphrase opens the
 // archive and the old one does not, and the content is the same
-// (doc/design.md 9.7). A plaintext archive has no passphrase to change.
+// (doc/design.eml 9.7). A plaintext archive has no passphrase to change.
 func TestChangePassphrase(t *testing.T) {
 	tree := fixture(t)
 	oldPass := passFile(t, "the old one")
@@ -1009,7 +1009,7 @@ func TestChangePassphrase(t *testing.T) {
 }
 
 // TestArchiveExtension: -cf NAME makes NAME.ect and says so, and the other
-// operations find it by the name as typed (doc/design.md 10.12).
+// operations find it by the name as typed (doc/design.eml 10.12).
 func TestArchiveExtension(t *testing.T) {
 	tree := fixture(t)
 	dir := t.TempDir()
@@ -1090,7 +1090,7 @@ func TestRegexThroughTheBinary(t *testing.T) {
 // TestDiffThroughTheBinary: a tree extracted with -p is what the archive
 // holds, so --diff finds nothing there, and in the tree that it came from.
 // A change to either is a difference, with exit 1. Where extraction skips
-// pipes (macOS, doc/design.md 15.1), the pipe is the one difference.
+// pipes (macOS, doc/design.eml 15.1), the pipe is the one difference.
 func TestDiffThroughTheBinary(t *testing.T) {
 	tree := metadataFixture(t)
 	archive := filepath.Join(t.TempDir(), "meta.ect")
@@ -1132,7 +1132,7 @@ func TestDiffThroughTheBinary(t *testing.T) {
 // TestDiffExtractOfTheBinary: --diff-extract of the tree that an archive
 // came from extracts each member into a scratch directory and finds no
 // difference, and the run removes the scratch directory. A change of one
-// byte is a difference, with exit 1 (doc/design.md 9.10).
+// byte is a difference, with exit 1 (doc/design.eml 9.10).
 func TestDiffExtractOfTheBinary(t *testing.T) {
 	tree := metadataFixture(t)
 	archive := filepath.Join(t.TempDir(), "meta.ect")
@@ -1158,7 +1158,7 @@ func TestDiffExtractOfTheBinary(t *testing.T) {
 }
 
 // TestEncryptArchiveOfTheBinary: the built binary encrypts a plaintext
-// archive (doc/design.md 9.11). The result asks for the passphrase,
+// archive (doc/design.eml 9.11). The result asks for the passphrase,
 // verifies, and extracts the same tree. A second run is a usage error.
 func TestEncryptArchiveOfTheBinary(t *testing.T) {
 	tree := metadataFixture(t)

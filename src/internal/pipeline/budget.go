@@ -1,6 +1,6 @@
 // Package pipeline holds the concurrency machinery for building an archive:
 // a memory budget, spill buffers, and a worker pool that compresses chunks
-// while a single goroutine owns the output file (doc/design.md 8).
+// while a single goroutine owns the output file (doc/design.eml 8).
 package pipeline
 
 import (
@@ -96,7 +96,7 @@ func (b *Budget) Release(n int64) {
 
 // atLeast raises the limit to n if it is lower. The builder uses it: the
 // reader holds one chunk while it waits for the next, so a budget below two
-// chunks can never be met (doc/design.md 8.1).
+// chunks can never be met (doc/design.eml 8.1).
 func (b *Budget) atLeast(n int64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

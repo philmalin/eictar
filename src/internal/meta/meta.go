@@ -4,7 +4,7 @@
 //
 // Everything here is either a pure conversion or a thin wrapper round one
 // system call. The policy - what to record, what to restore, and as whom -
-// lives in the archive package (doc/design.md 7 and 14).
+// lives in the archive package (doc/design.eml 7 and 14).
 package meta
 
 import (
@@ -20,7 +20,7 @@ import (
 var ErrUnsupported = errors.New("not supported on this platform")
 
 // Capabilities says what the metadata code of a platform does
-// (doc/design.md 15.1). The tests read it, so that each one runs where its
+// (doc/design.eml 15.1). The tests read it, so that each one runs where its
 // feature exists and says why it does not elsewhere.
 type Capabilities struct {
 	Metadata bool // owner, special bits, times, hardlinks, link times
@@ -33,7 +33,7 @@ type Capabilities struct {
 // ErrRefused means the destination does not take one extended attribute: the
 // filesystem has none, or the platform has no place for the name, as Linux
 // has none for macOS's com.apple.* names. Extraction lists such names in one
-// notice (doc/design.md 7.7).
+// notice (doc/design.eml 7.7).
 var ErrRefused = errors.New("the destination does not take this extended attribute")
 
 // Info is what the archive needs to know about a filesystem object beyond its
@@ -210,7 +210,7 @@ type Segment struct {
 
 // XattrClass groups extended attribute names by who may restore them.
 //
-// Names are recorded exactly as the platform gives them (doc/design.md 7.7):
+// Names are recorded exactly as the platform gives them (doc/design.eml 7.7):
 // user.foo on Linux and the BSDs, com.apple.quarantine on macOS. The class
 // decides only which options and which privilege apply to a name. Whether the
 // destination takes it is found out when it is set.

@@ -1471,9 +1471,9 @@ plan</a></li>
 <h1 id="eictar-testing">eictar — Testing</h1>
 <p>Date: 2026-10-15 Applies to: v1 (format version 1.0)</p>
 <p>This document describes how eictar is tested, and the evidence that
-the tests give. <code>design.md</code> describes the format and the
+the tests give. <code>design.eml</code> describes the format and the
 program, and <code>history.md</code> gives the milestones and the
-releases. This document was §13 of <code>design.md</code> until
+releases. This document was §13 of <code>design.eml</code> until
 2026-10-15. Its section N was section 13.N there.</p>
 <h2 id="contents">Contents</h2>
 <p><a href="#1-unit-tests-in-each-package-go-test-">1. Unit tests</a> ·
@@ -1497,7 +1497,7 @@ the refusal of each single-field corruption.</li>
 <li><strong>Codec conformance</strong>: one test suite for every
 registered codec. It covers round trips, empty input, incompressible
 input, chunk boundaries, the parameter checks, refusal of bad
-parameters, and the parallel-encoder test of design.md §8.2.</li>
+parameters, and the parallel-encoder test of design.eml §8.2.</li>
 <li><strong>Key schedule</strong>: fixed vectors for the KEK, the
 wrapped data key, and every subkey. Also for a sealed chunk, a sealed
 index, a sealed dictionary and the keyed index digest. A failure here
@@ -1547,7 +1547,7 @@ value, a group-writable file, <code>--no-config</code>, comments,
 <code>--show-config</code> with its sources, and the variable of
 <code>--passphrase-env</code>. A <code>.eictarrc</code> in the current
 directory has no effect.</li>
-<li><strong>Encoder memory</strong> (design.md §8.2):
+<li><strong>Encoder memory</strong> (design.eml §8.2):
 <ul>
 <li>the window of zstd fits the chunk</li>
 <li>the estimate of each codec</li>
@@ -1557,29 +1557,31 @@ limit</li>
 </ul></li>
 <li><strong>Codecs, worst case</strong>: each codec at its strongest
 setting compresses 4 MiB of zeroes in less than 10 s. The test proves
-why the xz binary tree is not used (design.md §10.2).</li>
+why the xz binary tree is not used (design.eml §10.2).</li>
 <li><strong>Lock</strong>: while one writer holds an archive, append,
 delete, compact, repair and create each stop with
 <code>ErrLocked</code>. A lock on a file that a rename replaced is
 refused. A reader during an append stops with <code>ErrLocked</code>,
-not with damage (design.md §9.6).</li>
+not with damage (design.eml §9.6).</li>
 <li><strong>Repair</strong>: a file that ends with a damaged trailer is
 not changed without <code>--discard-damaged</code>, and <code>-n</code>
 changes nothing. A file whose last write stopped before its trailer is
-repaired with no option (design.md §9.5).</li>
+repaired with no option (design.eml §9.5).</li>
 <li><strong>Recompress</strong>: the content, the digests and the ids
 stay, and each sealed member gets a new salt. A tombstone behind a
-hardlink, and the holes of a sparse file, survive (design.md §9.3).</li>
+hardlink, and the holes of a sparse file, survive (design.eml
+§9.3).</li>
 <li><strong>Progress meter</strong>: the status line, no drawing before
-the first byte, and no meter without a terminal (design.md §10.10).</li>
+the first byte, and no meter without a terminal (design.eml
+§10.10).</li>
 <li><strong>Compare with the disk</strong>: each kind of difference,
 patterns and excludes, a file archived alone, an encrypted archive, the
 same result for each <code>-j</code>, and a link on disk that leads out
-of the directory (design.md §9.8).</li>
+of the directory (design.eml §9.8).</li>
 <li><strong>Encryption of an archive</strong>:
 <code>--encrypt-archive</code> keeps each member, its metadata and its
 content, seals each chunk and each dictionary, and gives each digest its
-keyed value (design.md §9.11). No chunk, dictionary, index or path of
+keyed value (design.eml §9.11). No chunk, dictionary, index or path of
 the plaintext archive stays in the file. The uuid and the creation time
 stay. An encrypted archive stops the run before a prompt. A damaged blob
 or dictionary, and a blob that changes between the passes, stop it, and
@@ -1597,21 +1599,21 @@ message on a full scratch. Damage gives exit 3, also under
 <code>--keep-going</code>. The result is the same for each
 <code>-j</code>. Each operation on the scratch directory, and each on
 the tree, fails in turn, and each fault fails the run. As root, a wrong
-owner and other device numbers of a copy are differences (design.md
+owner and other device numbers of a copy are differences (design.eml
 §9.10).</li>
 <li><strong>Dry run</strong>: for create, update with each mode, extract
 with each overwrite policy, and delete, the paths of the dry run are the
 paths that the real run writes, and the archive does not change. Also
 the conflict policies, the key for the digests of an encrypted archive,
-an unsafe member path, and no destination made (design.md §9.9).</li>
+an unsafe member path, and no destination made (design.eml §9.9).</li>
 <li><strong>Strip components</strong>: the paths after the strip, a
 short path left out, the later member of a collision with its warning,
 two directories with one path, a hard link to a target that is extracted
 and to one that is not, patterns on the archive paths, the dry run,
 <code>--diff</code> with patterns, excludes and a hard link, a path that
-is not canonical, and exit 1 (design.md §10.14).</li>
+is not canonical, and exit 1 (design.eml §10.14).</li>
 <li><strong>Security regressions</strong>: one test for each finding of
-<code>doc/Security_Audit.md</code>:
+<code>doc/Security_Audit.eml</code>:
 <ul>
 <li>the decision for each class of xattr</li>
 <li>a member <code>.</code></li>
@@ -1624,7 +1626,7 @@ the walk opens it</li>
 <li>a passphrase file that other users can read</li>
 </ul></li>
 <li><strong>Names on the terminal</strong>: each kind of escape of
-design.md §10.13. A name with an escape sequence in <code>-t</code>,
+design.eml §10.13. A name with an escape sequence in <code>-t</code>,
 <code>-tv</code>, a dry run and <code>--diff</code>: escaped on a
 terminal, and exact to a pipe. A message is escaped in both cases.</li>
 <li><strong>Man page and help</strong>: <code>doc/eictar.1</code> and
@@ -1643,7 +1645,7 @@ a space, and environment variable names. Windows skips it.</li>
 <li><strong>Platforms</strong>: each metadata test runs where
 <code>meta.Supports</code> says that its feature exists. An xattr from
 macOS and one from Linux, extracted on each platform, are applied or
-listed in the one notice as design.md §7.7 says. A pipe is created, or
+listed in the one notice as design.eml §7.7 says. A pipe is created, or
 skipped with a notice on macOS.</li>
 <li><strong>Golden files</strong>: four archives in
 <code>src/internal/archive/testdata/golden/</code>.
@@ -1654,7 +1656,7 @@ generations: a create, an append that replaces a member, and a delete.
 to a tombstone. The tests open them, run <code>--verify</code> on them
 and extract them. Only a planned format change can write them again,
 with <code>-update-golden</code>.</li>
-<li><strong>Dictionaries</strong> (design.md §4.2):
+<li><strong>Dictionaries</strong> (design.eml §4.2):
 <ul>
 <li>a gain on similar files</li>
 <li>a frame that decodes only with its own dictionary</li>
@@ -1662,7 +1664,7 @@ with <code>-update-golden</code>.</li>
 <li>reuse on <code>-r</code>, compact and recompress</li>
 <li>damage to a plain and to a sealed dictionary</li>
 </ul></li>
-<li><strong>Identical content</strong> (design.md §4.3):
+<li><strong>Identical content</strong> (design.eml §4.3):
 <ul>
 <li>copies that share one blob, and <code>--no-dedup</code></li>
 <li>sharing across generations, and with an earlier version</li>
@@ -1674,11 +1676,11 @@ with <code>-update-golden</code>.</li>
 match, and an <code>-R</code> that matches nothing. An
 <code>--exclude</code> glob with a <code>/</code> takes the contents of
 a directory on a read, for <code>-t</code> and <code>--diff</code>
-(design.md §10.11). The <code>.ect</code> name rule (design.md
+(design.eml §10.11). The <code>.ect</code> name rule (design.eml
 §10.12).</li>
 <li><strong>Mutation</strong>: append after the old trailer, each
 <code>--on-conflict</code> policy, and each <code>--update-mode</code>
-case of design.md §10.5. Also delete, <code>--verify</code>,
+case of design.eml §10.5. Also delete, <code>--verify</code>,
 <code>--info</code>, and the passphrase for each. Compact runs plain and
 encrypted, through a symbolic link, and with a hardlink to a tombstone.
 Two tests check <code>--keep-going</code>. A path that fails keeps its
@@ -1724,7 +1726,7 @@ archive is unchanged.</li>
 <li><strong>Listing</strong>: <code>-t</code> gives the paths, and
 <code>-tv</code> and <code>--long</code> give the same long listing.
 <code>-tvv</code> adds its columns and the line of totals.
-<code>--json</code> has every field of design.md §10.9.</li>
+<code>--json</code> has every field of design.eml §10.9.</li>
 <li><strong>Metadata</strong>: hardlinks, holes, xattrs, setuid bits,
 pipes, link times, a skipped socket, and difficult names (spaces,
 newlines, non-UTF-8, long names, leading dashes). The test compares the
@@ -1770,12 +1772,12 @@ and <code>--diff</code> pass with it. A second run gives exit 2.</li>
 <code>--json</code></li>
 <li><code>--diff</code>: no difference after <code>-xp</code>, except
 the pipe on macOS, and then a changed file and a missing file with exit
-1 (design.md §9.8)</li>
+1 (design.eml §9.8)</li>
 <li><code>--diff-extract</code>: no difference in the source tree, no
 scratch directory after the run, and a changed file with exit 1
-(design.md §9.10)</li>
+(design.eml §9.10)</li>
 </ul>
-The dry run (design.md §9.9) has no operational test. The tests of
+The dry run (design.eml §9.9) has no operational test. The tests of
 package <code>cli</code> run it through <code>Run</code>, and check its
 output and that nothing changes.</li>
 <li><strong>Large archive</strong>: an archive larger than 4 GiB, plain
@@ -1821,17 +1823,18 @@ the result of <code>make check</code>.</li>
 need the strongest tests, because a fault there is silent and permanent.
 The benchmarks are <code>make bench</code>, <code>make compare</code>,
 and <code>BenchmarkCodecs</code> and
-<code>BenchmarkDictSmallChunks</code> in <code>codec</code> (design.md
+<code>BenchmarkDictSmallChunks</code> in <code>codec</code> (design.eml
 §8.4).</li>
 <li><strong>References to sections stay correct.</strong> The code and
 the documents refer to sections by number, such as
-<code>doc/design.md 9.6</code> in a comment and
+<code>doc/design.eml 9.6</code> in a comment and
 <code>testing.md §5</code> in a document. A section that moves leaves
 such a reference wrong. The test of <code>tools/docrefs</code> finds
 each reference, in the documents, the code, the <code>Makefile</code>
 and the workflows, that names a section or a document that is not there.
 A reference with no name of a document is to the document that holds it.
-In <code>Security_Audit.md</code>, it is to <code>design.md</code>.</li>
+In <code>Security_Audit.eml</code>, it is to
+<code>design.eml</code>.</li>
 </ul>
 <h2 id="stress-tester">4. Stress tester</h2>
 <p><code>make stress</code> builds and runs <code>tools/stress</code>,
@@ -1845,7 +1848,7 @@ combinations that nobody did.</p>
 <p><strong>The model</strong> is a map from each stored path to what an
 extraction must give back. That is the type, the content, the size, the
 mode, the time, and the target of a link. It changes only as eictar’s
-rules say (design.md §9.2, §10.5). Replace, skip, error, the three
+rules say (design.eml §9.2, §10.5). Replace, skip, error, the three
 update modes, and delete with eictar’s pattern rule are each a few lines
 of the tester.</p>
 <p><strong>A sequence</strong> creates an archive from a generated tree,
@@ -1862,7 +1865,7 @@ must not list without the passphrase. Each operation uses a random codec
 and random settings: chunk size, workers, memory limit and spill
 threshold. A zstd dictionary at level 10 or above gets chunks of 64 KiB
 or more. Each chunk with such a dictionary costs approximately 0.5 ms
-(design.md §15.2), and chunks of 512 bytes on a large tree take more
+(design.eml §15.2), and chunks of 512 bytes on a large tree take more
 than the limit of two minutes for one command, which counts as a
 hang.</p>
 <p>The last three steps test the operations that compare and plan:</p>
@@ -2012,8 +2015,8 @@ commands of the run. Each line has the time, the options, the size of
 the source tree, and the <code>make stress</code> command that repeats
 its sequence. A slow command is not a failure. Only a command that takes
 more than two minutes fails, as a hang. The list shows a slow case
-before it becomes a hang, as the case of design.md §15.2 became. After a
-failure, the counts are the checks that held before it. To a file or a
+before it becomes a hang, as the case of design.eml §15.2 became. After
+a failure, the counts are the checks that held before it. To a file or a
 pipe, the progress line comes once a minute.</p>
 <p><strong>A failure stops the run.</strong> The sequence’s directory
 stays, with the source tree, <code>failure.txt</code> and
@@ -2033,32 +2036,32 @@ eictar. Each one now has a test of its own:</p>
 checksum, gave exit 4, as for an I/O error. It must give exit 3, for
 damage. Such an error is now <code>ErrCorruptData</code>.</li>
 <li>A pattern that matched a directory by its name, deeper in the tree,
-did not take the directory’s contents (design.md §10.11).</li>
+did not take the directory’s contents (design.eml §10.11).</li>
 <li><code>-u --update-mode=digest</code> archived an unchanged sparse
 file again, when the filesystem reported its data regions in another way
-(design.md §10.5).</li>
+(design.eml §10.5).</li>
 </ul>
 <p>The steps for <code>--diff</code>, <code>-n</code> and
 <code>--strip-components</code> found two more in their first runs:</p>
 <ul>
 <li><code>--diff</code> reported the directory of a member as a path
 that the archive lacks, when <code>-r a/b/c</code> had added the member
-by its own path, with no member for <code>a/b</code> (design.md
+by its own path, with no member for <code>a/b</code> (design.eml
 §9.8).</li>
 <li><code>--diff --strip-components</code> compared a hard link with the
 file at its target’s path when a collision had left the target out.
-Extraction gives such a link a copy of the content (design.md
+Extraction gives such a link a copy of the content (design.eml
 §10.14).</li>
 </ul>
 <p>Longer runs found one more fault, and two faults in the tester:</p>
 <ul>
 <li>A damaged crypto header that gave less than 8 KiB of KDF memory for
-each thread gave exit 4. It must give exit 3, for damage (design.md
+each thread gave exit 4. It must give exit 3, for damage (design.eml
 §6.2).</li>
 <li><code>zstd:level=13,train=16K</code> with chunks of 512 bytes took
 124 s on a tree of 125 MiB, and the tester reported a hang. The output
 was correct. At level 9, the same command took 0.6 s. This is the cost
-that design.md §15.2 records.</li>
+that design.eml §15.2 records.</li>
 <li>After 4 hours, the generator gave two new entries of one directory
 the same name, and the second one failed. A new entry now gets another
 name when its name is taken. After this fix, a run of 8 hours passed.
@@ -2561,8 +2564,8 @@ privilege; a device as root, of each type, with its permissions and
 numbers; <code>O_NOFOLLOW</code>; an attribute that grew between its
 size and its read; the errors of the attributes; and ids 0, which are
 ids and not “no id”. The test of a device as root found a fault of
-<code>x/sys</code> on NetBSD, which made each device node 0:0 (design.md
-§15.1).</p>
+<code>x/sys</code> on NetBSD, which made each device node 0:0
+(design.eml §15.1).</p>
 <p>In <code>codec</code>, the suite that runs for each codec did not
 reach the functions that take a codec by name, which <code>cli</code>
 and <code>archive</code> call. Tests now give their refusals of a name
@@ -2726,7 +2729,7 @@ fault.</p></li>
 operation on a spill file fail in turn, and each call to the encoder, to
 <code>NewSealer</code> and to <code>Emit</code>. It does this with a
 small budget and with a large one, and with a disk that stays full. It
-found two faults, which are now fixed (design.md §8), each with a test
+found two faults, which are now fixed (design.eml §8), each with a test
 that fails without the fix:</p>
 <ul>
 <li>When the encoder failed on a chunk that was not the last to return,
@@ -2766,7 +2769,7 @@ found.</p></li>
 training of a dictionary goes through a <code>srcDir</code>
 (<code>src.go</code>): in production an <code>os.Root</code>, so that
 each entry is found through the directory that holds it
-(doc/Security_Audit.md, finding 11). The reads of each file, of its
+(doc/Security_Audit.eml, finding 11). The reads of each file, of its
 holes and of its extended attributes go through it too.
 <code>TestCreateFaultsAreNeverSilent</code> makes each operation fail in
 turn, for a create, with <code>--keep-going</code>, <code>-h</code> and
@@ -2888,8 +2891,8 @@ does not open at another index, with the other final flag, in another
 member, or for another generation or id.</li>
 <li><code>FuzzMatch</code> (<code>fsutil</code>) compares
 <code>Match</code> with a matcher that follows the four rules of
-design.md §10.11 and has a glob of its own, which fills a table and does
-not backtrack. The patterns are of <code>a</code>, <code>b</code>,
+design.eml §10.11 and has a glob of its own, which fills a table and
+does not backtrack. The patterns are of <code>a</code>, <code>b</code>,
 <code>*</code>, <code>?</code> and <code>/</code>. With one rule taken
 out of <code>Match</code>, it finds a difference in less than a
 second.</li>
@@ -2909,11 +2912,11 @@ for step 6.</p>
 <p><strong>Step 5. Models of the protocols.</strong> TLA+ models check
 three protocols, where faults of order and of timing hide:</p>
 <ul>
-<li>the commit of a generation, and <code>--repair</code> (design.md
+<li>the commit of a generation, and <code>--repair</code> (design.eml
 §9.1, §9.5)</li>
 <li>the lock, and the check that the path still names the locked file
-(design.md §9.6)</li>
-<li>the rules of the memory budget against a deadlock (design.md
+(design.eml §9.6)</li>
+<li>the rules of the memory budget against a deadlock (design.eml
 §8.1)</li>
 </ul>
 <p>The two hangs that the tests found were both in the memory
@@ -2927,29 +2930,30 @@ has configurations that take out one guarantee of the program, and TLC
 must find the fault in each. Thus a model that cannot see a fault makes
 <code>make tla</code> fail.</p>
 <ul>
-<li><code>Commit.tla</code>: an append, an update or a delete (design.md
-§9.1), and the cut-back after an error. The disk keeps each write and
-truncate in a cache until an <code>fsync</code>. At a power failure, any
-subset of the cached operations is on the disk, in order, and a write
-can be torn. In each state, after a power failure, the archive gives the
-old generation or the new one, at worst after <code>--repair</code>. A
-success is durable. An error leaves the old archive when the truncate
-worked. TLC finds the fault when the <code>fsync</code> before the
-trailer, after the trailer, or after the cut-back is gone.</li>
+<li><code>Commit.tla</code>: an append, an update or a delete
+(design.eml §9.1), and the cut-back after an error. The disk keeps each
+write and truncate in a cache until an <code>fsync</code>. At a power
+failure, any subset of the cached operations is on the disk, in order,
+and a write can be torn. In each state, after a power failure, the
+archive gives the old generation or the new one, at worst after
+<code>--repair</code>. A success is durable. An error leaves the old
+archive when the truncate worked. TLC finds the fault when the
+<code>fsync</code> before the trailer, after the trailer, or after the
+cut-back is gone.</li>
 <li><code>Replace.tla</code>: a compact, a change of passphrase and a
-create, which rename a temporary file over the path (design.md §9.3,
+create, which rename a temporary file over the path (design.eml §9.3,
 §9.7). The path gives the old archive or the complete new one, and a
 success is durable. Without the <code>fsync</code> of the new file, the
 path can name an incomplete archive. Without the <code>fsync</code> of
 the directory, a success is not durable. That is the case on Windows
-(design.md §15.1).</li>
+(design.eml §15.1).</li>
 <li><code>Writers.tla</code>: appends, compacts and creates at the same
-time, with the lock and the check of the path (design.md §9.6). No
+time, with the lock and the check of the path (design.eml §9.6). No
 append that reported success is lost, unless a create replaced the
 archive after it. TLC finds a lost append without the check of the path,
 and when a compact reads its archive before it takes the lock, a fault
 that the code had before.</li>
-<li><code>Budget.tla</code>: the memory budget of a create (design.md
+<li><code>Budget.tla</code>: the memory budget of a create (design.eml
 §8.1). No state stops for ever, each member reaches the archive, the
 budget stays within its limit, and all of it comes back. TLC finds a
 deadlock without the spill before the wait (the hang that M8 fixed),
@@ -2960,10 +2964,10 @@ archive at the path held no lock. A second create could then make an
 archive there, and an append could start on it. The first create renamed
 its own archive over it, and the append, which reported success, was
 lost. Now the rename of such a create fails when a file is at the path,
-and the create stops with exit 4 (design.md §9.6).
+and the create stops with exit 4 (design.eml §9.6).
 <code>TestCreateDoesNotReplaceAnArchiveThatAppeared</code> fails without
 the fix.</p>
-<p>The models also showed that design.md §9.1 listed one
+<p>The models also showed that design.eml §9.1 listed one
 <code>fsync</code> more than the code makes: the blobs and the index
 have one <code>fsync</code> together. The text now follows the code.</p>
 <p>The models have limits. A model is not the code, and only the tests
@@ -2988,7 +2992,7 @@ can run, in this order: <code>make check</code>, <code>make tla</code>,
 <code>make vuln</code>, <code>make mutate</code> on each package,
 <code>make fuzz</code> with one hour for each target, and
 <code>make stress</code> for 8 hours. The CI workflow gives
-<code>make check</code> on the other platforms (design.md §12.3). The
+<code>make check</code> on the other platforms (design.eml §12.3). The
 quick steps come first, so that a fault in them stops the gate before
 the long steps start. The gate stops at the first step that fails,
 because a fix makes a new commit, and the gate must run again on that
@@ -3004,7 +3008,7 @@ writes the output of each step to a log in
 <code>.build/gate/SHA/</code>, and a record with the commit, the
 toolchain, and the result and time of each step. The last line of the
 record is <code>PASS</code> only when every step ran and passed. The
-release steps of design.md §12.3 ask for this line. When a step fails,
+release steps of design.eml §12.3 ask for this line. When a step fails,
 the worktree stays for the examination. For example, it holds the input
 of a fuzz target that failed, in <code>testdata/fuzz</code>.</p>
 <p><code>make vuln</code> runs <code>govulncheck</code>
@@ -3020,11 +3024,11 @@ entry, or with no entry. GHSA-fpmh-frq8-7rj8, a panic of the zstd
 decoder of <code>klauspost/compress</code> v1.20.1 and earlier on a
 crafted frame, had no entry when the gate passed <code>make vuln</code>.
 Thus a release also needs a read of the advisories and the release notes
-of each module (design.md §12.3, step 1).</p>
+of each module (design.eml §12.3, step 1).</p>
 <p>The first run of the gate found a vulnerability. GO-2026-6604 lets
 <code>os.Root.MkdirAll</code> follow a junction out of the root on
 Windows. An extraction uses <code>os.Root</code> to keep each member in
-the destination (design.md §7.6). Go 1.27.2 fixes it. The toolchain of
+the destination (design.eml §7.6). Go 1.27.2 fixes it. The toolchain of
 the development machine was 1.27.1, so the gate stopped at
 <code>make vuln</code>. The release workflow takes the newest patch
 release of the version in <code>go.mod</code> (<code>check-latest</code>
@@ -3078,7 +3082,7 @@ waits, and the fault showed only when the close came between the set of
 the terminal and the first read. A loop of 3,000 runs under
 <code>-race</code> stopped in the same way in 4 minutes.
 <code>TestPromptAfterAHangup</code> now gives the hangup before the read
-every time, and eictar reads the line itself (design.md §10.3). The
+every time, and eictar reads the line itself (design.eml §10.3). The
 mutation step found three survivors in the new code: the settings of the
 terminal, and an error of each call that reads or sets them.
 <code>TestReadPasswordSetsTheTerminal</code> now tests them. A terminal

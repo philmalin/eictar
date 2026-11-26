@@ -130,7 +130,7 @@ func TestConfigFileACL(t *testing.T) {
 }
 
 // TestPassphraseFileACL: a warning for a passphrase file that Users can read
-// (doc/Security_Audit.md, finding 8).
+// (doc/Security_Audit.eml, finding 8).
 func TestPassphraseFileACL(t *testing.T) {
 	for _, tc := range []struct {
 		extra string

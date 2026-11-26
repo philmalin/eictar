@@ -13,7 +13,7 @@ import (
 
 // TestSecondWriterIsRefused: while one writer holds an archive, every other
 // kind of writer stops at once with ErrLocked, and the archive is unchanged.
-// Readers are not affected (doc/design.md 9.6).
+// Readers are not affected (doc/design.eml 9.6).
 func TestSecondWriterIsRefused(t *testing.T) {
 	tree := mutTree(t)
 	archive := mkArchive(t, tree, false, "t/a.txt")
@@ -58,7 +58,7 @@ func TestSecondWriterIsRefused(t *testing.T) {
 // lands the file ends in its blobs. A reader then finds no trailer at the
 // end. While a writer holds the lock, that is a write in progress and not
 // damage: the reader says that the archive is being changed, and does not
-// name --repair (doc/design.md 9.6). With no writer, the same bytes are
+// name --repair (doc/design.eml 9.6). With no writer, the same bytes are
 // damage.
 func TestReadDuringAnAppend(t *testing.T) {
 	tree := mutTree(t)

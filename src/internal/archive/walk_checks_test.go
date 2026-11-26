@@ -111,7 +111,7 @@ func TestWalkErrorsNameTheFullPath(t *testing.T) {
 // TestLinkReadThroughTheHeldDirectory: a link is read through the directory
 // that the walk holds. If its directory becomes a link to another one after
 // the lstat, the link of the other directory, which can lead anywhere, is
-// not what the archive stores (doc/Security_Audit.md, finding 11).
+// not what the archive stores (doc/Security_Audit.eml, finding 11).
 func TestLinkReadThroughTheHeldDirectory(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows does not rename a directory that the walk holds open")

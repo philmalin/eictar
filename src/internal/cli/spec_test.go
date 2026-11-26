@@ -23,7 +23,7 @@ func TestParseCompressSpec(t *testing.T) {
 		{"zstd: level = 19 ", CompressSpec{Name: "zstd", Params: map[string]string{"level": "19"}}},
 		// A value may itself contain an '=' - the split is on the first one.
 		{"x:k=a=b", CompressSpec{Name: "x", Params: map[string]string{"k": "a=b"}}},
-		// A key alone is "on"; the codec decides what that means (doc/design.md
+		// A key alone is "on"; the codec decides what that means (doc/design.eml
 		// 10.2), and refuses it for a key such as level.
 		{"zstd:level=19,long,train", CompressSpec{Name: "zstd", Params: map[string]string{"level": "19", "long": "on", "train": "on"}}},
 		{"zstd:level", CompressSpec{Name: "zstd", Params: map[string]string{"level": "on"}}},
@@ -132,7 +132,7 @@ func TestSizeStringRoundTrip(t *testing.T) {
 
 // TestWindowWiderThanTheChunkWarns: the chunks are independent, so a zstd
 // window or an xz dictionary larger than a chunk does nothing beyond it, and
-// the program says so (doc/design.md 10.2). Only a parameter that was given
+// the program says so (doc/design.eml 10.2). Only a parameter that was given
 // counts: plain xz uses preset 6, but nobody asked for its dictionary.
 func TestWindowWiderThanTheChunkWarns(t *testing.T) {
 	for _, tc := range []struct {

@@ -48,11 +48,11 @@ type CodecSpec struct {
 	Name   string         `cbor:"name"`
 	Params map[string]any `cbor:"params,omitempty"`
 	// Dict is the id of the dictionary (Index.Dicts) that the codec used, or
-	// zero. Unlike Params, a reader needs it to decode (doc/design.md 4.2).
+	// zero. Unlike Params, a reader needs it to decode (doc/design.eml 4.2).
 	Dict uint32 `cbor:"dict,omitempty"`
 }
 
-// Dict is a dictionary that some codec entries use (doc/design.md 4.2). Its
+// Dict is a dictionary that some codec entries use (doc/design.eml 4.2). Its
 // blob is one chunk, not compressed, and sealed as a whole when the archive
 // is encrypted.
 type Dict struct {
@@ -73,7 +73,7 @@ const MaxDictSize = 1 << 20
 const MaxDicts = 1024
 
 // EncInfo carries the per-member encryption parameters. The key itself is
-// derived from the passphrase and this salt; see doc/design.md 6.2.
+// derived from the passphrase and this salt; see doc/design.eml 6.2.
 type EncInfo struct {
 	Salt []byte `cbor:"salt"`
 }
@@ -110,7 +110,7 @@ type Member struct {
 	LinkTarget string  `cbor:"link,omitempty"`
 	HardlinkTo uint64  `cbor:"hardlink,omitempty"`
 	// Data is the id of the member whose blob holds this member's content
-	// (doc/design.md 4.3). Such a member has no blob of its own.
+	// (doc/design.eml 4.3). Such a member has no blob of its own.
 	Data      uint64            `cbor:"data,omitempty"`
 	RDev      []uint32          `cbor:"rdev,omitempty"` // {major, minor}
 	Xattrs    map[string][]byte `cbor:"xattrs,omitempty"`
@@ -192,7 +192,7 @@ const MaxIndexSize = 1 << 30 // 1 GiB
 // A compressed index may also expand only so far: to MaxIndexRatio times its
 // own size, or to MinIndexLimit, whichever is more. A real index compresses
 // perhaps 5 to 20 times. Without the ratio, a plain archive of a few KiB
-// made a listing allocate 1 GiB (doc/Security_Audit.md, finding 6).
+// made a listing allocate 1 GiB (doc/Security_Audit.eml, finding 6).
 const (
 	MaxIndexRatio = 200
 	MinIndexLimit = 64 << 20
@@ -242,7 +242,7 @@ type EncodeOptions struct {
 	Seal Sealer
 	// Digest computes the value the trailer records. It is supplied by the
 	// caller because an encrypted archive keys it, and a keyed digest is what
-	// stops an attacker rewriting metadata they cannot read (doc/design.md
+	// stops an attacker rewriting metadata they cannot read (doc/design.eml
 	// 6.4). Nil means the plain BLAKE3 of the bytes.
 	Digest func([]byte) [DigestSize]byte
 }
@@ -262,7 +262,7 @@ type EncodedIndex struct {
 //
 // The order matters and is not negotiable: compressing after encryption would
 // achieve nothing, and sealing before compression would leak nothing useful
-// either. See doc/design.md 6.3.
+// either. See doc/design.eml 6.3.
 func (ix *Index) Encode(opt EncodeOptions) (*EncodedIndex, error) {
 	if ix.Version == 0 {
 		ix.Version = IndexVersion
@@ -440,7 +440,7 @@ func (ix *Index) Validate() error {
 }
 
 // validateData checks each member that shares the content of another
-// (doc/design.md 4.3): the owner is a regular file with a blob of its own,
+// (doc/design.eml 4.3): the owner is a regular file with a blob of its own,
 // so that there are no chains, and it has the same payload - size, sparse map
 // and digest - so that the member reads what its own fields describe.
 func (ix *Index) validateData() error {
@@ -720,7 +720,7 @@ func (c CodecSpec) String() string {
 		parts = append(parts, fmt.Sprintf("%s=%v", k, c.Params[k]))
 	}
 	// A codec with a dictionary shows "dict", the way a key given alone is
-	// written (doc/design.md 10.2).
+	// written (doc/design.eml 10.2).
 	if c.Dict != 0 {
 		parts = append(parts, "dict")
 	}

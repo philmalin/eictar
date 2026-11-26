@@ -13,7 +13,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
-// Tests of the dictionaries of doc/design.md 4.2.
+// Tests of the dictionaries of doc/design.eml 4.2.
 
 // trainParams asks for a small dictionary, which a test tree can fill.
 var trainParams = codec.Params{"level": "19", "train": "16K"}
@@ -179,7 +179,7 @@ func TestDictionaryCompact(t *testing.T) {
 
 	// Replace the whole tree without a dictionary, then compact. The content
 	// is the same, so without --no-dedup the new members would share the old
-	// blobs (doc/design.md 4.3), and those blobs need the dictionary.
+	// blobs (doc/design.eml 4.3), and those blobs need the dictionary.
 	if _, err := appendTo(t, archive, tree, false, func(c *AppendConfig) { c.NoDedup = true }, "src"); err != nil {
 		t.Fatal(err)
 	}

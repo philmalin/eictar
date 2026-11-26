@@ -13,7 +13,7 @@ import (
 // any byte but "/" and NUL, and a crafted archive can hold any name. Written
 // as it is, an escape sequence in a name can recolour the terminal, move the
 // cursor, or write over the lines before it, so that a listing does not show
-// what the archive holds (doc/design.md 10.13, doc/Security_Audit.md finding
+// what the archive holds (doc/design.eml 10.13, doc/Security_Audit.eml finding
 // 12). A backslash is shown doubled, so that each escape has one meaning.
 func printable(s string) string {
 	if !needsEscape(s) {

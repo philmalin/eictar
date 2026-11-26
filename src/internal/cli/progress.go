@@ -26,7 +26,7 @@ const meterInterval = 200 * time.Millisecond
 
 // meter is --progress: one status line on stderr, redrawn in place. It wraps
 // the reporter, so that a -v line or a warning clears the status line first
-// and the two never run into each other (doc/design.md 10.4).
+// and the two never run into each other (doc/design.eml 10.4).
 type meter struct {
 	inner *reporter
 	out   io.Writer

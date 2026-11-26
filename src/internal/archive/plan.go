@@ -10,7 +10,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/format"
 )
 
-// A dry run (-n, doc/design.md 9.9) selects what its operation would work on,
+// A dry run (-n, doc/design.eml 9.9) selects what its operation would work on,
 // by the same code and with the same options, and reports each path. It opens
 // nothing for writing: no archive is created or locked, and no file is
 // extracted. It reads no file content, except to compare digests under -u

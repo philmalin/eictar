@@ -87,7 +87,7 @@ func checkCompress(o *Options, stderr io.Writer) error {
 // checkSpec builds an encoder for spec to check it, and warns when it asks for
 // a window or a dictionary larger than a chunk: the chunks are independent,
 // so no match reaches back past the start of its chunk, and xz presets that
-// differ only above the chunk size compress the same (doc/design.md 10.2).
+// differ only above the chunk size compress the same (doc/design.eml 10.2).
 func checkSpec(o *Options, spec CompressSpec, option string, stderr io.Writer) error {
 	enc, err := codec.NewEncoder(spec.Name, codec.Params(spec.Params), 1)
 	if err != nil {
@@ -207,7 +207,7 @@ func runList(o *Options, stdout, stderr io.Writer) error {
 	}
 
 	// -v gives the long listing, as in tar, and -vv adds detail and a line
-	// of totals (doc/design.md 10.9). --long is -v by another name.
+	// of totals (doc/design.eml 10.9). --long is -v by another name.
 	detail := o.Verbose >= 2
 	switch {
 	case o.JSON:
@@ -279,7 +279,7 @@ func extractConfig(o *Options, stdout io.Writer, rep *reporter) (archive.Extract
 	dest := o.Destination
 
 	// -C names a directory to work in, and unlike -d it does not create one
-	// (doc/design.md 7.1). Checking here keeps a typo from quietly producing
+	// (doc/design.eml 7.1). Checking here keeps a typo from quietly producing
 	// a new directory next to the one that was meant.
 	if dest == "" && len(o.Chdir) > 0 {
 		if len(o.Chdir) > 1 {
@@ -368,7 +368,7 @@ func runListCodecs(stdout io.Writer) error {
 
 // createBaseDir resolves -C for create. Multiple -C options mean interleaved
 // directory changes in tar, which needs argument order the flag parser does
-// not preserve; until that is settled (doc/design.md 1.3, question 2), more
+// not preserve; until that is settled (doc/design.eml 1.3, question 2), more
 // than one is refused rather than silently misapplied.
 func createBaseDir(o *Options) (string, error) {
 	switch len(o.Chdir) {
@@ -436,7 +436,7 @@ func gatherPaths(o *Options) ([]string, error) {
 	return paths, nil
 }
 
-// longLine renders one member of the long listing (doc/design.md 10.9): type
+// longLine renders one member of the long listing (doc/design.eml 10.9): type
 // and mode, owner, size, stored size, percentage saved, codec, time and path,
 // with a link's target where it has one. detail (-vv) adds the chunk count,
 // whether the member is sealed, and the start of its digest.
@@ -478,7 +478,7 @@ func longColumns(l *archive.Listing, m *format.Member, detail bool) []string {
 	stored, saved, codecCol := "-", "-", "-"
 	chunks, sealed, digest := "-", "-", "-"
 	if m.Data != 0 {
-		// It stores nothing: the blob is its owner's (doc/design.md 4.3).
+		// It stores nothing: the blob is its owner's (doc/design.eml 4.3).
 		// The digest stays, so that equal content shows as equal.
 		digest = hex.EncodeToString(m.Digest[:8])
 	} else if m.Type.HasPayload() {
@@ -652,7 +652,7 @@ func owner(m *format.Member) string {
 // jsonMember is the listing record.
 //
 // A POSIX path is a byte sequence, and this program deliberately archives ones
-// that are not valid UTF-8 (doc/design.md 5.3). JSON strings must be valid
+// that are not valid UTF-8 (doc/design.eml 5.3). JSON strings must be valid
 // UTF-8, so such a path cannot be represented faithfully in "path": Go's
 // encoder substitutes U+FFFD. PathBase64 carries the exact bytes alongside it,
 // and is present only when it is needed, so ordinary listings stay clean.
@@ -675,7 +675,7 @@ type jsonMember struct {
 	Sparse     bool     `json:"sparse,omitempty"`
 	Xattrs     []string `json:"xattrs,omitempty"` // names only: values can be binary
 
-	// What the blob holds, for a member that has one (doc/design.md 10.9).
+	// What the blob holds, for a member that has one (doc/design.eml 10.9).
 	// The pointers are set for every such member, so that an empty file
 	// reports 0 and a plaintext one false, rather than leaving them out.
 	Codec      *jsonCodec `json:"codec,omitempty"`
@@ -746,7 +746,7 @@ func (e *partialError) Error() string {
 }
 
 // collisionError ends a run in which --strip-components gave members the
-// same path. The warnings named each one (doc/design.md 10.14).
+// same path. The warnings named each one (doc/design.eml 10.14).
 type collisionError struct{ collided int }
 
 func (e *collisionError) Error() string {

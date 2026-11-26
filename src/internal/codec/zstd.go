@@ -20,7 +20,7 @@ func init() { Register(zstdFactory{}) }
 // default, 6-9 better, and 10-22 best (EncoderLevelFromZstd). Thus 12 and 19
 // give the same archive. The default is 12, the best speed: about 5% smaller
 // than 3 on source code, and about 3.4 times slower to create, with the same
-// extraction speed (doc/design.md 10.2). 12 rather than 19, so that it stays
+// extraction speed (doc/design.eml 10.2). 12 rather than 19, so that it stays
 // a sensible level if the library gains finer ones.
 const (
 	zstdLevelMin, zstdLevelMax, zstdLevelDefault = 1, 22, 12
@@ -28,7 +28,7 @@ const (
 	// zstdLongBare is the window of zstd --long given alone.
 	zstdLongBare = 27
 
-	// Dictionary sizes (doc/design.md 4.2). Alone, train lets the writer
+	// Dictionary sizes (doc/design.eml 4.2). Alone, train lets the writer
 	// choose the size from the files.
 	zstdTrainMin, zstdTrainMax = 4 << 10, 1 << 20
 	zstdTrainAuto              = "auto"
@@ -76,7 +76,7 @@ func (f zstdFactory) NewEncoder(p Params, concurrency int) (Encoder, error) {
 
 // newEncoderWith builds the encoder, with a dictionary when o.Dict is not nil.
 // The train key is checked here but does not change the encoder: the writer
-// trains the dictionary and hands it in (doc/design.md 4.2).
+// trains the dictionary and hands it in (doc/design.eml 4.2).
 func (f zstdFactory) newEncoderWith(p Params, o EncoderOptions) (Encoder, error) {
 	concurrency, dictionary := o.Concurrency, o.Dict
 	spec := f.Describe()
@@ -103,7 +103,7 @@ func (f zstdFactory) newEncoderWith(p Params, o EncoderOptions) (Encoder, error)
 		// one per call, so a shared encoder built with 1 serialises every
 		// caller: the worker pool runs, and only one worker compresses at a
 		// time. It must match the number of goroutines that will share it
-		// (doc/design.md 8.2).
+		// (doc/design.eml 8.2).
 		zstd.WithEncoderConcurrency(concurrency),
 	}
 	resolved := map[string]any{"level": level}
@@ -112,7 +112,7 @@ func (f zstdFactory) newEncoderWith(p Params, o EncoderOptions) (Encoder, error)
 		window = 1 << long
 		resolved["long"] = long
 	}
-	// No match reaches back past the start of its chunk (doc/design.md 4),
+	// No match reaches back past the start of its chunk (doc/design.eml 4),
 	// so a window larger than the chunk holds nothing, but the library
 	// allocates it: 300 MB for each state at long=27. A window of the chunk,
 	// rounded up to a power of 2, gives the same result.
@@ -281,7 +281,7 @@ func zstdLevelWindow(level int) int {
 }
 
 // encodeMemory is what one encoder state holds, from measurements: a base for
-// each speed of the library, and two buffers of the window (doc/design.md
+// each speed of the library, and two buffers of the window (doc/design.eml
 // 8.2). At level 12 with 4 MiB chunks, it is 44 MB.
 func (zstdFactory) encodeMemory(p Params, maxChunk int) (int64, error) {
 	level, err := intParam(p, "level", zstdLevelDefault, zstdLevelMin, zstdLevelMax)

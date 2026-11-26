@@ -9,7 +9,7 @@ import (
 // errNoAttr is what the platform returns for an attribute that is not there.
 var errNoAttr = unix.ENODATA
 
-// Supports is this platform's row of the table in doc/design.md 15.1.
+// Supports is this platform's row of the table in doc/design.eml 15.1.
 var Supports = Capabilities{Metadata: true, Xattrs: true, Holes: true, Fifos: true, Devices: true}
 
 func statInfo(st *syscall.Stat_t) Info {

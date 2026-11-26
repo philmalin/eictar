@@ -292,7 +292,7 @@ func (g *gen) addEntry(rel string, dirs *[]string) error {
 		fallthrough
 	case r < 9 || (g.profile != "mixed" && r < 12):
 		// A copy: another inode with the same content, which the archive
-		// stores once (doc/design.md 4.3). A copy of a sparse file is dense,
+		// stores once (doc/design.eml 4.3). A copy of a sparse file is dense,
 		// so its payload differs, and it is stored in full.
 		if files := g.files(); len(files) > 0 {
 			return g.copyFile(files[g.rnd.IntN(len(files))], rel, false)

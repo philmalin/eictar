@@ -1,0 +1,104 @@
+<mxfile host="Electron">
+  <diagram name="Create" id="create_flow">
+    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <!-- The three kinds of goroutine -->
+        <mxCell id="walker" value="walker goroutine" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#666666;strokeWidth=0.75;dashed=1;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingTop=2;fontFamily=Helvetica;fontSize=10;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="20" y="20" width="300" height="470" as="geometry" />
+        </mxCell>
+        <mxCell id="workers" value="worker pool (-j)" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#666666;strokeWidth=0.75;dashed=1;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingTop=2;fontFamily=Helvetica;fontSize=10;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="180" height="470" as="geometry" />
+        </mxCell>
+        <mxCell id="emitter" value="emitter goroutine" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#666666;strokeWidth=0.75;dashed=1;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingTop=2;fontFamily=Helvetica;fontSize=10;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="680" y="280" width="200" height="160" as="geometry" />
+        </mxCell>
+        <!-- The walker: one file after the other -->
+        <mxCell id="walk" value="walk.go&lt;div&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;paths, exclude, -R,&lt;br&gt;one file system&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=13;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="70" y="55" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="capture" value="capture.go&lt;div&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;stat, xattrs, holes,&lt;br&gt;hardlinks, conflicts&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=13;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="70" y="145" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="same" value="Size of stored&lt;br&gt;content?" style="rhombus;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=13;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="100" y="235" width="140" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ref" value="Reference&lt;div&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;no payload&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=13;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="40" y="380" width="120" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="add" value="Builder.AddFile&lt;div&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;read chunks,&lt;br&gt;BLAKE3 digest&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=13;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="180" y="380" width="120" height="70" as="geometry" />
+        </mxCell>
+        <!-- The workers: chunks in parallel -->
+        <mxCell id="enc" value="codec:&lt;br&gt;compress" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=13;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="420" y="55" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="seal" value="crypt:&lt;br&gt;seal chunk" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=13;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="420" y="145" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="settle" value="settle:&lt;br&gt;chunks in order" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=13;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="420" y="235" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="spool" value="Spool&lt;div&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;memory or disk&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=13;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="420" y="325" width="140" height="60" as="geometry" />
+        </mxCell>
+        <!-- The emitter: the only goroutine that moves the file offset -->
+        <mxCell id="append" value="Writer.AppendMember&lt;div&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;equal content: a reference;&lt;br&gt;else the blob at the&lt;br&gt;file offset&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=13;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="700" y="315" width="160" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="close" value="Writer.Close&lt;div&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;index, digest, trailer,&lt;br&gt;sync, rename&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=13;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="700" y="480" width="160" height="80" as="geometry" />
+        </mxCell>
+        <!-- The flow -->
+        <mxCell id="e_walk_capture" edge="1" parent="1" source="walk" target="capture" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#000000;labelBackgroundColor=#ffffff;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_capture_same" edge="1" parent="1" source="capture" target="same" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#000000;labelBackgroundColor=#ffffff;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_same_ref" edge="1" parent="1" source="same" target="ref" value="yes: hash;&lt;br&gt;equal content" style="rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#000000;labelBackgroundColor=#ffffff;edgeStyle=none;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry"><Array as="points">
+            <mxPoint x="100" y="280" />
+          </Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e_same_add" edge="1" parent="1" source="same" target="add" value="no, or&lt;br&gt;not equal" style="rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#000000;labelBackgroundColor=#ffffff;edgeStyle=none;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry"><Array as="points">
+            <mxPoint x="240" y="280" />
+          </Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e_add_enc" edge="1" parent="1" source="add" target="enc" value="chunk,&lt;br&gt;budget held" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#000000;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry"><Array as="points">
+            <mxPoint x="360" y="415" />
+            <mxPoint x="360" y="85" />
+          </Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e_enc_seal" edge="1" parent="1" source="enc" target="seal" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#000000;labelBackgroundColor=#ffffff;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_seal_settle" edge="1" parent="1" source="seal" target="settle" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#000000;labelBackgroundColor=#ffffff;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_settle_spool" edge="1" parent="1" source="settle" target="spool" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#000000;labelBackgroundColor=#ffffff;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_spool_append" edge="1" parent="1" source="spool" target="append" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#000000;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t_complete" value="member&lt;br&gt;complete" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=10;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="590" y="320" width="70" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ref_append" edge="1" parent="1" source="ref" target="append" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#000000;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.8;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry"><Array as="points">
+            <mxPoint x="100" y="520" />
+            <mxPoint x="640" y="520" />
+            <mxPoint x="640" y="395" />
+          </Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e_append_close" edge="1" parent="1" source="append" target="close" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;fontFamily=Helvetica;fontSize=10;fontColor=#000000;labelBackgroundColor=#ffffff;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

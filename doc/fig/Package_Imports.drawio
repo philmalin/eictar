@@ -1,0 +1,81 @@
+<mxfile host="Electron">
+  <diagram name="Package imports" id="package_imports">
+    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <!-- The group of the three packages that import no other package of eictar -->
+        <mxCell id="base" value="An arrow to this group is an import of each package in it" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#666666;strokeWidth=0.75;dashed=1;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingTop=2;fontFamily=Helvetica;fontSize=10;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="120" y="500" width="560" height="120" as="geometry" />
+        </mxCell>
+        <!-- The packages. Grey italic: the external modules that a package imports -->
+        <mxCell id="main" value="cmd/eictar&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;main.go&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="320" y="20" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="cli" value="cli&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;options, configuration,&lt;br&gt;dispatch, output, progress&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#666666&quot;&gt;&lt;i&gt;spf13/pflag, x/term,&lt;br&gt;x/sys/unix, x/sys/windows&lt;/i&gt;&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="320" y="110" width="160" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="archive" value="archive&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;reader, writer, walk, capture,&lt;br&gt;extract, mutate, lock,&lt;br&gt;dictionaries, shared content,&lt;br&gt;diff, dry run&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#666666&quot;&gt;&lt;i&gt;blake3, x/sys/unix,&lt;br&gt;x/sys/windows&lt;/i&gt;&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="320" y="240" width="160" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="pipeline" value="pipeline&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;budget, spool, builder&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#666666&quot;&gt;&lt;i&gt;x/sys/windows&lt;/i&gt;&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="320" y="400" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="fsutil" value="fsutil&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;paths, patterns,&lt;br&gt;regular expressions&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="560" y="150" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="meta" value="meta&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;stat, xattrs, holes,&lt;br&gt;*at calls&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#666666&quot;&gt;&lt;i&gt;x/sys/unix, x/sys/windows&lt;/i&gt;&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="560" y="265" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="format" value="format&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;header, trailer,&lt;br&gt;index, CBOR&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#666666&quot;&gt;&lt;i&gt;fxamacker/cbor, blake3,&lt;br&gt;klauspost/compress&lt;/i&gt;&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="base">
+          <mxGeometry x="20" y="25" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="crypt" value="crypt&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;keys, AEAD&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#666666&quot;&gt;&lt;i&gt;x/crypto, blake3&lt;/i&gt;&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="base">
+          <mxGeometry x="200" y="25" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="codec" value="codec&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;zstd, gzip, flate, xz,&lt;br&gt;s2, none, dictionaries&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#666666&quot;&gt;&lt;i&gt;klauspost/compress,&lt;br&gt;ulikunitz/xz&lt;/i&gt;&lt;/font&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;shadow=0;strokeColor=#000000;strokeWidth=0.75;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=#000000;fillColor=#ffffff;" vertex="1" parent="base">
+          <mxGeometry x="380" y="25" width="160" height="80" as="geometry" />
+        </mxCell>
+        <!-- The key -->
+        <mxCell id="key" value="&lt;i&gt;Grey italic&lt;/i&gt;: the external modules that the package imports" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;fontFamily=Helvetica;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="120" y="630" width="400" height="20" as="geometry" />
+        </mxCell>
+        <!-- Imports between the packages of eictar -->
+        <mxCell id="e_main_cli" edge="1" parent="1" source="main" target="cli" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cli_archive" edge="1" parent="1" source="cli" target="archive" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_archive_pipeline" edge="1" parent="1" source="archive" target="pipeline" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_pipeline_base" edge="1" parent="1" source="pipeline" target="base" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_archive_base" edge="1" parent="1" source="archive" target="base" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;exitX=0;exitY=0.85;exitDx=0;exitDy=0;entryX=0.196;entryY=0;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry"><Array as="points">
+            <mxPoint x="230" y="342" />
+          </Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e_cli_base" edge="1" parent="1" source="cli" target="base" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;exitX=0.1;exitY=1;exitDx=0;exitDy=0;entryX=0.071;entryY=0;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry"><Array as="points">
+            <mxPoint x="336" y="220" />
+            <mxPoint x="160" y="220" />
+          </Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e_cli_fsutil" edge="1" parent="1" source="cli" target="fsutil" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_archive_fsutil" edge="1" parent="1" source="archive" target="fsutil" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;exitX=1;exitY=0.1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry"><Array as="points">
+            <mxPoint x="640" y="252" />
+          </Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e_archive_meta" edge="1" parent="1" source="archive" target="meta" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=0.75;endArrow=blockThin;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

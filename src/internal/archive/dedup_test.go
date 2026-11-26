@@ -11,7 +11,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
-// Tests of the identical content of doc/design.md 4.3.
+// Tests of the identical content of doc/design.eml 4.3.
 
 // copyTree has one file in three places, one other file, and a hardlink to a
 // copy, which must stay a hardlink.
@@ -130,7 +130,7 @@ func TestAppendSharesOldContent(t *testing.T) {
 }
 
 // TestDamagedOwnerIsNotShared: an append does not make a good file share a
-// blob that has become damaged since it was written (doc/design.md 4.3).
+// blob that has become damaged since it was written (doc/design.eml 4.3).
 func TestDamagedOwnerIsNotShared(t *testing.T) {
 	tree := copyTree(t)
 	archive := createWith(t, tree, false, false, "c/a")

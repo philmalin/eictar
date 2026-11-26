@@ -1,4 +1,4 @@
-# The tests on every platform that eictar claims (doc/design.md 15.1).
+# The tests on every platform that eictar claims (doc/design.eml 15.1).
 #
 # A cross-compile proves only that the code builds. The metadata of each
 # platform - xattrs, holes, no-follow calls - differs in ways that only a test

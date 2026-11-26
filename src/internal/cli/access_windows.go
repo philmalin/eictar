@@ -12,7 +12,7 @@ import (
 )
 
 // On Windows, the owner and the ACL of a file give who can read and write it
-// (doc/design.md 11.4 and 15.1). The program trusts you, SYSTEM and the
+// (doc/design.eml 11.4 and 15.1). The program trusts you, SYSTEM and the
 // Administrators group, as it trusts you and root on Unix.
 
 const (
@@ -53,7 +53,7 @@ func checkConfigOwner(f *os.File, _ os.FileInfo) error {
 }
 
 // passphraseFileExposure gives the warning for a passphrase file that
-// another account owns or can read, or "" (doc/Security_Audit.md, finding 8).
+// another account owns or can read, or "" (doc/Security_Audit.eml, finding 8).
 func passphraseFileExposure(path string) string {
 	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT,
 		windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)

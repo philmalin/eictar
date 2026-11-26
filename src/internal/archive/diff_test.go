@@ -247,7 +247,7 @@ func TestDiffOfAMemberWithoutItsParent(t *testing.T) {
 
 // An archive made with -C dir . does not record ".", so it cannot tell that
 // it holds the whole base directory. A new path at the top is not reported;
-// a new path in an archived directory is (doc/design.md 9.8).
+// a new path in an archived directory is (doc/design.eml 9.8).
 func TestDiffOfTheWholeBase(t *testing.T) {
 	tree := diffFixture(t)
 	archivePath := diffArchive(t, tree, ".")
@@ -264,7 +264,7 @@ func TestDiffOfTheWholeBase(t *testing.T) {
 	}
 }
 
-// The archive is not a path that is missing from itself (doc/design.md 7.2).
+// The archive is not a path that is missing from itself (doc/design.eml 7.2).
 func TestDiffSkipsTheArchive(t *testing.T) {
 	tree := diffFixture(t)
 	archivePath := tree.Path("tree/a.ect")

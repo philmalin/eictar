@@ -36,7 +36,7 @@ type Stats struct {
 	Unchanged int // found up to date by -u
 	Replaced  int // live members that this run tombstoned
 	// Collided counts the members left out because a later member has the
-	// same path after --strip-components (doc/design.md 10.14).
+	// same path after --strip-components (doc/design.eml 10.14).
 	Collided int
 }
 
@@ -55,14 +55,14 @@ type CreateConfig struct {
 	// not entered.
 	Exclude []string
 	// Regex is -R: only the walked paths that match are stored, and each
-	// expression must match one (doc/design.md 10.11). ExcludeRegex is
+	// expression must match one (doc/design.eml 10.11). ExcludeRegex is
 	// --exclude-regex, which works like Exclude.
 	Regex        fsutil.Regexps
 	ExcludeRegex fsutil.Regexps
 	// OneFileSystem is --one-file-system: a mount point is recorded, empty.
 	OneFileSystem bool
 	// NoDedup is --no-dedup: each copy of the same content is stored in full
-	// (doc/design.md 4.3).
+	// (doc/design.eml 4.3).
 	NoDedup bool
 	// Metadata selects which metadata is recorded.
 	Metadata MetadataOptions
@@ -284,7 +284,7 @@ func (g *walkGuard) skip(e entry) bool {
 
 // walkPaths walks cfg.Paths with the walk options of cfg, and calls visit
 // for each entry. An entry that the walk cannot read fails as one member, as
-// a file that cannot be opened does (doc/design.md 10.4): it counts in
+// a file that cannot be opened does (doc/design.eml 10.4): it counts in
 // stats.Failed, and stops the walk unless cfg.KeepGoing.
 func walkPaths(cfg CreateConfig, stats *Stats, visit func(entry) error) error {
 	wk := newWalker(walkOptions{
@@ -320,7 +320,7 @@ type EncryptionConfig struct {
 	Passphrase []byte
 	Params     crypt.KDFParams
 	// EncryptIndex hides the metadata as well. Authentication of the index
-	// does not depend on it (doc/design.md 6.4).
+	// does not depend on it (doc/design.eml 6.4).
 	EncryptIndex bool
 }
 
@@ -366,7 +366,7 @@ func (e *EncryptionConfig) apply(opts *Options) error {
 
 // newWrappedKeys makes a random data key, derives the keys of the archive
 // uuid from it, and wraps it for the passphrase. The passphrase makes none of
-// the keys, so it can change later (doc/design.md 6.2, 9.7).
+// the keys, so it can change later (doc/design.eml 6.2, 9.7).
 func newWrappedKeys(passphrase []byte, params crypt.KDFParams, uuid [16]byte) (keys *crypt.Keys, salt, wrapped []byte, err error) {
 	dataKey, err := crypt.NewDataKey()
 	if err != nil {
@@ -389,7 +389,7 @@ func newWrappedKeys(passphrase []byte, params crypt.KDFParams, uuid [16]byte) (k
 // Argon2id allocates its memory parameter outright, so asking for more than
 // the machine has is not slow - it is an out-of-memory kill with no
 // explanation. Saying so first is the difference between a diagnostic and a
-// dead process (doc/design.md A.3).
+// dead process (doc/design.eml A.3).
 func checkAffordable(p crypt.KDFParams) error {
 	return checkAffordableOn(p, kdfMemory())
 }
@@ -413,7 +413,7 @@ func checkAffordableOn(p crypt.KDFParams, ram int64) error {
 }
 
 // encoderSlots is how many Encode calls may run at once: one for each worker,
-// but no more than the memory holds (doc/design.md 8.2). One state of zstd at
+// but no more than the memory holds (doc/design.eml 8.2). One state of zstd at
 // its best speed holds 44 MB, and one at long=27 held 300 MB before the
 // window was capped at the chunk. With 32 workers, that was more than the
 // machines of CI had. Workers above the number wait for a free state.
@@ -450,7 +450,7 @@ func encoderSlotsOn(opts Options, workers int, limit, ram int64) int {
 // budgetFor sizes the in-flight memory allowance.
 //
 // The design asks for the smaller of a quarter of RAM and a few chunks per
-// worker (doc/design.md 8.1). The second term is what actually binds on a large
+// worker (doc/design.eml 8.1). The second term is what actually binds on a large
 // machine, and the first is what keeps a small one usable.
 func budgetFor(limit int64, workers, chunkSize int) int64 {
 	return budgetForOn(limit, workers, chunkSize, totalMemory())
@@ -512,7 +512,7 @@ func (l *Listing) Codec(m *format.Member) (format.CodecSpec, bool) {
 }
 
 // SameAs returns the path of the member whose content m shares
-// (doc/design.md 4.3), or its id when there is no listing to look it up in.
+// (doc/design.eml 4.3), or its id when there is no listing to look it up in.
 // deleted reports that the owner is a tombstone, which holds the content for
 // its sharers until they go.
 func (l *Listing) SameAs(m *format.Member) (path string, deleted bool) {

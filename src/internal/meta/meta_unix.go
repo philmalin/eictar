@@ -13,7 +13,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// The metadata code for the UNIX-like platforms (doc/design.md 15.1). What
+// The metadata code for the UNIX-like platforms (doc/design.eml 15.1). What
 // differs between them is in sys_<os>.go (the stat fields, pipes and device
 // nodes), xattr_*.go and holes_*.go.
 
@@ -34,7 +34,7 @@ func StatPath(_ string, fi fs.FileInfo) Info { return Stat(fi) }
 // come from os.Root, and name must be one path component: together those
 // keep the operation inside the extraction root. A platform without mkfifoat
 // returns ErrUnsupported: a path-based mkfifo could be redirected by a planted
-// link (doc/design.md 7.6).
+// link (doc/design.eml 7.6).
 func Mkfifo(dir *os.File, name string, mode uint32) error {
 	if err := oneComponent(name); err != nil {
 		return err
@@ -135,7 +135,7 @@ const NoBlock = unix.O_NONBLOCK
 // OpenNoFollow opens a file for reading, and fails if the last name is a
 // symbolic link. The writer uses it for a file that the walk found as a
 // regular file, so that a link put there after the walk is not followed
-// (doc/design.md 14.3).
+// (doc/design.eml 14.3).
 func OpenNoFollow(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW|NoBlock, 0)
 }
@@ -144,7 +144,7 @@ func OpenNoFollow(path string) (*os.File, error) {
 // symbolic link: in a directory that everyone can write and that is sticky,
 // such as /tmp, a link is followed only when its owner is the caller or the
 // owner of the directory. The kernel applies the rule to open(2). The writer
-// resolves -f itself, so it applies the rule too (doc/design.md 9).
+// resolves -f itself, so it applies the rule too (doc/design.eml 9).
 func MayFollow(link string, linkInfo fs.FileInfo) bool {
 	dir, err := os.Stat(filepath.Dir(link))
 	if err != nil {

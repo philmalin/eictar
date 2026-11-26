@@ -22,7 +22,7 @@ import (
 //     nine-byte header into an unbounded allocation.
 const (
 	// MaxIndexMembers caps the members in one index. Archives beyond this
-	// need the paged index described in doc/design.md section 15, not a
+	// need the paged index described in doc/design.eml section 15, not a
 	// bigger number here.
 	MaxIndexMembers = 1 << 22 // 4,194,304
 

@@ -127,7 +127,7 @@ func moduleRoot() (string, error) {
 // isolatedEnv is the environment of the test process without anything that
 // configures eictar: no EICTAR_* variable, and a HOME and XDG_CONFIG_HOME
 // with no configuration file in them. A test must not depend on the
-// configuration of whoever runs it (doc/design.md 11).
+// configuration of whoever runs it (doc/design.eml 11).
 func isolatedEnv(tb testing.TB) []string {
 	home := tb.TempDir()
 	var out []string

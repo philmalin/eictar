@@ -54,7 +54,7 @@ type capturer struct {
 	warn func(format string, args ...any)
 }
 
-// Conflict policies for -r (doc/design.md 9.2).
+// Conflict policies for -r (doc/design.eml 9.2).
 const (
 	ConflictReplace = "replace"
 	ConflictSkip    = "skip"
@@ -246,7 +246,7 @@ func (c *capturer) submitFile(m format.Member, e entry) error {
 	m.Type = format.TypeReg
 	m.Codec = c.w.CodecRef()
 
-	// A file with holes stores only its data regions (doc/design.md 5.1).
+	// A file with holes stores only its data regions (doc/design.eml 5.1).
 	segs, sparse, err := dataSegments(f.file(), e.Info.Size(), e.Sys.Blocks)
 	if err != nil {
 		return fmt.Errorf("%s: %w", e.Src, err)
@@ -273,7 +273,7 @@ func (c *capturer) submitFile(m format.Member, e entry) error {
 
 	// A file with the size of stored content can be a copy of it: hash it
 	// first, and share that content instead of compressing it again
-	// (doc/design.md 4.3).
+	// (doc/design.eml 4.3).
 	if c.w.dedup.hasSize(payload) {
 		shared, err := c.shareIfCopy(m, e, reader(), payload)
 		if err != nil || shared {
@@ -339,7 +339,7 @@ var errChangedDuringWalk = errors.New("changed after the walk found it; not arch
 // sure that it is still that file. Between the walk's lstat and this open,
 // someone who can write the directory can put a symbolic link there, to
 // /etc/shadow for example. A privileged backup of such a tree then stored the
-// target under the file's name (doc/Security_Audit.md, finding 3). The open
+// target under the file's name (doc/Security_Audit.eml, finding 3). The open
 // goes through the directory that the walk opened, by the file's name alone,
 // so that a directory above it that became a link is not followed (finding
 // 11). It does not follow a link, except under -h, and the file must have the
@@ -388,7 +388,7 @@ func (c *capturer) recordXattrs(m *format.Member, e entry, f srcFile) error {
 	xattrs, err := readXattrs(e, f, c.opt, func(name string, size int) {
 		// Linux never makes one this large, but macOS can: a resource
 		// fork is an xattr with no size limit. The file is still
-		// archived; the attribute is not (doc/design.md 15.1).
+		// archived; the attribute is not (doc/design.eml 15.1).
 		if c.warn != nil {
 			c.warn("%s: extended attribute %q is larger than the format allows (%d bytes); not archived",
 				e.Src, name, size)
@@ -460,7 +460,7 @@ func (c *capturer) contentOf(m *format.Member) *format.Member {
 	return m
 }
 
-// outOfDate applies the -u test of doc/design.md 10.5 to one path. For a
+// outOfDate applies the -u test of doc/design.eml 10.5 to one path. For a
 // hardlink, old is the member that holds its content (see contentOf).
 func outOfDate(old *format.Member, e entry, mode string, newHash func() hash.Hash) (bool, error) {
 	// A change of type is always a change.

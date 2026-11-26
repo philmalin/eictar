@@ -19,7 +19,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/testutil"
 )
 
-// Tests of --encrypt-archive (doc/design.md 9.11). The fault and power-loss
+// Tests of --encrypt-archive (doc/design.eml 9.11). The fault and power-loss
 // tests of fault_test.go and crash_test.go also run it (writeCases).
 
 // encryptWith is the configuration of the tests: the new passphrase is

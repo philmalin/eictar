@@ -94,7 +94,7 @@ func TestCreateRefusesABadTarget(t *testing.T) {
 
 // TestCreateRefusesAPlantedLink: -f through a link that the rule of
 // fs.protected_symlinks does not follow is refused, and the error names the
-// link (doc/Security_Audit.md, finding 4). The rule refuses only a link of
+// link (doc/Security_Audit.eml, finding 4). The rule refuses only a link of
 // another user, which only root can make, so the test replaces it.
 func TestCreateRefusesAPlantedLink(t *testing.T) {
 	saved := mayFollowLink

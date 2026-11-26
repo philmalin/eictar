@@ -7,7 +7,7 @@ import (
 )
 
 // The pattern rules against a simple reference matcher (doc/testing.md 5,
-// step 4). The reference follows the four rules of doc/design.md 10.11, with
+// step 4). The reference follows the four rules of doc/design.eml 10.11, with
 // a glob of its own, and none of the code of Match.
 
 // refGlob matches one name: * is any run of characters, and ? is one. It
@@ -34,7 +34,7 @@ func refGlob(pattern, name string) bool {
 	return ok[len(name)]
 }
 
-// refMatch is doc/design.md 10.11: the path itself, a directory that the
+// refMatch is doc/design.eml 10.11: the path itself, a directory that the
 // path is under, a glob of the whole path in which * does not match a /,
 // and, for a pattern with no /, a glob of one name at any depth.
 func refMatch(pattern, member string) bool {

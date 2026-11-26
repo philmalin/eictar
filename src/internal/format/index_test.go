@@ -85,7 +85,7 @@ func sampleIndex() *Index {
 			},
 			{
 				// A copy of src/main.go: it shares that member's blob
-				// (doc/design.md 4.3).
+				// (doc/design.eml 4.3).
 				ID: 20, Generation: 3, Path: "copy/main.go", Type: TypeReg,
 				Mode: 0o644, Size: 4096, Codec: NoCodec, Data: 1,
 				Digest: bytes.Repeat([]byte{0xab}, DigestSize),
@@ -780,7 +780,7 @@ func TestIndexValidateRejectsSharing(t *testing.T) {
 
 // TestIndexExpansionIsBounded: a small index may not decode to a large one.
 // A plain archive of a few KiB made a listing allocate 1 GiB before the
-// ratio (doc/Security_Audit.md, finding 6).
+// ratio (doc/Security_Audit.eml, finding 6).
 func TestIndexExpansionIsBounded(t *testing.T) {
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderConcurrency(1))
 	bomb := enc.EncodeAll(make([]byte, 100<<20), nil) // 100 MiB of zeros
@@ -802,7 +802,7 @@ func TestIndexExpansionIsBounded(t *testing.T) {
 
 // TestIndexDigestUsesTheKey: the digest that the trailer records comes from
 // the caller's function when there is one. That is the keyed digest of an
-// encrypted archive (doc/design.md 6.4). The plain hash in its place lets an
+// encrypted archive (doc/design.eml 6.4). The plain hash in its place lets an
 // attacker rewrite the metadata and compute a new digest.
 func TestIndexDigestUsesTheKey(t *testing.T) {
 	mark := [DigestSize]byte{0x6b, 0x65, 0x79}

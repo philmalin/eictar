@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// The steps of this file test --diff (doc/design.md 9.8), the dry run -n
+// The steps of this file test --diff (doc/design.eml 9.8), the dry run -n
 // (9.9) and --strip-components (10.14) against the model.
 
 // lines splits the output of a command into its lines.
@@ -123,7 +123,7 @@ func (s *sequence) extractDryRun() error {
 // diffStep extracts the archive, and runs --diff on the result: there must
 // be no difference. Then it makes one change to the extracted tree, and
 // --diff must report that path, with that kind of difference, and nothing
-// else. Half the time, the step runs --diff-extract instead (doc/design.md
+// else. Half the time, the step runs --diff-extract instead (doc/design.eml
 // 9.10), with the scratch directory beside the tree: each copy must also
 // equal the file, and the one change must still give one line.
 func (s *sequence) diffStep() error {
@@ -341,7 +341,7 @@ func (m Model) stripModel(n int) (want Model, collisions [][2]string, ok bool) {
 
 // plainName reports whether eictar writes the name as it is in a message:
 // valid UTF-8 with no backslash, control character or direction mark
-// (doc/design.md 10.13).
+// (doc/design.eml 10.13).
 func plainName(p string) bool {
 	if !utf8.ValidString(p) || strings.ContainsRune(p, '\\') {
 		return false

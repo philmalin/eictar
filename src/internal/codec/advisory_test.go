@@ -34,7 +34,7 @@ func zstdHuffWeightsFrames() (oneFrame []byte, twoFrames [2][]byte) {
 // TestZstdHuffWeightsAdvisory: a crafted chunk is damage, not a panic, also
 // when the bad state comes from the chunk before it in the same decoder
 // (GHSA-fpmh-frq8-7rj8). The reader uses a decoder again for the next chunk
-// (doc/design.md 8.3).
+// (doc/design.eml 8.3).
 func TestZstdHuffWeightsAdvisory(t *testing.T) {
 	oneFrame, twoFrames := zstdHuffWeightsFrames()
 	dec, err := NewDecoder("zstd", 1<<20)

@@ -9,7 +9,7 @@ import (
 // ErrLocked means another process is changing the archive. The caller does
 // not wait: a backup job that waits can hang with no message, and the second
 // of two overlapping jobs is better stopped with a clear error
-// (doc/design.md 9.6).
+// (doc/design.eml 9.6).
 var ErrLocked = errors.New("another eictar is changing this archive; try again when it has finished")
 
 // lockArchive takes the writer's exclusive lock on f, the open archive at

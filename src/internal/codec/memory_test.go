@@ -10,7 +10,7 @@ import (
 
 // TestZstdWindowFitsTheChunk: a window larger than a chunk holds nothing, so
 // the encoder caps it at the chunk, rounded up to a power of 2. At long=27
-// that saves 260 MB for each state (doc/design.md 8.2). The test measures
+// that saves 260 MB for each state (doc/design.eml 8.2). The test measures
 // the memory of one state, which is what the cap is for.
 func TestZstdWindowFitsTheChunk(t *testing.T) {
 	src := make([]byte, 100<<10)

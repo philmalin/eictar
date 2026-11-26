@@ -35,7 +35,7 @@ const RootPath = "."
 // This follows tar, zip and pax: an archive holds a portable tree, not a set
 // of filesystem locations, so /etc/passwd is stored as etc/passwd and unpacks
 // under the destination rather than over the system. Unlike tar, there is no
-// option to turn this off; see doc/design.md 7.
+// option to turn this off; see doc/design.eml 7.
 //
 // On Windows, the volume name is removed too, as tar does: C:\Users\a.txt
 // and \\server\share\a.txt are stored as Users/a.txt and a.txt. On other

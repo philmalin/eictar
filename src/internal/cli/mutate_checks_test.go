@@ -103,7 +103,7 @@ func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 // TestRepairThroughRun: a file that ends with a damaged trailer is refused
 // with exit 3, and is not changed. -n says what a repair removes, also with
 // -q, and --discard-damaged removes it. A file whose last write stopped
-// before its trailer is repaired with no option (doc/design.md 9.5).
+// before its trailer is repaired with no option (doc/design.eml 9.5).
 func TestRepairThroughRun(t *testing.T) {
 	dir, archivePath := opsTree(t)
 	first, err := os.ReadFile(archivePath)

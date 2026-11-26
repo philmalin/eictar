@@ -812,7 +812,7 @@ func TestKeepGoingSkipsBadMembers(t *testing.T) {
 // TestKeepGoingPastAnUnreadableDirectory: an error of the walk itself - here
 // a directory that cannot be read - fails one member under --keep-going, and
 // the rest of the tree is archived. It stopped the whole run, with no archive
-// (doc/design.md 10.4).
+// (doc/design.eml 10.4).
 //
 // Linux lists the extended attributes of a directory of mode 0, so the
 // directory is archived, empty, and only the listing of its entries fails.
@@ -1926,7 +1926,7 @@ func TestEncryptedTamperIsCaught(t *testing.T) {
 	}
 }
 
-// TestEncryptedMetadataTamperIsCaught is the attack doc/design.md 6.4 exists
+// TestEncryptedMetadataTamperIsCaught is the attack doc/design.eml 6.4 exists
 // for: an attacker who cannot read a byte of content rewrites a path in the
 // plaintext index. Every chunk still authenticates, because the chunk AAD
 // never mentioned the path. Only the keyed index digest catches it.
@@ -1985,7 +1985,7 @@ func TestPlaintextMetadataTamperIsNotDetected(t *testing.T) {
 		t.Errorf("member path = %q, want the forged %q", got, "renamed.txt")
 	}
 	// If this ever starts failing, an unkeyed archive gained tamper evidence
-	// and doc/design.md 14.4 needs updating to match.
+	// and doc/design.eml 14.4 needs updating to match.
 }
 
 func copyFile(t *testing.T, from, to string) {
@@ -2233,7 +2233,7 @@ func TestAffordabilityCheck(t *testing.T) {
 }
 
 // TestEncoderSlotsFitTheMemory: the encoder states of all workers must fit in
-// the memory; the default zstd level holds 44 MB for each (doc/design.md 8.2).
+// the memory; the default zstd level holds 44 MB for each (doc/design.eml 8.2).
 // 32 workers on a machine of CI ran out of memory before this rule.
 func TestEncoderSlotsFitTheMemory(t *testing.T) {
 	zstd12 := Options{Codec: "zstd"}

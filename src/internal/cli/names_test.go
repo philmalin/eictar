@@ -39,7 +39,7 @@ func forceTerminal(t *testing.T, yes bool) {
 
 // TestNamesOnATerminal: a name with an escape sequence reaches a terminal
 // escaped, in the listing, the long listing, a dry run and --diff, and a pipe
-// exactly (doc/Security_Audit.md, finding 12).
+// exactly (doc/Security_Audit.eml, finding 12).
 func TestNamesOnATerminal(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("a Windows file name cannot hold a control character")

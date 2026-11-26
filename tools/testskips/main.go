@@ -5,7 +5,7 @@
 //	go test -count=1 -json ./src/... | go run ./tools/testskips
 //
 // A skipped test passes quietly, and a platform avoids a test by skipping it
-// (doc/design.md 15.1). CI prints this for each platform, so that a green job
+// (doc/design.eml 15.1). CI prints this for each platform, so that a green job
 // also says what it did not test, and a red one says which test failed.
 package main
 

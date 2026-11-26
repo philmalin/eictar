@@ -39,7 +39,7 @@ func metadataTree(t *testing.T) *testutil.Tree {
 		Text("tree/"+strings.Repeat("n", 200), 0o644, "long name")
 
 	// What a platform does not support is left out of the tree, so that the
-	// round trip tests the rest there (doc/design.md 15.1).
+	// round trip tests the rest there (doc/design.eml 15.1).
 	names := []string{"tree/plain.txt", "tree/attrs.txt", "tree/tool",
 		"tree/private/first", "tree/pipe", "tree/disk.img", "tree/with space.txt",
 		"tree/new\nline.txt", "tree/-leading-dash", "tree/" + strings.Repeat("n", 200)}
@@ -149,7 +149,7 @@ func TestSpecialBitsNeedAskingFor(t *testing.T) {
 // still fails at once for a file stored dense.
 func TestHolesSurviveAndCostNothing(t *testing.T) {
 	if !meta.Supports.Holes {
-		t.Skipf("%s stores files with holes dense (doc/design.md 15.1)", runtime.GOOS)
+		t.Skipf("%s stores files with holes dense (doc/design.eml 15.1)", runtime.GOOS)
 	}
 	tree := metadataTree(t)
 	if !tree.Holes("tree/disk.img") {

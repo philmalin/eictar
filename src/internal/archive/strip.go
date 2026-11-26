@@ -9,7 +9,7 @@ import (
 )
 
 // stripPath removes the first n components of the stored path p, as
-// --strip-components does (doc/design.md 10.14). It reports false when p
+// --strip-components does (doc/design.eml 10.14). It reports false when p
 // has n components or fewer: nothing of it is left to write.
 func stripPath(p string, n int) (string, bool) {
 	for range n {

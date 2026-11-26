@@ -246,7 +246,7 @@ font-size : 200%;
 font-weight : bold;
 text-align : left;
 border-bottom : medium solid #777777;
-background-color : #eeeeee;
+background-color : #f0f0f0;
 }
 h2 {
 color: #000;
@@ -255,7 +255,7 @@ font-size : 180%;
 font-weight : bold;
 text-align : left;
 border-bottom : medium solid #777777;
-background-color : #eeeeee;
+background-color : #f0f0f0;
 }
 h3 {
 color: #000;
@@ -263,7 +263,7 @@ color: var(--text-bright);
 font-size : 160%;
 font-weight : bold;
 text-align : left;
-background-color : #eeeeee;
+background-color : #f0f0f0;
 }
 h4 {
 color: #000;
@@ -271,7 +271,7 @@ color: var(--text-bright);
 font-size : 140%;
 font-weight : bold;
 text-align : left;
-background-color : #eeeeee;
+background-color : #f0f0f0;
 }
 h5 {
 color: #000;
@@ -279,7 +279,7 @@ color: var(--text-bright);
 font-size : 120%;
 font-weight : bold;
 text-align : left;
-background-color : #eeeeee;
+background-color : #f0f0f0;
 }
 h6 {
 color: #000;
@@ -287,7 +287,7 @@ color: var(--text-bright);
 font-size : 110%;
 font-weight : bold;
 text-align : left;
-background-color : #eeeeee;
+background-color : #f0f0f0;
 }
 @media (prefers-color-scheme: dark) {
 h1 {
@@ -1464,7 +1464,7 @@ scope for v1</a></li>
 <h1 id="eictar---encrypted-individually-compressed-tar">eictar -
 Encrypted Individually-Compressed TAR</h1>
 <blockquote>
-<p>This statement and <code>doc/design.md</code> are kept in sync. This
+<p>This statement and <code>doc/design.eml</code> are kept in sync. This
 file says <em>what</em> the program must do and <em>why</em>; the design
 document says <em>how</em>. When a requirement changes, change it here
 first, then carry it into the design.</p>
@@ -1567,7 +1567,7 @@ untouched.</li>
 </ol>
 <h2 id="decisions">Decisions</h2>
 <p>These resolve the open questions in the constraints above.
-<code>doc/design.md</code> gives the full reasoning and the exact
+<code>doc/design.eml</code> gives the full reasoning and the exact
 formats.</p>
 <table>
 <colgroup>
@@ -1676,7 +1676,7 @@ than by the inode. Hardlinks are detected and stored once; two unrelated
 copies of the same file are not. Neither whole-file dedup nor
 chunk-level dedup (the content-defined chunking that borg and restic
 use) is in v1. Whole-file dedup is cheap to add later and
-<code>doc/design.md</code> §15 records what it needs.</li>
+<code>doc/design.eml</code> §15 records what it needs.</li>
 <li>Public-key recipients. The format leaves room for them.</li>
 <li>Reading an archive from a pipe. The footer index needs a seekable
 file.</li>
@@ -1684,7 +1684,7 @@ file.</li>
 <li>Metadata on platforms other than Linux, macOS, FreeBSD, NetBSD and
 OpenBSD. On other platforms the program archives content, directories
 and links only. The four platforms besides Linux have the limits in
-<code>doc/design.md</code> §15.1: macOS records no ACLs and does not
+<code>doc/design.eml</code> §15.1: macOS records no ACLs and does not
 create pipes, and OpenBSD has no extended attributes. The tests run on
 all five platforms in CI.</li>
 </ul>

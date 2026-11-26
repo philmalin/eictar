@@ -382,7 +382,7 @@ func TestExtractFaultsAreNeverSilent(t *testing.T) {
 
 // pipesExtracted reports whether extraction makes a pipe on this platform. A
 // platform with no call to make one on the descriptor of a directory skips
-// it, with a notice: macOS and Windows (doc/design.md 15.1).
+// it, with a notice: macOS and Windows (doc/design.eml 15.1).
 func pipesExtracted(t *testing.T) bool {
 	t.Helper()
 	d, err := os.Open(t.TempDir())

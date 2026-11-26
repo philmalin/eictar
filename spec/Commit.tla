@@ -1,7 +1,7 @@
 ------------------------------ MODULE Commit ------------------------------
 (***************************************************************************)
 (* An append, an update or a delete writes a new generation in place      *)
-(* (doc/design.md 9.1). The writer puts the blobs and the index after the *)
+(* (doc/design.eml 9.1). The writer puts the blobs and the index after the *)
 (* old end of the file, makes them durable, writes the trailer, and makes *)
 (* it durable. An error before the end cuts the file back to its old      *)
 (* length. The power can fail at any moment.                              *)
@@ -13,7 +13,7 @@
 (* part of the file is durable, and no write touches it.                  *)
 (*                                                                         *)
 (* After the failure, a reader opens the file, or refuses it, and then    *)
-(* --repair cuts it after the last valid trailer (doc/design.md 9.5).     *)
+(* --repair cuts it after the last valid trailer (doc/design.eml 9.5).     *)
 (***************************************************************************)
 EXTENDS Naturals, Sequences
 

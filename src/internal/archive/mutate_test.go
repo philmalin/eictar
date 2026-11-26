@@ -315,7 +315,7 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-// TestHardlinkToATombstone is doc/design.md 9.2: replacing one name of a
+// TestHardlinkToATombstone is doc/design.eml 9.2: replacing one name of a
 // hardlink pair must not take the content from the other name, before or
 // after a compact.
 func TestHardlinkToATombstone(t *testing.T) {
@@ -565,7 +565,7 @@ func TestInfo(t *testing.T) {
 	}
 }
 
-// TestCrashAtEveryCut is the crash-consistency property of doc/design.md 9.1:
+// TestCrashAtEveryCut is the crash-consistency property of doc/design.eml 9.1:
 // wherever an append stops, the file either opens as the new generation or
 // is refused, and repair gives back the old generation exactly.
 func TestCrashAtEveryCut(t *testing.T) {
@@ -615,7 +615,7 @@ func TestCrashAtEveryCut(t *testing.T) {
 // damage of a complete generation, not an interrupted write: the file ends
 // with a whole trailer. A repair would remove the whole generation, so it
 // stops and changes nothing. -n says what it would remove, and changes
-// nothing. --discard-damaged removes it (doc/design.md 9.5).
+// nothing. --discard-damaged removes it (doc/design.eml 9.5).
 func TestRepairOfADamagedTrailer(t *testing.T) {
 	tree := mutTree(t)
 	archive := mkArchive(t, tree, false, "t/a.txt")
@@ -880,7 +880,7 @@ func TestUpdateLeavesAnUnchangedHardlinkAlone(t *testing.T) {
 // TestCompactKeepsAnAppendBeforeItsLock: an append that commits after compact
 // opens the archive and before it takes the lock is in the compacted archive.
 // Compact read the index before it locked, and so wrote the archive again
-// from the older index, without the append (doc/design.md 9.6).
+// from the older index, without the append (doc/design.eml 9.6).
 func TestCompactKeepsAnAppendBeforeItsLock(t *testing.T) {
 	tree := mutTree(t)
 	archive := mkArchive(t, tree, false, "t")
@@ -1271,7 +1271,7 @@ func TestOutsideSegments(t *testing.T) {
 	}
 }
 
-// TestEncryptedDigestIsKeyed is the point of the keyed digest (doc/design.md
+// TestEncryptedDigestIsKeyed is the point of the keyed digest (doc/design.eml
 // 6.2): in an encrypted archive whose index is not sealed, the plain BLAKE3
 // of a file must be nowhere in the file, or anyone with a copy of the file
 // could find out that the archive holds it. A plaintext archive keeps the
@@ -1465,7 +1465,7 @@ func livePaths(t *testing.T, archive string) []string {
 
 // TestRegexFiltersTheWalk: -R stores only what matches, at any depth, and
 // not the directories above it; --exclude-regex does not enter a directory
-// (doc/design.md 10.11).
+// (doc/design.eml 10.11).
 func TestRegexFiltersTheWalk(t *testing.T) {
 	tree := regexTree(t)
 	cfg := CreateConfig{

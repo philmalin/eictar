@@ -1,2223 +1,1862 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" lang xml:lang>
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="generator" content="pandoc" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>Security Audit</title>
+  <title> eictar security audit</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <style>
-code{white-space: pre-wrap;}
-span.smallcaps{font-variant: small-caps;}
-div.columns{display: flex; gap: min(4vw, 1.5em);}
-div.column{flex: auto; overflow-x: auto;}
-div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
-
-ul.task-list[class]{list-style: none;}
-ul.task-list li input[type="checkbox"] {
-font-size: inherit;
-width: 0.8em;
-margin: 0 0.8em 0.2em -1.6em;
-vertical-align: middle;
-}
-.display.math{display: block; text-align: center; margin: 0.5rem auto;}
-</style>
-  <style type="text/css">
-:root {
---background-body: #fff;
---background: #efefef;
---background-alt: #f7f7f7;
---selection: #9e9e9e;
---text-main: #363636;
---text-bright: #000;
---text-muted: #70777f;
---links: #0076d1;
---focus: #0096bfab;
---border: #dbdbdb;
---code: #000;
---animation-duration: 0.1s;
---button-base: #d0cfcf;
---button-hover: #9b9b9b;
---scrollbar-thumb: rgb(170, 170, 170);
---scrollbar-thumb-hover: var(--button-hover);
---form-placeholder: #949494;
---form-text: #1d1d1d;
---variable: #39a33c;
---highlight: #ff0;
---select-arrow: url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23161f27'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E");
-}
-@media (prefers-color-scheme: dark) {
-:root {
---background-body: #202b38;
---background: #161f27;
---background-alt: #1a242f;
---selection: #1c76c5;
---text-main: #dbdbdb;
---text-bright: #fff;
---text-muted: #a9b1ba;
---links: #41adff;
---focus: #0096bfab;
---border: #526980;
---code: #ffbe85;
---animation-duration: 0.1s;
---button-base: #0c151c;
---button-hover: #040a0f;
---scrollbar-thumb: var(--button-hover);
---scrollbar-thumb-hover: rgb(0, 0, 0);
---form-placeholder: #a9a9a9;
---form-text: #fff;
---variable: #d941e2;
---highlight: #efdb43;
---select-arrow: url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23efefef'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E");
-}
-}
-html {
-scrollbar-color: rgb(170, 170, 170) #fff;
-scrollbar-color: var(--scrollbar-thumb) var(--background-body);
-scrollbar-width: thin;
-}
-@media (prefers-color-scheme: dark) {
-html {
-scrollbar-color: #040a0f #202b38;
-scrollbar-color: var(--scrollbar-thumb) var(--background-body);
-}
-}
-@media (prefers-color-scheme: dark) {
-html {
-scrollbar-color: #040a0f #202b38;
-scrollbar-color: var(--scrollbar-thumb) var(--background-body);
-}
-}
-@media (prefers-color-scheme: dark) {
-html {
-scrollbar-color: #040a0f #202b38;
-scrollbar-color: var(--scrollbar-thumb) var(--background-body);
-}
-}
-@media (prefers-color-scheme: dark) {
-html {
-scrollbar-color: #040a0f #202b38;
-scrollbar-color: var(--scrollbar-thumb) var(--background-body);
-}
-}
-@media (prefers-color-scheme: dark) {
-html {
-scrollbar-color: #040a0f #202b38;
-scrollbar-color: var(--scrollbar-thumb) var(--background-body);
-}
-}
-@media (prefers-color-scheme: dark) {
-html {
-scrollbar-color: #040a0f #202b38;
-scrollbar-color: var(--scrollbar-thumb) var(--background-body);
-}
-}
-body {
-font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
-line-height: 1.4;
-max-width: 80%;
-margin: 20px auto;
-padding: 0 10px;
-word-wrap: break-word;
-color: #363636;
-color: var(--text-main);
-background: #fff;
-background: var(--background-body);
-text-rendering: optimizeLegibility;
-}
-@media (prefers-color-scheme: dark) {
-body {
-background: #202b38;
-background: var(--background-body);
-}
-}
-@media (prefers-color-scheme: dark) {
-body {
-color: #dbdbdb;
-color: var(--text-main);
-}
-}
-button {
-transition:
-background-color 0.1s linear,
-border-color 0.1s linear,
-color 0.1s linear,
-box-shadow 0.1s linear,
-transform 0.1s ease;
-transition:
-background-color var(--animation-duration) linear,
-border-color var(--animation-duration) linear,
-color var(--animation-duration) linear,
-box-shadow var(--animation-duration) linear,
-transform var(--animation-duration) ease;
-}
-@media (prefers-color-scheme: dark) {
-button {
-transition:
-background-color 0.1s linear,
-border-color 0.1s linear,
-color 0.1s linear,
-box-shadow 0.1s linear,
-transform 0.1s ease;
-transition:
-background-color var(--animation-duration) linear,
-border-color var(--animation-duration) linear,
-color var(--animation-duration) linear,
-box-shadow var(--animation-duration) linear,
-transform var(--animation-duration) ease;
-}
-}
-input {
-transition:
-background-color 0.1s linear,
-border-color 0.1s linear,
-color 0.1s linear,
-box-shadow 0.1s linear,
-transform 0.1s ease;
-transition:
-background-color var(--animation-duration) linear,
-border-color var(--animation-duration) linear,
-color var(--animation-duration) linear,
-box-shadow var(--animation-duration) linear,
-transform var(--animation-duration) ease;
-}
-@media (prefers-color-scheme: dark) {
-input {
-transition:
-background-color 0.1s linear,
-border-color 0.1s linear,
-color 0.1s linear,
-box-shadow 0.1s linear,
-transform 0.1s ease;
-transition:
-background-color var(--animation-duration) linear,
-border-color var(--animation-duration) linear,
-color var(--animation-duration) linear,
-box-shadow var(--animation-duration) linear,
-transform var(--animation-duration) ease;
-}
-}
-textarea {
-transition:
-background-color 0.1s linear,
-border-color 0.1s linear,
-color 0.1s linear,
-box-shadow 0.1s linear,
-transform 0.1s ease;
-transition:
-background-color var(--animation-duration) linear,
-border-color var(--animation-duration) linear,
-color var(--animation-duration) linear,
-box-shadow var(--animation-duration) linear,
-transform var(--animation-duration) ease;
-}
-@media (prefers-color-scheme: dark) {
-textarea {
-transition:
-background-color 0.1s linear,
-border-color 0.1s linear,
-color 0.1s linear,
-box-shadow 0.1s linear,
-transform 0.1s ease;
-transition:
-background-color var(--animation-duration) linear,
-border-color var(--animation-duration) linear,
-color var(--animation-duration) linear,
-box-shadow var(--animation-duration) linear,
-transform var(--animation-duration) ease;
-}
-}
-h1 {
-font-size: 2.2em;
-margin-top: 0;
-}
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-margin-bottom: 12px;
-margin-top: 24px;
-}
-h1 {
-color: #000;
-color: var(--text-bright);
-font-size : 200%;
-font-weight : bold;
-text-align : left;
-border-bottom : medium solid #777777;
-background-color : #eeeeee;
-}
-h2 {
-color: #000;
-color: var(--text-bright);
-font-size : 180%;
-font-weight : bold;
-text-align : left;
-border-bottom : medium solid #777777;
-background-color : #eeeeee;
-}
-h3 {
-color: #000;
-color: var(--text-bright);
-font-size : 160%;
-font-weight : bold;
-text-align : left;
-background-color : #eeeeee;
-}
-h4 {
-color: #000;
-color: var(--text-bright);
-font-size : 140%;
-font-weight : bold;
-text-align : left;
-background-color : #eeeeee;
-}
-h5 {
-color: #000;
-color: var(--text-bright);
-font-size : 120%;
-font-weight : bold;
-text-align : left;
-background-color : #eeeeee;
-}
-h6 {
-color: #000;
-color: var(--text-bright);
-font-size : 110%;
-font-weight : bold;
-text-align : left;
-background-color : #eeeeee;
-}
-@media (prefers-color-scheme: dark) {
-h1 {
-color: #fff;
-color: var(--text-bright);
-}
-}
-h2 {
-color: #000;
-color: var(--text-bright);
-}
-@media (prefers-color-scheme: dark) {
-h2 {
-color: #fff;
-color: var(--text-bright);
-}
-}
-h3 {
-color: #000;
-color: var(--text-bright);
-}
-@media (prefers-color-scheme: dark) {
-h3 {
-color: #fff;
-color: var(--text-bright);
-}
-}
-h4 {
-color: #000;
-color: var(--text-bright);
-}
-@media (prefers-color-scheme: dark) {
-h4 {
-color: #fff;
-color: var(--text-bright);
-}
-}
-h5 {
-color: #000;
-color: var(--text-bright);
-}
-@media (prefers-color-scheme: dark) {
-h5 {
-color: #fff;
-color: var(--text-bright);
-}
-}
-h6 {
-color: #000;
-color: var(--text-bright);
-}
-@media (prefers-color-scheme: dark) {
-h6 {
-color: #fff;
-color: var(--text-bright);
-}
-}
-strong {
-color: #000;
-color: var(--text-bright);
-}
-@media (prefers-color-scheme: dark) {
-strong {
-color: #fff;
-color: var(--text-bright);
-}
-}
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-b,
-strong,
-th {
-font-weight: 600;
-}
-q::before {
-content: none;
-}
-q::after {
-content: none;
-}
-blockquote {
-border-left: 4px solid #0096bfab;
-border-left: 4px solid var(--focus);
-margin: 1.5em 0;
-padding: 0.5em 1em;
-font-style: italic;
-}
-@media (prefers-color-scheme: dark) {
-blockquote {
-border-left: 4px solid #0096bfab;
-border-left: 4px solid var(--focus);
-}
-}
-q {
-border-left: 4px solid #0096bfab;
-border-left: 4px solid var(--focus);
-margin: 1.5em 0;
-padding: 0.5em 1em;
-font-style: italic;
-}
-@media (prefers-color-scheme: dark) {
-q {
-border-left: 4px solid #0096bfab;
-border-left: 4px solid var(--focus);
-}
-}
-blockquote > footer {
-font-style: normal;
-border: 0;
-}
-blockquote cite {
-font-style: normal;
-}
-address {
-font-style: normal;
-}
-a[href^='mailto\:']::before {
-content: '📧 ';
-}
-a[href^='tel\:']::before {
-content: '📞 ';
-}
-a[href^='sms\:']::before {
-content: '💬 ';
-}
-mark {
-background-color: #ff0;
-background-color: var(--highlight);
-border-radius: 2px;
-padding: 0 2px 0 2px;
-color: #000;
-}
-@media (prefers-color-scheme: dark) {
-mark {
-background-color: #efdb43;
-background-color: var(--highlight);
-}
-}
-a > code,
-a > strong {
-color: inherit;
-}
-button,
-select,
-input[type='submit'],
-input[type='reset'],
-input[type='button'],
-input[type='checkbox'],
-input[type='range'],
-input[type='radio'] {
-cursor: pointer;
-}
-input,
-select {
-display: block;
-}
-[type='checkbox'],
-[type='radio'] {
-display: initial;
-}
-input {
-color: #1d1d1d;
-color: var(--form-text);
-background-color: #efefef;
-background-color: var(--background);
-font-family: inherit;
-font-size: inherit;
-margin-right: 6px;
-margin-bottom: 6px;
-padding: 10px;
-border: none;
-border-radius: 6px;
-outline: none;
-}
-@media (prefers-color-scheme: dark) {
-input {
-background-color: #161f27;
-background-color: var(--background);
-}
-}
-@media (prefers-color-scheme: dark) {
-input {
-color: #fff;
-color: var(--form-text);
-}
-}
-button {
-color: #1d1d1d;
-color: var(--form-text);
-background-color: #efefef;
-background-color: var(--background);
-font-family: inherit;
-font-size: inherit;
-margin-right: 6px;
-margin-bottom: 6px;
-padding: 10px;
-border: none;
-border-radius: 6px;
-outline: none;
-}
-@media (prefers-color-scheme: dark) {
-button {
-background-color: #161f27;
-background-color: var(--background);
-}
-}
-@media (prefers-color-scheme: dark) {
-button {
-color: #fff;
-color: var(--form-text);
-}
-}
-textarea {
-color: #1d1d1d;
-color: var(--form-text);
-background-color: #efefef;
-background-color: var(--background);
-font-family: inherit;
-font-size: inherit;
-margin-right: 6px;
-margin-bottom: 6px;
-padding: 10px;
-border: none;
-border-radius: 6px;
-outline: none;
-}
-@media (prefers-color-scheme: dark) {
-textarea {
-background-color: #161f27;
-background-color: var(--background);
-}
-}
-@media (prefers-color-scheme: dark) {
-textarea {
-color: #fff;
-color: var(--form-text);
-}
-}
-select {
-color: #1d1d1d;
-color: var(--form-text);
-background-color: #efefef;
-background-color: var(--background);
-font-family: inherit;
-font-size: inherit;
-margin-right: 6px;
-margin-bottom: 6px;
-padding: 10px;
-border: none;
-border-radius: 6px;
-outline: none;
-}
-@media (prefers-color-scheme: dark) {
-select {
-background-color: #161f27;
-background-color: var(--background);
-}
-}
-@media (prefers-color-scheme: dark) {
-select {
-color: #fff;
-color: var(--form-text);
-}
-}
-button {
-background-color: #d0cfcf;
-background-color: var(--button-base);
-padding-right: 30px;
-padding-left: 30px;
-}
-@media (prefers-color-scheme: dark) {
-button {
-background-color: #0c151c;
-background-color: var(--button-base);
-}
-}
-input[type='submit'] {
-background-color: #d0cfcf;
-background-color: var(--button-base);
-padding-right: 30px;
-padding-left: 30px;
-}
-@media (prefers-color-scheme: dark) {
-input[type='submit'] {
-background-color: #0c151c;
-background-color: var(--button-base);
-}
-}
-input[type='reset'] {
-background-color: #d0cfcf;
-background-color: var(--button-base);
-padding-right: 30px;
-padding-left: 30px;
-}
-@media (prefers-color-scheme: dark) {
-input[type='reset'] {
-background-color: #0c151c;
-background-color: var(--button-base);
-}
-}
-input[type='button'] {
-background-color: #d0cfcf;
-background-color: var(--button-base);
-padding-right: 30px;
-padding-left: 30px;
-}
-@media (prefers-color-scheme: dark) {
-input[type='button'] {
-background-color: #0c151c;
-background-color: var(--button-base);
-}
-}
-button:hover {
-background: #9b9b9b;
-background: var(--button-hover);
-}
-@media (prefers-color-scheme: dark) {
-button:hover {
-background: #040a0f;
-background: var(--button-hover);
-}
-}
-input[type='submit']:hover {
-background: #9b9b9b;
-background: var(--button-hover);
-}
-@media (prefers-color-scheme: dark) {
-input[type='submit']:hover {
-background: #040a0f;
-background: var(--button-hover);
-}
-}
-input[type='reset']:hover {
-background: #9b9b9b;
-background: var(--button-hover);
-}
-@media (prefers-color-scheme: dark) {
-input[type='reset']:hover {
-background: #040a0f;
-background: var(--button-hover);
-}
-}
-input[type='button']:hover {
-background: #9b9b9b;
-background: var(--button-hover);
-}
-@media (prefers-color-scheme: dark) {
-input[type='button']:hover {
-background: #040a0f;
-background: var(--button-hover);
-}
-}
-input[type='color'] {
-min-height: 2rem;
-padding: 8px;
-cursor: pointer;
-}
-input[type='checkbox'],
-input[type='radio'] {
-height: 1em;
-width: 1em;
-}
-input[type='radio'] {
-border-radius: 100%;
-}
-input {
-vertical-align: top;
-}
-label {
-vertical-align: middle;
-margin-bottom: 4px;
-display: inline-block;
-}
-input:not([type='checkbox']):not([type='radio']),
-input[type='range'],
-select,
-button,
-textarea {
--webkit-appearance: none;
-}
-textarea {
-display: block;
-margin-right: 0;
-box-sizing: border-box;
-resize: vertical;
-}
-textarea:not([cols]) {
-width: 100%;
-}
-textarea:not([rows]) {
-min-height: 40px;
-height: 140px;
-}
-select {
-background: #efefef url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23161f27'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E") calc(100% - 12px) 50% / 12px no-repeat;
-background: var(--background) var(--select-arrow) calc(100% - 12px) 50% / 12px no-repeat;
-padding-right: 35px;
-}
-@media (prefers-color-scheme: dark) {
-select {
-background: #161f27 url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23efefef'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E") calc(100% - 12px) 50% / 12px no-repeat;
-background: var(--background) var(--select-arrow) calc(100% - 12px) 50% / 12px no-repeat;
-}
-}
-@media (prefers-color-scheme: dark) {
-select {
-background: #161f27 url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23efefef'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E") calc(100% - 12px) 50% / 12px no-repeat;
-background: var(--background) var(--select-arrow) calc(100% - 12px) 50% / 12px no-repeat;
-}
-}
-@media (prefers-color-scheme: dark) {
-select {
-background: #161f27 url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23efefef'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E") calc(100% - 12px) 50% / 12px no-repeat;
-background: var(--background) var(--select-arrow) calc(100% - 12px) 50% / 12px no-repeat;
-}
-}
-@media (prefers-color-scheme: dark) {
-select {
-background: #161f27 url("data:image/svg+xml;charset=utf-8,%3C?xml version='1.0' encoding='utf-8'?%3E %3Csvg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' height='62.5' width='116.9' fill='%23efefef'%3E %3Cpath d='M115.3,1.6 C113.7,0 111.1,0 109.5,1.6 L58.5,52.7 L7.4,1.6 C5.8,0 3.2,0 1.6,1.6 C0,3.2 0,5.8 1.6,7.4 L55.5,61.3 C56.3,62.1 57.3,62.5 58.4,62.5 C59.4,62.5 60.5,62.1 61.3,61.3 L115.2,7.4 C116.9,5.8 116.9,3.2 115.3,1.6Z'/%3E %3C/svg%3E") calc(100% - 12px) 50% / 12px no-repeat;
-background: var(--background) var(--select-arrow) calc(100% - 12px) 50% / 12px no-repeat;
-}
-}
-select::-ms-expand {
-display: none;
-}
-select[multiple] {
-padding-right: 10px;
-background-image: none;
-overflow-y: auto;
-}
-input:focus {
-box-shadow: 0 0 0 2px #0096bfab;
-box-shadow: 0 0 0 2px var(--focus);
-}
-@media (prefers-color-scheme: dark) {
-input:focus {
-box-shadow: 0 0 0 2px #0096bfab;
-box-shadow: 0 0 0 2px var(--focus);
-}
-}
-select:focus {
-box-shadow: 0 0 0 2px #0096bfab;
-box-shadow: 0 0 0 2px var(--focus);
-}
-@media (prefers-color-scheme: dark) {
-select:focus {
-box-shadow: 0 0 0 2px #0096bfab;
-box-shadow: 0 0 0 2px var(--focus);
-}
-}
-button:focus {
-box-shadow: 0 0 0 2px #0096bfab;
-box-shadow: 0 0 0 2px var(--focus);
-}
-@media (prefers-color-scheme: dark) {
-button:focus {
-box-shadow: 0 0 0 2px #0096bfab;
-box-shadow: 0 0 0 2px var(--focus);
-}
-}
-textarea:focus {
-box-shadow: 0 0 0 2px #0096bfab;
-box-shadow: 0 0 0 2px var(--focus);
-}
-@media (prefers-color-scheme: dark) {
-textarea:focus {
-box-shadow: 0 0 0 2px #0096bfab;
-box-shadow: 0 0 0 2px var(--focus);
-}
-}
-input[type='checkbox']:active,
-input[type='radio']:active,
-input[type='submit']:active,
-input[type='reset']:active,
-input[type='button']:active,
-input[type='range']:active,
-button:active {
-transform: translateY(2px);
-}
-input:disabled,
-select:disabled,
-button:disabled,
-textarea:disabled {
-cursor: not-allowed;
-opacity: 0.5;
-}
-::-moz-placeholder {
-color: #949494;
-color: var(--form-placeholder);
-}
-:-ms-input-placeholder {
-color: #949494;
-color: var(--form-placeholder);
-}
-::-ms-input-placeholder {
-color: #949494;
-color: var(--form-placeholder);
-}
-::placeholder {
-color: #949494;
-color: var(--form-placeholder);
-}
-@media (prefers-color-scheme: dark) {
-::-moz-placeholder {
-color: #a9a9a9;
-color: var(--form-placeholder);
-}
-:-ms-input-placeholder {
-color: #a9a9a9;
-color: var(--form-placeholder);
-}
-::-ms-input-placeholder {
-color: #a9a9a9;
-color: var(--form-placeholder);
-}
-::placeholder {
-color: #a9a9a9;
-color: var(--form-placeholder);
-}
-}
-fieldset {
-border: 1px #0096bfab solid;
-border: 1px var(--focus) solid;
-border-radius: 6px;
-margin: 0;
-margin-bottom: 12px;
-padding: 10px;
-}
-@media (prefers-color-scheme: dark) {
-fieldset {
-border: 1px #0096bfab solid;
-border: 1px var(--focus) solid;
-}
-}
-legend {
-font-size: 0.9em;
-font-weight: 600;
-}
-input[type='range'] {
-margin: 10px 0;
-padding: 10px 0;
-background: transparent;
-}
-input[type='range']:focus {
-outline: none;
-}
-input[type='range']::-webkit-slider-runnable-track {
-width: 100%;
-height: 9.5px;
--webkit-transition: 0.2s;
-transition: 0.2s;
-background: #efefef;
-background: var(--background);
-border-radius: 3px;
-}
-@media (prefers-color-scheme: dark) {
-input[type='range']::-webkit-slider-runnable-track {
-background: #161f27;
-background: var(--background);
-}
-}
-input[type='range']::-webkit-slider-thumb {
-box-shadow: 0 1px 1px #000, 0 0 1px #0d0d0d;
-height: 20px;
-width: 20px;
-border-radius: 50%;
-background: #dbdbdb;
-background: var(--border);
--webkit-appearance: none;
-margin-top: -7px;
-}
-@media (prefers-color-scheme: dark) {
-input[type='range']::-webkit-slider-thumb {
-background: #526980;
-background: var(--border);
-}
-}
-input[type='range']:focus::-webkit-slider-runnable-track {
-background: #efefef;
-background: var(--background);
-}
-@media (prefers-color-scheme: dark) {
-input[type='range']:focus::-webkit-slider-runnable-track {
-background: #161f27;
-background: var(--background);
-}
-}
-input[type='range']::-moz-range-track {
-width: 100%;
-height: 9.5px;
--moz-transition: 0.2s;
-transition: 0.2s;
-background: #efefef;
-background: var(--background);
-border-radius: 3px;
-}
-@media (prefers-color-scheme: dark) {
-input[type='range']::-moz-range-track {
-background: #161f27;
-background: var(--background);
-}
-}
-input[type='range']::-moz-range-thumb {
-box-shadow: 1px 1px 1px #000, 0 0 1px #0d0d0d;
-height: 20px;
-width: 20px;
-border-radius: 50%;
-background: #dbdbdb;
-background: var(--border);
-}
-@media (prefers-color-scheme: dark) {
-input[type='range']::-moz-range-thumb {
-background: #526980;
-background: var(--border);
-}
-}
-input[type='range']::-ms-track {
-width: 100%;
-height: 9.5px;
-background: transparent;
-border-color: transparent;
-border-width: 16px 0;
-color: transparent;
-}
-input[type='range']::-ms-fill-lower {
-background: #efefef;
-background: var(--background);
-border: 0.2px solid #010101;
-border-radius: 3px;
-box-shadow: 1px 1px 1px #000, 0 0 1px #0d0d0d;
-}
-@media (prefers-color-scheme: dark) {
-input[type='range']::-ms-fill-lower {
-background: #161f27;
-background: var(--background);
-}
-}
-input[type='range']::-ms-fill-upper {
-background: #efefef;
-background: var(--background);
-border: 0.2px solid #010101;
-border-radius: 3px;
-box-shadow: 1px 1px 1px #000, 0 0 1px #0d0d0d;
-}
-@media (prefers-color-scheme: dark) {
-input[type='range']::-ms-fill-upper {
-background: #161f27;
-background: var(--background);
-}
-}
-input[type='range']::-ms-thumb {
-box-shadow: 1px 1px 1px #000, 0 0 1px #0d0d0d;
-border: 1px solid #000;
-height: 20px;
-width: 20px;
-border-radius: 50%;
-background: #dbdbdb;
-background: var(--border);
-}
-@media (prefers-color-scheme: dark) {
-input[type='range']::-ms-thumb {
-background: #526980;
-background: var(--border);
-}
-}
-input[type='range']:focus::-ms-fill-lower {
-background: #efefef;
-background: var(--background);
-}
-@media (prefers-color-scheme: dark) {
-input[type='range']:focus::-ms-fill-lower {
-background: #161f27;
-background: var(--background);
-}
-}
-input[type='range']:focus::-ms-fill-upper {
-background: #efefef;
-background: var(--background);
-}
-@media (prefers-color-scheme: dark) {
-input[type='range']:focus::-ms-fill-upper {
-background: #161f27;
-background: var(--background);
-}
-}
-a {
-text-decoration: none;
-color: #0076d1;
-color: var(--links);
-}
-@media (prefers-color-scheme: dark) {
-a {
-color: #41adff;
-color: var(--links);
-}
-}
-a:hover {
-text-decoration: underline;
-}
-code {
-background: #efefef;
-background: var(--background);
-color: #000;
-color: var(--code);
-padding: 2.5px 5px;
-border-radius: 6px;
-font-size: 1em;
-}
-@media (prefers-color-scheme: dark) {
-code {
-color: #ffbe85;
-color: var(--code);
-}
-}
-@media (prefers-color-scheme: dark) {
-code {
-background: #161f27;
-background: var(--background);
-}
-}
-samp {
-background: #efefef;
-background: var(--background);
-color: #000;
-color: var(--code);
-padding: 2.5px 5px;
-border-radius: 6px;
-font-size: 1em;
-}
-@media (prefers-color-scheme: dark) {
-samp {
-color: #ffbe85;
-color: var(--code);
-}
-}
-@media (prefers-color-scheme: dark) {
-samp {
-background: #161f27;
-background: var(--background);
-}
-}
-time {
-background: #efefef;
-background: var(--background);
-color: #000;
-color: var(--code);
-padding: 2.5px 5px;
-border-radius: 6px;
-font-size: 1em;
-}
-@media (prefers-color-scheme: dark) {
-time {
-color: #ffbe85;
-color: var(--code);
-}
-}
-@media (prefers-color-scheme: dark) {
-time {
-background: #161f27;
-background: var(--background);
-}
-}
-pre > code {
-padding: 10px;
-display: block;
-overflow-x: auto;
-}
-var {
-color: #39a33c;
-color: var(--variable);
-font-style: normal;
-font-family: monospace;
-}
-@media (prefers-color-scheme: dark) {
-var {
-color: #d941e2;
-color: var(--variable);
-}
-}
-kbd {
-background: #efefef;
-background: var(--background);
-border: 1px solid #dbdbdb;
-border: 1px solid var(--border);
-border-radius: 2px;
-color: #363636;
-color: var(--text-main);
-padding: 2px 4px 2px 4px;
-}
-@media (prefers-color-scheme: dark) {
-kbd {
-color: #dbdbdb;
-color: var(--text-main);
-}
-}
-@media (prefers-color-scheme: dark) {
-kbd {
-border: 1px solid #526980;
-border: 1px solid var(--border);
-}
-}
-@media (prefers-color-scheme: dark) {
-kbd {
-background: #161f27;
-background: var(--background);
-}
-}
-img,
-video {
-max-width: 100%;
-height: auto;
-}
-hr {
-border: none;
-border-top: 1px solid #dbdbdb;
-border-top: 1px solid var(--border);
-}
-@media (prefers-color-scheme: dark) {
-hr {
-border-top: 1px solid #526980;
-border-top: 1px solid var(--border);
-}
-}
-table {
-border-collapse: collapse;
-margin-bottom: 10px;
-width: 100%;
-table-layout: auto;
-}
-.narrow table { width: auto; }
-table caption {
-text-align: left;
-}
-td,
-th {
-padding: 6px;
-text-align: left;
-vertical-align: top;
-word-wrap: break-word;
-}
-thead {
-border-bottom: 1px solid #dbdbdb;
-border-bottom: 1px solid var(--border);
-}
-@media (prefers-color-scheme: dark) {
-thead {
-border-bottom: 1px solid #526980;
-border-bottom: 1px solid var(--border);
-}
-}
-tfoot {
-border-top: 1px solid #dbdbdb;
-border-top: 1px solid var(--border);
-}
-@media (prefers-color-scheme: dark) {
-tfoot {
-border-top: 1px solid #526980;
-border-top: 1px solid var(--border);
-}
-}
-tbody tr:nth-child(even) {
-background-color: #efefef;
-background-color: var(--background);
-}
-@media (prefers-color-scheme: dark) {
-tbody tr:nth-child(even) {
-background-color: #161f27;
-background-color: var(--background);
-}
-}
-tbody tr:nth-child(even) button {
-background-color: #f7f7f7;
-background-color: var(--background-alt);
-}
-@media (prefers-color-scheme: dark) {
-tbody tr:nth-child(even) button {
-background-color: #1a242f;
-background-color: var(--background-alt);
-}
-}
-tbody tr:nth-child(even) button:hover {
-background-color: #fff;
-background-color: var(--background-body);
-}
-@media (prefers-color-scheme: dark) {
-tbody tr:nth-child(even) button:hover {
-background-color: #202b38;
-background-color: var(--background-body);
-}
-}
-::-webkit-scrollbar {
-height: 10px;
-width: 10px;
-}
-::-webkit-scrollbar-track {
-background: #efefef;
-background: var(--background);
-border-radius: 6px;
-}
-@media (prefers-color-scheme: dark) {
-::-webkit-scrollbar-track {
-background: #161f27;
-background: var(--background);
-}
-}
-::-webkit-scrollbar-thumb {
-background: rgb(170, 170, 170);
-background: var(--scrollbar-thumb);
-border-radius: 6px;
-}
-@media (prefers-color-scheme: dark) {
-::-webkit-scrollbar-thumb {
-background: #040a0f;
-background: var(--scrollbar-thumb);
-}
-}
-@media (prefers-color-scheme: dark) {
-::-webkit-scrollbar-thumb {
-background: #040a0f;
-background: var(--scrollbar-thumb);
-}
-}
-::-webkit-scrollbar-thumb:hover {
-background: #9b9b9b;
-background: var(--scrollbar-thumb-hover);
-}
-@media (prefers-color-scheme: dark) {
-::-webkit-scrollbar-thumb:hover {
-background: rgb(0, 0, 0);
-background: var(--scrollbar-thumb-hover);
-}
-}
-@media (prefers-color-scheme: dark) {
-::-webkit-scrollbar-thumb:hover {
-background: rgb(0, 0, 0);
-background: var(--scrollbar-thumb-hover);
-}
-}
-::-moz-selection {
-background-color: #9e9e9e;
-background-color: var(--selection);
-color: #000;
-color: var(--text-bright);
-}
-::selection {
-background-color: #9e9e9e;
-background-color: var(--selection);
-color: #000;
-color: var(--text-bright);
-}
-@media (prefers-color-scheme: dark) {
-::-moz-selection {
-color: #fff;
-color: var(--text-bright);
-}
-::selection {
-color: #fff;
-color: var(--text-bright);
-}
-}
-@media (prefers-color-scheme: dark) {
-::-moz-selection {
-background-color: #1c76c5;
-background-color: var(--selection);
-}
-::selection {
-background-color: #1c76c5;
-background-color: var(--selection);
-}
-}
-details {
-display: flex;
-flex-direction: column;
-align-items: flex-start;
-background-color: #f7f7f7;
-background-color: var(--background-alt);
-padding: 10px 10px 0;
-margin: 1em 0;
-border-radius: 6px;
-overflow: hidden;
-}
-@media (prefers-color-scheme: dark) {
-details {
-background-color: #1a242f;
-background-color: var(--background-alt);
-}
-}
-details[open] {
-padding: 10px;
-}
-details > :last-child {
-margin-bottom: 0;
-}
-details[open] summary {
-margin-bottom: 10px;
-}
-summary {
-display: list-item;
-background-color: #efefef;
-background-color: var(--background);
-padding: 10px;
-margin: -10px -10px 0;
-cursor: pointer;
-outline: none;
-}
-@media (prefers-color-scheme: dark) {
-summary {
-background-color: #161f27;
-background-color: var(--background);
-}
-}
-summary:hover,
-summary:focus {
-text-decoration: underline;
-}
-details > :not(summary) {
-margin-top: 0;
-}
-summary::-webkit-details-marker {
-color: #363636;
-color: var(--text-main);
-}
-@media (prefers-color-scheme: dark) {
-summary::-webkit-details-marker {
-color: #dbdbdb;
-color: var(--text-main);
-}
-}
-dialog {
-background-color: #f7f7f7;
-background-color: var(--background-alt);
-color: #363636;
-color: var(--text-main);
-border: none;
-border-radius: 6px;
-border-color: #dbdbdb;
-border-color: var(--border);
-padding: 10px 30px;
-}
-@media (prefers-color-scheme: dark) {
-dialog {
-border-color: #526980;
-border-color: var(--border);
-}
-}
-@media (prefers-color-scheme: dark) {
-dialog {
-color: #dbdbdb;
-color: var(--text-main);
-}
-}
-@media (prefers-color-scheme: dark) {
-dialog {
-background-color: #1a242f;
-background-color: var(--background-alt);
-}
-}
-dialog > header:first-child {
-background-color: #efefef;
-background-color: var(--background);
-border-radius: 6px 6px 0 0;
-margin: -10px -30px 10px;
-padding: 10px;
-text-align: center;
-}
-@media (prefers-color-scheme: dark) {
-dialog > header:first-child {
-background-color: #161f27;
-background-color: var(--background);
-}
-}
-dialog::-webkit-backdrop {
-background: #0000009c;
--webkit-backdrop-filter: blur(4px);
-backdrop-filter: blur(4px);
-}
-dialog::backdrop {
-background: #0000009c;
--webkit-backdrop-filter: blur(4px);
-backdrop-filter: blur(4px);
-}
-footer {
-border-top: 1px solid #dbdbdb;
-border-top: 1px solid var(--border);
-padding-top: 10px;
-color: #70777f;
-color: var(--text-muted);
-}
-@media (prefers-color-scheme: dark) {
-footer {
-color: #a9b1ba;
-color: var(--text-muted);
-}
-}
-@media (prefers-color-scheme: dark) {
-footer {
-border-top: 1px solid #526980;
-border-top: 1px solid var(--border);
-}
-}
-body > footer {
-margin-top: 40px;
-}
-@media print {
-body,
-pre,
-code,
-summary,
-details,
-button,
-input,
-textarea {
-background-color: #fff;
-}
-button,
-input,
-textarea {
-border: 1px solid #000;
-}
-body,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-pre,
-code,
-button,
-input,
-textarea,
-footer,
-summary,
-strong {
-color: #000;
-}
-summary::marker {
-color: #000;
-}
-summary::-webkit-details-marker {
-color: #000;
-}
-tbody tr:nth-child(even) {
-background-color: #f2f2f2;
-}
-a {
-color: #00f;
-text-decoration: underline;
-}
-}
-</style>
+@media all
+{
+   body {
+      font-family      : Bitter,Merriweather,Bookman Old Style,serif ;
+      font-size        : 12pt;
+      font-weight      : normal;
+      text-align       : justify;
+      background-color : white;
+      line-height      : 1.3;
+   }
+   td.npar {
+      text-align : justify;
+   }
+   div.npar {
+      margin-left : 3em;
+      margin-block-start  : 1em;
+      margin-block-end    : 1em;
+   }
+   div.npar_nbr {
+      position    : absolute;
+      margin-left : -3em;
+      width       : 3em;
+   }
+   div.par {
+      margin-block-start  : 1em;
+      margin-block-end    : 1em;
+      margin-inline-start : 0px;
+      margin-inline-end   : 0px;
+   }
+   div.style-block {
+      margin-block-start  : 1em;
+      margin-block-end    : 1em;
+      margin-inline-start : 0px;
+      margin-inline-end   : 0px;
+   }
+   td.npar div.par {
+      margin-block-start  : 0.25em;
+      margin-block-end    : 0.25em;
+   }
+   div.quote {
+      box-sizing         : border-box;
+      margin-left        : 3%;
+      color              : #222222;
+      width              : 94%;
+      border-left        : 2.5pt solid #777777;
+      padding-left       : 0.5em;
+      padding-right      : 0.5em;
+      padding-top        : 0.25em;
+      padding-bottom     : 0.25em;
+      margin-block-start : 1em;
+      margin-block-end   : 1em;
+   }
+   div.quote :first-child {
+      margin-top : 0.5pt;
+   }
+   div.quote :last-child {
+      margin-bottom : 0.5pt;
+   }
+   div.caption {
+      margin-left  : 3%;
+      margin-right : 3%;
+      /* text-align   : center; */
+   }
+   div.caption p {
+      margin-top  : 0.5em;
+   }
+   span.npar {
+      position    : absolute;
+      margin-left : -3em;
+      width       : 3em;
+   }
+   .code {
+      font-family : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size : 11.0pt;
+      text-align  : left;
+   }
+   .small {
+      font-size : 80%;
+   }
+   .em {
+      font-family : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight : bold;
+   }
+   .italic {
+      font-style       : italic;
+   }
+   .hl {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight      : bold;
+      background-color : #eeeeee;
+   }
+   .comment {
+      font-family          : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-style           : italic;
+      background-color     : #FAFFFA;
+      border               : thin solid #6DBA6D;
+      padding              : 0.1em;
+      line-height          : 175%;
+      box-decoration-break : clone;
+   }
+   .comment-block {
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      background-color : #FAFFFA;
+      border           : thin solid #6DBA6D;
+      padding          : 5pt;
+      padding-top      : 0pt;
+      padding-bottom   : 0pt;
+      margin           : 1em;
+   }
+   .phead {
+      font-family        : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size          : 105%;
+      font-weight        : bold;
+      text-align         : left;
+      margin-block-start : 1em;
+      margin-block-end   : 0.2em;
+   }
+   .header {
+      font-family        : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size          : 110%;
+      font-weight        : bold;
+      text-align         : left;
+      border-bottom      : thin solid #777777;
+      background-color   : #eeeeee;
+      margin-block-start : 1em;
+      margin-block-end   : 0.5em;
+   }
+   .inline-strong {
+      font-family : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight : bold;
+   }
+   .inline-border {
+      border  : thin solid #777777;
+      padding : 1px;
+   }
+   .important {
+      border        : thin solid #cc0000;
+      border-radius : 4px;
+      padding       : 3px;
+      color         : #aa0000;
+      margin-left   : 15%;
+      margin-right  : 15%;
+      font-family   : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size     : 100%;
+      font-weight   : bold;
+   }
+   .title {
+      font-family : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size   : 210%;
+      font-weight : bold;
+      text-align  : left;
+   }
+   .author {
+      font-family : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size   : 120%;
+      font-weight : bold;
+      text-align  : left;
+   }
+   .summary {
+      font-family : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size   : 100%;
+      font-style  : italic;
+      font-weight : normal;
+   }
+   .definition-name {
+      font-family : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight : bold;
+   }
+   .definition-body {
+      font-family : Bitter,Merriweather,Bookman Old Style,serif ;
+      font-weight : normal;
+   }
+   sub {
+      font-size : 75%;
+   }
+   sup {
+      font-size : 75%;
+   }
+   .symbol {
+      font-family : MathJax_Main,Times New Roman,serif;
+   }
+   tt {
+      font-family : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size : 11.0pt;
+      font-weight : normal;
+   }
+   tt.code {
+      color : #CC0000;
+      background-color : #8A8A8A12;
+   }
+   h1 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 165%;
+      font-weight      : bold;
+      text-align       : left;
+      border-bottom    : medium solid #777777;
+      background-color : #eeeeee;
+   }
+   h2 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 145%;
+      font-weight      : bold;
+      text-align       : left;
+      border-bottom    : thin solid #777777;
+      background-color : #eeeeee;
+   }
+   h3 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 130%;
+      font-weight      : bold;
+      text-align       : left;
+      background-color : #eeeeee;
+   }
+   h4 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 120%;
+      font-weight      : bold;
+      text-align       : left;
+      margin-block-end : 0.4em;
+   }
+   h5 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 110%;
+      font-weight      : bold;
+      text-align       : left;
+      margin-block-end : 0.3em;
+   }
+   h6 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 105%;
+      font-weight      : bold;
+      text-align       : left;
+      margin-block-end : 0.2em;
+   }
+   ol {
+      font-weight  : normal;
+      text-align   : justify;
+      margin-right : 2em;
+   }
+   ul {
+      font-weight  : normal;
+      text-align   : justify;
+      margin-right : 2em;
+   }
+   li .par {
+      margin-block-start : 0.5em;
+      margin-block-end   : 0.5em;
+   }
+   table {
+      margin-block-start : 1em;
+      margin-block-end   : 1em;
+      font-size          : 100%;
+      font-weight        : normal;
+      border-collapse    : collapse;
+   }
+   th {
+      background-color : #E6F0FF;
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight      : bold;
+      text-align       : left;
+      vertical-align   : top;
+      padding          : 0.2em;
+   }
+   td p {
+      /* top/bottom right/left */
+      margin : 0.75em 0.1em;
+   }
+   td.smargin p {
+      /* top/bottom right/left */
+      margin : 0.25em 0.1em;
+   }
+   td {
+      vertical-align : top;
+      padding        : 0.2em;
+   }
+   table.contents {
+      border-collapse : collapse;
+      width           : 80%
+   }
+   td.contents-1 {
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size      : 120%;
+      font-weight    : bold;
+      text-align     : left;
+      vertical-align : top;
+   }
+   td.contents-2 {
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size      : 100%;
+      font-weight    : normal;
+      text-align     : left;
+      vertical-align : top
+   }
+   td.contents-3 {
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size      : 100%;
+      font-weight    : normal;
+      text-align     : left;
+      vertical-align : top
+   }
+   td.contents-4 {
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size      : 100%;
+      font-style     : italic;
+      text-align     : left;
+      vertical-align : top
+   }
+   td.contents-5 {
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size      : 100%;
+      font-style     : italic;
+      text-align     : left;
+      vertical-align : top
+   }
+   td.thead {
+      background-color : #E6F0FF;
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-weight      : bold;
+      text-align       : left;
+      vertical-align   : top
+   }
+   div.image {
+      width             : 100%;
+      page-break-inside : avoid;
+      margin-top        : 1.25em;
+      margin-bottom     : 1.25em;
+   }
+   .code-container {
+      background-color: #FAFCFF;
+      border          : thin solid #718FBC;
+      border-radius   : 2pt;
+      font-family     : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size       : 85%;
+      text-align      : left;
+      counter-reset   : line;
+      margin-top      : 1.25em;
+      margin-bottom   : 1.25em;
+      width           : fit-content;
+      line-height     : 110%;
+   }
+   .code-header {
+      border-bottom: thin solid #718FBC;
+      font-weight  : bold;
+      counter-reset: line;
+      padding      : 0.4em;
+   }
+   .code-container .noLineNum {
+      display       : block;
+      word-break    : break-all;
+      overflow-wrap : break-word;
+      padding-top   : 0.075em;
+      padding-bottom: 0.075em;
+      margin-left   : 0.5em;
+      text-align    : left;
+   }
+   .code-container .lineNum {
+      display       : block;
+      word-break    : break-all;
+      overflow-wrap : break-word;
+      padding-top   : 0.075em;
+      padding-bottom: 0.075em;
+      margin-left   : 3.5em;
+      text-align    : left;
+      border-left   : thin solid #718FBC;
+   }
+   .code-container .lineNum:before {
+      counter-increment: line;
+      content          : counter(line);
+      display          : inline-block;
+      margin-left      : -3.5em;
+      padding-right    : 0.7em;
+      margin-right     : 0.7em;
+      text-align       : right;
+      width            : 3em;
+   }
+   table.code-table {
+      background-color : #FAFCFF;
+      border           : thin solid #718FBC;
+      /*margin           : 0.1em;*/
+   }
+   table.code-inner-table {
+      margin           : 0.1em;
+      padding          : 0px;
+      border-spacing   : 0px;
+   }
+   th.code-table {
+      background-color : #FAFCFF;
+      border-bottom    : thin solid #718FBC;
+      font-family      : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size        : 11.0pt;
+      font-weight      : bold;
+   }
+   td.code-left {
+      font-family  : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size    : 11.0pt;
+      font-weight  : normal;
+      padding      : 0px;
+      text-align   : right;
+      border-right : thin solid #718FBC;
+   }
+   td.code-right {
+      font-family  : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size    : 11.0pt;
+      font-weight  : normal;
+      padding      : 0px;
+      text-align   : left;
+   }
+   table.panel-table {
+      border        : thin solid #777777;
+      font-family   : Bitter,Merriweather,Bookman Old Style,serif ;
+      text-align    : justify;
+      margin-top    : 1.5em;
+      margin-bottom : 1.5em;
+   }
+   th.panel-table {
+      border-bottom    : thin solid #777777;
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 100%;
+      font-weight      : bold;
+      text-align       : left;
+      vertical-align   : middle;
+      padding          : 0.125em 0.25em;
+   }
+   td.panel-table {
+      padding : 0.125em 0.25em;
+      overflow-wrap: anywhere;
+   }
+   th.panel-table p {
+      margin : 0.5em 0.1em;
+   }
+   td.panel-table p {
+      margin : 0.5em 0.1em;
+      overflow-wrap: anywhere;
+   }
+   table.forum-table {
+      border        : thin solid #777777;
+      font-family   : Bitter,Merriweather,Bookman Old Style,serif ;
+      text-align    : justify;
+      margin-top    : 1.5em;
+      margin-bottom : 1.5em;
+   }
+   th.forum-table {
+      border-bottom    : thin solid #777777;
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 100%;
+      font-weight      : bold;
+      text-align       : left;
+      vertical-align   : middle;
+      padding          : 0.125em 0.25em;
+   }
+   td.forum-table {
+      padding : 0.125em 0.25em;
+      overflow-wrap: anywhere;
+   }
+   th.forum-table p {
+      margin : 0.5em 0.1em;
+   }
+   th.forum-table .par {
+      margin-block-start  : 0.125em;
+      margin-block-end    : 0.125em;
+      margin-inline-start : 0px;
+      margin-inline-end   : 0px;
+   }
+   td.forum-table p {
+      margin : 0.5em 0.1em;
+      overflow-wrap: anywhere;
+   }
+   table.class-desc {
+      border      : 1.5px solid #777777;
+   }
+   th.class-desc {
+      font-family      : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      /*background-color : #dddddd;*/
+      background-color : #E6F0FF;;
+      border-bottom    : 1.5px solid #777777;
+      vertical-align   : top;
+   }
+   td.class-desc-sec {
+      border-bottom  : 1.5px solid #777777;
+      border-top     : 1.5px solid #777777;
+      font-weight    : bold;
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      vertical-align : top
+   }
+   td.class-desc-item {
+      font-family    : Bitter,Merriweather,Bookman Old Style,serif ;
+      border-bottom  : 1.5px solid #777777;
+      border-top     : 1.5px solid #777777;
+      vertical-align : top;
+   }
+   td.class-desc-head {
+      font-weight    : bold;
+      font-family    : Inter, Open Sans, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      vertical-align : top
+   }
+   .emath {
+      font-family    : MathJax_Main,Times New Roman,serif;
+      font-size      : 110%;
+      letter-spacing : 0.2pt;
+   }
+   div.emath {
+      margin-left   : 3%;
+      margin-top    : 0.5em;
+      margin-bottom : 0.5em;
+      max-width     : 97%;
+   }
+   table.matrix {
+      padding            : 0;
+      border-spacing     : 0;
+      margin-block-start : 0.1em;
+      margin-block-end   : 0.1em;
+   }
+   td.matrix {
+      vertical-align : middle;
+      text-align     : center;
+   }
+   td.lbracket {
+      font-size    : 20%;
+      border       : solid 1px black;
+      border-right : none;
+   }
+   td.rbracket {
+      font-size   : 20%;
+      border      : solid 1px black;
+      border-left : none;
+   }
+   td.lpipe {
+      font-size    : 20%;
+      border-left  : solid 1px black;
+   }
+   td.rpipe {
+      font-size    : 20%;
+      border-right : solid 1px black;
+   }
+   table.sum {
+      vertical-align : middle;
+      display        : inline-table;
+      margin-bottom  : 0.0em;
+      text-indent    : 0em;
+   }
+   .emath div.fraction {
+      display            : inline-grid;
+      grid-template-rows : 50% 50%;
+      vertical-align     : middle;
+      text-align         : center;
+      padding            : 0 0.10em;
+   }
+   .emath span.ftop {
+      align-self : end;
+      padding    : 0 0.15em 0.1em;
+   }
+   .emath span.fbottom {
+      border-top : 1px solid #000;
+      align-self : start;
+      padding    : 0.1em 0.15em 0;
+   }
+   .emath .supsub {
+      display         : inline-flex;
+      flex-direction  : column;
+      justify-content : space-between;
+      vertical-align  : middle;
+      font-size       : 80%;
+   }
+   .emath .supsubitem {
+      margin-top : -0.2em;
+      margin-bottom : -0.2em;
+      text-align    : left;
+   }
+   .emath .sum {
+      display            : inline-grid;
+      grid-template-rows : 25% 50% 25%;
+      vertical-align     : middle;
+      align-items        : center;
+      text-align         : center;
+   }
+   .emath .sum .stop {
+      font-size  : 80%;
+      align-self : end;
+   }
+   .emath .sum .smiddle {
+      font-size     : 100%;
+      align-self    : center;
+      margin-bottom : 0.1em;
+   }
+   .emath .sum .sbottom {
+      font-size  : 80%;
+      align-self : start;
+   }
+   .emath .quotation {
+      font-family : Bitter,Merriweather,Bookman Old Style,serif ;
+      font-size   : 90%;
+   }
+   .emath .root {
+      display: inline-block;
+      vertical-align: middle;
+      border-top: 1px solid;
+      border-left: 1px solid;
+      transform: skew(-15deg);
+      transform-origin: bottom left;
+      margin: 0 10px;
+      position: relative;
+   }
+   .emath .root:before {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      height: 40%;
+      width: 5px;
+      left: -5px;
+      border-top: 1px solid;
+      border-right: 1px solid;
+      transform: skew(30deg);
+      transform-origin: bottom right;
+   }
+   .emath .radicand {
+      display: inline-block;
+      padding-left: 0.5em;
+      transform: skew(15deg);
+   }
+   .emath .overbar {
+      position: relative;
+   }
+   .emath .overbar::after {
+      content    : var(--overbar-content);
+      line-height: 100%;
+      position   : absolute;
+      width      : 100%;
+      height     : 100%;
+      left       : 0;
+      top        :50%;
+      transform  : translateX(var(--overbar-translateX)) translateY(var(--overbar-translateY));
+      text-align : center;
+   }
+   table.frac {
+      vertical-align : middle;
+      display        : inline-table;
+      margin-bottom  : 0.5em;
+      margin-left    : 0.3em;
+      margin-right   : 0.3em;
+      text-indent    : 0em;
+   }
+   span.sumchar {
+      font-size: 160%;
+   }
+   span.sumsup {
+      font-size: 80%;
+   }
+   span.sumsub {
+      font-size: 80%;
+   }
+   .supsub {
+      line-height: 1.8;
+   }
+   table.tsupsub {
+      border-collapse : collapse;
+      font-size       : 80%;
+      position        : relative;
+      vertical-align  : middle;
+      display         : inline-table;
+      text-indent     : 0em;
+   }
+   td.tsupsub {
+      padding     : 0;
+      position    : relative;
+      text-indent : 0em;
+   }
+}
+@media screen
+{
+   body
+   {
+      margin-left  : 2.5em;
+      margin-right : 2.5em;
+   }
+}
+@media print
+{
+   @page {
+      margin: 10mm;
+      padding: 0;
+      size: A4;
+   }
+   body {
+      font-family : Bitter,Merriweather,Bookman Old Style,serif ;
+      font-size   : 10.5pt;
+      font-weight : normal;
+      text-align  : justify;
+      background-color : white;
+   }
+   h1 {
+      font-family        : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size          : 165%;
+      font-weight        : bold;
+      text-align         : left;
+      border-bottom      : medium solid #777777;
+      page-break-before  : always;
+      page-break-after   : avoid;
+   }
+   h2 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 145%;
+      font-weight      : bold;
+      text-align       : left;
+      border-bottom    : thin solid #777777;
+      background-color : #eeeeee;
+      page-break-after : avoid;
+   }
+   h3 {
+      font-family      : Inter Light, Open Sans Light, IBM Plex Sans Light, IBM Plex Sans, Public Sans,Trebuchet MS,DejaVu Sans,sans-serif;
+      font-size        : 130%;
+      font-weight      : bold;
+      text-align       : left;
+      background-color : #eeeeee;
+      page-break-after : avoid;
+   }
+   ol {
+      font-weight : normal;
+      text-align  : justify;
+   }
+   ul {
+      font-weight : normal;
+      text-align  : justify;
+   }
+   .code-container {
+      font-size       : 80%;
+   }
+   div.new_page {
+      page-break-before  : always;
+   }
+   .code {
+      font-family : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size : 9.66pt;
+      text-align  : left;
+   }
+   tt {
+      font-family : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size : 9.66pt;
+      font-weight : normal;
+   }
+   tt.code {
+      color : #CC0000;
+      background-color : #8A8A8A12;
+   }
+   th.code-table {
+      background-color : #FAFCFF;
+      border-bottom    : thin solid #718FBC;
+      font-family      : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size        : 9.66pt;
+      font-weight      : bold;
+   }
+   td.code-left {
+      font-family  : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size    : 9.66pt;
+      font-weight  : normal;
+      padding      : 0px;
+      text-align   : right;
+      border-right : thin solid #718FBC;
+   }
+   td.code-right {
+      font-family  : CommitMono,DejaVu Sans Mono,PT Mono,Consolas,monospace;
+      font-size    : 9.66pt;
+      font-weight  : normal;
+      padding      : 0px;
+      text-align   : left;
+   }
+}
+  </style>
 </head>
+
 <body>
-<header id="title-block-header">
-<h1 class="title">Security Audit</h1>
-</header>
-<nav id="TOC" role="doc-toc">
-<ul>
-<li><a href="#eictar-security-audit" id="toc-eictar-security-audit">eictar security audit</a>
-<ul>
-<li><a href="#scope-and-method" id="toc-scope-and-method">1. Scope and
-method</a></li>
-<li><a href="#summary" id="toc-summary">2. Summary</a></li>
-<li><a href="#findings" id="toc-findings">3. Findings</a>
-<ul>
-<li><a href="#finding-1.-privileged-extended-attributes-high" id="toc-finding-1.-privileged-extended-attributes-high">Finding 1.
-Privileged extended attributes (high)</a></li>
-<li><a href="#finding-2.-a-member-.-changed-the-destination-high" id="toc-finding-2.-a-member-.-changed-the-destination-high">Finding 2. A
-member <code>.</code> changed the destination (high)</a></li>
-<li><a href="#finding-3.-a-file-that-becomes-a-link-after-the-walk-medium" id="toc-finding-3.-a-file-that-becomes-a-link-after-the-walk-medium">Finding
-3. A file that becomes a link after the walk (medium)</a></li>
-<li><a href="#finding-4.-a-planted-link-in-the-archive-path-medium" id="toc-finding-4.-a-planted-link-in-the-archive-path-medium">Finding 4.
-A planted link in the archive path (medium)</a></li>
-<li><a href="#finding-5.-the-umask-and-acls-on-extraction-medium-to-low" id="toc-finding-5.-the-umask-and-acls-on-extraction-medium-to-low">Finding
-5. The umask and ACLs on extraction (medium to low)</a></li>
-<li><a href="#finding-6.-the-expansion-of-the-index-low" id="toc-finding-6.-the-expansion-of-the-index-low">Finding 6. The
-expansion of the index (low)</a></li>
-<li><a href="#finding-7.-size-side-channels-across-files-low-documented" id="toc-finding-7.-size-side-channels-across-files-low-documented">Finding
-7. Size side channels across files (low; documented)</a></li>
-<li><a href="#finding-8.-a-passphrase-file-that-others-can-read-low" id="toc-finding-8.-a-passphrase-file-that-others-can-read-low">Finding
-8. A passphrase file that others can read (low)</a></li>
-<li><a href="#finding-9.-information" id="toc-finding-9.-information">Finding 9. Information</a></li>
-</ul></li>
-<li><a href="#what-the-review-found-sound" id="toc-what-the-review-found-sound">4. What the review found
-sound</a></li>
-<li><a href="#recommendations-for-later" id="toc-recommendations-for-later">5. Recommendations for later</a></li>
-<li><a href="#follow-up-review-for-v1.0.3" id="toc-follow-up-review-for-v1.0.3">6. Follow-up review for v1.0.3</a>
-<ul>
-<li><a href="#finding-10.-one-decoder-for-each-kind-in-the-index-low" id="toc-finding-10.-one-decoder-for-each-kind-in-the-index-low">Finding
-10. One decoder for each kind in the index (low)</a></li>
-<li><a href="#the-other-changes" id="toc-the-other-changes">The other
-changes</a></li>
-<li><a href="#recommendation-1-fuzzing" id="toc-recommendation-1-fuzzing">Recommendation 1: fuzzing</a></li>
-<li><a href="#status-of-the-recommendations" id="toc-status-of-the-recommendations">Status of the
-recommendations</a></li>
-</ul></li>
-<li><a href="#follow-up-review-of---diff-and--n" id="toc-follow-up-review-of---diff-and--n">7. Follow-up review of
-<code>--diff</code> and <code>-n</code></a>
-<ul>
-<li><a href="#finding-11.-a-directory-that-becomes-a-link-during-the-walk-medium" id="toc-finding-11.-a-directory-that-becomes-a-link-during-the-walk-medium">Finding
-11. A directory that becomes a link during the walk (medium)</a></li>
-<li><a href="#finding-12.-control-characters-in-names-go-to-the-terminal-low" id="toc-finding-12.-control-characters-in-names-go-to-the-terminal-low">Finding
-12. Control characters in names go to the terminal (low)</a></li>
-<li><a href="#the-other-changes-1" id="toc-the-other-changes-1">The
-other changes</a></li>
-<li><a href="#status-of-the-recommendations-1" id="toc-status-of-the-recommendations-1">Status of the
-recommendations</a></li>
-</ul></li>
-</ul></li>
-</ul>
-</nav>
-<h1 id="eictar-security-audit">eictar security audit</h1>
-<table>
-<colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
-</colgroup>
-<tbody>
-<tr class="odd">
-<td>Version reviewed</td>
-<td>v1.0.1</td>
+<div class="title" style="text-align : center;"><b>eictar security audit</b></div>
+<table style="width : 94%;margin-left : 3%;border-top:1px solid #777777;border-bottom:1px solid #777777;">
+<tbody><tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Version reviewed </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> v1.0.1 </div>
+</td>
 </tr>
-<tr class="even">
-<td>Fixes in</td>
-<td>v1.0.2</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixes in </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> v1.0.2 </div>
+</td>
 </tr>
-<tr class="odd">
-<td>Date</td>
-<td>2026-09-26</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Date </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 2026-09-26 </div>
+</td>
 </tr>
-<tr class="even">
-<td>Follow-up review</td>
-<td>the changes after v1.0.2, with fixes in v1.0.3, 2026-10-01 (§6)</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Follow-up review </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> the changes after v1.0.2, with fixes in v1.0.3, 2026-10-01 (<a href = "#follow-up-review-v1">§6</a>) </div>
+</td>
 </tr>
-<tr class="odd">
-<td>Second follow-up</td>
-<td><code>--diff</code>, <code>-n</code>, and <code>--exclude</code> on
-a read, after v1.0.5, with fixes in v1.0.6, 2026-10-04 (§7)</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Second follow-up </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">--diff</tt>, <tt class="code">-n</tt>, and <tt class="code">--exclude</tt> on a read, after v1.0.5, with fixes in v1.0.6, 2026-10-04 (<a href = "#follow-up-review-diff">§7</a>) </div>
+</td>
 </tr>
-<tr class="even">
-<td>Scope</td>
-<td>the source code, the archive format, and encrypted archives</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Scope </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> the source code, the archive format, and encrypted archives </div>
+</td>
 </tr>
 </tbody>
 </table>
-<h2 id="scope-and-method">1. Scope and method</h2>
-<p>The review read the code of each part where untrusted data enters, or
-where the program acts with the rights of its user:</p>
-<ul>
-<li>the parser of an archive: the header, the crypto header, the
-trailer, the index, and every length, offset and count in them</li>
-<li>the decoder of each codec, against decompression bombs</li>
-<li>extraction: paths, links, special files, modes, owners and extended
-attributes</li>
-<li>the cryptography: the key schedule, the nonces, what each AAD binds,
-the sealed dictionary, and what an encrypted archive shows</li>
-<li>the writer: how it opens the files of a tree, its temporary files,
-and the archive path</li>
-<li>the passphrase and the configuration</li>
-</ul>
-<p>“Tested” means that the review made the attack happen, before the
-fix. “Code” means that the review found it in the code, and gives the
-place.</p>
-<h2 id="summary">2. Summary</h2>
-<table>
-<colgroup>
-<col style="width: 25%" />
-<col style="width: 25%" />
-<col style="width: 25%" />
-<col style="width: 25%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th>#</th>
-<th>Severity</th>
-<th>Finding</th>
-<th>Status in v1.0.2</th>
+<div class="contents">
+<table class="contents">
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">1</div></td>
+<td class="contents-1" colspan="2"><a href="#scope-method"> Scope and method</a></td>
 </tr>
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">2</div></td>
+<td class="contents-1" colspan="2"><a href="#summary"> Summary</a></td>
+</tr>
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">3</div></td>
+<td class="contents-1" colspan="2"><a href="#findings"> Findings</a></td>
+</tr>
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">4</div></td>
+<td class="contents-1" colspan="2"><a href="#what-review-found-sound"> What the review found sound</a></td>
+</tr>
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">5</div></td>
+<td class="contents-1" colspan="2"><a href="#recommendations-later"> Recommendations for later</a></td>
+</tr>
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">6</div></td>
+<td class="contents-1" colspan="2"><a href="#follow-up-review-v1"> Follow-up review for v1.0.3</a></td>
+</tr>
+<tr>
+<td class="contents-1" width="3%"><div style="display:inline;white-space:nowrap;">7</div></td>
+<td class="contents-1" colspan="2"><a href="#follow-up-review-diff"> Follow-up review of <tt class="code">--diff</tt> and <tt class="code">-n</tt></a></td>
+</tr>
+</table></div>
+<div style="page-break-inside:avoid;">
+<h1 id="scope-method">1&#x00A0;&#x00A0; Scope and method</h1>
+<div class="par">
+
+The review read the code of each part where untrusted data enters, or where
+the program acts with the rights of its user:
+
+</div>
+</div>
+<ul>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    the parser of an archive: the header, the crypto header, the trailer, the
+    index, and every length, offset and count in them
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    the decoder of each codec, against decompression bombs
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    extraction: paths, links, special files, modes, owners and extended
+    attributes
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    the cryptography: the key schedule, the nonces, what each AAD binds, the
+    sealed dictionary, and what an encrypted archive shows
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    the writer: how it opens the files of a tree, its temporary files, and the
+    archive path
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+    the passphrase and the configuration
+  </div>
+  </li>
+</ul>
+<div class="par">
+
+"Tested" means that the review made the attack happen, before the fix. "Code"
+means that the review found it in the code, and gives the place.
+
+</div>
+<div style="page-break-inside:avoid;">
+<h1 id="summary">2&#x00A0;&#x00A0; Summary</h1>
+<table style="border-top:2px solid #777777;border-bottom:2px solid #777777;">
+<thead style="border-bottom:2px solid #777777;;">
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> # </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Severity </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Finding </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Status in v1.0.2 </div>
+</td>
 </thead>
-<tbody>
-<tr class="odd">
-<td>1</td>
-<td>High</td>
-<td>Extraction as root restored <code>security.*</code> extended
-attributes, file capabilities too</td>
-<td>Fixed</td>
+<tbody><tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 1 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> High </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Extraction as root restored <tt class="code">security.*</tt> extended attributes, file capabilities too </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed </div>
+</td>
 </tr>
-<tr class="even">
-<td>2</td>
-<td>High</td>
-<td>A member <code>.</code> changed the destination directory
-itself</td>
-<td>Fixed</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 2 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> High </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> A member <tt class="code">.</tt> changed the destination directory itself </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed </div>
+</td>
 </tr>
-<tr class="odd">
-<td>3</td>
-<td>Medium</td>
-<td>Create followed a symbolic link that took the place of a file after
-the walk</td>
-<td>Fixed</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 3 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Medium </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Create followed a symbolic link that took the place of a file after the walk </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed </div>
+</td>
 </tr>
-<tr class="even">
-<td>4</td>
-<td>Medium</td>
-<td>The archive path followed a link that another user planted in
-<code>/tmp</code></td>
-<td>Fixed</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 4 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Medium </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> The archive path followed a link that another user planted in <tt class="code">/tmp</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed </div>
+</td>
 </tr>
-<tr class="odd">
-<td>5</td>
-<td>Medium to low</td>
-<td>Extraction ignored the umask, and restored ACLs for any user</td>
-<td>Fixed</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 5 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Medium to low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Extraction ignored the umask, and restored ACLs for any user </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed </div>
+</td>
 </tr>
-<tr class="even">
-<td>6</td>
-<td>Low</td>
-<td>A small plain archive made a listing allocate 1 GiB</td>
-<td>Fixed</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 6 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> A small plain archive made a listing allocate 1 GiB </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed </div>
+</td>
 </tr>
-<tr class="odd">
-<td>7</td>
-<td>Low</td>
-<td>Dictionaries and shared content let an attacker test for a file,
-from the size of the archive</td>
-<td>Documented</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 7 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Dictionaries and shared content let an attacker test for a file, from the size of the archive </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Documented </div>
+</td>
 </tr>
-<tr class="even">
-<td>8</td>
-<td>Low</td>
-<td>A passphrase file that other users can read gave no warning</td>
-<td>Fixed</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 8 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> A passphrase file that other users can read gave no warning </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed </div>
+</td>
 </tr>
-<tr class="odd">
-<td>9</td>
-<td>Information</td>
-<td>An unsealed index shows link targets and xattr values; other known
-limits</td>
-<td>Documented</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 9 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Information </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> An unsealed index shows link targets and xattr values; other known limits </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Documented </div>
+</td>
 </tr>
-<tr class="even">
-<td>10</td>
-<td>Low</td>
-<td>The pool of decoders kept one decoder for each kind that the index
-named (after v1.0.2, not released)</td>
-<td>Fixed in v1.0.3</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 10 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> The pool of decoders kept one decoder for each kind that the index named (after v1.0.2, not released) </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed in v1.0.3 </div>
+</td>
 </tr>
-<tr class="odd">
-<td>11</td>
-<td>Medium</td>
-<td>The walk followed a directory that became a link after its
-<code>lstat</code> (found after v1.0.5)</td>
-<td>Fixed in v1.0.6 (§7)</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 11 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Medium </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> The walk followed a directory that became a link after its <tt class="code">lstat</tt> (found after v1.0.5) </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed in v1.0.6 (<a href = "#follow-up-review-diff">§7</a>) </div>
+</td>
 </tr>
-<tr class="even">
-<td>12</td>
-<td>Low</td>
-<td>Control characters in member names went to the terminal as they are
-(found after v1.0.5)</td>
-<td>Fixed in v1.0.6 (§7)</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 12 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Low </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Control characters in member names went to the terminal as they are (found after v1.0.5) </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed in v1.0.6 (<a href = "#follow-up-review-diff">§7</a>) </div>
+</td>
 </tr>
 </tbody>
 </table>
-<p>Findings 1 to 4 matter most when root extracts an archive from
-someone else, or archives a tree that other users can write. Each fix
-has a test in <code>src/internal/archive/security_test.go</code>,
-<code>src/internal/meta/meta_unix_test.go</code>,
-<code>src/internal/format/index_test.go</code> or
-<code>src/internal/cli/passphrase_test.go</code>.</p>
-<h2 id="findings">3. Findings</h2>
-<h3 id="finding-1.-privileged-extended-attributes-high">Finding 1.
-Privileged extended attributes (high)</h3>
-<p><strong>Where:</strong> <code>applyXattrs</code> in
-<code>src/internal/archive/extract.go</code>, and
-<code>ClassifyXattr</code> in <code>src/internal/meta/meta.go</code>.
-Found in the code.</p>
-<p><strong>Problem.</strong> Extraction put the names
-<code>security.*</code>, <code>trusted.*</code> and
-<code>system.*</code> into one class, “privileged”. It restored that
-class by default when the process was root.</p>
-<p><code>security.capability</code> holds the Linux file capabilities of
-a program. An archive can hold a program with
-<code>cap_setuid+ep</code>. Then an extraction by root installs a
-program that any user can run to become root.
-<code>security.selinux</code> also lets an archive choose the security
-label of a file.</p>
-<p>The design required <code>-p</code> for the setuid bit, and said that
-extraction restores “nothing that needs privilege or gives it”. The
-capabilities went around both.</p>
-<p><strong>Fix.</strong> Privileged attributes are restored only as root
-and with <code>-p</code>. <code>-p</code> is now the one consent to
-restore everything exactly (design §7.7). Without it, one notice counts
-what <code>-p</code> restores.</p>
-<p><strong>Test.</strong> <code>TestXattrPolicy</code> checks the
-decision for each class of attribute, for root and for other users, with
-and without <code>-p</code> and <code>--no-xattrs</code>. The decision
-is a function of its own, <code>xattrPolicy</code>, so that the test
-does not need root.</p>
-<h3 id="finding-2.-a-member-.-changed-the-destination-high">Finding 2. A
-member <code>.</code> changed the destination (high)</h3>
-<p><strong>Where:</strong> <code>finishDirs</code> in
-<code>src/internal/archive/extract.go</code>. Tested.</p>
-<p><strong>Problem.</strong> The format allows the path <code>.</code>,
-the root of the archived tree. The writer never stores it, but the
-reader accepted it. The last pass of extraction then applied its mode
-and its times to the destination itself, and its owner under
-<code>--preserve-owner</code>. A crafted archive made a destination of
-0755 into 0777. Extracted into <code>$HOME</code>, it makes the home
-directory open to every user. As root with
-<code>--preserve-owner -d /</code>, it gives <code>/</code> to another
-user.</p>
-<p><strong>Fix.</strong> Extraction removes a member <code>.</code> and
-says so in a notice. The destination is never changed.</p>
-<p><strong>Test.</strong>
-<code>TestExtractDoesNotChangeTheDestination</code> extracts a crafted
-archive, and checks that the destination keeps its mode, and the
-notice.</p>
-<h3 id="finding-3.-a-file-that-becomes-a-link-after-the-walk-medium">Finding
-3. A file that becomes a link after the walk (medium)</h3>
-<p><strong>Where:</strong> <code>submitFile</code> and
-<code>sameContent</code> in
-<code>src/internal/archive/capture.go</code>, and
-<code>sampleTree</code> in <code>src/internal/archive/dict.go</code>.
-Found in the code.</p>
-<p><strong>Problem.</strong> The walk found each file with
-<code>lstat</code>. Then the writer opened it with <code>os.Open</code>,
-which follows a symbolic link.</p>
-<p>Between the two calls, a user who can write the directory can put a
-link to <code>/etc/shadow</code> in place of a file. A backup by root
-then stores <code>/etc/shadow</code> under that user’s file name. A
-later restore of “my files” gives it to the user. With
-<code>train</code>, parts of it also go into the dictionary.</p>
-<p><strong>Fix.</strong> <code>openWalked</code> opens with
-<code>O_NOFOLLOW</code>, except under <code>-h</code>, and then makes
-sure that the open file has the device and the inode that the walk saw.
-Otherwise the member fails, as for a read error. The capture, the
-samples of a dictionary and <code>-u --update-mode=digest</code> all use
-it.</p>
-<p><strong>Limit.</strong> A file that someone deletes and creates again
-can get the same inode number. Linux, NetBSD and OpenBSD give a freed
-number to the next file at once. Such a file passes the check. That is
-safe: it holds only content that the user can also write into the walked
-file. A link, or a hardlink to another file, always has another inode,
-and the check refuses it.</p>
-<p><strong>Tests.</strong> <code>TestOpenWalkedRefusesASwap</code> puts
-a symbolic link, a hardlink to another file, and another new file in
-place of a walked file. The first version of the test deleted the walked
-file, and CI found that the new file then often got its inode.
-<code>TestCreateSkipsAFileThatBecameALink</code> does the same through
-the capture of a member.</p>
-<p><strong>Windows.</strong> The Windows CI job (§15.1 of
-<code>doc/design.md</code>) found that the check did nothing there for a
-path named on the command line. The walk reads such a path with
-<code>os.Lstat</code>. On Windows, that <code>FileInfo</code> has no
-file identity. <code>os.SameFile</code> reads the identity from the path
-the first time it needs it, so <code>openWalked</code> compared the open
-file with the file at the path at that time, not at the time of the
-walk. A file put there after the walk passed the check. The files below
-a named path were safe, because the walk reads them through
-<code>os.Root</code>, and that <code>FileInfo</code> has its identity
-already. The fix: the walk calls <code>pinIdentity</code> after
-<code>os.Lstat</code> and after the <code>os.Stat</code> of
-<code>-h</code>. It reads the identity at that time.
-<code>TestWalkPinsTheIdentityOfANamedPath</code> puts another file at a
-named path after the walk, and expects the refusal.</p>
-<h3 id="finding-4.-a-planted-link-in-the-archive-path-medium">Finding 4.
-A planted link in the archive path (medium)</h3>
-<p><strong>Where:</strong> <code>createTarget</code> in
-<code>src/internal/archive/writer.go</code>, and
-<code>CompactArchive</code> in
-<code>src/internal/archive/mutate.go</code>. Found in the code.</p>
-<p><strong>Problem.</strong> The writer resolves <code>-f</code> with
-<code>filepath.EvalSymlinks</code>, and renames the new archive over the
-target. Suppose that another user plants
-<code>/tmp/backup.ect -&gt; /etc/passwd</code>. Then
-<code>eictar -cf /tmp/backup.ect</code> by root replaces
-<code>/etc/passwd</code>.</p>
-<p>Linux refuses such a link to <code>open(2)</code> in a sticky
-directory that everyone can write (<code>fs.protected_symlinks</code>).
-That rule protects <code>tar</code>. But the writer resolved the link
-itself, so the rule never applied.</p>
-<p><strong>Fix.</strong> <code>checkLinks</code> applies the rule of the
-kernel to each link in the path, for create, compact and change of
-passphrase. A link in such a directory is followed only when it belongs
-to the caller or to the owner of the directory. Otherwise the program
-stops with exit 3.</p>
-<p><strong>Tests.</strong> <code>TestMayFollow</code> checks the rule
-for links of other users, which a test cannot make.
-<code>TestCheckLinksFollowsOwnLinks</code> checks that a link of one’s
-own in a sticky directory still works.</p>
-<h3 id="finding-5.-the-umask-and-acls-on-extraction-medium-to-low">Finding
-5. The umask and ACLs on extraction (medium to low)</h3>
-<p><strong>Where:</strong> <code>meta.FileMode</code> and
-<code>applyXattrs</code>. Tested.</p>
-<p><strong>Problem.</strong> Extraction gave each file the mode of the
-archive, exactly. An archive’s 0666 file and 0777 directory became files
-that every user can write, whatever the umask of the user. POSIX ACLs
-were also restored by default, and an ACL can give access to other
-users, as a mode can. <code>tar</code> applies the umask for a user who
-is not root.</p>
-<p><strong>Fix.</strong> For a user who is not root, and without
-<code>-p</code>, each mode is less the umask. ACLs are restored as root,
-or with <code>-p</code>.</p>
-<p><strong>Test.</strong> <code>TestExtractAppliesTheUmask</code>
-extracts a 0666 file and a 0777 directory with and without
-<code>-p</code>. <code>TestXattrPolicy</code> covers the ACLs.</p>
-<h3 id="finding-6.-the-expansion-of-the-index-low">Finding 6. The
-expansion of the index (low)</h3>
-<p><strong>Where:</strong> <code>DecodeIndex</code> in
-<code>src/internal/format/index.go</code>. Found in the code.</p>
-<p><strong>Problem.</strong> A compressed index expanded up to
-<code>MaxIndexSize</code>, 1 GiB, and so a plain archive of a few KiB
-made a listing allocate 1 GiB. An encrypted archive was safe, because
-its keyed digest is checked before the index is decompressed.</p>
-<p><strong>Fix.</strong> An index can also expand only to 200 times its
-compressed size, or to 64 MiB, whichever is more. A real index
-compresses 5 to 20 times.</p>
-<p><strong>Test.</strong> <code>TestIndexExpansionIsBounded</code>
-decodes 100 MiB of zeros from a small frame, and checks the refusal and
-the limits.</p>
-<h3 id="finding-7.-size-side-channels-across-files-low-documented">Finding
-7. Size side channels across files (low; documented)</h3>
-<p><strong>Problem.</strong> Until M10 and M11, each file was compressed
-alone. Thus the content of one file never changed the stored size of
-another. Now two features work across files:</p>
+</div>
+<div class="par">
+
+Findings 1 to 4 matter most when root extracts an archive from someone else,
+or archives a tree that other users can write. Each fix has a test in
+<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;security_&#8203;test.&#8203;go</tt>, <tt class="code">src/&#8203;internal/&#8203;meta/&#8203;meta_&#8203;unix_&#8203;test.&#8203;go</tt>,
+<tt class="code">src/&#8203;internal/&#8203;format/&#8203;index_&#8203;test.&#8203;go</tt> or <tt class="code">src/&#8203;internal/&#8203;cli/&#8203;passphrase_&#8203;test.&#8203;go</tt>.
+
+</div>
+<div style="page-break-inside:avoid;">
+<h1 id="findings">3&#x00A0;&#x00A0; Findings</h1>
+<h2 id="finding-1"> Finding 1. Privileged extended attributes (high)</h2>
+</div>
+<div class="par">
+
+<b>Where:</b> <tt class="code">applyXattrs</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;extract.&#8203;go</tt>, and
+<tt class="code">ClassifyXattr</tt> in <tt class="code">src/&#8203;internal/&#8203;meta/&#8203;meta.&#8203;go</tt>. Found in the code.
+
+<b>Problem.</b> Extraction put the names <tt class="code">security.*</tt>, <tt class="code">trusted.*</tt> and
+<tt class="code">system.*</tt> into one class, "privileged". It restored that class by default
+when the process was root.
+
+<tt class="code">security.capability</tt> holds the Linux file capabilities of a program. An
+archive can hold a program with <tt class="code">cap_setuid+ep</tt>. Then an extraction by root
+installs a program that any user can run to become root. <tt class="code">security.selinux</tt>
+also lets an archive choose the security label of a file.
+
+The design required <tt class="code">-p</tt> for the setuid bit, and said that extraction
+restores "nothing that needs privilege or gives it". The capabilities went
+around both.
+
+<b>Fix.</b> Privileged attributes are restored only as root and with <tt class="code">-p</tt>.
+<tt class="code">-p</tt> is now the one consent to restore everything exactly (design <a href = "design.html#metadata-extraction">§7.7</a>).
+Without it, one notice counts what <tt class="code">-p</tt> restores.
+
+<b>Test.</b> <tt class="code">TestXattrPolicy</tt> checks the decision for each class of attribute,
+for root and for other users, with and without <tt class="code">-p</tt> and <tt class="code">--no-xattrs</tt>. The
+decision is a function of its own, <tt class="code">xattrPolicy</tt>, so that the test does not
+need root.
+
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-2"> Finding 2. A member <tt class="code">.</tt> changed the destination (high)</h2>
+<div class="par">
+
+<b>Where:</b> <tt class="code">finishDirs</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;extract.&#8203;go</tt>. Tested.
+
+<b>Problem.</b> The format allows the path <tt class="code">.</tt>, the root of the archived tree.
+The writer never stores it, but the reader accepted it. The last pass of
+extraction then applied its mode and its times to the destination itself,
+and its owner under <tt class="code">--preserve-owner</tt>. A crafted archive made a destination
+of 0755 into 0777. Extracted into <tt class="code">$HOME</tt>, it makes the home directory open
+to every user. As root with <tt class="code">--preserve-owner -d /</tt>, it gives <tt class="code">/</tt> to another
+user.
+
+<b>Fix.</b> Extraction removes a member <tt class="code">.</tt> and says so in a notice. The
+destination is never changed.
+
+<b>Test.</b> <tt class="code">TestExtractDoesNotChangeTheDestination</tt> extracts a crafted
+archive, and checks that the destination keeps its mode, and the notice.
+
+</div>
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-3"> Finding 3. A file that becomes a link after the walk (medium)</h2>
+<div class="par">
+
+<b>Where:</b> <tt class="code">submitFile</tt> and <tt class="code">sameContent</tt> in
+<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;capture.&#8203;go</tt>, and <tt class="code">sampleTree</tt> in
+<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;dict.&#8203;go</tt>. Found in the code.
+
+<b>Problem.</b> The walk found each file with <tt class="code">lstat</tt>. Then the writer opened
+it with <tt class="code">os.Open</tt>, which follows a symbolic link.
+
+Between the two calls, a user who can write the directory can put a link to
+<tt class="code">/etc/shadow</tt> in place of a file. A backup by root then stores <tt class="code">/etc/shadow</tt>
+under that user's file name. A later restore of "my files" gives it to the
+user. With <tt class="code">train</tt>, parts of it also go into the dictionary.
+
+<b>Fix.</b> <tt class="code">openWalked</tt> opens with <tt class="code">O_NOFOLLOW</tt>, except under <tt class="code">-h</tt>, and then
+makes sure that the open file has the device and the inode that the walk
+saw. Otherwise the member fails, as for a read error. The capture, the
+samples of a dictionary and <tt class="code">-u --update-mode=digest</tt> all use it.
+
+<b>Limit.</b> A file that someone deletes and creates again can get the same
+inode number. Linux, NetBSD and OpenBSD give a freed number to the next file
+at once. Such a file passes the check. That is safe: it holds only content
+that the user can also write into the walked file. A link, or a hardlink
+to another file, always has another inode, and the check refuses it.
+
+<b>Tests.</b> <tt class="code">TestOpenWalkedRefusesASwap</tt> puts a symbolic link, a hardlink to
+another file, and another new file in place of a walked file. The first
+version of the test deleted the walked file, and CI found that the new file
+then often got its inode. <tt class="code">TestCreateSkipsAFileThatBecameALink</tt> does the
+same through the capture of a member.
+
+<b>Windows.</b> The Windows CI job (<a href = "design.html#other-platforms">§15.1</a> of <tt class="code">doc/design.eml</tt>) found that the
+check did nothing there for a path named on the command line. The walk reads
+such a path with <tt class="code">os.Lstat</tt>. On Windows, that <tt class="code">FileInfo</tt> has no file
+identity. <tt class="code">os.SameFile</tt> reads the identity from the path the first time it
+needs it, so <tt class="code">openWalked</tt> compared the open file with the file at the path
+at that time, not at the time of the walk. A file put there after the walk
+passed the check. The files below a named path were safe, because the walk
+reads them through <tt class="code">os.Root</tt>, and that <tt class="code">FileInfo</tt> has its identity already.
+The fix: the walk calls <tt class="code">pinIdentity</tt> after <tt class="code">os.Lstat</tt> and after the
+<tt class="code">os.Stat</tt> of <tt class="code">-h</tt>. It reads the identity at that time.
+<tt class="code">TestWalkPinsTheIdentityOfANamedPath</tt> puts another file at a named path
+after the walk, and expects the refusal.
+
+</div>
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-4"> Finding 4. A planted link in the archive path (medium)</h2>
+<div class="par">
+
+<b>Where:</b> <tt class="code">createTarget</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>, and
+<tt class="code">CompactArchive</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;mutate.&#8203;go</tt>. Found in the code.
+
+<b>Problem.</b> The writer resolves <tt class="code">-f</tt> with <tt class="code">filepath.EvalSymlinks</tt>, and
+renames the new archive over the target. Suppose that another user plants
+<tt class="code">/tmp/backup.ect -&gt; /etc/passwd</tt>. Then <tt class="code">eictar -cf /tmp/backup.ect</tt> by root
+replaces <tt class="code">/etc/passwd</tt>.
+
+Linux refuses such a link to <tt class="code">open(2)</tt> in a sticky directory that everyone can
+write (<tt class="code">fs.protected_symlinks</tt>). That rule protects <tt class="code">tar</tt>. But the writer
+resolved the link itself, so the rule never applied.
+
+<b>Fix.</b> <tt class="code">checkLinks</tt> applies the rule of the kernel to each link in the
+path, for create, compact and change of passphrase. A link in such a
+directory is followed only when it belongs to the caller or to the owner of
+the directory. Otherwise the program stops with exit 3.
+
+<b>Tests.</b> <tt class="code">TestMayFollow</tt> checks the rule for links of other users, which a
+test cannot make. <tt class="code">TestCheckLinksFollowsOwnLinks</tt> checks that a link of
+one's own in a sticky directory still works.
+
+</div>
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-5"> Finding 5. The umask and ACLs on extraction (medium to low)</h2>
+<div class="par">
+
+<b>Where:</b> <tt class="code">meta.FileMode</tt> and <tt class="code">applyXattrs</tt>. Tested.
+
+<b>Problem.</b> Extraction gave each file the mode of the archive, exactly. An
+archive's 0666 file and 0777 directory became files that every user can
+write, whatever the umask of the user. POSIX ACLs were also restored by
+default, and an ACL can give access to other users, as a mode can.
+<tt class="code">tar</tt> applies the umask for a user who is not root.
+
+<b>Fix.</b> For a user who is not root, and without <tt class="code">-p</tt>, each mode is less the
+umask. ACLs are restored as root, or with <tt class="code">-p</tt>.
+
+<b>Test.</b> <tt class="code">TestExtractAppliesTheUmask</tt> extracts a 0666 file and a 0777
+directory with and without <tt class="code">-p</tt>. <tt class="code">TestXattrPolicy</tt> covers the ACLs.
+
+</div>
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-6"> Finding 6. The expansion of the index (low)</h2>
+<div class="par">
+
+<b>Where:</b> <tt class="code">DecodeIndex</tt> in <tt class="code">src/&#8203;internal/&#8203;format/&#8203;index.&#8203;go</tt>. Found in the
+code.
+
+<b>Problem.</b> A compressed index expanded up to <tt class="code">MaxIndexSize</tt>, 1 GiB, and so
+a plain archive of a few KiB made a listing allocate 1 GiB. An encrypted
+archive was safe, because its keyed digest is checked before the index is
+decompressed.
+
+<b>Fix.</b> An index can also expand only to 200 times its compressed size, or
+to 64 MiB, whichever is more. A real index compresses 5 to 20 times.
+
+<b>Test.</b> <tt class="code">TestIndexExpansionIsBounded</tt> decodes 100 MiB of zeros from a
+small frame, and checks the refusal and the limits.
+
+</div>
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-7"> Finding 7. Size side channels across files (low; documented)</h2>
+<div class="par">
+
+<b>Problem.</b> Until M10 and M11, each file was compressed alone. Thus the
+content of one file never changed the stored size of another. Now two
+features work across files:
+
+</div>
+</div>
 <ul>
-<li><strong>Shared content (§4.3 of the design).</strong> A copy of a
-file that the archive holds adds almost nothing.</li>
-<li><strong>Dictionaries (§4.2).</strong> A file that looks like the
-files of the dictionary compresses better.</li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    <b>Shared content (<a href = "design.html#identical-content-m11">§4.3</a> of the design).</b> A copy of a file that the
+    archive holds adds almost nothing.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+    <b>Dictionaries (<a href = "design.html#dictionaries-m10">§4.2</a>).</b> A file that looks like the files of the
+    dictionary compresses better.
+  </div>
+  </li>
 </ul>
-<p>Suppose that an attacker can put files into a tree that is archived
-again and again, and can see the size of the archive. Then the attacker
-can test if the archive holds a guessed file. With a dictionary, this is
-the attack CRIME across files, which the design accepted only inside one
-member. <code>--encrypt-index</code> hides the size of each member, but
-not the size of the archive.</p>
-<p><strong>Response.</strong> Documented in the design (§14.1), the man
-page and the README. For such a tree, use <code>--no-dedup</code> and no
-<code>train</code>. No code change: the features are useful, and the
-risk needs an unusual setting.</p>
-<h3 id="finding-8.-a-passphrase-file-that-others-can-read-low">Finding
-8. A passphrase file that others can read (low)</h3>
-<p><strong>Where:</strong> <code>warnIfInsecureSource</code> in
-<code>src/internal/cli/passphrase.go</code>.</p>
-<p><strong>Problem.</strong> <code>--passphrase-file</code> read a file
-that every user can read, with no message.</p>
-<p><strong>Fix.</strong> A warning, as ssh gives for a key: the file can
-be read by other users, and <code>chmod 600</code> it. The program still
-reads it. On Windows, the warning comes from the owner and the ACL of
-the file: another account than you, SYSTEM or the Administrators group
-can read it (design §15.1).</p>
-<p><strong>Test.</strong>
-<code>TestPassphraseFileThatOthersCanRead</code> checks the modes 0600,
-0400, 0640 and 0644. On Windows, <code>TestPassphraseFileACL</code>
-checks a file that <code>BUILTIN\Users</code> can read, and
-<code>TestExposure</code> checks how the ACEs are read.</p>
-<h3 id="finding-9.-information">Finding 9. Information</h3>
+<div class="par">
+
+Suppose that an attacker can put files into a tree that is archived again
+and again, and can see the size of the archive. Then the attacker can test
+if the archive holds a guessed file. With a dictionary, this is the attack
+CRIME across files, which the design accepted only inside one member.
+<tt class="code">--encrypt-index</tt> hides the size of each member, but not the size of the
+archive.
+
+<b>Response.</b> Documented in the design (<a href = "design.html#what-observer-sees">§14.1</a>), the man page and the
+README. For such a tree, use <tt class="code">--no-dedup</tt> and no <tt class="code">train</tt>. No code change:
+the features are useful, and the risk needs an unusual setting.
+
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-8"> Finding 8. A passphrase file that others can read (low)</h2>
+<div class="par">
+
+<b>Where:</b> <tt class="code">warnIfInsecureSource</tt> in <tt class="code">src/&#8203;internal/&#8203;cli/&#8203;passphrase.&#8203;go</tt>.
+
+<b>Problem.</b> <tt class="code">--passphrase-file</tt> read a file that every user can read, with
+no message.
+
+<b>Fix.</b> A warning, as ssh gives for a key: the file can be read by other
+users, and <tt class="code">chmod 600</tt> it. The program still reads it. On Windows, the
+warning comes from the owner and the ACL of the file: another account than
+you, SYSTEM or the Administrators group can read it (design <a href = "design.html#other-platforms">§15.1</a>).
+
+<b>Test.</b> <tt class="code">TestPassphraseFileThatOthersCanRead</tt> checks the modes 0600, 0400,
+0640 and 0644. On Windows, <tt class="code">TestPassphraseFileACL</tt> checks a file that
+<tt class="code">BUILTIN\Users</tt> can read, and <tt class="code">TestExposure</tt> checks how the ACEs are read.
+
+</div>
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-9"> Finding 9. Information</h2>
 <ul>
-<li><strong>An unsealed index shows more than names.</strong> It also
-shows link targets, and the value of each extended attribute. A value
-can say much: macOS records the address that a file came from, in
-<code>com.apple.metadata:kMDItemWhereFroms</code>. Documented in the
-design (§14.1). <code>--encrypt-index</code> hides the index.</li>
-<li><strong>XChaCha20-Poly1305 does not commit to its key.</strong> One
-ciphertext can open under two keys, with work. This matters for a
-service that tests passphrases for someone else. It does not matter for
-an archive that its owner opens.</li>
-<li><strong>Known and documented limits:</strong>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    <b>An unsealed index shows more than names.</b> It also shows link targets,
+    and the value of each extended attribute. A value can say much: macOS
+    records the address that a file came from, in
+    <tt class="code">com.&#8203;apple.&#8203;metadata:kMDItemWhereFroms</tt>. Documented in the design (<a href = "design.html#what-observer-sees">§14.1</a>).
+    <tt class="code">--encrypt-index</tt> hides the index.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>XChaCha20-Poly1305 does not commit to its key.</b> One ciphertext can open
+    under two keys, with work. This matters for a service that tests
+    passphrases for someone else. It does not matter for an archive that its
+    owner opens.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>Known and documented limits:</b>
+
+    </div>
 <ul>
-<li>The program sets the passphrase and the data key to zero, but not
-the subkeys (design §14.2).</li>
-<li>An archive can ask for up to 64 passes of Argon2id before its
-passphrase is checked (§6.2).</li>
-<li>A rollback to an older genuine archive, and a downgrade to plaintext
-without a passphrase source, are not detected (§14.4).</li>
-</ul></li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+        The program sets the passphrase and the data key to zero, but not the
+        subkeys (design <a href = "design.html#keys-passphrases">§14.2</a>).
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+        An archive can ask for up to 64 passes of Argon2id before its
+        passphrase is checked (<a href = "design.html#crypto-header-cbor-plaintext">§6.2</a>).
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+        A rollback to an older genuine archive, and a downgrade to plaintext
+        without a passphrase source, are not detected (<a href = "design.html#integrity-its-limits">§14.4</a>).
+      </div>
+  </li>
 </ul>
-<h2 id="what-the-review-found-sound">4. What the review found sound</h2>
-<ul>
-<li><strong>Paths on extraction.</strong> Every file operation goes
-through <code>os.Root</code>. Special files and link times use
-<code>*at</code> calls with one name, on a directory descriptor. The
-review found no way out of the destination. It tried <code>..</code>, an
-absolute path, a planted link, and a hardlink to a file that the run did
-not write. A file is written to a temporary name with
-<code>O_EXCL</code>, and renamed into place, so the program never writes
-through an existing hardlink.</li>
-<li><strong>Decompression bombs.</strong> Each codec has a bound.
-<ul>
-<li>zstd: a frame that declares a window of 512 MiB or 2 GiB is refused
-before any allocation (tested).</li>
-<li>s2: the declared length must be the length that the index
-gives.</li>
-<li>gzip and flate: at most the expected length is read, and one more
-byte. gzip refuses a second member.</li>
-<li>xz: the dictionary is at most the chunk.</li>
-</ul></li>
-<li><strong>Allocation.</strong> Each number that sizes an allocation
-has a limit, which the program applies first. These numbers are:
-<ul>
-<li>the size of the index, the chunk size and the crypto header</li>
-<li>the number of members and of dictionaries</li>
-<li>the size of a dictionary</li>
-</ul></li>
-<li><strong>Keys and nonces.</strong>
-<ul>
-<li>Each archive, member and dictionary has its own key from HKDF.</li>
-<li>Each member and dictionary gets a new random salt when it is sealed:
-recompress, compact and change of passphrase never use a nonce two
-times.</li>
-<li>The nonce of the index is random.</li>
-<li>The AAD binds a chunk to its member, its place and the last
-chunk.</li>
-<li>Digests are keyed in an encrypted archive, and every comparison
-takes constant time.</li>
-<li>The data key is wrapped with its tag, so a wrong passphrase is found
-before any other read.</li>
-</ul></li>
-<li><strong>Shared content</strong> checks an old owner before it first
-uses it, and reads a shared blob with the key and the id of its
-owner.</li>
-<li><strong>Temporary and spill files</strong> have random names, are
-created with <code>O_EXCL</code> and mode 0600, and a spill file is
-removed from its directory at once.</li>
-<li><strong>Regular expressions</strong> use RE2, in linear time. Each
-expression must compile alone before the anchors go around it, so it
-cannot break out of them.</li>
+  </li>
 </ul>
-<h2 id="recommendations-for-later">5. Recommendations for later</h2>
+</div>
+<div style="page-break-inside:avoid;">
+<h1 id="what-review-found-sound">4&#x00A0;&#x00A0; What the review found sound</h1>
 <ul>
-<li>Run the fuzz targets for longer, and add one for the parser of a
-zstd dictionary from an archive. A plain archive can give any bytes as a
-dictionary, with a correct unkeyed digest.</li>
-<li>Consider a separate option for privileged attributes, if users want
-capabilities without exact modes.</li>
-<li>Review the code again when a feature adds a new place where the
-archive’s data decides what the program does.</li>
-</ul>
-<h2 id="follow-up-review-for-v1.0.3">6. Follow-up review for v1.0.3</h2>
-<p>This review applies recommendation 3 of §5 to the changes after
-v1.0.2:</p>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    <b>Paths on extraction.</b> Every file operation goes through <tt class="code">os.Root</tt>.
+    Special files and link times use <tt class="code">*at</tt> calls with one name, on a directory
+    descriptor. The review found no way out of the destination. It tried
+    <tt class="code">..</tt>, an absolute path, a planted link, and a hardlink to a file that the
+    run did not write. A file is written to a temporary name with <tt class="code">O_EXCL</tt>, and
+    renamed into place, so the program never writes through an existing
+    hardlink.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>Decompression bombs.</b> Each codec has a bound.
+
+    </div>
 <ul>
-<li>the name of the archive: a name that is an existing directory gets
-<code>.ect</code>, even when it has a dot</li>
-<li>parallel <code>--verify</code>, with members in batches</li>
-<li>the pool of decoders, and a set of decoders for each worker of
-<code>--verify</code></li>
-<li>the default of <code>-j</code>: three quarters of the CPUs</li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+        zstd: a frame that declares a window of 512 MiB or 2 GiB is refused
+        before any allocation (tested).
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+        s2: the declared length must be the length that the index gives.
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+        gzip and flate: at most the expected length is read, and one more byte.
+        gzip refuses a second member.
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+        xz: the dictionary is at most the chunk.
+      </div>
+  </li>
 </ul>
-<p>It also does recommendation 1.</p>
-<h3 id="finding-10.-one-decoder-for-each-kind-in-the-index-low">Finding
-10. One decoder for each kind in the index (low)</h3>
-<p><strong>Where:</strong> <code>takeDecoder</code>,
-<code>giveDecoder</code> and <code>decoderSet</code> in
-<code>src/internal/archive/reader.go</code>. Commit 3f84d7f added them
-after v1.0.2. No release had them.</p>
-<p><strong>Problem.</strong> The pool, and the set of each worker, keep
-an idle decoder for each kind: each codec, chunk size and dictionary.
-These values come from the index, and so from the attacker. A chunk size
-is valid for a member of one chunk when it is at least the size of the
-content. Thus each member of a hostile archive can have a kind of its
-own. Each idle zstd decoder keeps about 17 KB of tables, and its
-dictionary. An index can hold 4194304 members. Thus
-<code>--verify</code> or extraction of a small archive could keep many
-GB of decoders. Before the pool, the reader closed each decoder after
-its member.</p>
-<p><strong>Fix.</strong> The pool and each set keep at most 16 kinds
-(<code>maxDecoderKinds</code>). A decoder of a further kind is closed
-after its member. A real archive has one kind for each catalog entry and
-chunk size that it uses.</p>
-<p><strong>Test.</strong> <code>TestDecoderKindsAreBounded</code>
-decodes one member with 40 chunk sizes, through the pool and through a
-set. Each keeps 16 kinds, and each decode is correct. With no bound, the
-test fails: each keeps 40.</p>
-<h3 id="the-other-changes">The other changes</h3>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>Allocation.</b> Each number that sizes an allocation has a limit, which
+    the program applies first. These numbers are:
+
+    </div>
 <ul>
-<li><strong>No state goes from one member to the next.</strong> A
-decoder is used again only for the same codec, chunk size and dictionary
-id. Thus a decoder made with one dictionary never decodes a member whose
-catalog names another. zstd resets its frame state at the start of each
-<code>DecodeAll</code>. The other codecs make a new reader for each
-chunk. A decoder that returns an error is closed, not used again
-(<code>TestDecoderPoolDropsFailedDecoder</code>).</li>
-<li><strong>Parallel <code>--verify</code></strong> bounds its workers
-by the chunk sizes in the index, as extraction does (design §8.3). A
-batch that waits holds only one error for each member, not content. The
-report keeps the order of the index, so the output does not depend on
-the workers (<code>TestVerifyInParallel</code>).</li>
-<li><strong>The name of the archive</strong> changes only which file
-name the program uses. The archive is then opened as before, with the
-protection of finding 4.</li>
-<li><strong>The default of <code>-j</code></strong> has no effect on
-security.</li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+        the size of the index, the chunk size and the crypto header
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+        the number of members and of dictionaries
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+        the size of a dictionary
+      </div>
+  </li>
 </ul>
-<h3 id="recommendation-1-fuzzing">Recommendation 1: fuzzing</h3>
-<p><code>FuzzZstdDictionary</code> (package <code>codec</code>) is new.
-It follows the reader with an arbitrary dictionary: the check of the id,
-the decoder made from the dictionary, and a decode with it.
-<code>make fuzz</code> runs it with the other targets.</p>
-<p>Each of the six targets ran for 5 minutes, on 32 CPUs
-(<code>make fuzz FUZZTIME=5m</code>). None found a failure.</p>
-<table>
-<thead>
-<tr class="header">
-<th>Target</th>
-<th style="text-align: right;">Inputs</th>
-<th style="text-align: right;">Corpus</th>
-</tr>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>Keys and nonces.</b>
+
+    </div>
+<ul>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+        Each archive, member and dictionary has its own key from HKDF.
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+        Each member and dictionary gets a new random salt when it is sealed:
+        recompress, compact and change of passphrase never use a nonce two
+        times.
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+        The nonce of the index is random.
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+        The AAD binds a chunk to its member, its place and the last chunk.
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+        Digests are keyed in an encrypted archive, and every comparison takes
+        constant time.
+      </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+        The data key is wrapped with its tag, so a wrong passphrase is found
+        before any other read.
+      </div>
+  </li>
+</ul>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>Shared content</b> checks an old owner before it first uses it, and reads
+    a shared blob with the key and the id of its owner.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>Temporary and spill files</b> have random names, are created with
+    <tt class="code">O_EXCL</tt> and mode 0600, and a spill file is removed from its directory at
+    once.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+    <b>Regular expressions</b> use RE2, in linear time. Each expression must
+    compile alone before the anchors go around it, so it cannot break out of
+    them.
+  </div>
+  </li>
+</ul>
+</div>
+<div style="page-break-inside:avoid;">
+<h1 id="recommendations-later">5&#x00A0;&#x00A0; Recommendations for later</h1>
+<ul>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    Run the fuzz targets for longer, and add one for the parser of a zstd
+    dictionary from an archive. A plain archive can give any bytes as a
+    dictionary, with a correct unkeyed digest.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    Consider a separate option for privileged attributes, if users want
+    capabilities without exact modes.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+    Review the code again when a feature adds a new place where the archive's
+    data decides what the program does.
+  </div>
+  </li>
+</ul>
+</div>
+<div style="page-break-inside:avoid;">
+<h1 id="follow-up-review-v1">6&#x00A0;&#x00A0; Follow-up review for v1.0.3</h1>
+<div class="par">
+
+This review applies recommendation 3 of <a href = "#recommendations-later">§5</a> to the changes after v1.0.2:
+
+</div>
+</div>
+<ul>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    the name of the archive: a name that is an existing directory gets <tt class="code">.ect</tt>,
+    even when it has a dot
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    parallel <tt class="code">--verify</tt>, with members in batches
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    the pool of decoders, and a set of decoders for each worker of <tt class="code">--verify</tt>
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+    the default of <tt class="code">-j</tt>: three quarters of the CPUs
+  </div>
+  </li>
+</ul>
+<div class="par">
+
+It also does recommendation 1.
+
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-10"> Finding 10. One decoder for each kind in the index (low)</h2>
+<div class="par">
+
+<b>Where:</b> <tt class="code">takeDecoder</tt>, <tt class="code">giveDecoder</tt> and <tt class="code">decoderSet</tt> in
+<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;reader.&#8203;go</tt>. Commit 3f84d7f added them after v1.0.2.
+No release had them.
+
+<b>Problem.</b> The pool, and the set of each worker, keep an idle decoder for
+each kind: each codec, chunk size and dictionary. These values come from the
+index, and so from the attacker. A chunk size is valid for a member of one
+chunk when it is at least the size of the content. Thus each member of a
+hostile archive can have a kind of its own. Each idle zstd decoder keeps
+about 17 KB of tables, and its dictionary. An index can hold 4194304
+members. Thus <tt class="code">--verify</tt> or extraction of a small archive could keep many GB
+of decoders. Before the pool, the reader closed each decoder after its
+member.
+
+<b>Fix.</b> The pool and each set keep at most 16 kinds (<tt class="code">maxDecoderKinds</tt>). A
+decoder of a further kind is closed after its member. A real archive has one
+kind for each catalog entry and chunk size that it uses.
+
+<b>Test.</b> <tt class="code">TestDecoderKindsAreBounded</tt> decodes one member with 40 chunk
+sizes, through the pool and through a set. Each keeps 16 kinds, and each
+decode is correct. With no bound, the test fails: each keeps 40.
+
+</div>
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="other-changes"> The other changes</h2>
+<ul>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    <b>No state goes from one member to the next.</b> A decoder is used again
+    only for the same codec, chunk size and dictionary id. Thus a decoder made
+    with one dictionary never decodes a member whose catalog names another.
+    zstd resets its frame state at the start of each <tt class="code">DecodeAll</tt>. The other
+    codecs make a new reader for each chunk. A decoder that returns an error
+    is closed, not used again (<tt class="code">TestDecoderPoolDropsFailedDecoder</tt>).
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>Parallel <tt class="code">--verify</tt></b> bounds its workers by the chunk sizes in the
+    index, as extraction does (design <a href = "design.html#parallel-extraction">§8.3</a>). A batch that waits holds only one
+    error for each member, not content. The report keeps the order of the
+    index, so the output does not depend on the workers
+    (<tt class="code">TestVerifyInParallel</tt>).
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>The name of the archive</b> changes only which file name the program uses.
+    The archive is then opened as before, with the protection of finding 4.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+    <b>The default of <tt class="code">-j</tt></b> has no effect on security.
+  </div>
+  </li>
+</ul>
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="recommendation-1"> Recommendation 1: fuzzing</h2>
+<div class="par">
+
+<tt class="code">FuzzZstdDictionary</tt> (package <tt class="code">codec</tt>) is new. It follows the reader with an
+arbitrary dictionary: the check of the id, the decoder made from the
+dictionary, and a decode with it. <tt class="code">make fuzz</tt> runs it with the other
+targets.
+
+Each of the six targets ran for 5 minutes, on 32 CPUs (<tt class="code">make fuzz
+FUZZTIME=5m</tt>). None found a failure.
+
+</div>
+</div>
+<table style="width : 94%;margin-left : 3%;border-top:2px solid #777777;border-bottom:2px solid #777777;">
+<thead style="border-bottom:2px solid #777777;;">
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Target </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Inputs </div>
+</td>
+<td class="thead" style="padding: 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;vertical-align:middle;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Corpus </div>
+</td>
 </thead>
-<tbody>
-<tr class="odd">
-<td><code>FuzzHeaderUnmarshal</code></td>
-<td style="text-align: right;">215,835,789</td>
-<td style="text-align: right;">12</td>
+<tbody><tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">FuzzHeaderUnmarshal</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 215,835,789 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 12 </div>
+</td>
 </tr>
-<tr class="even">
-<td><code>FuzzTrailerUnmarshal</code></td>
-<td style="text-align: right;">220,831,787</td>
-<td style="text-align: right;">11</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">FuzzTrailerUnmarshal</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 220,831,787 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 11 </div>
+</td>
 </tr>
-<tr class="odd">
-<td><code>FuzzDecodeIndex</code></td>
-<td style="text-align: right;">178,932,605</td>
-<td style="text-align: right;">872</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">FuzzDecodeIndex</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 178,932,605 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 872 </div>
+</td>
 </tr>
-<tr class="even">
-<td><code>FuzzUnmarshalCryptoHeader</code></td>
-<td style="text-align: right;">200,141,852</td>
-<td style="text-align: right;">621</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">FuzzUnmarshalCryptoHeader</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 200,141,852 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 621 </div>
+</td>
 </tr>
-<tr class="odd">
-<td><code>FuzzDecoders</code></td>
-<td style="text-align: right;">106,053,599</td>
-<td style="text-align: right;">1026</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">FuzzDecoders</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 106,053,599 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 1026 </div>
+</td>
 </tr>
-<tr class="even">
-<td><code>FuzzZstdDictionary</code></td>
-<td style="text-align: right;">121,155,063</td>
-<td style="text-align: right;">600</td>
+<tr>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> <tt class="code">FuzzZstdDictionary</tt> </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 121,155,063 </div>
+</td>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 600 </div>
+</td>
 </tr>
 </tbody>
 </table>
-<h3 id="status-of-the-recommendations">Status of the
-recommendations</h3>
-<ol type="1">
-<li>Done: the new target, and the longer run above.</li>
-<li>Open. It is a decision about a feature, not a fault.</li>
-<li>Done for v1.0.3, in this section. It stays a rule for later
-changes.</li>
+<div style="page-break-inside:avoid;">
+<h2 id="status-recommendations"> Status of the recommendations</h2>
+<ol>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    Done: the new target, and the longer run above.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    Open. It is a decision about a feature, not a fault.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+    Done for v1.0.3, in this section. It stays a rule for later changes.
+  </div>
+  </li>
 </ol>
-<h2 id="follow-up-review-of---diff-and--n">7. Follow-up review of
-<code>--diff</code> and <code>-n</code></h2>
-<p>This review applies recommendation 3 of §5 to the changes after
-v1.0.5:</p>
+</div>
+<div style="page-break-inside:avoid;">
+<h1 id="follow-up-review-diff">7&#x00A0;&#x00A0; Follow-up review of <tt class="code">--diff</tt> and <tt class="code">-n</tt></h1>
+<div class="par">
+
+This review applies recommendation 3 of <a href = "#recommendations-later">§5</a> to the changes after v1.0.5:
+
+</div>
+</div>
 <ul>
-<li><code>--diff</code> (design §9.8): member paths from the archive
-decide where the program reads the disk</li>
-<li><code>-n</code>, the dry run (design §9.9): with <code>-x</code>,
-member paths decide where the program looks under the destination</li>
-<li><code>--exclude</code> on a read: a matched directory takes its
-contents</li>
-<li><code>-h</code> on the command line: refused where it means
-nothing</li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    <tt class="code">--diff</tt> (design <a href = "design.html#compare-disk-diff">§9.8</a>): member paths from the archive decide where the
+    program reads the disk
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <tt class="code">-n</tt>, the dry run (design <a href = "design.html#dry-run-n">§9.9</a>): with <tt class="code">-x</tt>, member paths decide where the
+    program looks under the destination
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <tt class="code">--exclude</tt> on a read: a matched directory takes its contents
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+    <tt class="code">-h</tt> on the command line: refused where it means nothing
+  </div>
+  </li>
 </ul>
-<p>The review read <code>diff.go</code>, <code>plan.go</code> and the
-walk that both use, and made the attacks below happen.</p>
-<h3 id="finding-11.-a-directory-that-becomes-a-link-during-the-walk-medium">Finding
-11. A directory that becomes a link during the walk (medium)</h3>
-<p><strong>Where:</strong> <code>walk</code> and
-<code>walkChildren</code> in <code>src/internal/archive/walk.go</code>.
-Found in the code, and tested. The walk is older than
-<code>--diff</code>. It is the walk of create, append, update,
-<code>--diff</code>, <code>-n</code> and the samples of a
-dictionary.</p>
-<p><strong>Problem.</strong> The walk finds a directory with
-<code>lstat</code>, and then reads it with <code>os.ReadDir</code>, by
-its path. The path of each entry below it is the path of the directory
-and the name. Each later call resolves the whole path again, and follows
-a link in it.</p>
-<p>Between the <code>lstat</code> and the <code>ReadDir</code>, a user
-who can write the parent can put a link in place of the directory. The
-walk then reads the directory that the link points to. The
-<code>lstat</code> of each entry goes through the link, so
-<code>openWalked</code> (finding 3) finds the device and the inode that
-it expects: <code>O_NOFOLLOW</code> applies to the last name of a path
-only. Thus:</p>
+<div class="par">
+
+The review read <tt class="code">diff.go</tt>, <tt class="code">plan.go</tt> and the walk that both use, and made
+the attacks below happen.
+
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-11"> Finding 11. A directory that becomes a link during the walk (medium)</h2>
+<div class="par">
+
+<b>Where:</b> <tt class="code">walk</tt> and <tt class="code">walkChildren</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;walk.&#8203;go</tt>.
+Found in the code, and tested. The walk is older than <tt class="code">--diff</tt>. It is the
+walk of create, append, update, <tt class="code">--diff</tt>, <tt class="code">-n</tt> and the samples of a
+dictionary.
+
+<b>Problem.</b> The walk finds a directory with <tt class="code">lstat</tt>, and then reads it with
+<tt class="code">os.ReadDir</tt>, by its path. The path of each entry below it is the path of
+the directory and the name. Each later call resolves the whole path again,
+and follows a link in it.
+
+Between the <tt class="code">lstat</tt> and the <tt class="code">ReadDir</tt>, a user who can write the parent can
+put a link in place of the directory. The walk then reads the directory that
+the link points to. The <tt class="code">lstat</tt> of each entry goes through the link, so
+<tt class="code">openWalked</tt> (finding 3) finds the device and the inode that it expects:
+<tt class="code">O_NOFOLLOW</tt> applies to the last name of a path only. Thus:
+
+</div>
+</div>
 <ul>
-<li>A backup by root of a tree that other users can write stores files
-from outside the tree, under that user’s names, as finding 3 did for one
-file.</li>
-<li><code>--diff</code> by another user, with an archive from the
-attacker, tells the attacker if a file outside the tree has the content
-that a member names. The attacker must also see the output.</li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    A backup by root of a tree that other users can write stores files from
+    outside the tree, under that user's names, as finding 3 did for one file.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+    <tt class="code">--diff</tt> by another user, with an archive from the attacker, tells the
+    attacker if a file outside the tree has the content that a member names.
+    The attacker must also see the output.
+  </div>
+  </li>
 </ul>
-<p>The check of <code>--diff</code> on the start of each walk
-(<code>rootThere</code>, through <code>os.Root</code>) does not help.
-The walk itself starts again from the path.</p>
-<p><strong>Test.</strong> A test walked a directory while another
-goroutine put a link to another directory in its place, and back, in a
-loop. The walk reported a file of the other directory after 3749 walks,
-in 0.2 s.</p>
-<p><strong>Fix.</strong> The walk holds each directory that it enters
-open, as an <code>os.Root</code>, and does each operation below it
-through that root, by one name: the <code>lstat</code>, the
-<code>readlink</code>, the open of a file, and the open of a
-subdirectory. It opens a subdirectory, and checks that it has the device
-and the inode of the <code>lstat</code>, before it reads it. Otherwise
-the directory fails as a member that changed, and the walk does not
-enter it. <code>os.Root</code> follows a link that stays inside the
-directory, and does not take <code>O_NOFOLLOW</code>. The check of the
-device and the inode refuses what such a link opens, for a directory and
-for a file (<code>openWalked</code>).</p>
-<p>The extended attributes come from the open file or directory
-(<code>ReadXattrsFile</code>: <code>flistxattr</code> and
-<code>fgetxattr</code> on Linux and macOS, <code>extattr_list_fd</code>
-and <code>extattr_get_fd</code> on FreeBSD and NetBSD).
-<code>--diff</code> opens each file during the walk, and its workers
-read the open file. The samples of a dictionary come from a second walk,
-which reads each file that the first walk chose while it holds the
-file’s directory. <code>--diff</code> starts each walk inside its
-<code>os.Root</code>. The open of a file has <code>O_NONBLOCK</code>
-too, so that a pipe in the place of a file does not stop the open.</p>
-<p><strong>Limits.</strong></p>
+<div class="par">
+
+The check of <tt class="code">--diff</tt> on the start of each walk (<tt class="code">rootThere</tt>, through
+<tt class="code">os.Root</tt>) does not help. The walk itself starts again from the path.
+
+<b>Test.</b> A test walked a directory while another goroutine put a link to
+another directory in its place, and back, in a loop. The walk reported a
+file of the other directory after 3749 walks, in 0.2 s.
+
+<b>Fix.</b> The walk holds each directory that it enters open, as an <tt class="code">os.Root</tt>,
+and does each operation below it through that root, by one name: the
+<tt class="code">lstat</tt>, the <tt class="code">readlink</tt>, the open of a file, and the open of a
+subdirectory. It opens a subdirectory, and checks that it has the device and
+the inode of the <tt class="code">lstat</tt>, before it reads it. Otherwise the directory fails
+as a member that changed, and the walk does not enter it. <tt class="code">os.Root</tt> follows
+a link that stays inside the directory, and does not take <tt class="code">O_NOFOLLOW</tt>. The
+check of the device and the inode refuses what such a link opens, for a
+directory and for a file (<tt class="code">openWalked</tt>).
+
+The extended attributes come from the open file or directory
+(<tt class="code">ReadXattrsFile</tt>: <tt class="code">flistxattr</tt> and <tt class="code">fgetxattr</tt> on Linux and macOS,
+<tt class="code">extattr_list_fd</tt> and <tt class="code">extattr_get_fd</tt> on FreeBSD and NetBSD). <tt class="code">--diff</tt>
+opens each file during the walk, and its workers read the open file. The
+samples of a dictionary come from a second walk, which reads each file that
+the first walk chose while it holds the file's directory. <tt class="code">--diff</tt> starts
+each walk inside its <tt class="code">os.Root</tt>. The open of a file has <tt class="code">O_NONBLOCK</tt> too, so
+that a pipe in the place of a file does not stop the open.
+
+<b>Limits.</b>
+
+</div>
 <ul>
-<li>A path that the user names is opened from its parent, by the path.
-The user chose that path.</li>
-<li>A directory that the process cannot open, for want of permission, is
-archived empty, as before. Its attributes then come from the path. Root
-can open every directory, so this does not apply to a backup by
-root.</li>
-<li><code>-h</code> follows links on purpose. A link that it follows is
-followed by its path, and the walk holds the directory from there.</li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    A path that the user names is opened from its parent, by the path. The
+    user chose that path.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    A directory that the process cannot open, for want of permission, is
+    archived empty, as before. Its attributes then come from the path. Root
+    can open every directory, so this does not apply to a backup by root.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+    <tt class="code">-h</tt> follows links on purpose. A link that it follows is followed by its
+    path, and the walk holds the directory from there.
+  </div>
+  </li>
 </ul>
-<p><strong>Tests.</strong>
-<code>TestWalkRefusesADirectoryThatBecameALink</code> puts a link in the
-place of a directory between its <code>lstat</code> and its open: the
-walk does not enter it, and reports it as changed.
-<code>TestWalkHoldsTheDirectoryItOpened</code> puts the link there after
-the walk opened the directory, between two of its entries: the next
-entry is still the file of the tree. Each test fails when its part of
-the fix is taken out. The race of the first test, in a loop, made
-206,703 walks in 10 s with no walk out of the tree.</p>
-<p><strong>Cost.</strong> On 20,000 small files in 2,000 directories,
-create took the same time. <code>--diff</code> took 0.175 s, against
-0.14 s before: it opens each file in the walk, not in a worker.</p>
-<p><strong>Status:</strong> fixed.</p>
-<h3 id="finding-12.-control-characters-in-names-go-to-the-terminal-low">Finding
-12. Control characters in names go to the terminal (low)</h3>
-<p><strong>Where:</strong> each output of a member path:
-<code>-t</code>, <code>-v</code>, <code>-n</code>, the lines of
-<code>--diff</code>, and the messages that name a member. Found in the
-code, and tested.</p>
-<p><strong>Problem.</strong> A name on Linux can hold any byte except
-<code>/</code> and NUL, and the index of a crafted archive can hold any
-name. The program writes a name to the terminal as it is. An escape
-sequence in a name can change the colours, move the cursor, write over
-the lines before it, or hide other names. Some terminals do more with
-some sequences. Thus <code>-t</code> or <code>-n</code> of an archive
-from someone else can show a listing that is not the content. A test
-archived the name <code>a&lt;ESC&gt;[31mRED</code>, and <code>-t</code>
-and <code>-cn</code> wrote the ESC byte.</p>
-<p><strong>Fix.</strong> When it writes to a terminal, the program shows
-each character that a terminal can act on as an escape
-(<code>printable</code> in <code>src/internal/cli/names.go</code>,
-design §10.13). These are the control characters, DEL, the C1 set, a
-byte that is not UTF-8, and the characters that change the direction of
-the text. A backslash is doubled, so that each escape has one meaning.
-The paths of the listings, of <code>-v</code>, of a dry run and of
-<code>--diff</code> use it, and the link target, the owner and the codec
-of the long listing too. To a pipe or a file, a name stays exact, as
-with <code>ls</code>, for a script that reads the names.
-<code>--json</code> escapes in both cases. A message on stderr is always
-escaped: a person can read a log on a terminal later.</p>
-<p><strong>Tests.</strong> <code>TestPrintable</code> covers each kind
-of escape. <code>TestNamesOnATerminal</code> archives the name
-<code>a&lt;ESC&gt;[2J</code>, and checks <code>-t</code>,
-<code>-tv</code>, <code>-cn</code> and <code>--diff</code>: escaped on a
-terminal, exact to a pipe. <code>TestMessagesAreEscaped</code> checks a
-notice and an error. Each test fails when the escape is taken out.</p>
-<p><strong>Status:</strong> fixed.</p>
-<h3 id="the-other-changes-1">The other changes</h3>
+<div class="par">
+
+<b>Tests.</b> <tt class="code">TestWalkRefusesADirectoryThatBecameALink</tt> puts a link in the
+place of a directory between its <tt class="code">lstat</tt> and its open: the walk does not
+enter it, and reports it as changed. <tt class="code">TestWalkHoldsTheDirectoryItOpened</tt>
+puts the link there after the walk opened the directory, between two of its
+entries: the next entry is still the file of the tree. Each test fails when
+its part of the fix is taken out. The race of the first test, in a loop,
+made 206,703 walks in 10 s with no walk out of the tree.
+
+<b>Cost.</b> On 20,000 small files in 2,000 directories, create took the same
+time. <tt class="code">--diff</tt> took 0.175 s, against 0.14 s before: it opens each file in
+the walk, not in a worker.
+
+<b>Status:</b> fixed.
+
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="finding-12"> Finding 12. Control characters in names go to the terminal (low)</h2>
+<div class="par">
+
+<b>Where:</b> each output of a member path: <tt class="code">-t</tt>, <tt class="code">-v</tt>, <tt class="code">-n</tt>, the lines of
+<tt class="code">--diff</tt>, and the messages that name a member. Found in the code, and
+tested.
+
+<b>Problem.</b> A name on Linux can hold any byte except <tt class="code">/</tt> and NUL, and the
+index of a crafted archive can hold any name. The program writes a name to
+the terminal as it is. An escape sequence in a name can change the colours,
+move the cursor, write over the lines before it, or hide other names. Some
+terminals do more with some sequences. Thus <tt class="code">-t</tt> or <tt class="code">-n</tt> of an archive from
+someone else can show a listing that is not the content. A test archived the
+name <tt class="code">a&lt;ESC&gt;[31mRED</tt>, and <tt class="code">-t</tt> and <tt class="code">-cn</tt> wrote the ESC byte.
+
+<b>Fix.</b> When it writes to a terminal, the program shows each character that
+a terminal can act on as an escape (<tt class="code">printable</tt> in
+<tt class="code">src/&#8203;internal/&#8203;cli/&#8203;names.&#8203;go</tt>, design <a href = "design.html#names-terminal">§10.13</a>). These are the control
+characters, DEL, the C1 set, a byte that is not UTF-8, and the characters
+that change the direction of the text. A backslash is doubled, so that each
+escape has one meaning. The paths of the listings, of <tt class="code">-v</tt>, of a dry run and
+of <tt class="code">--diff</tt> use it, and the link target, the owner and the codec of the long
+listing too. To a pipe or a file, a name stays exact, as with <tt class="code">ls</tt>, for a
+script that reads the names. <tt class="code">--json</tt> escapes in both cases. A message on
+stderr is always escaped: a person can read a log on a terminal later.
+
+<b>Tests.</b> <tt class="code">TestPrintable</tt> covers each kind of escape. <tt class="code">TestNamesOnATerminal</tt>
+archives the name <tt class="code">a&lt;ESC&gt;[2J</tt>, and checks <tt class="code">-t</tt>, <tt class="code">-tv</tt>, <tt class="code">-cn</tt> and <tt class="code">--diff</tt>:
+escaped on a terminal, exact to a pipe. <tt class="code">TestMessagesAreEscaped</tt> checks a
+notice and an error. Each test fails when the escape is taken out.
+
+<b>Status:</b> fixed.
+
+</div>
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="other-changes-2"> The other changes</h2>
 <ul>
-<li><strong><code>--diff</code> checks every member path</strong> as
-extraction does (design §7.5), before it reads the disk. A path with
-<code>..</code>, an absolute path, or a path that is not canonical stops
-the run with exit 3.</li>
-<li><strong>The start of each walk</strong> is checked through
-<code>os.Root</code>. A link on disk that leads out of the directory
-stops the run with exit 3
-(<code>TestDiffDoesNotLeaveTheBaseThroughALink</code>). The fix of
-finding 11 starts the walk inside that root too.</li>
-<li><strong>The target of a hardlink</strong> is found through
-<code>os.Root</code> too. A target path that <code>--exclude</code> left
-out, and that the path check did not see, cannot leave the
-directory.</li>
-<li><strong>What <code>--diff</code> shows</strong> of the disk: the
-kind of each difference, modes, owners by number, times, and the target
-of a link, in quotes. It shows the names of the extended attributes that
-differ, not their values. It reads no member data, and the digests that
-it compares are keyed in an encrypted archive.</li>
-<li><strong>A dry run of <code>-x</code></strong> looks only under the
-destination, through <code>os.Root</code>, and refuses an unsafe path
-with exit 3, as extraction does. When the destination does not exist, it
-reads nothing on disk. It shows which paths exist under the destination,
-which the user can see anyway.</li>
-<li><strong>A dry run of <code>-c</code>, <code>-r</code> and
-<code>-u</code></strong> walks only the paths that the user gave. The
-archive decides only what happens to each path, by the rules of the real
-run. <code>-u --update-mode=digest</code> reads each file with
-<code>openWalked</code>. A dry run of <code>--delete</code> reads
-nothing on disk.</li>
-<li><strong>No dry run takes a lock</strong> or opens the archive for
-writing. A writer at the same time is safe: a reader sees one complete
-generation.</li>
-<li><strong><code>--exclude</code> on a read</strong> only removes
-members from a selection. It cannot add one.</li>
-<li><strong><code>-h</code></strong> on an operation that does not walk
-was ignored. It is now a usage error, as each other option of the walk
-is. This has no effect on security.</li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;">
+    <b><tt class="code">--diff</tt> checks every member path</b> as extraction does (design <a href = "design.html#how-paths-are-checked">§7.5</a>),
+    before it reads the disk. A path with <tt class="code">..</tt>, an absolute path, or a path
+    that is not canonical stops the run with exit 3.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>The start of each walk</b> is checked through <tt class="code">os.Root</tt>. A link on disk
+    that leads out of the directory stops the run with exit 3
+    (<tt class="code">TestDiffDoesNotLeaveTheBaseThroughALink</tt>). The fix of finding 11 starts
+    the walk inside that root too.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>The target of a hardlink</b> is found through <tt class="code">os.Root</tt> too. A target path
+    that <tt class="code">--exclude</tt> left out, and that the path check did not see, cannot
+    leave the directory.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>What <tt class="code">--diff</tt> shows</b> of the disk: the kind of each difference, modes,
+    owners by number, times, and the target of a link, in quotes. It shows the
+    names of the extended attributes that differ, not their values. It reads
+    no member data, and the digests that it compares are keyed in an
+    encrypted archive.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>A dry run of <tt class="code">-x</tt></b> looks only under the destination, through
+    <tt class="code">os.Root</tt>, and refuses an unsafe path with exit 3, as extraction does. When
+    the destination does not exist, it reads nothing on disk. It shows which
+    paths exist under the destination, which the user can see anyway.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>A dry run of <tt class="code">-c</tt>, <tt class="code">-r</tt> and <tt class="code">-u</tt></b> walks only the paths that the user
+    gave. The archive decides only what happens to each path, by the rules of
+    the real run. <tt class="code">-u --update-mode=digest</tt> reads each file with <tt class="code">openWalked</tt>.
+    A dry run of <tt class="code">--delete</tt> reads nothing on disk.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b>No dry run takes a lock</b> or opens the archive for writing. A writer at
+    the same time is safe: a reader sees one complete generation.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par">
+    <b><tt class="code">--exclude</tt> on a read</b> only removes members from a selection. It cannot
+    add one.
+  </div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;">
+    <b><tt class="code">-h</tt></b> on an operation that does not walk was ignored. It is now a usage
+    error, as each other option of the walk is. This has no effect on
+    security.
+  </div>
+  </li>
 </ul>
-<h3 id="status-of-the-recommendations-1">Status of the
-recommendations</h3>
-<ol start="3" type="1">
-<li>Done for these changes, in this section. Findings 11 and 12 are
-fixed. It stays a rule for later changes.</li>
+</div>
+<div style="page-break-inside:avoid;">
+<h2 id="status-recommendations-2"> Status of the recommendations</h2>
+<ol>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;margin-bottom:0.10em;">
+    Done for these changes, in this section. Findings 11 and 12 are fixed. It
+    stays a rule for later changes.
+  </div>
+  </li>
 </ol>
+</div>
 </body>
 </html>

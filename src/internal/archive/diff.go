@@ -21,8 +21,8 @@ import (
 	"github.com/philmalin/eictar/src/internal/meta"
 )
 
-// DiffConfig drives --diff (doc/design.md 9.8), and with Extract,
-// --diff-extract (doc/design.md 9.10).
+// DiffConfig drives --diff (doc/design.eml 9.8), and with Extract,
+// --diff-extract (doc/design.eml 9.10).
 type DiffConfig struct {
 	Archive string
 	// BaseDir is -C: the directory that holds the tree. "" is the working
@@ -36,7 +36,7 @@ type DiffConfig struct {
 	Dereference   bool
 	OneFileSystem bool
 	// StripComponents is --strip-components: the tree on disk is what
-	// extraction with it writes (doc/design.md 10.14). The patterns match
+	// extraction with it writes (doc/design.eml 10.14). The patterns match
 	// the stored paths, before the strip.
 	StripComponents int
 	// Metadata leaves out what --no-owner, --no-xattrs and --no-acls name.
@@ -116,7 +116,7 @@ type DiffResult struct {
 }
 
 // DiffArchive compares the live members of an archive with the tree on disk
-// (doc/design.md 9.8). It reports the members that are not on disk, the
+// (doc/design.eml 9.8). It reports the members that are not on disk, the
 // paths on disk that are not in the archive, and the members whose type,
 // content or metadata are different. It changes nothing.
 //
@@ -372,7 +372,7 @@ type differ struct {
 // reads it and closes it.
 //
 // With extract, the worker also extracts content into the scratch directory
-// and compares the copy with the file (doc/design.md 9.10). m is the member
+// and compares the copy with the file (doc/design.eml 9.10). m is the member
 // of the path, and found holds the kinds that the comparison with the
 // archive found: the copy is not compared again for those.
 type contentJob struct {
@@ -533,7 +533,7 @@ func (d *differ) walk(roots []string) error {
 // rootThere reports whether a root of the tree is on disk. The root's path
 // comes from the archive, which can be hostile: os.Root refuses a path that
 // leaves the base directory through a symbolic link, as extraction does
-// (doc/design.md 7.5).
+// (doc/design.eml 7.5).
 func (d *differ) rootThere(root string) (bool, error) {
 	_, err := d.root.Lstat(root)
 	switch {
@@ -579,7 +579,7 @@ func (d *differ) visit(e entry) error {
 	if err := d.stopped(); err != nil {
 		return err
 	}
-	// The archive is never in itself (doc/design.md 7.2).
+	// The archive is never in itself (doc/design.eml 7.2).
 	if d.archive != nil && os.SameFile(e.Info, d.archive) {
 		return nil
 	}
@@ -607,7 +607,7 @@ func (d *differ) visit(e entry) error {
 	}
 
 	// A file is opened here, while the walk holds its directory, and not by
-	// its path in a worker later (doc/Security_Audit.md, finding 11). Its
+	// its path in a worker later (doc/Security_Audit.eml, finding 11). Its
 	// attributes and its content come from what this opens.
 	var f srcFile
 	var openErr error
@@ -730,7 +730,7 @@ func compareEntry(m, content *format.Member, e entry, opt MetadataOptions, f src
 		}
 	}
 
-	// A symbolic link's own mode means nothing (doc/design.md 7.6).
+	// A symbolic link's own mode means nothing (doc/design.eml 7.6).
 	if mode := meta.UnixMode(e.Info.Mode()); m.Type != format.TypeSymlink && mode != m.Mode {
 		add(DiffMode, fmt.Sprintf("%04o", m.Mode), fmt.Sprintf("%04o", mode))
 	}

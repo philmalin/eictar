@@ -9,8 +9,8 @@ import (
 	"github.com/philmalin/eictar/src/internal/format"
 )
 
-// runDiff is --diff (doc/design.md 9.8): it compares the archive with the
-// tree on disk, and changes nothing. --diff-extract (doc/design.md 9.10) also
+// runDiff is --diff (doc/design.eml 9.8): it compares the archive with the
+// tree on disk, and changes nothing. --diff-extract (doc/design.eml 9.10) also
 // extracts each member into a scratch directory, and compares the copy with
 // the disk.
 func runDiff(o *Options, stdout, stderr io.Writer) error {
@@ -62,7 +62,7 @@ func runDiff(o *Options, stdout, stderr io.Writer) error {
 	switch {
 	case res.Damaged > 0:
 		// Under --keep-going, damage found by a decode is still damage,
-		// as for --verify (doc/design.md 9.10).
+		// as for --verify (doc/design.eml 9.10).
 		return fmt.Errorf("%d members of the archive did not decode: %w", res.Damaged, format.ErrCorruptData)
 	case res.Failed > 0:
 		return &partialError{failed: res.Failed}

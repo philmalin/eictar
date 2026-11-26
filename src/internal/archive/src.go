@@ -12,7 +12,7 @@ import (
 // srcDir is a directory of a tree that a create, an append, a --diff or the
 // training of a dictionary walks. In production it is an *os.Root: each
 // entry is found through the directory that holds it, by its name alone
-// (doc/Security_Audit.md, finding 11). The fault tests wrap one, to make an
+// (doc/Security_Audit.eml, finding 11). The fault tests wrap one, to make an
 // operation fail (doc/testing.md 5, step 3).
 type srcDir interface {
 	Lstat(name string) (fs.FileInfo, error)

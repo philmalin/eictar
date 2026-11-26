@@ -4,7 +4,7 @@ import "errors"
 
 // Sentinel errors. Callers distinguish "this is not an eictar archive" from
 // "this archive is damaged" from "this archive is too new for me", because the
-// three warrant different exit codes (doc/design.md section 10.7) and very
+// three warrant different exit codes (doc/design.eml section 10.7) and very
 // different advice to the user.
 var (
 	// ErrBadMagic means the bytes are not an eictar structure at all.

@@ -15,7 +15,7 @@ import (
 	"github.com/philmalin/eictar/src/internal/codec"
 )
 
-// The configuration layer (doc/design.md 11): settings from a configuration
+// The configuration layer (doc/design.eml 11): settings from a configuration
 // file and from EICTAR_* environment variables, below the command line in
 // precedence and above the built-in defaults.
 
@@ -88,7 +88,7 @@ var configKeys = map[string][]Operation{
 }
 
 // refusedKeys are options that exist but that a configuration must not set,
-// with the reason (doc/design.md 11.1 and 11.4).
+// with the reason (doc/design.eml 11.1 and 11.4).
 var refusedKeys = map[string]string{
 	"passphrase":          "a passphrase never comes from the environment or a configuration file; use --passphrase-file or --passphrase-env on the command line",
 	"passphrase-file":     "a passphrase source is given on the command line only",
@@ -156,7 +156,7 @@ func loadLayers(configFlag string, passphraseEnvs ...string) (*layers, error) {
 	return l, nil
 }
 
-// configPath chooses the one configuration file to read (doc/design.md 11):
+// configPath chooses the one configuration file to read (doc/design.eml 11):
 // --config, then $EICTAR_CONFIG, then the XDG location, then ~/.eictarrc.
 // A file that was named must exist; a default location may not.
 func configPath(configFlag string) (string, error) {
@@ -193,7 +193,7 @@ func lookupEnv(name string) (string, bool) {
 	return "", false
 }
 
-// readFile parses the configuration file (doc/design.md 11.3): key = value
+// readFile parses the configuration file (doc/design.eml 11.3): key = value
 // lines, # comments, and [codec.NAME] sections.
 func (l *layers) readFile(path string) error {
 	f, err := os.Open(path)
@@ -209,7 +209,7 @@ func (l *layers) readFile(path string) error {
 		return &UsageError{fmt.Errorf("configuration file %s is not a regular file", path)}
 	}
 	// A person who can write the file can set exclude, and make a backup
-	// smaller without a message (doc/design.md 11.4).
+	// smaller without a message (doc/design.eml 11.4).
 	if err := checkConfigOwner(f, fi); err != nil {
 		return &UsageError{fmt.Errorf("configuration file %s: %w", path, err)}
 	}
@@ -270,7 +270,7 @@ func stripComment(line string) string {
 	return strings.TrimSpace(line)
 }
 
-// readEnv reads the EICTAR_* variables (doc/design.md 11.2). A variable the
+// readEnv reads the EICTAR_* variables (doc/design.eml 11.2). A variable the
 // program does not know is an error, not something to ignore: a misspelled
 // EICTAR_COMPESS would otherwise give an archive at a level nobody chose.
 func (l *layers) readEnv(passphraseEnvs []string) error {

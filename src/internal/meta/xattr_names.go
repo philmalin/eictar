@@ -16,7 +16,7 @@ import (
 //
 // Linux and macOS list the names NUL-separated. The names are recorded
 // exactly as the platform gives them: user.foo on Linux, com.apple.quarantine
-// on macOS (doc/design.md 7.7). A filesystem without extended attributes is
+// on macOS (doc/design.eml 7.7). A filesystem without extended attributes is
 // not an error: it returns none.
 func ReadXattrs(path string, follow bool) (map[string][]byte, error) {
 	list := unix.Llistxattr
@@ -33,7 +33,7 @@ func ReadXattrs(path string, follow bool) (map[string][]byte, error) {
 // ReadXattrsFile returns every extended attribute of an open file or
 // directory. Working on the descriptor, not a path, reads the attributes of
 // the file that the walk opened, whatever the path names by now
-// (doc/Security_Audit.md, finding 11). where names the file in an error.
+// (doc/Security_Audit.eml, finding 11). where names the file in an error.
 func ReadXattrsFile(f *os.File, where string) (map[string][]byte, error) {
 	fd := int(f.Fd())
 	return readXattrs(where,

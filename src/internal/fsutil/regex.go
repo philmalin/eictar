@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Regexps are the expressions of -R and --exclude-regex (doc/design.md
+// Regexps are the expressions of -R and --exclude-regex (doc/design.eml
 // 10.11). Each one must match the whole stored path. Go's regexp is RE2: a
 // match takes time linear in the path, so no expression can hang the program.
 type Regexps []*Regexp

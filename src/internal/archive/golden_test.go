@@ -168,7 +168,7 @@ func TestGolden(t *testing.T) {
 }
 
 // TestGoldenDictionary opens an encrypted archive with a dictionary, written
-// by an earlier build (doc/design.md 4.2): a sealed dictionary blob, its keyed
+// by an earlier build (doc/design.eml 4.2): a sealed dictionary blob, its keyed
 // digest, and the catalog entry that names it.
 func TestGoldenDictionary(t *testing.T) {
 	path := filepath.Join(goldenDir, "dict.ect")
@@ -217,7 +217,7 @@ func TestGoldenDictionary(t *testing.T) {
 }
 
 // TestGoldenSharedContent opens an archive with shared content, written by an
-// earlier build (doc/design.md 4.3): a copy that shares a live member's blob,
+// earlier build (doc/design.eml 4.3): a copy that shares a live member's blob,
 // and a file that -u took again unchanged, which shares the blob of its own
 // tombstone.
 func TestGoldenSharedContent(t *testing.T) {

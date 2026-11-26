@@ -90,7 +90,7 @@ func (s *sequence) codecSpec() string {
 		return "none"
 	case 1:
 		spec := "zstd:level=" + strconv.Itoa(1+s.rnd.IntN(15))
-		// A dictionary on create, append and recompress (doc/design.md 4.2).
+		// A dictionary on create, append and recompress (doc/design.eml 4.2).
 		// Small sizes, so that a generated tree can fill them, and the forms
 		// alone and at the limit; a tree that cannot fill one gives a
 		// notice and no dictionary, which is a case too.
@@ -130,7 +130,7 @@ func (s *sequence) tuning(spec string) []string {
 	}
 	if slowDictionary(spec) {
 		// At level 10 and above, each chunk with a dictionary costs
-		// approximately 0.5 ms (doc/design.md 15.2). Chunks of 512 bytes on a
+		// approximately 0.5 ms (doc/design.eml 15.2). Chunks of 512 bytes on a
 		// tree of 125 MiB take more than commandTimeout, and that is not a hang.
 		sizes = sizes[2:]
 	}
@@ -304,7 +304,7 @@ func (s *sequence) add(op string, dry bool) error {
 		mode = []string{"newer", "different", "digest"}[s.rnd.IntN(3)]
 		opts = append(opts, "--update-mode", mode)
 	}
-	// Selection by regular expression (doc/design.md 10.11), and now and
+	// Selection by regular expression (doc/design.eml 10.11), and now and
 	// then each copy stored in full (4.3).
 	var f filter
 	if s.rnd.IntN(6) == 0 {
@@ -389,7 +389,7 @@ func (s *sequence) addToModel(args []string, policy, mode string, f filter) (ref
 		}
 	}
 	// eictar links the names of one inode that one run records, and no
-	// others (doc/design.md 8): each run starts its groups again.
+	// others (doc/design.eml 8): each run starts its groups again.
 	groups := map[inode]int{}
 	for _, p := range paths {
 		abs := filepath.Join(s.src, p)
@@ -509,7 +509,7 @@ func (s *sequence) changePassphrase() error {
 }
 
 // encryptArchive encrypts the plaintext archive with --encrypt-archive, now
-// and then with --encrypt-index (doc/design.md 9.11). The archive must no
+// and then with --encrypt-index (doc/design.eml 9.11). The archive must no
 // longer list without the passphrase. The checks after the step show that
 // the passphrase opens it, and that the content is the same.
 func (s *sequence) encryptArchive() error {
