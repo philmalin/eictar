@@ -195,7 +195,7 @@ func TestCreateSkipsAFileThatBecameALink(t *testing.T) {
 
 // Finding 4: -f through a link that another user planted in a sticky
 // directory is refused, and a link of one's own is followed.
-func TestCheckLinksFollowsOwnLinks(t *testing.T) {
+func TestResolveArchiveFollowsOwnLinks(t *testing.T) {
 	dir := t.TempDir()
 	os.Chmod(dir, 0o1777) // sticky and world-writable, as /tmp
 	target := filepath.Join(t.TempDir(), "real.ect")
@@ -203,10 +203,10 @@ func TestCheckLinksFollowsOwnLinks(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
-	if err := checkLinks(link); err != nil {
+	if _, err := resolveArchive(link); err != nil {
 		t.Errorf("a link of one's own: %v", err)
 	}
-	if err := checkLinks(filepath.Join(dir, "none.ect")); err != nil {
+	if _, err := resolveArchive(filepath.Join(dir, "none.ect")); err != nil {
 		t.Errorf("a path that does not exist: %v", err)
 	}
 }

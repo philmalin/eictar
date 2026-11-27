@@ -803,7 +803,7 @@
 <tr>
 <td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Status </div>
 </td>
-<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> findings 13 and 14 are fixed after v1.1.4; the others are open </div>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> findings 13 to 17 are fixed after v1.1.4; the others are open </div>
 </td>
 </tr>
 </tbody>
@@ -910,7 +910,7 @@ names one finding in both documents.</div>
 </td>
 <td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
 </td>
-<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Open </div>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed after v1.1.4 </div>
 </td>
 </tr>
 <tr>
@@ -922,7 +922,7 @@ names one finding in both documents.</div>
 </td>
 <td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
 </td>
-<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Open </div>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed after v1.1.4 </div>
 </td>
 </tr>
 <tr>
@@ -934,7 +934,7 @@ names one finding in both documents.</div>
 </td>
 <td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
 </td>
-<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Open </div>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed after v1.1.4 </div>
 </td>
 </tr>
 <tr>
@@ -1379,6 +1379,22 @@ to each link, read it and go on with its target, to at most 40 links. Do not
 call <tt class="code">EvalSymlinks</tt>. Then open the parent of the target, and do the open of
 the old file, the create of the temporary file and the rename relative to
 that directory descriptor.</div>
+<div class="par"><b>Status.</b> Fixed after v1.1.4. <tt class="code">resolveArchive</tt>, in
+<tt class="code">src/&#8203;internal/&#8203;archive/&#8203;resolve_&#8203;other.&#8203;go</tt>, is the one pass: it reads
+each name with <tt class="code">Lstat</tt>, applies the rule to each link, and continues with
+the target of the link, to at most 40 links. On Unix, create and compact no
+longer call <tt class="code">EvalSymlinks</tt>. Then the open of the old file must give the file that
+<tt class="code">Lstat</tt> found at the resolved path, or the program stops with exit 3. A
+link that appears after the pass is not followed: the rename replaces the
+name. The operations stay by path, not relative to a directory descriptor.
+A swap of a directory of the path needs write permission on its parent, and
+gives nothing that the rule does not allow already. Design
+<a href = "design.html#changes-checks">§9</a> says why.
+<tt class="code">TestCreateRaceWithAPlantedLink</tt> is the test of the review: before the fix
+it replaced the victim after 5 to 16 tries. Now no try replaces it, in up to
+2,000 tries or 2 seconds.
+<tt class="code">TestCreateRefusesAFileSwappedBeforeItsOpen</tt> and
+<tt class="code">TestCompactRefusesAFileSwappedBeforeItsOpen</tt> test the check of the open.</div>
 <div style="page-break-inside:avoid;">
 <h2 id="finding-16"> Finding 16. The check of -f does not look at a link inside the target of a link (medium)</h2>
 <div class="par"><b>Where:</b> <tt class="code">checkLinks</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;writer.&#8203;go</tt>, used
@@ -1397,6 +1413,10 @@ own link to the planted link replaced the victim file. The review confirmed
 the gap in the code.</div>
 <div class="par"><b>Fix.</b> The one-pass resolution of finding 15, which applies the rule to
 every link that it follows, also inside a link target.</div>
+<div class="par"><b>Status.</b> Fixed after v1.1.4, with the fix of finding 15.
+<tt class="code">TestCreateChecksALinkInsideALinkTarget</tt> and
+<tt class="code">TestCompactChecksALinkInsideALinkTarget</tt> test the two links of the attack.
+The create and the compact stop with exit 3, and the victim stays.</div>
 <div style="page-break-inside:avoid;">
 <h2 id="finding-17"> Finding 17. Create gives the new archive the mode of a file that another user put at -f (medium)</h2>
 <div class="par"><b>Where:</b> <tt class="code">createTarget</tt> and <tt class="code">createTemp</tt> in
@@ -1418,6 +1438,13 @@ the archive had mode 0666.</div>
 directory that everyone can write, refuse a file that neither the caller nor
 the owner of the directory owns (exit 3), as the kernel does. In other cases,
 use <tt class="code">0666</tt> less the umask.</div>
+<div class="par"><b>Status.</b> Fixed after v1.1.4. The caller's own file gives its mode, as
+before. In a sticky directory that everyone can write, a file that neither
+the caller nor the owner of the directory owns is refused with exit 3. Any
+other file of another user gives <tt class="code">0666</tt> less the umask, with no bit that the
+old file does not have. This keeps root's archive in the home of a user from
+a mode wider than the old one. <tt class="code">TestCreateDoesNotTakeTheModeOfAnotherUsersFile</tt>
+tests the mode, and <tt class="code">TestReplaceRule</tt> the rule.</div>
 <div style="page-break-inside:avoid;">
 <h2 id="finding-18"> Finding 18. -c with a passphrase source and no -e writes a plaintext archive (medium)</h2>
 <div class="par"><b>Where:</b> <tt class="code">runCreate</tt> in <tt class="code">src/&#8203;internal/&#8203;cli/&#8203;ops.&#8203;go</tt>, and
@@ -1918,9 +1945,9 @@ format.md §8.3.</div>
 <tr>
 <td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> 4 </div>
 </td>
-<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Bypassed </div>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Holds again after the fix of findings 15 to 17 </div>
 </td>
-<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Findings 15 and 16 go round the rule; finding 17 is the same pattern for a file; finding 41 on Windows. </div>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Findings 15 and 16 went round the rule, and finding 17 was the same pattern for a file. Finding 41 on Windows is open. </div>
 </td>
 </tr>
 <tr>

@@ -995,7 +995,7 @@ of an archive that is already encrypted. Nothing was changed.
 The archive failed a check: damaged data, a wrong passphrase, a failed
 authentication tag, an unsafe path, or a plain archive where a passphrase
 was given. Also an archive path through a symbolic link that the program
-does not follow.
+does not follow, or a file at that path that the program does not replace.
 .TP
 .B 4
 Any other error, for example an I/O error, or another eictar that is
@@ -1057,7 +1057,16 @@ archive path given with
 follows a symbolic link in a directory such as
 .I /tmp
 only when the link belongs to the user or to the owner of the directory, as
-the Linux kernel does. Otherwise the program stops with exit 3.
+the Linux kernel does. This rule applies to each link that the path goes
+through, also a link inside the target of another link. Otherwise the
+program stops with exit 3.
+In such a directory, create also does not replace a file that neither the
+user nor the owner of the directory owns, as the kernel does for
+.IR fs.protected_regular ,
+and stops with exit 3.
+When create replaces a file of another user, the new archive does not get
+the mode of that file: it gets 0666 less the umask, with no bit that the
+old file does not have.
 .IP \(bu 2
 Identical content and
 .B train

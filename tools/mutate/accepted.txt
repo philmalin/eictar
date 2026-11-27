@@ -266,17 +266,17 @@ src/internal/archive/reader.go: decoderSet.holds: operator: && → ||
 
 # --- archive: the writer ---
 
-src/internal/archive/writer.go: Create: if false: err != nil → false #5
+src/internal/archive/writer.go: Create: if false: err != nil → false #4
 	Equivalent. crypto/rand.Read does not return an error: it ends the
 	program instead.
-src/internal/archive/writer.go: createTemp: if false: err != nil → false
+src/internal/archive/target.go: createTemp: if false: err != nil → false
 	Equivalent. crypto/rand.Read does not return an error (see above).
 src/internal/archive/writer.go: Writer.newSealer: if false: err != nil → false
 	Equivalent. crypto/rand.Read does not return an error (see above).
 src/internal/archive/writer.go: Writer.newSealer: if false: err != nil → false #2
 	Equivalent. MemberKey fails only for a salt that is not 16 bytes, and
 	the salt is made here with 16.
-src/internal/archive/writer.go: Create: if false: err != nil → false #7
+src/internal/archive/writer.go: Create: if false: err != nil → false #6
 	Equivalent. Header.MarshalBinary fails only when the encrypted flag and
 	the length of the crypto header disagree, and Create sets both together.
 src/internal/archive/writer.go: Create: operator: > → >=
@@ -363,6 +363,9 @@ src/internal/archive/extract.go: tempName: operator: > → >=
 src/internal/archive/dest.go: dirCache.put: operator: < → <=
 	Equivalent. Each use of an entry takes the next tick, so no two entries
 	have the same tick, and the entry that the cache drops is the same.
+src/internal/archive/target.go: inheritedMode: if false: !owner.OK → false
+	Another platform: Windows and the other systems where meta.Stat gives no
+	owner. On Linux, macOS and the BSDs, a FileInfo of a file has its owner.
 
 # --- archive: the operations that change an archive (mutate.go) ---
 

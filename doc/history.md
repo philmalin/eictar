@@ -648,3 +648,24 @@ stream, or longer than its plaintext, but no version of eictar writes one.
   `TestExtractDoesNotFollowALinkInTheDestination`,
   `TestBeneathRefusesADirectorySwappedForALink` and
   `TestBeneathForgetsAReplacedDirectory` cover it.
+- The archive path of `-f` is resolved in one pass (design.eml §9). The
+  pass applies the rule of `fs.protected_symlinks` to each link that it
+  follows, also a link inside the target of another link. Before, the rule
+  looked only at the path as the user typed it, and `EvalSymlinks` then
+  resolved the path a second time. A link that another user made between
+  the two, or put inside the target of the user's own link, made a create
+  by root replace `/etc/passwd` (findings 15 and 16). The open of the file
+  that a create or a compact replaces must give the file that the pass
+  found, or the program stops with exit 3. A file of another user at `-f`
+  no longer gives its mode to the new archive: the new archive gets 0666
+  less the umask, with no bit that the old file does not have. In a sticky
+  directory that everyone can write, create refuses a file that neither the
+  user nor the owner of the directory owns, with exit 3, as the kernel does
+  for `fs.protected_regular` (finding 17). Through a link of the user's own
+  to a file that does not exist yet, create now makes that file, and the
+  link stays. Before, the create stopped with an error that said that
+  another run made the file at the path.
+  `TestCreateRaceWithAPlantedLink`, `TestCreateChecksALinkInsideALinkTarget`,
+  `TestCompactChecksALinkInsideALinkTarget`,
+  `TestCreateRefusesAFileSwappedBeforeItsOpen` and
+  `TestCreateDoesNotTakeTheModeOfAnotherUsersFile` cover it.

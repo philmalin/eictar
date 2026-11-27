@@ -1922,19 +1922,47 @@ after the trailer is synced. Until the rename, a file that is already at the
 path stays as it was. Thus a create that fails, for example on a mistyped
 source path, does not destroy a backup.
 
-The new file gets the permissions of the file that it replaces. If the path
-is a symbolic link, the file that the link points to is replaced, and the
-link stays. The walk skips both the temporary file and the old archive, so
-neither goes into the new archive.
+The new file gets the permissions of the file that it replaces, when the
+caller owns that file. The file of another user gives no permissions: the
+new file gets {C:0666} less the umask, with no bit that the old file does not
+have. Thus a 0666 file that another user puts at {C:-f} does not make root's
+archive 0666, and root's archive in the home of a user is not wider than the
+old one. If the path is a symbolic link, the file that the link points to is
+replaced, and the link stays. This is also true for a link to a file that
+does not exist yet. The walk skips both the temporary file and the old
+archive, so neither goes into the new archive.
 
 {b:A symbolic link in the path must be one that the kernel follows.} Take a
 sticky directory that everyone can write, such as {C:/tmp}. There, Linux
 follows a link only when it belongs to the caller or to the owner of the
 directory ({C:fs.protected_symlinks}). The writer resolves the path itself and
 renames over the target, so the kernel's rule never applies. Thus the writer
-applies the rule to each link in the path, for create, compact, change of
-passphrase and {C:--encrypt-archive}. Without this rule, a link {C:/tmp/backup.ect -> /etc/passwd} that
+applies the rule itself, for create, compact, change of passphrase and
+{C:--encrypt-archive}. Without this rule, a link {C:/tmp/backup.ect -> /etc/passwd} that
 another user plants makes a create by root replace {C:/etc/passwd}.
+
+The check and the resolution are one pass ({C:resolveArchive}). The pass
+reads each name of the path with {C:Lstat}. It applies the rule to each link,
+reads the link, and continues with its target, to at most 40 links, as the
+kernel does. Thus the rule also applies to a link inside the target of
+another link, and each link that the pass follows is the link that it
+checked. Only the last name can be missing. Then these steps occur:
+
+{list:
+  {item: The writer finds the file at the resolved path with {C:Lstat}, and then opens it. The open must give the same regular file. Otherwise the program stops with exit 3. Thus the mode and the lock come from the file that the rename replaces.}
+  {item: In a sticky directory that everyone can write, create does not replace a file that neither the caller nor the owner of the directory owns. The program stops with exit 3. The kernel refuses an open with {C:O_CREAT} of such a file in the same way ({C:fs.protected_regular}).}
+  {item: A name that becomes a link after the pass does not move the archive: the rename replaces the name, not what a link at the name points to.}
+}
+
+A limit stays. The pass gives a path, not a directory handle, and the
+operations after it use that path. To put a link in place of a directory of
+the path, a user must be able to write the parent of that directory. In a
+sticky directory that everyone can write, that user cannot rename the
+directory of another user, and under {C:fs.protected_symlinks} the kernel
+does not follow the link of that user for root. In other directories, the rule follows the link of any user,
+so the swap gives nothing that a link there before the pass does not. On
+Windows, the rule allows each link, and {C:filepath.EvalSymlinks} resolves the
+path.
 
 {section 2 bid=write-sequence: The write sequence}
 

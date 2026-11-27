@@ -18,7 +18,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"lukechampine.com/blake3"
@@ -27,7 +26,6 @@ import (
 	"github.com/philmalin/eictar/src/internal/crypt"
 	"github.com/philmalin/eictar/src/internal/format"
 	"github.com/philmalin/eictar/src/internal/fsutil"
-	"github.com/philmalin/eictar/src/internal/meta"
 )
 
 // Defaults for the writer and the pipeline.
@@ -143,12 +141,7 @@ func Create(path string, opt Options) (*Writer, error) {
 		return nil, err
 	}
 
-	target, mode, err := createTarget(path)
-	if err != nil {
-		enc.Close()
-		return nil, err
-	}
-	guard, err := guardExisting(target)
+	target, guard, mode, err := createTarget(path)
 	if err != nil {
 		enc.Close()
 		return nil, err
@@ -516,123 +509,6 @@ func (w *Writer) Close() error {
 	}
 	return fsys.SyncDir(filepath.Dir(w.path))
 }
-
-// createTarget resolves where a new archive goes, and the mode it gets.
-//
-// A symbolic link is followed, so that the rename replaces the file and keeps
-// the link. A file already there lends its permissions to the new one:
-// replacing a 0600 archive with a 0644 one would be a silent change of who
-// can read it. A new file gets 0666 less the umask, as os.Create does.
-func createTarget(path string) (string, os.FileMode, error) {
-	if err := checkLinks(path); err != nil {
-		return "", 0, err
-	}
-	target := path
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		target = resolved
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", 0, fmt.Errorf("resolving %s: %w", path, err)
-	}
-	fi, err := os.Stat(target)
-	switch {
-	case err == nil && !fi.Mode().IsRegular():
-		return "", 0, fmt.Errorf("%s exists and is not a regular file", path)
-	case err == nil:
-		return target, fi.Mode().Perm(), nil
-	case errors.Is(err, os.ErrNotExist):
-		return target, 0, nil
-	default:
-		return "", 0, fmt.Errorf("stat %s: %w", path, err)
-	}
-}
-
-// guardExisting locks the archive that a create will replace, so that the
-// create cannot rename over a file that another run is appending to. It
-// returns nil when there is no file at target yet.
-func guardExisting(target string) (archiveFile, error) {
-	f, err := fsys.OpenArchive(target, os.O_RDONLY)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("opening %s: %w", target, err)
-	}
-	if err := lockArchive(f, target); err != nil {
-		f.Close()
-		return nil, err
-	}
-	return f, nil
-}
-
-// createTemp opens a new file beside target. mode 0 means the default for a
-// new file.
-func createTemp(target string, mode os.FileMode) (archiveFile, os.FileInfo, string, error) {
-	dir, base := filepath.Split(target)
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return nil, nil, "", fmt.Errorf("generating a temporary name: %w", err)
-	}
-	tmpPath := filepath.Join(dir, fmt.Sprintf(".%s.create-%x", base, b))
-
-	// 0666 through open(2), not os.CreateTemp's 0600, so that the umask
-	// decides the mode of a new archive exactly as it would for os.Create.
-	f, err := fsys.CreateNew(tmpPath, 0o666)
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("creating %s: %w", target, err)
-	}
-	fail := func(err error) (archiveFile, os.FileInfo, string, error) {
-		f.Close()
-		fsys.Remove(tmpPath)
-		return nil, nil, "", err
-	}
-	if mode != 0 {
-		if err := f.Chmod(mode); err != nil {
-			return fail(fmt.Errorf("setting the mode of %s: %w", target, err))
-		}
-	}
-	self, err := f.Stat()
-	if err != nil {
-		return fail(fmt.Errorf("stat %s: %w", target, err))
-	}
-	return f, self, tmpPath, nil
-}
-
-// ErrUnsafeLink means -f names a path through a symbolic link that the
-// program does not follow (doc/Security_Audit.eml, finding 4).
-var ErrUnsafeLink = errors.New("a symbolic link that another user planted in a shared directory")
-
-// checkLinks refuses a path through a symbolic link that the kernel would not
-// follow for open(2) under fs.protected_symlinks. The writer resolves the
-// path itself and renames over the target, so the kernel's rule never
-// applies: a link /tmp/backup.ect -> /etc/passwd, planted by another user,
-// made a create by root replace /etc/passwd.
-func checkLinks(path string) error {
-	clean := filepath.Clean(path)
-	// The walk starts at the root of the path: the volume and a separator on
-	// Windows (C:\), a separator elsewhere. A separator alone made \C: on
-	// Windows, which is no path, and the walk stopped there.
-	prefix := filepath.VolumeName(clean)
-	rest := clean[len(prefix):]
-	if sep := string(filepath.Separator); strings.HasPrefix(rest, sep) {
-		prefix += sep
-		rest = rest[len(sep):]
-	}
-	for _, part := range strings.Split(rest, string(filepath.Separator)) {
-		prefix = filepath.Join(prefix, part)
-		fi, err := os.Lstat(prefix)
-		if err != nil {
-			return nil // what does not exist is not a link; the caller reports it
-		}
-		if fi.Mode()&os.ModeSymlink != 0 && !mayFollowLink(prefix, fi) {
-			return fmt.Errorf("%s: %w; the program does not follow it", prefix, ErrUnsafeLink)
-		}
-	}
-	return nil
-}
-
-// mayFollowLink is the rule of fs.protected_symlinks. A test replaces it, to
-// refuse a link without a link of another user, which only root can make.
-var mayFollowLink = meta.MayFollow
 
 // SameFile reports whether fi is the file this writer is writing. The walk
 // uses it so that an archive is never archived into itself.

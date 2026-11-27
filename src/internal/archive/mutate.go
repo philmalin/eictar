@@ -345,14 +345,14 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	var res CompactResult
 
 	// Through a symlink, the rename must replace the file, not the link, and
-	// the link must be one that the program follows (checkLinks).
-	if err := checkLinks(cfg.Archive); err != nil {
+	// each link must be one that the program follows (resolveArchive).
+	path, err := resolveArchive(cfg.Archive)
+	if err != nil {
 		return res, err
 	}
-	path, err := filepath.EvalSymlinks(cfg.Archive)
-	if err != nil {
-		return res, fmt.Errorf("resolving %s: %w", cfg.Archive, err)
-	}
+	// The file that the rename replaces must be the file that the compact
+	// reads: a link put at path after the resolution is refused.
+	before, _ := os.Lstat(path) // an error here, openLocked reports it
 	open := cfg.Open
 	if cfg.Encrypt != nil {
 		// The archive must be plaintext. An encrypted one stops here, before
@@ -364,6 +364,13 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 		return res, err
 	}
 	defer r.Close()
+	opened, err := r.f.Stat()
+	if err != nil {
+		return res, fmt.Errorf("stat %s: %w", cfg.Archive, err)
+	}
+	if err := openedAsSeen(path, before, opened); err != nil {
+		return res, err
+	}
 
 	res.OldSize = r.size
 	keep := kept(r.index.Members)
@@ -377,10 +384,7 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 		return res, nil
 	}
 
-	fi, err := r.f.Stat()
-	if err != nil {
-		return res, fmt.Errorf("stat %s: %w", cfg.Archive, err)
-	}
+	fi := opened
 	dir, base := filepath.Split(path)
 	if dir == "" {
 		dir = "."

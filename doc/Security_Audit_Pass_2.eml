@@ -8,7 +8,7 @@
 | Date | 2026-11-26 |
 | Earlier review | {ref t=Security_Audit.html#scope-method:Security_Audit.eml}: v1.0.1, with follow-ups for v1.0.3 and v1.0.6 (findings 1 to 12) |
 | Scope | the source code of {C:src/}, the archive format, and encrypted archives |
-| Status | findings 13 and 14 are fixed after v1.1.4; the others are open |
+| Status | findings 13 to 17 are fixed after v1.1.4; the others are open |
 }
 
 {contents l=2}
@@ -46,9 +46,9 @@ names one finding in both documents.
 | # | Severity | Finding | Found by | Status |
 | 13 | High | A directory and a link to {C:.} with one path change the destination directory itself | Tested | Fixed after v1.1.4 |
 | 14 | Medium; high for root and {C:-d /} | Extraction follows a link that another user put inside the destination | Tested | Fixed after v1.1.4 |
-| 15 | Medium | A race between the check of {C:-f} and its resolution follows a planted link | Tested | Open |
-| 16 | Medium | The check of {C:-f} does not look at a link inside the target of a link | Tested | Open |
-| 17 | Medium | Create gives the new archive the mode of a file that another user put at {C:-f} | Tested | Open |
+| 15 | Medium | A race between the check of {C:-f} and its resolution follows a planted link | Tested | Fixed after v1.1.4 |
+| 16 | Medium | The check of {C:-f} does not look at a link inside the target of a link | Tested | Fixed after v1.1.4 |
+| 17 | Medium | Create gives the new archive the mode of a file that another user put at {C:-f} | Tested | Fixed after v1.1.4 |
 | 18 | Medium | {C:-c} with a passphrase source and no {C:-e} writes a plaintext archive, with no message | Tested | Open |
 | 19 | Medium | A 7 KB plain archive makes a listing use 4 GB of memory | Tested | Open |
 | 20 | Low | {C:--repair} removes a complete generation when the damage is in its trailer magic | Tested | Open |
@@ -210,6 +210,23 @@ call {C:EvalSymlinks}. Then open the parent of the target, and do the open of
 the old file, the create of the temporary file and the rename relative to
 that directory descriptor.
 
+{b:Status.} Fixed after v1.1.4. {C:resolveArchive}, in
+{C bc=/._:src/internal/archive/resolve_other.go}, is the one pass: it reads
+each name with {C:Lstat}, applies the rule to each link, and continues with
+the target of the link, to at most 40 links. On Unix, create and compact no
+longer call {C:EvalSymlinks}. Then the open of the old file must give the file that
+{C:Lstat} found at the resolved path, or the program stops with exit 3. A
+link that appears after the pass is not followed: the rename replaces the
+name. The operations stay by path, not relative to a directory descriptor.
+A swap of a directory of the path needs write permission on its parent, and
+gives nothing that the rule does not allow already. Design
+{ref t=design.html#changes-checks:§9} says why.
+{C:TestCreateRaceWithAPlantedLink} is the test of the review: before the fix
+it replaced the victim after 5 to 16 tries. Now no try replaces it, in up to
+2,000 tries or 2 seconds.
+{C:TestCreateRefusesAFileSwappedBeforeItsOpen} and
+{C:TestCompactRefusesAFileSwappedBeforeItsOpen} test the check of the open.
+
 {section 2 nc bid=finding-16: Finding 16. The check of -f does not look at a link inside the target of a link (medium)}
 
 {b:Where:} {C:checkLinks} in {C bc=/._:src/internal/archive/writer.go}, used
@@ -231,6 +248,11 @@ the gap in the code.
 
 {b:Fix.} The one-pass resolution of finding 15, which applies the rule to
 every link that it follows, also inside a link target.
+
+{b:Status.} Fixed after v1.1.4, with the fix of finding 15.
+{C:TestCreateChecksALinkInsideALinkTarget} and
+{C:TestCompactChecksALinkInsideALinkTarget} test the two links of the attack.
+The create and the compact stop with exit 3, and the victim stays.
 
 {section 2 nc bid=finding-17: Finding 17. Create gives the new archive the mode of a file that another user put at -f (medium)}
 
@@ -256,6 +278,14 @@ the archive had mode 0666.
 directory that everyone can write, refuse a file that neither the caller nor
 the owner of the directory owns (exit 3), as the kernel does. In other cases,
 use {C:0666} less the umask.
+
+{b:Status.} Fixed after v1.1.4. The caller's own file gives its mode, as
+before. In a sticky directory that everyone can write, a file that neither
+the caller nor the owner of the directory owns is refused with exit 3. Any
+other file of another user gives {C:0666} less the umask, with no bit that the
+old file does not have. This keeps root's archive in the home of a user from
+a mode wider than the old one. {C:TestCreateDoesNotTakeTheModeOfAnotherUsersFile}
+tests the mode, and {C:TestReplaceRule} the rule.
 
 {section 2 nc bid=finding-18: Finding 18. -c with a passphrase source and no -e writes a plaintext archive (medium)}
 
@@ -756,7 +786,7 @@ format.md §8.3.
 | 1 | Holds | See finding 34 for the order of {C:chown} and the xattrs. |
 | 2 | Holds again after the fix of finding 13 | On Windows, a member {C:x\\..} (finding 33) named the destination. The check that no directory below the destination is the destination itself now refuses it (Code). |
 | 3 | Holds | With {C:-h}, finding 39 makes the open wait, but no wrong file is read. |
-| 4 | Bypassed | Findings 15 and 16 go round the rule; finding 17 is the same pattern for a file; finding 41 on Windows. |
+| 4 | Holds again after the fix of findings 15 to 17 | Findings 15 and 16 went round the rule, and finding 17 was the same pattern for a file. Finding 41 on Windows is open. |
 | 5 | Holds | |
 | 6 | Holds for the bytes | Finding 19 goes round it in Go memory. |
 | 7 | Documented | Finding 28 is the same inference for names. |

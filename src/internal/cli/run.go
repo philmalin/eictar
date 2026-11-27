@@ -252,7 +252,7 @@ func exitCodeFor(err error) int {
 	}
 	for _, untrusted := range []error{
 		// Too new for this build, or a member path that would escape.
-		format.ErrUnsupportedVersion, fsutil.ErrUnsafePath, archive.ErrUnsafeLink,
+		format.ErrUnsupportedVersion, fsutil.ErrUnsafePath, archive.ErrUnsafeLink, archive.ErrUnsafeTarget,
 		// A wrong passphrase is "this archive did not authenticate", which
 		// exit code 3 exists to say, as a failed tag is (doc/design.eml 10.7).
 		crypt.ErrWrongPassphrase,

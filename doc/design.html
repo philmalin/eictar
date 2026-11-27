@@ -3902,18 +3902,46 @@ temporary file beside the archive path, and <tt class="code">Close</tt> renames 
 after the trailer is synced. Until the rename, a file that is already at the
 path stays as it was. Thus a create that fails, for example on a mistyped
 source path, does not destroy a backup.</div>
-<div class="par">The new file gets the permissions of the file that it replaces. If the path
-is a symbolic link, the file that the link points to is replaced, and the
-link stays. The walk skips both the temporary file and the old archive, so
-neither goes into the new archive.</div>
+<div class="par">The new file gets the permissions of the file that it replaces, when the
+caller owns that file. The file of another user gives no permissions: the
+new file gets <tt class="code">0666</tt> less the umask, with no bit that the old file does not
+have. Thus a 0666 file that another user puts at <tt class="code">-f</tt> does not make root's
+archive 0666, and root's archive in the home of a user is not wider than the
+old one. If the path is a symbolic link, the file that the link points to is
+replaced, and the link stays. This is also true for a link to a file that
+does not exist yet. The walk skips both the temporary file and the old
+archive, so neither goes into the new archive.</div>
 <div class="par"><b>A symbolic link in the path must be one that the kernel follows.</b> Take a
 sticky directory that everyone can write, such as <tt class="code">/tmp</tt>. There, Linux
 follows a link only when it belongs to the caller or to the owner of the
 directory (<tt class="code">fs.protected_symlinks</tt>). The writer resolves the path itself and
 renames over the target, so the kernel's rule never applies. Thus the writer
-applies the rule to each link in the path, for create, compact, change of
-passphrase and <tt class="code">--encrypt-archive</tt>. Without this rule, a link <tt class="code">/tmp/backup.ect -&gt; /etc/passwd</tt> that
+applies the rule itself, for create, compact, change of passphrase and
+<tt class="code">--encrypt-archive</tt>. Without this rule, a link <tt class="code">/tmp/backup.ect -&gt; /etc/passwd</tt> that
 another user plants makes a create by root replace <tt class="code">/etc/passwd</tt>.</div>
+<div class="par">The check and the resolution are one pass (<tt class="code">resolveArchive</tt>). The pass
+reads each name of the path with <tt class="code">Lstat</tt>. It applies the rule to each link,
+reads the link, and continues with its target, to at most 40 links, as the
+kernel does. Thus the rule also applies to a link inside the target of
+another link, and each link that the pass follows is the link that it
+checked. Only the last name can be missing. Then these steps occur:</div>
+<ul>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-top:0.10em;"> The writer finds the file at the resolved path with <tt class="code">Lstat</tt>, and then opens it. The open must give the same regular file. Otherwise the program stops with exit 3. Thus the mode and the lock come from the file that the rename replaces.</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par"> In a sticky directory that everyone can write, create does not replace a file that neither the caller nor the owner of the directory owns. The program stops with exit 3. The kernel refuses an open with <tt class="code">O_CREAT</tt> of such a file in the same way (<tt class="code">fs.protected_regular</tt>).</div>
+  </li>
+  <li style="padding-left:0.5em;"><div class="par" style="margin-bottom:0.10em;"> A name that becomes a link after the pass does not move the archive: the rename replaces the name, not what a link at the name points to.</div>
+  </li>
+</ul>
+<div class="par">A limit stays. The pass gives a path, not a directory handle, and the
+operations after it use that path. To put a link in place of a directory of
+the path, a user must be able to write the parent of that directory. In a
+sticky directory that everyone can write, that user cannot rename the
+directory of another user, and under <tt class="code">fs.protected_symlinks</tt> the kernel
+does not follow the link of that user for root. In other directories, the rule follows the link of any user,
+so the swap gives nothing that a link there before the pass does not. On
+Windows, the rule allows each link, and <tt class="code">filepath.EvalSymlinks</tt> resolves the
+path.</div>
 <div style="page-break-inside:avoid;">
 <h2 id="write-sequence">9.1&#x00A0;&#x00A0; The write sequence</h2>
 <div class="par">Append, update and delete all use this sequence:</div>
