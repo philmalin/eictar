@@ -353,6 +353,7 @@ func CompactArchive(cfg CompactConfig) (CompactResult, error) {
 	// The file that the rename replaces must be the file that the compact
 	// reads: a link put at path after the resolution is refused.
 	before, _ := os.Lstat(path) // an error here, openLocked reports it
+	pinIdentity(before)         // on Windows, before the open, or the check sees the file there after it
 	open := cfg.Open
 	if cfg.Encrypt != nil {
 		// The archive must be plaintext. An encrypted one stops here, before

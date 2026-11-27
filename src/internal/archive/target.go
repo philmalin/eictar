@@ -65,6 +65,7 @@ func createTarget(path string) (string, archiveFile, targetMode, error) {
 	case !before.Mode().IsRegular():
 		return "", nil, targetMode{}, fmt.Errorf("%s exists and is not a regular file", path)
 	}
+	pinIdentity(before) // on Windows, before the open, or the check sees the file there after it
 	guard, err := fsys.OpenArchive(target, os.O_RDONLY)
 	if errors.Is(err, fs.ErrNotExist) {
 		return target, nil, targetMode{}, nil // removed since: the rename must not replace a new one
@@ -95,7 +96,10 @@ func createTarget(path string) (string, archiveFile, targetMode, error) {
 
 // openedAsSeen checks that opened, the file that an open of path gave, is
 // before, the file that Lstat found at path before the open. A link or
-// another file put at path between the two is refused.
+// another file put at path between the two is refused. On Windows, before
+// must have its identity from before the open (pinIdentity): os.SameFile
+// reads it from the path the first time that it needs it, and then it is
+// the identity of the file that the open found.
 func openedAsSeen(path string, before, opened fs.FileInfo) error {
 	if before == nil || !before.Mode().IsRegular() || !os.SameFile(before, opened) {
 		return fmt.Errorf("%s: %w: it changed while the program opened it", path, ErrUnsafeTarget)
