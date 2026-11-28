@@ -1743,10 +1743,13 @@ chunk is a number of up to 4 GiB that the reader must allocate.</p>
 <p>The index has a catalog of codecs. Each member names an entry of the
 catalog by its position, or <code>-1</code> for no codec. A catalog
 entry is a map with <code>name</code> (text), <code>params</code> (a map
-from text to a number or a text), and <code>dict</code> (uint,
-optional). The parameters record the settings of the writer. A reader
-does not need them. <code>dict</code> is the id of the dictionary (§6.1)
-that the codec used, and a reader needs it to decode.</p>
+from text to an integer or a text, at most 64 pairs), and
+<code>dict</code> (uint, optional). The catalog has at most 65536
+entries. The parameters record the settings of the writer, and a reader
+does not need them. A parameter of another type, for example an array, a
+map or a float, makes the index invalid. <code>dict</code> is the id of
+the dictionary (§6.1) that the codec used, and a reader needs it to
+decode.</p>
 <table>
 <colgroup>
 <col style="width: 19%" />
@@ -1912,7 +1915,12 @@ always sets it.</li>
 </ol>
 <p>A reader reverses the steps. It limits the decompressed index to 1
 GiB, and to 200 times the compressed index or 64 MiB, whichever is more.
-It limits the number of members to 4194304.</p>
+It limits the number of members to 4194304. It can also limit the memory
+that the index decodes into: eictar refuses an index whose decoded form
+needs more than 8 times its decompressed bytes, or 1 MiB, whichever is
+more. A real index needs at most about 6 times. An index of empty maps
+as members needs about 320 times, and a small archive of them made a
+listing use gigabytes.</p>
 <h3 id="index-map">8.2 Index map</h3>
 <table>
 <colgroup>
@@ -2433,6 +2441,14 @@ more</td>
 <tr class="even">
 <td>members in one index</td>
 <td>4194304</td>
+</tr>
+<tr class="odd">
+<td>codec entries in one index, parameters of one entry</td>
+<td>65536, 64</td>
+</tr>
+<tr class="even">
+<td>memory of the decoded index (eictar)</td>
+<td>8 × the decompressed index, or 1 MiB, whichever is more</td>
 </tr>
 <tr class="odd">
 <td>dictionaries in one index, dictionary size</td>

@@ -25,11 +25,15 @@ src/internal/format/cbor.go: decModeFor: if false: err != nil → false
 	maxIndexMapPairs. DecMode cannot fail.
 src/internal/format/crypto.go: UnmarshalCryptoHeader: if false: err != nil → false
 	Equivalent. decModeFor cannot fail (see above).
-src/internal/format/index.go: DecodeIndex: if false: err != nil → false #4
+src/internal/format/index.go: DecodeIndex: if false: err != nil → false #5
 	Equivalent. decModeFor cannot fail (see above).
 src/internal/format/crypto.go: CryptoHeader.Marshal: if false: err != nil → false #2
 	Equivalent. The crypto header has only integers, strings and byte
 	strings, which CBOR always encodes.
+src/internal/format/index.go: Index.Encode: if false: err != nil → false #2
+	Equivalent. Validate runs first, and refuses each value that CBOR cannot
+	encode: a codec parameter is an integer or a text string, and every
+	other field has a fixed type.
 src/internal/format/index.go: Index.Encode: if false: err != nil → false #3
 	Equivalent. zstd.NewWriter fails only for options that are not valid,
 	and these are constants.

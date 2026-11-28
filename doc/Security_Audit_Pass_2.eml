@@ -8,7 +8,7 @@
 | Date | 2026-11-26 |
 | Earlier review | {ref t=Security_Audit.html#scope-method:Security_Audit.eml}: v1.0.1, with follow-ups for v1.0.3 and v1.0.6 (findings 1 to 12) |
 | Scope | the source code of {C:src/}, the archive format, and encrypted archives |
-| Status | findings 13 to 18 are fixed after v1.1.4; the others are open |
+| Status | findings 13 to 19 are fixed after v1.1.4; the others are open |
 }
 
 {contents l=2}
@@ -50,7 +50,7 @@ names one finding in both documents.
 | 16 | Medium | The check of {C:-f} does not look at a link inside the target of a link | Tested | Fixed after v1.1.4 |
 | 17 | Medium | Create gives the new archive the mode of a file that another user put at {C:-f} | Tested | Fixed after v1.1.4 |
 | 18 | Medium | {C:-c} with a passphrase source and no {C:-e} writes a plaintext archive, with no message | Tested | Fixed after v1.1.4 |
-| 19 | Medium | A 7 KB plain archive makes a listing use 4 GB of memory | Tested | Open |
+| 19 | Medium | A 7 KB plain archive makes a listing use 4 GB of memory | Tested | Fixed after v1.1.4 |
 | 20 | Low | {C:--repair} removes a complete generation when the damage is in its trailer magic | Tested | Open |
 | 21 | Low | Blobs that overlap: compact and {C:--encrypt-archive} write one copy for each member | Tested | Open |
 | 22 | Low | A member id of 2{S:64}-1 wraps the next id to 0, and the check of an old owner stops | Tested | Open |
@@ -359,6 +359,23 @@ the number of keys and of catalog entries. Bound the decoded memory, not only
 the bytes: count the items of the CBOR before the decode, and weight each
 array of structures by the Go size of its element. Add the bound to design
 {ref t=design.html#extraction-reads-disk:§14.3}.
+
+{b:Status.} Fixed after v1.1.4. A codec parameter is an integer or a text
+string, the catalog has at most 65536 entries, and an entry at most 64
+parameters. Before the decode, {C:decodedCost}, in
+{C bc=/._:src/internal/format/cost.go}, reads the CBOR with the layout of
+the {C:Index} types, by reflection, so that a new field needs no change
+there. It adds the memory of each slice, map, string and pointer. An index
+that needs more than 8 times its decompressed bytes, or 1 MiB, is refused
+with exit 3. Real indexes need 2.1 to 5.7 times. The decoder can allocate up
+to about 1.7 times the estimate, because of the growth of Go maps. Thus a
+small archive can still make a reader use about 512 MiB: 8 times the 64 MiB
+that its index can decompress to. Before, 4.2 GB.
+{C:TestIndexOfEmptyMembersIsRefusedBeforeTheDecode} tests the second attack:
+before the fix, an index of 262 KB allocated 98 MB, and now the refusal
+allocates less than the index. {C:TestIndexWithNestedCodecParametersIsRefused}
+tests the first. ectread applies the same rules to the catalog. Design
+{ref t=design.html#extraction-reads-disk:§14.3} has the bound.
 
 {section 2 nc bid=finding-20: Finding 20. --repair removes a complete generation when its trailer magic is damaged (low)}
 

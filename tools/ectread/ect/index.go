@@ -87,6 +87,8 @@ const (
 	maxXName   = 255
 	maxXValue  = 65536
 	maxXCount  = 1024
+	maxCodecs  = 65536 // format.md 6
+	maxParams  = 64
 )
 
 func needUint(m *cmap, key, where string) (uint64, error) {
@@ -357,6 +359,9 @@ func (a *Archive) parseCodecs(top *cmap) error {
 	if err != nil {
 		return err
 	}
+	if len(arr) > maxCodecs {
+		return refusef("the index has %d codec entries, more than %d", len(arr), maxCodecs)
+	}
 	for i, raw := range arr {
 		where := fmt.Sprintf("codec %d", i)
 		m, ok := raw.(*cmap)
@@ -371,14 +376,17 @@ func (a *Archive) parseCodecs(top *cmap) error {
 		if err != nil {
 			return err
 		}
+		if len(params.keys) > maxParams {
+			return refusef("%s has %d parameters, more than %d", where, len(params.keys), maxParams)
+		}
 		for j, k := range params.keys {
 			if _, ok := k.(text); !ok {
 				return refusef("%s: a parameter name is not a text string", where)
 			}
 			switch params.vals[j].(type) {
-			case uint64, int64, float64, text:
+			case uint64, int64, text:
 			default:
-				return refusef("%s: parameter %q is not a number or a text string", where, k)
+				return refusef("%s: parameter %q is not an integer or a text string", where, k)
 			}
 		}
 		c := Codec{Name: name}

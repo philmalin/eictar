@@ -676,3 +676,16 @@ stream, or longer than its plaintext, but no version of eictar writes one.
   (finding 18). The source does not stand for `-e`: `-e` must be given, on
   the command line or in a configuration file.
   `TestPassphraseSourceOnCreateNeedsEncrypt` covers it.
+- The reader bounds the memory that the index decodes into, not only its
+  bytes (design.eml §14.3, format.md §8.1). Before the decode,
+  `decodedCost` reads the CBOR with the layout of the index types and adds
+  the memory of each slice, map, string and pointer. An index that needs
+  more than 8 times its decompressed bytes, or 1 MiB, is refused. A real
+  index needs at most about 6 times. A codec parameter must be an integer
+  or a text string, the catalog has at most 65536 entries, and an entry at
+  most 64 parameters. Before, a plain archive of 7 KB with arrays of empty
+  maps in a parameter made a listing use 4.2 GB, and one of 2,895 bytes
+  with 4 million empty members 1.6 GB (finding 19). ectread applies the
+  same rules to the catalog. `TestIndexOfEmptyMembersIsRefusedBeforeTheDecode`,
+  `TestIndexWithNestedCodecParametersIsRefused`, `TestRealIndexesDecode`
+  and `TestDecodedCost` cover it.

@@ -4363,6 +4363,22 @@ section N of {C:testing.md}.
         array elements: the input length, and {C:MaxIndexMembers}
       }
       {item:
+        the memory of the decoded index: 8 times the bytes of the decompressed
+        index, or 1 MiB, whichever is more. Before the decode,
+        {C:decodedCost} reads the CBOR with the layout of the {C:Index} types,
+        and adds the memory of each slice, map, string and pointer. A real
+        index needs at most about 6 times its bytes. An empty map as a member
+        is 1 byte and needs 320 bytes of memory: without this limit, a plain
+        archive of 2,895 bytes made a listing use 1.6 GB. A small archive can
+        still make a reader use about 512 MiB: 8 times the 64 MiB that its
+        index can decompress to
+      }
+      {item:
+        the codec catalog: 65536 entries, each with at most 64 parameters. A
+        parameter is an integer or a text string. Arrays of empty maps in a
+        parameter made a plain archive of 7 KB use 4.2 GB
+      }
+      {item:
         the chunk size: {C:MaxChunkSize}, 256 MiB ({ref t=#chunk-table:§5.2})
       }
       {item:

@@ -803,7 +803,7 @@
 <tr>
 <td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Status </div>
 </td>
-<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> findings 13 to 18 are fixed after v1.1.4; the others are open </div>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> findings 13 to 19 are fixed after v1.1.4; the others are open </div>
 </td>
 </tr>
 </tbody>
@@ -958,7 +958,7 @@ names one finding in both documents.</div>
 </td>
 <td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
 </td>
-<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Open </div>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed after v1.1.4 </div>
 </td>
 </tr>
 <tr>
@@ -1553,6 +1553,22 @@ the number of keys and of catalog entries. Bound the decoded memory, not only
 the bytes: count the items of the CBOR before the decode, and weight each
 array of structures by the Go size of its element. Add the bound to design
 <a href = "design.html#extraction-reads-disk">§14.3</a>.</div>
+<div class="par"><b>Status.</b> Fixed after v1.1.4. A codec parameter is an integer or a text
+string, the catalog has at most 65536 entries, and an entry at most 64
+parameters. Before the decode, <tt class="code">decodedCost</tt>, in
+<tt class="code">src/&#8203;internal/&#8203;format/&#8203;cost.&#8203;go</tt>, reads the CBOR with the layout of
+the <tt class="code">Index</tt> types, by reflection, so that a new field needs no change
+there. It adds the memory of each slice, map, string and pointer. An index
+that needs more than 8 times its decompressed bytes, or 1 MiB, is refused
+with exit 3. Real indexes need 2.1 to 5.7 times. The decoder can allocate up
+to about 1.7 times the estimate, because of the growth of Go maps. Thus a
+small archive can still make a reader use about 512 MiB: 8 times the 64 MiB
+that its index can decompress to. Before, 4.2 GB.
+<tt class="code">TestIndexOfEmptyMembersIsRefusedBeforeTheDecode</tt> tests the second attack:
+before the fix, an index of 262 KB allocated 98 MB, and now the refusal
+allocates less than the index. <tt class="code">TestIndexWithNestedCodecParametersIsRefused</tt>
+tests the first. ectread applies the same rules to the catalog. Design
+<a href = "design.html#extraction-reads-disk">§14.3</a> has the bound.</div>
 <div style="page-break-inside:avoid;">
 <h2 id="finding-20"> Finding 20. --repair removes a complete generation when its trailer magic is damaged (low)</h2>
 <div class="par"><b>Where:</b> <tt class="code">RepairArchive</tt> in <tt class="code">src/&#8203;internal/&#8203;archive/&#8203;mutate.&#8203;go</tt>.

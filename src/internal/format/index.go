@@ -3,6 +3,7 @@ package format
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -71,6 +72,15 @@ const MaxDictSize = 1 << 20
 
 // MaxDicts caps the dictionaries of one index.
 const MaxDicts = 1024
+
+// MaxCodecs caps the entries of the codec catalog, and MaxCodecParams the
+// parameters of one entry. A writer makes one entry for each codec, set of
+// parameters and dictionary that a member uses, and a codec has a few
+// parameters (doc/Security_Audit_Pass_2.eml, finding 19).
+const (
+	MaxCodecs      = 1 << 16
+	MaxCodecParams = 64
+)
 
 // EncInfo carries the per-member encryption parameters. The key itself is
 // derived from the passphrase and this salt; see doc/design.eml 6.2.
@@ -362,6 +372,15 @@ func DecodeIndex(b []byte, flags TrailerFlags, open Opener) (*Index, error) {
 		return nil, fmt.Errorf("format: %w: %d bytes", ErrIndexTooLarge, len(b))
 	}
 
+	cost, err := decodedCost(b, reflect.TypeFor[Index]())
+	if err != nil {
+		return nil, err
+	}
+	if limit := max(MinIndexMemory, MaxIndexMemoryRatio*uint64(len(b))); cost > limit {
+		return nil, fmt.Errorf("format: %w: its %d bytes decode to about %d bytes of memory, more than %d times as many",
+			ErrIndexTooLarge, len(b), cost, MaxIndexMemoryRatio)
+	}
+
 	dm, err := decModeFor(len(b))
 	if err != nil {
 		return nil, err
@@ -392,6 +411,9 @@ func (ix *Index) Validate() error {
 	}
 
 	if err := ix.validateDicts(); err != nil {
+		return err
+	}
+	if err := ix.validateCodecs(); err != nil {
 		return err
 	}
 
@@ -480,6 +502,31 @@ func sameSparse(a, b []SparseSegment) bool {
 
 // validateDicts checks the dictionaries, and that each catalog entry names a
 // dictionary that is there. Only zstd has dictionaries.
+// validateCodecs checks the size of the catalog, and that each parameter is an
+// integer or a text string, as every writer of eictar makes them. A decoded
+// index gives uint64 or int64 for an integer, and a writer int.
+func (ix *Index) validateCodecs() error {
+	if len(ix.Codecs) > MaxCodecs {
+		return fmt.Errorf("format: %w: %d codec entries exceeds the limit of %d",
+			ErrIndexTooLarge, len(ix.Codecs), MaxCodecs)
+	}
+	for i, c := range ix.Codecs {
+		if len(c.Params) > MaxCodecParams {
+			return fmt.Errorf("format: %w: codec %d (%s) has %d parameters, more than %d",
+				ErrCorruptIndex, i, c.Name, len(c.Params), MaxCodecParams)
+		}
+		for k, v := range c.Params {
+			switch v.(type) {
+			case int, int64, uint64, string:
+			default:
+				return fmt.Errorf("format: %w: codec %d (%s) has the parameter %q of type %T, not an integer or a text string",
+					ErrCorruptIndex, i, c.Name, k, v)
+			}
+		}
+	}
+	return nil
+}
+
 func (ix *Index) validateDicts() error {
 	if len(ix.Dicts) > MaxDicts {
 		return fmt.Errorf("format: %w: %d dictionaries exceeds the limit of %d",

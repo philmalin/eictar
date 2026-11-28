@@ -867,8 +867,9 @@ func TestSameCodec(t *testing.T) {
 func TestIndexEncodeErrors(t *testing.T) {
 	ix := sampleIndex()
 	ix.Codecs[0].Params["bad"] = make(chan int)
-	if enc, err := ix.Encode(EncodeOptions{}); err == nil {
-		t.Errorf("a parameter that CBOR cannot encode gave %d bytes", len(enc.Bytes))
+	if enc, err := ix.Encode(EncodeOptions{}); !errors.Is(err, ErrCorruptIndex) {
+		// Validate refuses it, before the encoder (finding 19).
+		t.Errorf("a parameter that CBOR cannot encode: %v, %v", enc, err)
 	}
 
 	failed := errors.New("seal failed")
@@ -879,8 +880,7 @@ func TestIndexEncodeErrors(t *testing.T) {
 }
 
 // TestIndexMapPairsAreCapped: the decoder takes a map of up to
-// maxIndexMapPairs pairs, and refuses a larger one. The codec parameters
-// have no other limit.
+// maxIndexMapPairs pairs, and refuses a larger one.
 func TestIndexMapPairsAreCapped(t *testing.T) {
 	for _, tc := range []struct {
 		pairs int
@@ -889,12 +889,16 @@ func TestIndexMapPairsAreCapped(t *testing.T) {
 		{maxIndexMapPairs, true},
 		{maxIndexMapPairs + 1, false},
 	} {
-		ix := sampleIndex()
-		ix.Codecs[1].Params = map[string]any{}
+		// The map is under a key that the reader does not know: the decoder
+		// skips it, and still applies the cap (doc/format.md 8.3).
+		big := map[string]uint64{}
 		for i := range tc.pairs {
-			ix.Codecs[1].Params[fmt.Sprint(i)] = uint64(1)
+			big[fmt.Sprint(i)] = 1
 		}
-		raw, err := encMode.Marshal(ix)
+		raw, err := encMode.Marshal(struct {
+			*Index
+			Later map[string]uint64 `cbor:"later"`
+		}{sampleIndex(), big})
 		if err != nil {
 			t.Fatal(err)
 		}

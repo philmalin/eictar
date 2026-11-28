@@ -137,9 +137,11 @@ reader must allocate.
 
 The index has a catalog of codecs. Each member names an entry of the catalog
 by its position, or `-1` for no codec. A catalog entry is a map with `name`
-(text), `params` (a map from text to a number or a text), and `dict` (uint,
-optional). The parameters record the settings of the writer. A reader does
-not need them. `dict` is the id of the dictionary (§6.1) that the codec
+(text), `params` (a map from text to an integer or a text, at most 64 pairs),
+and `dict` (uint, optional). The catalog has at most 65536 entries. The
+parameters record the settings of the writer, and a reader does not need
+them. A parameter of another type, for example an array, a map or a float,
+makes the index invalid. `dict` is the id of the dictionary (§6.1) that the codec
 used, and a reader needs it to decode.
 
 | Name | One compressed chunk is |
@@ -304,7 +306,11 @@ The index is encoded in these steps:
 
 A reader reverses the steps. It limits the decompressed index to 1 GiB, and
 to 200 times the compressed index or 64 MiB, whichever is more. It limits
-the number of members to 4194304.
+the number of members to 4194304. It can also limit the memory that the
+index decodes into: eictar refuses an index whose decoded form needs more than 8 times
+its decompressed bytes, or 1 MiB, whichever is more. A real index needs at
+most about 6 times. An index of empty maps as members needs about 320
+times, and a small archive of them made a listing use gigabytes.
 
 ### 8.2 Index map
 
@@ -505,5 +511,7 @@ a new `key` (§7.1). The blobs do not change.
 | `chunk` | 268435456 bytes |
 | decompressed index | 1 GiB, and at most 200 × its compressed size or 64 MiB, whichever is more |
 | members in one index | 4194304 |
+| codec entries in one index, parameters of one entry | 65536, 64 |
+| memory of the decoded index (eictar) | 8 × the decompressed index, or 1 MiB, whichever is more |
 | dictionaries in one index, dictionary size | 1024, 1048576 bytes |
 | xattr name, value, count | 255 bytes, 65536 bytes, 1024 |

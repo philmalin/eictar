@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"hash/crc32"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -267,6 +268,8 @@ func encode(v any) []byte {
 			return []byte{0xf5}
 		}
 		return []byte{0xf4}
+	case float64:
+		return binary.BigEndian.AppendUint64([]byte{0xfb}, math.Float64bits(v))
 	case simple:
 		return []byte{0xe0 | byte(v)}
 	}
@@ -472,7 +475,29 @@ func TestIndexChecks(t *testing.T) {
 		{"catalog params", func(idx *cmap) {
 			cs, _ := idx.get("codecs")
 			cs.([]any)[0].(*cmap).set("params", &cmap{keys: []any{text("level")}, vals: []any{[]any{}}})
-		}, -1, "not a number or a text"},
+		}, -1, "not an integer or a text"},
+		{"catalog param float", func(idx *cmap) {
+			cs, _ := idx.get("codecs")
+			cs.([]any)[0].(*cmap).set("params", &cmap{keys: []any{text("level")}, vals: []any{float64(3)}})
+		}, -1, "not an integer or a text"},
+		{"catalog params count", func(idx *cmap) {
+			p := &cmap{}
+			for i := range maxParams + 1 {
+				p.keys = append(p.keys, text(strconv.Itoa(i)))
+				p.vals = append(p.vals, uint64(1))
+			}
+			cs, _ := idx.get("codecs")
+			cs.([]any)[0].(*cmap).set("params", p)
+		}, -1, "65 parameters, more than 64"},
+		{"catalog entries", func(idx *cmap) {
+			cs, _ := idx.get("codecs")
+			entry := cs.([]any)[0]
+			many := make([]any, maxCodecs+1)
+			for i := range many {
+				many[i] = entry
+			}
+			idx.set("codecs", many)
+		}, -1, "65537 codec entries"},
 		{"dict size", func(idx *cmap) { idx.set("dicts", []any{dict(40000, 0, 64)}) }, -1, "size 0"},
 		{"dict id", func(idx *cmap) { idx.set("dicts", []any{dict(0, 8, 64)}) }, -1, "id 0"},
 		{"dict len", func(idx *cmap) {
