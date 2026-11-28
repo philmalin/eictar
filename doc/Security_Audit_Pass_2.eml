@@ -8,7 +8,7 @@
 | Date | 2026-11-26 |
 | Earlier review | {ref t=Security_Audit.html#scope-method:Security_Audit.eml}: v1.0.1, with follow-ups for v1.0.3 and v1.0.6 (findings 1 to 12) |
 | Scope | the source code of {C:src/}, the archive format, and encrypted archives |
-| Status | findings 13 to 17 are fixed after v1.1.4; the others are open |
+| Status | findings 13 to 18 are fixed after v1.1.4; the others are open |
 }
 
 {contents l=2}
@@ -49,7 +49,7 @@ names one finding in both documents.
 | 15 | Medium | A race between the check of {C:-f} and its resolution follows a planted link | Tested | Fixed after v1.1.4 |
 | 16 | Medium | The check of {C:-f} does not look at a link inside the target of a link | Tested | Fixed after v1.1.4 |
 | 17 | Medium | Create gives the new archive the mode of a file that another user put at {C:-f} | Tested | Fixed after v1.1.4 |
-| 18 | Medium | {C:-c} with a passphrase source and no {C:-e} writes a plaintext archive, with no message | Tested | Open |
+| 18 | Medium | {C:-c} with a passphrase source and no {C:-e} writes a plaintext archive, with no message | Tested | Fixed after v1.1.4 |
 | 19 | Medium | A 7 KB plain archive makes a listing use 4 GB of memory | Tested | Open |
 | 20 | Low | {C:--repair} removes a complete generation when the damage is in its trailer magic | Tested | Open |
 | 21 | Low | Blobs that overlap: compact and {C:--encrypt-archive} write one copy for each member | Tested | Open |
@@ -312,6 +312,13 @@ message above. The review reproduced this on a separate build.
 {b:Fix.} On {C:-c} (and {C:-n -c}), a passphrase source without {C:-e} is a
 usage error (exit 2). Do not make it imply {C:-e}: an explicit error is the
 same as for the other options.
+
+{b:Status.} Fixed after v1.1.4. On {C:-c}, and on {C:-n -c}, a passphrase
+source without {C:-e} is a usage error with exit 2, and the message names the
+source. {C:-e} from a configuration file counts. The source does not stand
+for {C:-e}. Design {ref t=design.html#encryption:§10.3} says so.
+{C:TestPassphraseSourceOnCreateNeedsEncrypt} and three cases of
+{C:TestParseUsageErrors} test it.
 
 {section 2 nc bid=finding-19: Finding 19. A 7 KB plain archive makes a listing use 4 GB of memory (medium)}
 

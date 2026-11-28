@@ -803,7 +803,7 @@
 <tr>
 <td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Status </div>
 </td>
-<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> findings 13 to 17 are fixed after v1.1.4; the others are open </div>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> findings 13 to 18 are fixed after v1.1.4; the others are open </div>
 </td>
 </tr>
 </tbody>
@@ -946,7 +946,7 @@ names one finding in both documents.</div>
 </td>
 <td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Tested </div>
 </td>
-<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Open </div>
+<td style="padding : 0.25em;border-top:1px solid #777777;;border-bottom:1px solid #777777;;text-align:left;"><div class="par" style="margin-top:0px;margin-bottom:0px;"> Fixed after v1.1.4 </div>
 </td>
 </tr>
 <tr>
@@ -1467,6 +1467,12 @@ message above. The review reproduced this on a separate build.</div>
 <div class="par"><b>Fix.</b> On <tt class="code">-c</tt> (and <tt class="code">-n -c</tt>), a passphrase source without <tt class="code">-e</tt> is a
 usage error (exit 2). Do not make it imply <tt class="code">-e</tt>: an explicit error is the
 same as for the other options.</div>
+<div class="par"><b>Status.</b> Fixed after v1.1.4. On <tt class="code">-c</tt>, and on <tt class="code">-n -c</tt>, a passphrase
+source without <tt class="code">-e</tt> is a usage error with exit 2, and the message names the
+source. <tt class="code">-e</tt> from a configuration file counts. The source does not stand
+for <tt class="code">-e</tt>. Design <a href = "design.html#encryption">§10.3</a> says so.
+<tt class="code">TestPassphraseSourceOnCreateNeedsEncrypt</tt> and three cases of
+<tt class="code">TestParseUsageErrors</tt> test it.</div>
 <div style="page-break-inside:avoid;">
 <h2 id="finding-19"> Finding 19. A 7 KB plain archive makes a listing use 4 GB of memory (medium)</h2>
 <div class="par"><b>Where:</b> <tt class="code">CodecSpec.Params</tt> (<tt class="code">map[string]any</tt>) in

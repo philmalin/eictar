@@ -669,3 +669,10 @@ stream, or longer than its plaintext, but no version of eictar writes one.
   `TestCompactChecksALinkInsideALinkTarget`,
   `TestCreateRefusesAFileSwappedBeforeItsOpen` and
   `TestCreateDoesNotTakeTheModeOfAnotherUsersFile` cover it.
+- On `-c`, `--passphrase-file` or `--passphrase-env` without `-e` is a
+  usage error, with exit 2 (design.eml §10.3). Before, the create read no
+  passphrase and wrote the tree in the clear, with exit 0. The next read
+  with the same source said that the archive was replaced or stripped
+  (finding 18). The source does not stand for `-e`: `-e` must be given, on
+  the command line or in a configuration file.
+  `TestPassphraseSourceOnCreateNeedsEncrypt` covers it.

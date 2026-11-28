@@ -664,6 +664,19 @@ func (o *Options) validate() error {
 		}
 		o.EncryptIdx = false
 	}
+	if o.Op == OpCreate && o.expectsEncryption() && !o.Encrypt {
+		// A passphrase source says "this archive is encrypted" (doc/design.eml
+		// 10.3). Without -e, the create read no passphrase and wrote the tree
+		// in the clear, with exit 0 (doc/Security_Audit_Pass_2.eml, finding
+		// 18). It does not stand for -e: the user states -e, as for
+		// --encrypt-index. A passphrase source comes from the command line
+		// only, so it is always typed.
+		name := "--passphrase-file"
+		if o.PassphraseEnv != "" {
+			name = "--passphrase-env"
+		}
+		return &UsageError{fmt.Errorf("%s requires --encrypt on -c: without it, the archive is not encrypted", name)}
+	}
 
 	// Metadata options have one meaning each, on the operations where they
 	// mean anything. Elsewhere they would be silently ignored, which this

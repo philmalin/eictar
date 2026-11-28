@@ -3256,6 +3256,12 @@ process's environment can see the value.
 program refuses the archive with exit 3. This is how it catches an archive
 whose encryption was removed ({ref t=#security-considerations:§14}).
 
+On {C:-c}, a passphrase source without {C:-e} is a usage error (exit 2). The
+source does not stand for {C:-e}: as for {C:--encrypt-index}, the user states
+{C:-e}. Before, the create read no passphrase and wrote a plaintext archive
+with exit 0, and the next read with the same source said that the archive
+was replaced or stripped. {C:-e} from a configuration file counts.
+
 {section 2 bid=general-options: General options}
 
 {stable col=4 header sb b==:

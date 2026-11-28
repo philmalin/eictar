@@ -5500,6 +5500,11 @@ process's environment can see the value.</div>
 <tt class="code">--passphrase-file</tt> or <tt class="code">--passphrase-env</tt> and the archive is plaintext, the
 program refuses the archive with exit 3. This is how it catches an archive
 whose encryption was removed (<a href = "#security-considerations">§14</a>).</div>
+<div class="par">On <tt class="code">-c</tt>, a passphrase source without <tt class="code">-e</tt> is a usage error (exit 2). The
+source does not stand for <tt class="code">-e</tt>: as for <tt class="code">--encrypt-index</tt>, the user states
+<tt class="code">-e</tt>. Before, the create read no passphrase and wrote a plaintext archive
+with exit 0, and the next read with the same source said that the archive
+was replaced or stripped. <tt class="code">-e</tt> from a configuration file counts.</div>
 <div style="page-break-inside:avoid;">
 <h2 id="general-options">10.4&#x00A0;&#x00A0; General options</h2>
 <table style="border-top:2px solid #777777;border-bottom:2px solid #777777;">

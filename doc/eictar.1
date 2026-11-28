@@ -420,7 +420,12 @@ Read the passphrase from the environment variable
 Other processes can see the environment, so the program prints a warning.
 .IP
 With either option, the program refuses an archive that is not encrypted,
-with exit 3. With
+with exit 3.
+On
+.BR \-c ,
+either option needs
+.BR \-e :
+without it, the program stops with exit 2, and writes no archive. With
 .BR \-\-encrypt\-archive ,
 the option gives the new passphrase of a plaintext archive.
 .TP

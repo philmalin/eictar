@@ -262,3 +262,43 @@ func TestConfiguredTrain(t *testing.T) {
 		t.Errorf("train = %q with train=off on the command line", got)
 	}
 }
+
+// TestPassphraseSourceOnCreateNeedsEncrypt: on create, a passphrase source
+// without -e is a usage error that names the source. Before, the create read
+// no passphrase and wrote the tree in the clear, with exit 0
+// (doc/Security_Audit_Pass_2.eml, finding 18). -e from a configuration file
+// counts, and the other operations take a source with no -e, as the archive
+// header says how it was made.
+func TestPassphraseSourceOnCreateNeedsEncrypt(t *testing.T) {
+	withEnv(t, t.TempDir())
+	for _, c := range []struct {
+		argv []string
+		want string
+	}{
+		{[]string{"-cf", "a", "--passphrase-file", "k", "p"}, "--passphrase-file requires --encrypt"},
+		{[]string{"-cf", "a", "--passphrase-env", "V", "p"}, "--passphrase-env requires --encrypt"},
+	} {
+		err := parseErr(t, c.argv...)
+		var ue *UsageError
+		if !errors.As(err, &ue) || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%q: %v, want a usage error with %q", c.argv, err, c.want)
+		}
+	}
+	for _, argv := range [][]string{
+		{"-cef", "a", "--passphrase-file", "k", "p"},
+		{"-tf", "a", "--passphrase-file", "k"},
+		{"-rf", "a", "--passphrase-env", "V", "p"},
+		{"-xf", "a", "--passphrase-file", "k"},
+	} {
+		if err := parseErr(t, argv...); err != nil {
+			t.Errorf("%q: %v", argv, err)
+		}
+	}
+
+	home := t.TempDir()
+	writeConfig(t, filepath.Join(home, ".eictarrc"), "encrypt = on\n")
+	withEnv(t, home)
+	if o := mustParse(t, "-cf", "a", "--passphrase-file", "k", "p"); !o.Encrypt {
+		t.Error("-e from the configuration file was not in effect")
+	}
+}
