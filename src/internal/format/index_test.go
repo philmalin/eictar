@@ -535,16 +535,11 @@ func TestIndexDecodeRejectsWrongSchemaVersion(t *testing.T) {
 }
 
 // TestIndexDecompressionBomb is the decode-side limit: a tiny input that
-// inflates without bound must be refused, not allocated.
+// inflates without bound must be refused, not allocated. The frame does not
+// give its size, so the decoder stops at the limit. TestIndexExpansionIsBounded
+// has a frame that gives its size.
 func TestIndexDecompressionBomb(t *testing.T) {
-	enc, err := zstd.NewWriter(nil, zstd.WithEncoderConcurrency(1))
-	if err != nil {
-		t.Fatalf("zstd writer: %v", err)
-	}
-	bomb := enc.EncodeAll(make([]byte, MaxIndexSize+(1<<20)), nil)
-	if err := enc.Close(); err != nil {
-		t.Fatalf("zstd close: %v", err)
-	}
+	bomb := zeroBomb(t, MaxIndexSize+(1<<20))
 	t.Logf("bomb is %d bytes compressed, %d decompressed", len(bomb), MaxIndexSize+(1<<20))
 
 	if _, err := DecodeIndex(bomb, FlagIndexCompressed, nil); err == nil {
@@ -910,4 +905,28 @@ func TestIndexMapPairsAreCapped(t *testing.T) {
 			t.Errorf("%d pairs: got %v, want ErrCorruptIndex", tc.pairs, err)
 		}
 	}
+}
+
+// zeroBomb gives n zero bytes, compressed with zstd as a stream. The zeros
+// go to the encoder 1 MiB at a time: a buffer of 1 GiB of zeros, with the
+// shadow memory of the race detector, killed the test run on a CI machine
+// with little memory. A stream frame does not give its size in its header,
+// so the decoder cannot refuse it at once: it decodes up to the limit.
+func zeroBomb(t *testing.T, n int) []byte {
+	t.Helper()
+	var out bytes.Buffer
+	enc, err := zstd.NewWriter(&out, zstd.WithEncoderConcurrency(1))
+	if err != nil {
+		t.Fatalf("zstd writer: %v", err)
+	}
+	zeros := make([]byte, 1<<20)
+	for left := n; left > 0; left -= len(zeros) {
+		if _, err := enc.Write(zeros[:min(left, len(zeros))]); err != nil {
+			t.Fatalf("zstd write: %v", err)
+		}
+	}
+	if err := enc.Close(); err != nil {
+		t.Fatalf("zstd close: %v", err)
+	}
+	return out.Bytes()
 }

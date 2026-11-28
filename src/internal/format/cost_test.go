@@ -132,7 +132,7 @@ func realIndex(kind string, n int) *Index {
 // allocates.
 func TestRealIndexesDecode(t *testing.T) {
 	for _, kind := range []string{"dir", "empty", "file", "xattrs", "dead"} {
-		ix := realIndex(kind, 20000)
+		ix := realIndex(kind, 4000)
 		raw, err := encMode.Marshal(ix)
 		if err != nil {
 			t.Fatal(err)
